@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Bookmark, Heart, MessageCircle, Play } from 'lucide-react'
 import type { Post, PostMedia as PostMediaType } from '../types'
@@ -8,10 +8,11 @@ import { clockTime, fullDateTime, relativeTime } from '../lib/time'
 import { formatCompact } from '../lib/format'
 import { Artwork } from './Artwork'
 import { CreatorAvatar, CreatorName } from './ui'
+import { SELF_ID } from '../data/seed'
+import { EARN_RULES } from '../lib/points'
+import { REQUIRED_SHARE, newWatchProgress, qualifiesAsWatched, recordSeek, recordTime, type WatchProgress } from '../lib/watch'
 
 export function PostMedia({ media, postId, rounded = true }: { media: PostMediaType; postId: string; rounded?: boolean }) {
-  const { markWatched } = useStore()
-  const [started, setStarted] = useState(false)
   const frame = clsx('relative overflow-hidden bg-ink-100', rounded && 'rounded-2xl')
 
   if (media.type === 'art') {
@@ -28,9 +29,38 @@ export function PostMedia({ media, postId, rounded = true }: { media: PostMediaT
       </div>
     )
   }
+  return <VideoMedia media={media} postId={postId} frame={frame} />
+}
+
+/** Video with genuine watch tracking: CP only after real playback, never for seeking to the end. */
+function VideoMedia({ media, postId, frame }: { media: Extract<PostMediaType, { type: 'video' }>; postId: string; frame: string }) {
+  const { markWatched, postById, state, pushToast } = useStore()
+  const [started, setStarted] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const progress = useRef<WatchProgress>(newWatchProgress())
+  const post = postById(postId)
+  const own = post?.creatorId === SELF_ID
+  const earned = Boolean(state.earnedKeys[`watch:${postId}`])
+  const canEarn = !own && !earned
+
+  const onEnded = () => {
+    const v = videoRef.current
+    if (!v || !canEarn) return
+    if (qualifiesAsWatched(progress.current, v.duration)) markWatched(postId)
+    else {
+      pushToast({
+        tone: 'info',
+        title: 'No CP for this video yet',
+        body: `Watch at least ${Math.round(REQUIRED_SHARE * 100)}% of it without skipping ahead to earn ${EARN_RULES.watch.points} CP.`,
+      })
+    }
+    progress.current = newWatchProgress()
+  }
+
   return (
     <div className={clsx(frame, 'aspect-[4/5] bg-ink-900')}>
       <video
+        ref={videoRef}
         className="h-full w-full object-cover"
         src={media.src}
         poster={media.poster}
@@ -39,16 +69,22 @@ export function PostMedia({ media, postId, rounded = true }: { media: PostMediaT
         muted
         preload="none"
         aria-label={media.alt}
-        onEnded={() => markWatched(postId)}
+        onTimeUpdate={(e) => {
+          const v = e.currentTarget
+          progress.current = recordTime(progress.current, v.currentTime, { seeking: v.seeking })
+        }}
+        onSeeked={(e) => {
+          progress.current = recordSeek(progress.current, e.currentTarget.currentTime)
+        }}
+        onEnded={onEnded}
         onPlay={() => setStarted(true)}
       />
       {!started && (
         <button
           type="button"
-          onClick={(e) => {
-            const video = e.currentTarget.previousElementSibling as HTMLVideoElement | null
+          onClick={() => {
             setStarted(true)
-            void video?.play()
+            void videoRef.current?.play()
           }}
           className="absolute inset-0 grid place-items-center bg-ink-900/10 transition hover:bg-ink-900/20"
           aria-label="Play video"
@@ -56,8 +92,8 @@ export function PostMedia({ media, postId, rounded = true }: { media: PostMediaT
           <span className="grid h-16 w-16 place-items-center rounded-full bg-white/90 text-ink-900 shadow-lg">
             <Play className="ml-1 h-7 w-7 fill-current" />
           </span>
-          <span className="absolute bottom-3 left-3 rounded-full bg-ink-900/70 px-2.5 py-1 text-xs font-semibold text-white">
-            0:08 · Watch to the end for +3 CP
+          <span className="absolute bottom-3 left-3 rounded-full bg-ink-900/75 px-2.5 py-1 text-xs font-semibold text-white">
+            0:08{canEarn ? ` · Watch it through for +${EARN_RULES.watch.points} CP` : earned ? ' · CP earned' : ''}
           </span>
         </button>
       )}

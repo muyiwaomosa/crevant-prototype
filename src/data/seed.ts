@@ -402,24 +402,29 @@ export function buildSeedComments(seededAt: number): Comment[] {
   })
 }
 
+// Reward costs are balanced for creator specific CP (Release 1).
+// A fan can earn about 8 CP per post (like 2, save 1, comment 5), plus 3 for
+// a finished video and 10 while following. Entry rewards (15 to 20 CP) are
+// reachable in one session; higher tiers (60 to 150 CP) need a few weeks of
+// regular engagement at roughly 24 CP per week for a creator posting 3 times.
 type SeedReward = Omit<Reward, 'createdAt'> & { daysAgo: number }
 
 const SEED_REWARDS: SeedReward[] = [
-  { id: 'r_theo_wall', creatorId: 'theo', title: 'Arctic wallpaper pack', description: 'Twelve phone and desktop wallpapers from the Kungsleden trip.', cost: 40, kind: 'digital', stock: null, claimedByOthers: 318, daysAgo: 20 },
-  { id: 'r_amara_card', creatorId: 'amara', title: 'Family recipe card: slow jollof', description: 'The printable recipe card my aunt wrote out for me, with my notes in the margins.', cost: 60, kind: 'digital', stock: null, claimedByOthers: 902, daysAgo: 30 },
-  { id: 'r_hana_list', creatorId: 'hana', title: 'Annotated reading list', description: 'Twenty translated novels with a short note on why each one stayed with me.', cost: 50, kind: 'digital', stock: null, claimedByOthers: 144, daysAgo: 12 },
-  { id: 'r_kofi_guide', creatorId: 'kofi', title: 'Balcony seed starting guide', description: 'My step by step guide for starting seeds in small spaces, with a planting calendar.', cost: 45, kind: 'digital', stock: null, claimedByOthers: 87, daysAgo: 9 },
-  { id: 'r_sofia_sketch', creatorId: 'sofia', title: 'Behind the algorithm sketchbook', description: 'A digital flip through of the notebook where each generative series starts.', cost: 80, kind: 'access', stock: null, claimedByOthers: 210, daysAgo: 15 },
-  { id: 'r_jordan_plan', creatorId: 'jordan', title: '8 week beginner 10K plan', description: 'The exact plan I use with my run group, with easy, steady, and rest days mapped out.', cost: 90, kind: 'digital', stock: null, claimedByOthers: 433, daysAgo: 18 },
-  { id: 'r_theo_gpx', creatorId: 'theo', title: 'Route files: Kungsleden north', description: 'GPX files for every day of the route, with water sources and camp spots marked.', cost: 120, kind: 'digital', stock: null, claimedByOthers: 96, daysAgo: 6 },
-  { id: 'r_priya_shout', creatorId: 'priya', title: 'Thank you in the build log', description: 'Your name in the supporters section of the next weekly build log.', cost: 150, kind: 'recognition', stock: 25, claimedByOthers: 19, daysAgo: 8 },
-  { id: 'r_hana_club', creatorId: 'hana', title: 'Book club guest pass', description: 'Join one monthly online book club call as a guest.', cost: 180, kind: 'access', stock: 15, claimedByOthers: 9, daysAgo: 5 },
-  { id: 'r_marcus_stems', creatorId: 'marcus', title: 'Unreleased stems pack', description: 'Stems from three unreleased beats for you to remix for personal use.', cost: 200, kind: 'digital', stock: null, claimedByOthers: 1204, daysAgo: 25 },
-  { id: 'r_sofia_print', creatorId: 'sofia', title: 'Signed digital edition', description: 'A numbered, high resolution file from the Grid Weather series with a signed certificate.', cost: 250, kind: 'digital', stock: 20, claimedByOthers: 14, daysAgo: 3 },
-  { id: 'r_jordan_form', creatorId: 'jordan', title: 'Running form check', description: 'Send a 20 second clip and get a short written review of your form.', cost: 300, kind: 'experience', stock: 10, claimedByOthers: 7, daysAgo: 4 },
-  { id: 'r_amara_live', creatorId: 'amara', title: 'Seat at a live cook along', description: 'One seat at a small online cook along. Ingredients list sent a week ahead.', cost: 400, kind: 'experience', stock: 12, claimedByOthers: 10, daysAgo: 2 },
-  { id: 'r_priya_call', creatorId: 'priya', title: '30 minute product chat', description: 'A short video call to talk through your side project or launch plan.', cost: 500, kind: 'experience', stock: 5, claimedByOthers: 4, daysAgo: 7 },
-  { id: 'r_marcus_name', creatorId: 'marcus', title: 'Name a track on the next EP', description: 'Pick the title of one track on the next EP, credited in the liner notes.', cost: 600, kind: 'recognition', stock: 1, claimedByOthers: 0, daysAgo: 1 },
+  { id: 'r_theo_wall', creatorId: 'theo', title: 'Arctic wallpaper pack', description: 'Twelve phone and desktop wallpapers from the Kungsleden trip.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 318, daysAgo: 20 },
+  { id: 'r_amara_card', creatorId: 'amara', title: 'Family recipe card: slow jollof', description: 'The printable recipe card my aunt wrote out for me, with my notes in the margins.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 902, daysAgo: 30 },
+  { id: 'r_hana_list', creatorId: 'hana', title: 'Annotated reading list', description: 'Twenty translated novels with a short note on why each one stayed with me.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 144, daysAgo: 12 },
+  { id: 'r_kofi_guide', creatorId: 'kofi', title: 'Balcony seed starting guide', description: 'My step by step guide for starting seeds in small spaces, with a planting calendar.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 87, daysAgo: 9 },
+  { id: 'r_sofia_sketch', creatorId: 'sofia', title: 'Behind the algorithm sketchbook', description: 'A digital flip through of the notebook where each generative series starts.', cost: 20, kind: 'access', stock: null, claimedByOthers: 210, daysAgo: 15 },
+  { id: 'r_jordan_plan', creatorId: 'jordan', title: '8 week beginner 10K plan', description: 'The exact plan I use with my run group, with easy, steady, and rest days mapped out.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 433, daysAgo: 18 },
+  { id: 'r_theo_gpx', creatorId: 'theo', title: 'Route files: Kungsleden north', description: 'GPX files for every day of the route, with water sources and camp spots marked.', cost: 60, kind: 'digital', stock: null, claimedByOthers: 96, daysAgo: 6 },
+  { id: 'r_priya_shout', creatorId: 'priya', title: 'Thank you in the build log', description: 'Your name in the supporters section of the next weekly build log.', cost: 15, kind: 'recognition', stock: 25, claimedByOthers: 19, daysAgo: 8 },
+  { id: 'r_hana_club', creatorId: 'hana', title: 'Book club guest pass', description: 'Join one monthly online book club call as a guest.', cost: 75, kind: 'access', stock: 15, claimedByOthers: 9, daysAgo: 5 },
+  { id: 'r_marcus_stems', creatorId: 'marcus', title: 'Unreleased stems pack', description: 'Stems from three unreleased beats for you to remix for personal use.', cost: 20, kind: 'digital', stock: null, claimedByOthers: 1204, daysAgo: 25 },
+  { id: 'r_sofia_print', creatorId: 'sofia', title: 'Signed digital edition', description: 'A numbered, high resolution file from the Grid Weather series with a signed certificate.', cost: 100, kind: 'digital', stock: 20, claimedByOthers: 14, daysAgo: 3 },
+  { id: 'r_jordan_form', creatorId: 'jordan', title: 'Running form check', description: 'Send a 20 second clip and get a short written review of your form.', cost: 90, kind: 'experience', stock: 10, claimedByOthers: 7, daysAgo: 4 },
+  { id: 'r_amara_live', creatorId: 'amara', title: 'Seat at a live cook along', description: 'One seat at a small online cook along. Ingredients list sent a week ahead.', cost: 120, kind: 'experience', stock: 12, claimedByOthers: 10, daysAgo: 2 },
+  { id: 'r_priya_call', creatorId: 'priya', title: '30 minute product chat', description: 'A short video call to talk through your side project or launch plan.', cost: 150, kind: 'experience', stock: 5, claimedByOthers: 4, daysAgo: 7 },
+  { id: 'r_marcus_name', creatorId: 'marcus', title: 'Name a track on the next EP', description: 'Pick the title of one track on the next EP, credited in the liner notes.', cost: 150, kind: 'recognition', stock: 1, claimedByOthers: 0, daysAgo: 1 },
 ]
 
 export function buildSeedRewards(seededAt: number): Reward[] {

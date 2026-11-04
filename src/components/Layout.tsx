@@ -4,7 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { Compass, Gift, Home, LayoutDashboard, ListOrdered, PenSquare, Sparkles, Ticket, User } from 'lucide-react'
 import { useStore } from '../state/store'
 import { Wordmark } from './Wordmark'
-import { CPAmount, SparkIcon } from './ui'
+import { CreatorAvatar, SparkIcon } from './ui'
 import { Toasts } from './Toasts'
 
 const FAN_NAV = [
@@ -63,7 +63,11 @@ function ScrollToTop() {
 }
 
 export function Layout() {
-  const { state, balance } = useStore()
+  const { state, balances, creatorById } = useStore()
+  const topBalances = Object.entries(balances)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
   const nav = state.mode === 'creator' ? CREATOR_NAV : FAN_NAV
   const location = useLocation()
 
@@ -119,9 +123,24 @@ export function Layout() {
           <ModeSwitch className="flex flex-col gap-0.5 lg:hidden [&>button]:px-0 [&>button]:text-[11px]" />
           {state.mode === 'fan' && (
             <Link to="/points" className="hidden rounded-2xl bg-ink-900 p-4 text-white lg:block">
-              <p className="text-xs font-medium text-ink-300">Your balance</p>
-              <CPAmount value={balance} className="mt-1 text-xl text-white [&>svg]:h-5 [&>svg]:w-5" />
-              <p className="mt-2 text-[11px] leading-snug text-ink-400">Demo points. No cash value.</p>
+              <p className="text-xs font-medium text-ink-300">Connection Points by creator</p>
+              {topBalances.length === 0 ? (
+                <p className="mt-1 text-sm text-ink-200">Engage with a creator to start earning CP with them.</p>
+              ) : (
+                <ul className="mt-2 space-y-1.5">
+                  {topBalances.map(([id, value]) => {
+                    const c = creatorById(id)
+                    return c ? (
+                      <li key={id} className="flex items-center gap-2 text-sm">
+                        <CreatorAvatar creator={c} size={20} />
+                        <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                        <span className="font-semibold tabular-nums">{value} CP</span>
+                      </li>
+                    ) : null
+                  })}
+                </ul>
+              )}
+              <p className="mt-2 text-[11px] leading-snug text-ink-300">Each balance is only for that creator's rewards. No cash value.</p>
             </Link>
           )}
           <p className="hidden text-[11px] leading-snug text-ink-400 lg:block">
@@ -135,17 +154,17 @@ export function Layout() {
         <header className="sticky top-0 z-40 border-b border-ink-100/80 bg-paper/90 pt-[env(safe-area-inset-top)] backdrop-blur-md md:hidden">
           <div className="flex h-14 items-center justify-between gap-3 px-4">
             <Link to={state.mode === 'creator' ? '/studio' : '/'} aria-label="Crevant home">
-              <Wordmark size="sm" />
+              <Wordmark size="sm" className="max-[359px]:[&>span:nth-child(2)]:hidden" />
             </Link>
             <div className="flex items-center gap-2">
               {state.mode === 'fan' && (
                 <Link
                   to="/points"
-                  className="flex h-8 items-center gap-1 rounded-full bg-white px-2.5 text-[13px] font-semibold tabular-nums text-ink-800 ring-1 ring-ink-100"
-                  aria-label={`${balance} Connection Points. View points`}
+                  className="flex h-8 items-center gap-1 rounded-full bg-white px-2.5 text-[13px] font-semibold text-ink-800 ring-1 ring-ink-100"
+                  aria-label="Connection Points by creator"
                 >
                   <SparkIcon className="h-4 w-4" />
-                  {balance.toLocaleString()}
+                  CP
                 </Link>
               )}
               <ModeSwitch className="w-[132px]" />

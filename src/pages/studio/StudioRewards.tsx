@@ -7,19 +7,19 @@ import { KIND_META } from '../../components/RewardCard'
 import { Button, CPAmount, Card, DemoTag, Notice, PageHeader } from '../../components/ui'
 import { SELF_ID } from '../../data/seed'
 
-const PRESETS = [25, 50, 100, 250, 500]
+const PRESETS = [15, 30, 60, 100, 150]
 
 export function StudioRewards() {
   const { rewards, createReward, deleteReward, pushToast } = useStore()
   const mine = rewards.filter((r) => r.creatorId === SELF_ID)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [cost, setCost] = useState(100)
+  const [cost, setCost] = useState(30)
   const [kind, setKind] = useState<RewardKind>('digital')
   const [limited, setLimited] = useState(false)
   const [stock, setStock] = useState(10)
 
-  const valid = title.trim().length >= 3 && description.trim().length >= 10 && cost >= 10 && cost <= 5000 && (!limited || stock >= 1)
+  const valid = title.trim().length >= 3 && description.trim().length >= 10 && cost >= 5 && cost <= 1000 && (!limited || stock >= 1)
   const field = 'mt-1 w-full rounded-xl bg-ink-50 px-3 py-2.5 text-[15px] font-normal ring-1 ring-ink-100 focus:outline-none focus:ring-2 focus:ring-brand-500'
 
   const submit = (e: React.FormEvent) => {
@@ -29,7 +29,7 @@ export function StudioRewards() {
     pushToast({ tone: 'success', title: 'Reward created', body: 'Your followers can now see it on the Rewards page.' })
     setTitle('')
     setDescription('')
-    setCost(100)
+    setCost(30)
     setLimited(false)
   }
 
@@ -38,7 +38,7 @@ export function StudioRewards() {
       <PageHeader title="Rewards for your fans" subtitle="Thank loyal followers with perks they can redeem using Connection Points." />
 
       <Notice tone="spark" className="mb-5">
-        Rewards you create here are demonstrations. Nothing is sold and fans cannot pay money for CP.
+        Rewards you create here are demonstrations. Fans redeem them with CP earned with you only. Nothing is sold, delivered, or paid for.
       </Notice>
 
       <Card className="mb-6 p-4 sm:p-5">
@@ -104,16 +104,17 @@ export function StudioRewards() {
                 id="cost"
                 type="number"
                 inputMode="numeric"
-                min={10}
-                max={5000}
+                min={5}
+                max={1000}
                 value={cost}
-                onChange={(e) => setCost(Math.max(0, Math.min(5000, Number(e.target.value) || 0)))}
+                onChange={(e) => setCost(Math.max(0, Math.min(1000, Number(e.target.value) || 0)))}
                 className="h-9 w-24 rounded-full bg-ink-50 px-3 text-sm font-semibold tabular-nums ring-1 ring-ink-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 aria-describedby="cost-help"
               />
             </div>
             <p id="cost-help" className="mt-1.5 text-[12px] text-ink-500">
-              Between 10 and 5,000. An engaged fan earns roughly 40 to 80 CP a day in this demo.
+              Between 5 and 1,000. Fans can only spend CP they earned with you. A fan who likes, saves, and comments on a post earns
+              about 8 CP, so 15 CP is one or two posts and 100 CP is several weeks of regular engagement.
             </p>
           </div>
 

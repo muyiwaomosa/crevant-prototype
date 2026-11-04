@@ -5,13 +5,14 @@ import { useNow, useStore } from '../state/store'
 import { PostCard } from '../components/PostCard'
 import { Avatar, EmptyState, buttonClass } from '../components/ui'
 import { fullDateTime, relativeTime } from '../lib/time'
-import { EARN_RULES, MIN_COMMENT_LENGTH } from '../lib/points'
+import { EARN_RULES } from '../lib/points'
+import { assessComment, COMMENT_ISSUE_TEXT } from '../lib/commentQuality'
 import { SELF_ID } from '../data/seed'
 
 export function PostPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
-  const { postById, commentsFor, addComment, state } = useStore()
+  const { postById, commentsFor, addComment, state, creatorById } = useStore()
   const now = useNow()
   const [text, setText] = useState('')
   const post = postById(id)
@@ -34,6 +35,8 @@ export function PostPage() {
   const comments = commentsFor(post.id)
   const canEarn = post.creatorId !== SELF_ID && !state.earnedKeys[`comment:${post.id}`]
   const trimmed = text.trim()
+  const creatorFirst = creatorById(post.creatorId)?.name.split(' ')[0] ?? 'this creator'
+  const issue = trimmed ? assessComment(trimmed, state.myComments.map((c) => c.text)) : null
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,6 +65,7 @@ export function PostPage() {
           </label>
           <textarea
             id="comment-box"
+            aria-describedby="comment-hint"
             value={text}
             onChange={(e) => setText(e.target.value.slice(0, 400))}
             rows={2}
@@ -69,14 +73,16 @@ export function PostPage() {
             className="block w-full resize-none bg-transparent px-2 py-1 text-[15px] text-ink-900 placeholder:text-ink-400 focus:outline-none"
           />
           <div className="mt-2 flex items-center justify-between gap-3 px-1">
-            <p className="text-[12px] text-ink-500">
-              {canEarn
-                ? trimmed.length >= MIN_COMMENT_LENGTH
-                  ? `Earns +${EARN_RULES.comment.points} demo CP`
-                  : `${MIN_COMMENT_LENGTH}+ characters earns +${EARN_RULES.comment.points} CP`
-                : post.creatorId === SELF_ID
-                  ? 'Your own post'
-                  : 'CP already earned on this post'}
+            <p id="comment-hint" className="text-[12px] text-ink-600">
+              {!canEarn
+                ? post.creatorId === SELF_ID
+                  ? 'Your own post, so no CP'
+                  : 'CP already earned on this post'
+                : !trimmed
+                  ? `A thoughtful comment earns +${EARN_RULES.comment.points} CP with ${creatorFirst}`
+                  : issue
+                    ? `No CP yet: ${COMMENT_ISSUE_TEXT[issue]}`
+                    : `Earns +${EARN_RULES.comment.points} CP with ${creatorFirst}`}
             </p>
             <button type="submit" disabled={!trimmed} className={buttonClass('primary', 'sm')}>
               <Send className="h-4 w-4" /> Post
@@ -90,7 +96,7 @@ export function PostPage() {
           <ol className="space-y-4">
             {comments.map((c) => (
               <li key={c.id} className="flex gap-3">
-                <Avatar name={c.authorName} hue={c.authorHue} size={36} />
+                <Avatar name={c.isYou ? state.profile.name : c.authorName} hue={c.authorHue} src={c.isYou ? state.profile.avatar : undefined} size={36} />
                 <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md bg-white px-4 py-2.5 ring-1 ring-ink-100">
                   <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
                     <span className="font-semibold text-ink-900">{c.authorName}</span>

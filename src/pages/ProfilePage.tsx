@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Bookmark, Gift, Info, Pencil, RotateCcw, Users } from 'lucide-react'
+import { Bookmark, Camera, Gift, Info, Pencil, RotateCcw, Users } from 'lucide-react'
+import { AvatarEditor } from '../components/AvatarEditor'
 import { useNow, useStore } from '../state/store'
 import { PostCard } from '../components/PostCard'
 import { FollowButton } from '../components/CreatorCard'
@@ -77,12 +78,13 @@ function EditProfile({ open, onClose }: { open: boolean; onClose: () => void }) 
 }
 
 export function ProfilePage() {
-  const { state, balance, postById, creatorById, resetDemo } = useStore()
+  const { state, lifetime, postById, creatorById, resetDemo } = useStore()
   const now = useNow()
   const [params, setParams] = useSearchParams()
   const tabParam = params.get('tab') as Tab | null
   const tab: Tab = tabParam && ['saved', 'following', 'redemptions'].includes(tabParam) ? tabParam : 'saved'
   const [editing, setEditing] = useState(false)
+  const [editingPhoto, setEditingPhoto] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
 
   const savedPosts = Object.entries(state.saved)
@@ -94,7 +96,17 @@ export function ProfilePage() {
     <div>
       <Card className="mb-5 p-5">
         <div className="flex items-start gap-4">
-          <Avatar name={state.profile.name} hue={168} size={72} />
+          <button
+            type="button"
+            onClick={() => setEditingPhoto(true)}
+            className="group relative shrink-0 rounded-full"
+            aria-label={state.profile.avatar ? 'Change profile picture' : 'Add profile picture'}
+          >
+            <Avatar name={state.profile.name} hue={168} src={state.profile.avatar} size={72} />
+            <span className="absolute -bottom-0.5 -right-0.5 grid h-7 w-7 place-items-center rounded-full bg-ink-900 text-white ring-2 ring-white group-hover:bg-brand-700">
+              <Camera className="h-3.5 w-3.5" />
+            </span>
+          </button>
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-display text-2xl font-extrabold tracking-[-0.02em]">{state.profile.name}</h1>
             <p className="text-sm text-ink-500">@{state.profile.handle}</p>
@@ -105,6 +117,9 @@ export function ProfilePage() {
           <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
             <Pencil className="h-4 w-4" /> Edit profile
           </Button>
+          <Button variant="secondary" size="sm" onClick={() => setEditingPhoto(true)}>
+            <Camera className="h-4 w-4" /> {state.profile.avatar ? 'Change photo' : 'Add photo'}
+          </Button>
           <Link to={`/creator/${SELF_ID}`} className={buttonClass('secondary', 'sm')}>
             View creator page
           </Link>
@@ -113,7 +128,7 @@ export function ProfilePage() {
           {[
             ['Following', state.following.length],
             ['Saved', savedPosts.length],
-            ['CP', balance.toLocaleString()],
+            ['CP earned', lifetime.toLocaleString()],
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl bg-ink-50 py-2.5">
               <dt className="text-[12px] text-ink-500">{label}</dt>
@@ -234,6 +249,7 @@ export function ProfilePage() {
       </section>
 
       {editing && <EditProfile open={editing} onClose={() => setEditing(false)} />}
+      <AvatarEditor open={editingPhoto} onClose={() => setEditingPhoto(false)} />
 
       <Modal open={confirmReset} onClose={() => setConfirmReset(false)} title="Reset the demo?">
         <p className="text-sm leading-relaxed text-ink-600">

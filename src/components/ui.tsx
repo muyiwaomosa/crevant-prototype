@@ -5,16 +5,19 @@ import { BadgeCheck, Info, X } from 'lucide-react'
 import type { Creator } from '../types'
 
 // ---------------------------------------------------------------------------
-// Avatar: generated from initials and a hue, so no image hosting is needed.
+// Avatar: an uploaded picture when there is one, otherwise initials on a
+// colour generated from a hue, so no image hosting is needed.
 
 export function Avatar({
   name,
   hue,
+  src,
   size = 40,
   className,
 }: {
   name: string
   hue: number
+  src?: string
   size?: number
   className?: string
 }) {
@@ -24,6 +27,19 @@ export function Avatar({
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase())
     .join('')
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        width={size}
+        height={size}
+        className={clsx('inline-block shrink-0 rounded-full bg-ink-100 object-cover', className)}
+        style={{ width: size, height: size, boxShadow: 'inset 0 0 0 1.5px rgb(255 255 255 / 0.25)' }}
+      />
+    )
+  }
   return (
     <span
       aria-hidden="true"
@@ -42,7 +58,7 @@ export function Avatar({
 }
 
 export function CreatorAvatar({ creator, size = 40, className }: { creator: Creator; size?: number; className?: string }) {
-  return <Avatar name={creator.name} hue={creator.hue} size={size} className={className} />
+  return <Avatar name={creator.name} hue={creator.hue} src={creator.avatar} size={size} className={className} />
 }
 
 export function CreatorName({ creator, className, linked = true }: { creator: Creator; className?: string; linked?: boolean }) {
@@ -224,7 +240,25 @@ export function Modal({
   useEffect(() => {
     if (!open) return
     const prev = document.activeElement as HTMLElement | null
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') return onClose()
+      // Keep keyboard focus inside the dialog while it is open.
+      if (e.key !== 'Tab' || !ref.current) return
+      const focusables = ref.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement
+      if (e.shiftKey && (active === first || active === ref.current)) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
     document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     ref.current?.focus()
