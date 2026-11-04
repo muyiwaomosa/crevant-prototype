@@ -4,18 +4,22 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Gift, History, Sparkles } from 'lucide-react'
 import { useNow, useStore } from '../state/store'
 import { RewardCard } from '../components/RewardCard'
+import { CPOverview } from './CPOverview'
 import { CreatorAvatar, DemoTag, EmptyState, Notice, PageHeader, SparkIcon, Tabs, buttonClass } from '../components/ui'
 import { relativeTime } from '../lib/time'
 import type { Reward } from '../types'
 
-type Tab = 'following' | 'all' | 'history'
+type Tab = 'rewards' | 'cp' | 'history'
+type Scope = 'following' | 'all'
 
 export function RewardsPage() {
   const { rewards, state, creatorById, balanceWith } = useStore()
   const now = useNow()
   const [params, setParams] = useSearchParams()
-  const tabParam = params.get('tab') as Tab | null
-  const tab: Tab = tabParam === 'all' || tabParam === 'history' ? tabParam : 'following'
+  // Older links used ?tab=following|all; they map onto the Rewards tab with a scope.
+  const tabParam = params.get('tab')
+  const tab: Tab = tabParam === 'cp' || tabParam === 'history' ? tabParam : 'rewards'
+  const scope: Scope = params.get('scope') === 'all' || tabParam === 'all' ? 'all' : 'following'
   const creatorFilter = params.get('creator')
 
   const setParam = (key: string, value: string | null) => {
@@ -26,9 +30,9 @@ export function RewardsPage() {
   }
 
   const visible = useMemo(() => {
-    const base = tab === 'following' ? rewards.filter((r) => state.following.includes(r.creatorId)) : rewards
+    const base = scope === 'following' ? rewards.filter((r) => state.following.includes(r.creatorId)) : rewards
     return creatorFilter ? base.filter((r) => r.creatorId === creatorFilter) : base
-  }, [rewards, state.following, tab, creatorFilter])
+  }, [rewards, state.following, scope, creatorFilter])
 
   // Group by creator, followed creators with the highest balance first.
   const groups = useMemo(() => {
@@ -42,31 +46,37 @@ export function RewardsPage() {
   }, [visible, state.following, balanceWith, creatorById])
 
   const filterCreators = useMemo(() => {
-    const ids = new Set((tab === 'following' ? rewards.filter((r) => state.following.includes(r.creatorId)) : rewards).map((r) => r.creatorId))
+    const ids = new Set((scope === 'following' ? rewards.filter((r) => state.following.includes(r.creatorId)) : rewards).map((r) => r.creatorId))
     return [...ids].map((id) => creatorById(id)).filter((c) => c !== undefined)
-  }, [rewards, state.following, tab, creatorById])
+  }, [rewards, state.following, scope, creatorById])
 
   return (
     <div>
-      <PageHeader title="Rewards" subtitle="Each creator's rewards are unlocked with the CP you earn with that creator." />
+      <PageHeader title="Rewards" subtitle="Rewards people offer, unlocked with the CP you earn by engaging with them." />
 
       <Notice tone="spark" className="mb-4">
         <strong className="font-semibold">Simulated rewards only.</strong> Redeeming deducts demo CP and shows a confirmation, but nothing is
-        purchased, delivered, or sent to the creator. CP has no cash value.
+        purchased, delivered, or sent to anyone. CP has no cash value.
       </Notice>
 
       <Tabs
         label="Rewards views"
         value={tab}
-        onChange={(t) => setParam('tab', t === 'following' ? null : t)}
+        onChange={(t) => {
+          const next = new URLSearchParams()
+          if (t !== 'rewards') next.set('tab', t)
+          setParams(next, { replace: true })
+        }}
         tabs={[
-          { id: 'following', label: 'Following' },
-          { id: 'all', label: 'All' },
-          { id: 'history', label: 'History', count: state.redemptions.length },
+          { id: 'rewards', label: 'Rewards' },
+          { id: 'cp', label: 'My CP' },
+          { id: 'history', label: 'Redeemed', count: state.redemptions.length },
         ]}
       />
 
-      {tab === 'history' ? (
+      {tab === 'cp' ? (
+        <CPOverview />
+      ) : tab === 'history' ? (
         state.redemptions.length === 0 ? (
           <EmptyState icon={<History className="h-7 w-7" />} title="No redemptions yet" body="Rewards you redeem will be listed here with their demo confirmation codes." />
         ) : (
@@ -96,8 +106,31 @@ export function RewardsPage() {
         )
       ) : (
         <>
+          <div role="group" aria-label="Whose rewards to show" className="mb-3 inline-flex rounded-full bg-white p-1 ring-1 ring-ink-100">
+            {(['following', 'all'] as const).map((sc) => (
+              <button
+                key={sc}
+                type="button"
+                aria-pressed={scope === sc}
+                onClick={() => {
+                  const next = new URLSearchParams(params)
+                  next.delete('tab')
+                  next.delete('creator')
+                  if (sc === 'all') next.set('scope', 'all')
+                  else next.delete('scope')
+                  setParams(next, { replace: true })
+                }}
+                className={clsx(
+                  'h-8 rounded-full px-3.5 text-[13px] font-semibold transition',
+                  scope === sc ? 'bg-ink-900 text-white' : 'text-ink-600 hover:text-ink-900',
+                )}
+              >
+                {sc === 'following' ? 'People you follow' : 'Everyone'}
+              </button>
+            ))}
+          </div>
           {filterCreators.length > 1 && (
-            <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Filter rewards by creator">
+            <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Filter rewards by person">
               <button
                 type="button"
                 onClick={() => setParam('creator', null)}
@@ -107,7 +140,7 @@ export function RewardsPage() {
                   !creatorFilter ? 'bg-ink-900 text-white' : 'bg-white text-ink-700 ring-1 ring-ink-100 hover:ring-ink-200',
                 )}
               >
-                All creators
+                All
               </button>
               {filterCreators.map((c) => (
                 <button
@@ -130,11 +163,11 @@ export function RewardsPage() {
           {groups.length === 0 ? (
             <EmptyState
               icon={<Gift className="h-7 w-7" />}
-              title={tab === 'following' ? 'No rewards from creators you follow' : 'No rewards here'}
-              body="Follow creators to see the rewards they offer their community."
+              title={scope === 'following' ? 'No rewards from people you follow' : 'No rewards here'}
+              body="Follow people to see the rewards they offer the people who engage with them."
               action={
                 <Link to="/discover" className={buttonClass('primary')}>
-                  Discover creators
+                  Discover people
                 </Link>
               }
             />
@@ -157,7 +190,7 @@ export function RewardsPage() {
                           </Link>
                         </h2>
                         <p className="text-[13px] text-ink-600">
-                          {c.isSelf ? 'Rewards you offer your fans' : following ? `Your balance with ${first}` : `Not following ${first} yet`}
+                          {c.isSelf ? 'Rewards you offer' : following ? `Your balance with ${first}` : `Not following ${first} yet`}
                         </p>
                       </div>
                       {!c.isSelf && (

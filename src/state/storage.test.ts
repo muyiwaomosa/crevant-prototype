@@ -47,7 +47,9 @@ describe('migration from version 1', () => {
     expect(s.myPosts).toHaveLength(1)
     expect(s.myComments).toHaveLength(1)
     expect(s.profile.name).toBe('Sam Fan')
-    expect(s.mode).toBe('creator')
+    expect('mode' in s).toBe(false)
+    expect(s.onboarding.status).toBe('completed')
+    expect(s.unifiedNotice).toBe('pending')
     expect(s.seededAt).toBe(v1.seededAt)
   })
 
@@ -60,6 +62,69 @@ describe('migration from version 1', () => {
     expect(s.earnedKeys).toEqual({})
     expect(s.followBonus).toEqual({})
     expect(s.clawbacks).toEqual({})
+  })
+})
+
+// A realistic snapshot of version 2 data written by Release 1, with the old mode switch.
+const v2 = {
+  version: 2,
+  seededAt: NOW - 2 * 86_400_000,
+  mode: 'creator',
+  profile: { name: 'Jamie Rivera', handle: 'jamierivera', bio: 'Sketches', category: 'Art', avatar: 'data:image/jpeg;base64,AAAA' },
+  following: ['amara', 'marcus'],
+  liked: { p_amara_1: true },
+  saved: { p_marcus_1: NOW },
+  myPosts: [{ id: 'p_me_new', creatorId: 'me', createdAt: NOW, text: 'My post', baseLikes: 0, baseSaves: 0 }],
+  myComments: [],
+  myRewards: [{ id: 'r_me_1', creatorId: 'me', title: 'Sketch', description: 'A signed sketch for you', cost: 30, kind: 'digital', stock: null, claimedByOthers: 0, createdAt: NOW }],
+  deletedPostIds: ['p_me_2'],
+  ledger: [
+    { id: 'l2', at: NOW, amount: -15, kind: 'redeem', label: 'Redeemed', creatorId: 'amara', refId: 'rd1' },
+    { id: 'l1', at: NOW, amount: 10, kind: 'follow', label: 'Followed Marcus', creatorId: 'marcus', refId: 'marcus' },
+    { id: 'l0', at: NOW, amount: 18, kind: 'like', label: 'Liked', creatorId: 'amara', refId: 'p_amara_1' },
+  ],
+  redemptions: [{ id: 'rd1', rewardId: 'r_amara_card', at: NOW, cost: 15, code: 'DEMO-AAAA-BBBB', rewardTitle: 'Family recipe card', creatorId: 'amara' }],
+  earnedKeys: { 'like:p_amara_1': NOW },
+  followBonus: { marcus: NOW },
+  clawbacks: { theo: 4 },
+  migrationNotice: null,
+}
+
+describe('migration from version 2 (unified experience)', () => {
+  const s = migrate(JSON.parse(JSON.stringify(v2)), NOW)
+
+  it('upgrades to the current version and drops the obsolete mode', () => {
+    expect(s.version).toBe(STORAGE_VERSION)
+    expect('mode' in s).toBe(false)
+  })
+
+  it('keeps CP balances, history, posts, rewards, profile, and picture exactly', () => {
+    expect(balancesByWallet(s.ledger)).toEqual({ amara: 3, marcus: 10 })
+    expect(s.ledger).toEqual(v2.ledger)
+    expect(s.redemptions).toEqual(v2.redemptions)
+    expect(s.myPosts).toEqual(v2.myPosts)
+    expect(s.myRewards).toEqual(v2.myRewards)
+    expect(s.deletedPostIds).toEqual(['p_me_2'])
+    expect(s.profile).toEqual(v2.profile)
+    expect(s.followBonus).toEqual(v2.followBonus)
+    expect(s.clawbacks).toEqual(v2.clawbacks)
+    expect(s.earnedKeys).toEqual(v2.earnedKeys)
+    expect(s.following).toEqual(['amara', 'marcus'])
+  })
+
+  it('treats them as returning users: no forced onboarding, one time notice', () => {
+    expect(s.onboarding.status).toBe('completed')
+    expect(s.unifiedNotice).toBe('pending')
+  })
+})
+
+describe('fresh state', () => {
+  it('starts with onboarding pending and no follows chosen for the person', () => {
+    const s = createInitialState(NOW)
+    expect(s.onboarding).toEqual({ status: 'pending', at: null })
+    expect(s.following).toEqual([])
+    expect(s.unifiedNotice).toBe('none')
+    expect('mode' in s).toBe(false)
   })
 })
 

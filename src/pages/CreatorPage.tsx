@@ -53,7 +53,7 @@ export function CreatorPage() {
               <CreatorAvatar creator={creator} size={84} />
             </span>
             {creator.isSelf ? (
-              <Link to="/studio/new" className={buttonClass('primary')}>
+              <Link to="/create" className={buttonClass('primary')}>
                 <PenSquare className="h-4 w-4" /> New post
               </Link>
             ) : (

@@ -6,7 +6,7 @@ import { Avatar, Button, Modal } from './ui'
 
 /**
  * Upload, preview, change, or remove the visitor's profile picture.
- * The same picture is used in fan mode and on the visitor's creator page.
+ * One picture for the one profile everyone has, used wherever that person appears.
  */
 export function AvatarEditor({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, setAvatar, pushToast } = useStore()

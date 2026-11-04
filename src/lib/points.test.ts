@@ -267,3 +267,47 @@ describe('invariant: balances never go negative', () => {
     }
   })
 })
+
+describe('unified model: CP belongs to a relationship, not a role', () => {
+  // Two participants, each with their own local state. Both publish, both follow each other.
+  const alice = 'alice'
+  const bob = 'bob'
+  const engage = (s: PersistedState, actor: string, author: string, postId: string, ctx = makeCtx()) =>
+    earnForInteraction(
+      s,
+      { action: 'like', refId: postId, creatorId: author, creatorName: author, isOwnContent: actor === author },
+      ctx,
+    ).state
+
+  it('mutual followers each earn CP with the other, independently', () => {
+    const ctx = makeCtx()
+    let aliceState = freshState({ following: [bob] })
+    let bobState = freshState({ following: [alice] })
+    aliceState = earnForFollow(aliceState, { creatorId: bob, creatorName: 'Bob', isSelf: false }, ctx).state
+    bobState = earnForFollow(bobState, { creatorId: alice, creatorName: 'Alice', isSelf: false }, ctx).state
+    aliceState = engage(aliceState, alice, bob, 'bob_post_1', ctx)
+    bobState = engage(bobState, bob, alice, 'alice_post_1', ctx)
+    bobState = engage(bobState, bob, alice, 'alice_post_2', ctx)
+    expect(balancesByWallet(aliceState.ledger)).toEqual({ bob: 12 })
+    expect(balancesByWallet(bobState.ledger)).toEqual({ alice: 14 })
+  })
+
+  it('anyone can offer a reward that their supporters redeem with CP earned with them', () => {
+    const ctx = makeCtx()
+    let bobState = freshState({ following: [alice] })
+    for (const id of ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8']) bobState = engage(bobState, bob, alice, id, ctx)
+    const aliceReward = reward({ id: 'r_alice', creatorId: alice, cost: 15 })
+    const r = redeemReward(bobState, aliceReward, { creatorName: 'Alice', code: 'X', selfId: bob }, ctx)
+    expect('redemption' in r).toBe(true)
+    expect(balanceWith(r.state.ledger, alice)).toBe(1)
+  })
+
+  it('nobody earns CP from their own posts, whoever they are', () => {
+    const ctx = makeCtx()
+    let s = freshState()
+    s = engage(s, alice, alice, 'alice_post_1', ctx)
+    s = engage(s, bob, bob, 'bob_post_1', ctx)
+    expect(s.ledger).toEqual([])
+    expect(rewardEligibility(s, reward({ creatorId: alice }), { selfId: alice })).toMatchObject({ reason: 'own' })
+  })
+})

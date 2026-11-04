@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom'
 import { Bookmark, Heart, MessageCircle, PenSquare, Trash2 } from 'lucide-react'
 import { useNow, useStore } from '../../state/store'
 import { PostMedia } from '../../components/PostCard'
-import { Button, Card, EmptyState, Modal, PageHeader, buttonClass } from '../../components/ui'
+import { Button, Card, EmptyState, Modal, buttonClass } from '../../components/ui'
 import { formatCompact } from '../../lib/format'
 import { fullDateTime, relativeTime } from '../../lib/time'
 import { SELF_ID } from '../../data/seed'
 
-export function StudioPosts() {
+/** The participant's own published posts, newest first, with stats and delete. Shown on Profile. */
+export function MyPosts() {
   const { posts, statsFor, deletePost } = useStore()
   const now = useNow()
   const [toDelete, setToDelete] = useState<string | null>(null)
@@ -16,23 +17,22 @@ export function StudioPosts() {
 
   return (
     <div>
-      <PageHeader
-        title="Your posts"
-        subtitle={`${mine.length} published, newest first`}
-        action={
-          <Link to="/studio/new" className={buttonClass('primary', 'sm')}>
-            <PenSquare className="h-4 w-4" /> New
+      {mine.length > 0 && (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-[13px] text-ink-600">{mine.length} published, newest first</p>
+          <Link to="/create" className={buttonClass('primary', 'sm')}>
+            <PenSquare className="h-4 w-4" /> New post
           </Link>
-        }
-      />
+        </div>
+      )}
 
       {mine.length === 0 ? (
         <EmptyState
           icon={<PenSquare className="h-7 w-7" />}
           title="Nothing published yet"
-          body="Your first post will land in your followers' feeds in time order."
+          body="Anyone can post on Crevant. Your first post goes to the people who follow you, in time order."
           action={
-            <Link to="/studio/new" className={buttonClass('primary')}>
+            <Link to="/create" className={buttonClass('primary')}>
               Write a post
             </Link>
           }
@@ -41,7 +41,6 @@ export function StudioPosts() {
         <div className="space-y-4">
           {mine.map((p) => {
             const s = statsFor(p)
-            const simulated = p.baseLikes === 0
             return (
               <Card key={p.id} className="p-4">
                 <div className="mb-2 flex items-center justify-between gap-3">
@@ -69,7 +68,7 @@ export function StudioPosts() {
                   <span className="inline-flex items-center gap-1.5">
                     <Bookmark className="h-4 w-4" /> {s.saves}
                   </span>
-                  {simulated && <span className="ml-auto text-[12px] text-ink-400">Simulated audience, grows over time</span>}
+                  <span className="ml-auto text-[12px] text-ink-600">Likes and saves are simulated</span>
                 </div>
               </Card>
             )

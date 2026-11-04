@@ -72,6 +72,10 @@ async function comment(page, postId, text) {
   await page.goto(BASE + '/')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
+  // Release 2: new visitors see onboarding. Skipping follows the four starter accounts.
+  await page.waitForURL(/\/welcome/)
+  await page.getByRole('button', { name: 'Skip' }).click()
+  await page.waitForURL(BASE + '/')
   check('fresh demo starts with no CP', Object.keys(await balances(page)).length === 0)
 
   // ---- Journey 1: chronological home feed --------------------------------
@@ -216,6 +220,7 @@ async function comment(page, postId, text) {
   check('reward history survives a refresh', (await page.getByText('Family recipe card: slow jollof').count()) >= 1)
 
   await page.goto(BASE + '/points')
+  await page.getByText('This total cannot be spent.').waitFor()
   check('points page shows lifetime total as not spendable', (await page.getByText('This total cannot be spent.').count()) === 1)
   await shot(page, 'points')
 
@@ -224,14 +229,11 @@ async function comment(page, postId, text) {
   await page.getByRole('button', { name: 'Follow Hana Sato' }).click()
   await page.goto(BASE + '/')
   check('following from Discover updates the feed', (await page.getByText('The Memory Police').count()) === 1)
-  await page.getByRole('radio', { name: 'Creator' }).click()
-  await page.waitForURL(/\/studio$/)
-  await page.goto(BASE + '/studio/new')
+  await page.goto(BASE + '/create')
   await page.fill('#post-text', 'Release 1 test post from the studio.')
   await page.getByRole('button', { name: 'Publish' }).click()
-  await page.waitForURL(/studio\/posts/)
-  await page.getByRole('radio', { name: 'Fan' }).click()
-  await page.waitForURL(BASE + '/')
+  await page.waitForURL(/\/profile/)
+  await page.goto(BASE + '/')
   check('published post is first in the chronological feed', (await page.locator('article').first().innerText()).includes('Release 1 test post'))
 
   // ---- Profile pictures ---------------------------------------------------
@@ -261,23 +263,22 @@ async function comment(page, postId, text) {
   check('picture shows on your creator page', (await imgCount()) >= 1)
   await page.reload()
   check('picture persists after refresh', (await imgCount()) >= 1)
-  await page.goto(BASE + '/studio')
-  check('picture shows in the creator studio', (await imgCount()) >= 1)
-  await shot(page, 'studio-avatar')
+  await page.goto(BASE + '/profile/tools')
+  check('creator tools page loads with the picture available on profile', (await page.getByRole('heading', { name: 'Creator tools' }).count()) === 1)
   // Creator side: create a reward and see the picture on the rewards page.
-  await page.goto(BASE + '/studio/rewards')
+  await page.goto(BASE + '/profile/tools')
   await page.fill('input[placeholder^="e.g."]', 'Signed sketchbook page')
   await page.fill('textarea', 'A scanned and signed page from my travel sketchbook.')
   await page.getByRole('button', { name: 'Create reward' }).click()
   await page.goto(BASE + '/rewards?tab=all&creator=me')
   check('picture shows with your rewards', (await imgCount()) >= 1)
-  // Change the picture from the creator studio.
-  await page.goto(BASE + '/studio')
-  await page.getByRole('button', { name: 'Change creator profile picture' }).click()
+  // Change the picture.
+  await page.goto(BASE + '/profile')
+  await page.getByRole('button', { name: 'Change profile picture' }).click()
   await page.locator('[role=dialog] input[type=file]').setInputFiles({ name: 'two.png', mimeType: 'image/png', buffer: await makeImage(page, 300, 700) })
   await page.getByRole('button', { name: 'Save picture' }).click()
   const av2 = (await stored(page)).profile.avatar
-  check('creator can change the picture', av2 && av2 !== av)
+  check('picture can be changed', av2 && av2 !== av)
   // Storage full: saving must fail cleanly.
   await page.goto(BASE + '/profile')
   await page.getByRole('button', { name: 'Change photo' }).click()
@@ -338,7 +339,7 @@ async function comment(page, postId, text) {
   }, KEY)
   await page.goto(BASE + '/points')
   const m = await stored(page)
-  check('version 1 data migrates to version 2', m.version === 2 && m.following.includes('marcus') && m.liked.p_amara_1 === true)
+  check('version 1 data migrates to the current version', m.version === 3 && m.following.includes('marcus') && m.liked.p_amara_1 === true)
   check('old universal CP is retired, not converted', m.ledger.length === 0 && m.migrationNotice.retiredBalance === 20)
   check('migration notice explains what happened', (await page.getByText('Connection Points now belong to each creator').count()) === 1)
   await shot(page, 'migration')
@@ -348,7 +349,7 @@ async function comment(page, postId, text) {
   // ---- Narrow viewport and desktop ---------------------------------------
   const narrow = await browser.newPage({ viewport: { width: 320, height: 640 } })
   narrow.on('pageerror', (e) => errors.push(e.message))
-  for (const p of ['/', '/discover', '/points', '/rewards', '/rewards?tab=all', '/profile', '/creator/amara', '/post/p_marcus_1', '/studio', '/studio/rewards']) {
+  for (const p of ['/', '/discover', '/points', '/rewards', '/rewards?tab=all', '/profile', '/creator/amara', '/post/p_marcus_1', '/profile/tools', '/create']) {
     await narrow.goto(BASE + p)
     const ow = await narrow.evaluate(() => document.documentElement.scrollWidth - innerWidth)
     check(`no sideways scroll at 320px on ${p}`, ow <= 0, `${ow}px`)

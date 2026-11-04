@@ -1,18 +1,21 @@
 import type { Comment, PersistedState, Post, Profile, Redemption, Reward } from '../types'
-import { DEFAULT_FOLLOWING, DEFAULT_PROFILE } from '../data/seed'
+import { DEFAULT_PROFILE } from '../data/seed'
 
-// Version 1: MVP with one universal CP balance.
+// Version 1: MVP with one universal CP balance and Fan/Creator modes.
 // Version 2: Release 1, CP balances belong to individual creators.
-export const STORAGE_VERSION = 2
+// Version 3: Release 2, one unified experience; no modes, first run onboarding.
+export const STORAGE_VERSION = 3
 export const STORAGE_KEY = 'crevant-demo-state'
 
 export function createInitialState(now = Date.now()): PersistedState {
   return {
     version: STORAGE_VERSION,
     seededAt: now,
-    mode: 'fan',
+    onboarding: { status: 'pending', at: null },
+    unifiedNotice: 'none',
     profile: { ...DEFAULT_PROFILE },
-    following: [...DEFAULT_FOLLOWING],
+    // New participants choose who to follow during onboarding.
+    following: [],
     liked: {},
     saved: {},
     myPosts: [],
@@ -53,7 +56,9 @@ export function migrateV1(v1: Record<string, unknown>, now = Date.now()): Persis
   const profile = isObj(v1.profile) ? { ...base.profile, ...(v1.profile as Partial<Profile>) } : base.profile
   return {
     ...base,
-    mode: v1.mode === 'creator' ? 'creator' : 'fan',
+    // Returning users skip onboarding and see a one time note about the change.
+    onboarding: { status: 'completed', at: now },
+    unifiedNotice: 'pending',
     profile,
     following: arr<string>(v1.following).filter((x) => typeof x === 'string'),
     liked: rec<true>(v1.liked),
@@ -73,6 +78,24 @@ export function migrateV1(v1: Record<string, unknown>, now = Date.now()): Persis
   }
 }
 
+/**
+ * Migrate version 2 (Release 1) data. Everything is kept except the obsolete
+ * Fan/Creator `mode`. These are returning users, so onboarding is marked as
+ * done and a one time note explains that the modes were merged.
+ */
+export function migrateV2(v2: Record<string, unknown>, now = Date.now()): PersistedState {
+  const rest = { ...v2 }
+  delete rest.mode
+  const base = createInitialState(typeof v2.seededAt === 'number' ? v2.seededAt : now)
+  return {
+    ...base,
+    ...(rest as Partial<PersistedState>),
+    version: STORAGE_VERSION,
+    onboarding: { status: 'completed', at: now },
+    unifiedNotice: 'pending',
+  }
+}
+
 /** Turn whatever is in storage into a valid current state. Never throws. */
 export function migrate(raw: unknown, now = Date.now()): PersistedState {
   if (!isObj(raw)) return createInitialState(now)
@@ -80,6 +103,7 @@ export function migrate(raw: unknown, now = Date.now()): PersistedState {
     // Fill in any fields a newer build added, keeping saved values.
     return { ...createInitialState(typeof raw.seededAt === 'number' ? raw.seededAt : now), ...(raw as Partial<PersistedState>) } as PersistedState
   }
+  if (raw.version === 2) return migrateV2(raw, now)
   if (raw.version === 1) return migrateV1(raw, now)
   return createInitialState(now)
 }

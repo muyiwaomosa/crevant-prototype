@@ -1,10 +1,10 @@
 import clsx from 'clsx'
 import { Fragment, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowDownWideNarrow, CheckCheck, ChevronDown, Compass, Sparkles } from 'lucide-react'
+import { ArrowDownWideNarrow, CheckCheck, ChevronDown, Compass, Plus, Sparkles, X } from 'lucide-react'
 import { useNow, useStore } from '../state/store'
 import { PostCard } from '../components/PostCard'
-import { CreatorAvatar, EmptyState, buttonClass } from '../components/ui'
+import { Avatar, CreatorAvatar, EmptyState, buttonClass } from '../components/ui'
 import { dayKey, dayLabel, fullDateTime } from '../lib/time'
 import { SELF_ID } from '../data/seed'
 
@@ -24,7 +24,7 @@ function ChronoExplainer() {
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-brand-900">Newest first. No ranking.</span>
           <span className="block text-[13px] leading-snug text-brand-800/80">
-            Posts from creators you follow, in the order they were shared.
+            Posts from people you follow, in the order they were shared.
           </span>
         </span>
         <ChevronDown className={clsx('h-5 w-5 shrink-0 text-brand-700 transition', open && 'rotate-180')} />
@@ -32,7 +32,7 @@ function ChronoExplainer() {
       {open && (
         <div className="space-y-2 px-4 pb-4 text-[13px] leading-relaxed text-brand-900/85">
           <p>
-            Your Home feed only shows creators you chose to follow, sorted purely by time. Nothing is boosted, hidden, or reordered based on
+            Your Home feed only shows people you chose to follow, sorted purely by time. Nothing is boosted, hidden, or reordered based on
             predicted engagement, so you can scroll until you are caught up.
           </p>
           <p>
@@ -42,6 +42,47 @@ function ChronoExplainer() {
         </div>
       )}
     </div>
+  )
+}
+
+/** One time note for people who used the old Fan and Creator modes. */
+function UnifiedNotice() {
+  const { state, dismissUnifiedNotice } = useStore()
+  if (state.unifiedNotice !== 'pending') return null
+  return (
+    <div role="region" aria-label="What's new" className="mb-4 flex items-start gap-3 rounded-2xl bg-white p-4 ring-2 ring-brand-200">
+      <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
+      <div className="min-w-0 flex-1 text-sm leading-relaxed text-ink-700">
+        <p className="font-semibold text-ink-900">Fan and Creator modes are now one</p>
+        <p className="mt-0.5">
+          Everything is in one place. Post any time from <strong>Create</strong>. Your rewards and audience tools are in{' '}
+          <Link to="/profile/tools" className="font-semibold text-brand-700 underline">
+            Profile → Creator tools
+          </Link>
+          . Your posts, points, and history are unchanged.
+        </p>
+      </div>
+      <button type="button" onClick={dismissUnifiedNotice} className="-m-1 rounded-full p-1.5 text-ink-500 hover:bg-ink-100" aria-label="Dismiss">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
+
+/** A gentle prompt so people discover that anyone can post. */
+function ShareSomething() {
+  const { state } = useStore()
+  return (
+    <Link
+      to="/create"
+      className="mb-4 flex items-center gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-ink-100 transition hover:ring-ink-200"
+    >
+      <Avatar name={state.profile.name} hue={168} src={state.profile.avatar} size={36} />
+      <span className="min-w-0 flex-1 truncate text-[15px] text-ink-600">Share something with your followers…</span>
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-600 px-3 py-1.5 text-[13px] font-semibold text-white">
+        <Plus className="h-4 w-4" /> Post
+      </span>
+    </Link>
   )
 }
 
@@ -67,18 +108,20 @@ export function HomePage() {
           <p className="text-[15px] text-ink-500">
             {followedCreators.length === 0
               ? 'You are not following anyone yet.'
-              : `${followedCreators.length} creator${followedCreators.length === 1 ? '' : 's'}, latest first`}
+              : `${followedCreators.length} ${followedCreators.length === 1 ? 'person' : 'people'}, latest first`}
           </p>
         </div>
         <Link to="/discover" className={buttonClass('secondary', 'sm')}>
-          <Compass className="h-4 w-4" /> Find creators
+          <Compass className="h-4 w-4" /> Find people
         </Link>
       </div>
 
+      <UnifiedNotice />
       <ChronoExplainer />
+      <ShareSomething />
 
       {followedCreators.length > 0 && (
-        <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="group" aria-label="Filter feed by creator">
+        <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="group" aria-label="Filter feed by person">
           <button
             type="button"
             onClick={() => setFilter('all')}
@@ -115,10 +158,10 @@ export function HomePage() {
         <EmptyState
           icon={<Compass className="h-7 w-7" />}
           title="Your feed is waiting"
-          body="Follow a few creators and their posts will show up here, newest first."
+          body="Follow a few people and their posts will show up here, newest first."
           action={
             <Link to="/discover" className={buttonClass('primary')}>
-              Discover creators
+              Discover people
             </Link>
           }
         />
@@ -145,10 +188,10 @@ export function HomePage() {
             </span>
             <p className="font-display text-lg font-bold">You are all caught up</p>
             <p className="max-w-sm text-sm leading-relaxed text-ink-500">
-              That is every post from {activeFilter === 'all' ? 'the creators you follow' : creatorById(activeFilter)?.name} back to{' '}
+              That is every post from {activeFilter === 'all' ? 'the people you follow' : creatorById(activeFilter)?.name} back to{' '}
               {fullDateTime(feed[feed.length - 1].createdAt)}. Nothing was left out by an algorithm.
             </p>
-            <Link to="/points" className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
+            <Link to="/rewards?tab=cp" className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
               <Sparkles className="h-4 w-4" /> See your Connection Points
             </Link>
           </div>
