@@ -4,9 +4,8 @@ import { Link } from 'react-router-dom'
 import { ArrowDownWideNarrow, CheckCheck, ChevronDown, Compass, Sparkles } from 'lucide-react'
 import { useNow, useStore } from '../state/store'
 import { PostCard } from '../components/PostCard'
-import { Button, CreatorAvatar, EmptyState, SparkIcon, buttonClass } from '../components/ui'
+import { CreatorAvatar, EmptyState, buttonClass } from '../components/ui'
 import { dayKey, dayLabel, fullDateTime } from '../lib/time'
-import { EARN_RULES } from '../lib/points'
 import { SELF_ID } from '../data/seed'
 
 function ChronoExplainer() {
@@ -46,23 +45,6 @@ function ChronoExplainer() {
   )
 }
 
-function CheckInCard() {
-  const { checkedInToday, checkIn } = useStore()
-  if (checkedInToday) return null
-  return (
-    <div className="mb-4 flex items-center gap-3 rounded-2xl bg-ink-900 px-4 py-3 text-white">
-      <SparkIcon className="h-9 w-9 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold">Daily check in</p>
-        <p className="text-[13px] text-ink-300">Earn {EARN_RULES.checkin.points} demo CP for stopping by today.</p>
-      </div>
-      <Button variant="spark" size="sm" onClick={checkIn}>
-        Check in
-      </Button>
-    </div>
-  )
-}
-
 export function HomePage() {
   const { posts, state, creatorById } = useStore()
   const now = useNow()
@@ -94,7 +76,6 @@ export function HomePage() {
       </div>
 
       <ChronoExplainer />
-      <CheckInCard />
 
       {followedCreators.length > 0 && (
         <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="group" aria-label="Filter feed by creator">

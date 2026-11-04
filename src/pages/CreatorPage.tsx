@@ -8,6 +8,8 @@ import { PostCard } from '../components/PostCard'
 import { RewardCard } from '../components/RewardCard'
 import { CreatorAvatar, CreatorName, EmptyState, Tabs, buttonClass } from '../components/ui'
 import { formatCompact } from '../lib/format'
+import { EARN_RULES, rewardProgress } from '../lib/points'
+import { SparkIcon } from '../components/ui'
 
 export function CreatorPage() {
   const { id = '' } = useParams()
@@ -34,7 +36,6 @@ export function CreatorPage() {
   const creatorPosts = posts.filter((p) => p.creatorId === creator.id)
   const creatorRewards = rewards.filter((r) => r.creatorId === creator.id)
   const following = state.following.includes(creator.id)
-  const myCp = state.ledger.filter((e) => e.creatorId === creator.id && e.amount > 0).reduce((s, e) => s + e.amount, 0)
 
   return (
     <div>
@@ -81,15 +82,10 @@ export function CreatorPage() {
               </div>
             ))}
           </dl>
-          {!creator.isSelf && (
-            <p className="mt-3 text-[13px] text-ink-500">
-              {following
-                ? `You have earned ${myCp} CP engaging with ${creator.name.split(' ')[0]}.`
-                : `Follow to see these posts in your Home feed and unlock ${creator.name.split(' ')[0]}'s rewards.`}
-            </p>
-          )}
         </div>
       </section>
+
+      {!creator.isSelf && <ConnectionPanel creatorId={creator.id} following={following} onShowRewards={() => setTab('rewards')} />}
 
       <Tabs
         label="Profile sections"
@@ -118,5 +114,73 @@ export function CreatorPage() {
         </div>
       )}
     </div>
+  )
+}
+
+/** The fan's CP relationship with one creator, and what is still left to earn. */
+function ConnectionPanel({ creatorId, following, onShowRewards }: { creatorId: string; following: boolean; onShowRewards: () => void }) {
+  const { creatorById, balanceWith, posts, rewards, state } = useStore()
+  const creator = creatorById(creatorId)!
+  const first = creator.name.split(' ')[0]
+  const balance = balanceWith(creatorId)
+  const theirPosts = posts.filter((p) => p.creatorId === creatorId)
+  const open = (action: string) => theirPosts.filter((p) => !state.earnedKeys[`${action}:${p.id}`]).length
+  const videos = theirPosts.filter((p) => p.media?.type === 'video' && !state.earnedKeys[`watch:${p.id}`]).length
+  const next = rewards.filter((r) => r.creatorId === creatorId && !state.redemptions.some((x) => x.rewardId === r.id)).find((r) => r.cost > balance)
+  const ready = rewards.filter((r) => r.creatorId === creatorId && r.cost <= balance && !state.redemptions.some((x) => x.rewardId === r.id)).length
+
+  const items = [
+    { label: 'Follow bonus', detail: state.followBonus[creatorId] ? 'Held while you follow' : following ? 'Not held: you were already following when the demo started, or the daily follow limit was reached' : `+${EARN_RULES.follow.points} CP when you follow`, done: Boolean(state.followBonus[creatorId]) },
+    { label: 'Comment on posts', detail: `${open('comment')} of ${theirPosts.length} posts left · +${EARN_RULES.comment.points} each`, done: open('comment') === 0 },
+    ...(theirPosts.some((p) => p.media?.type === 'video') ? [{ label: 'Watch videos to the end', detail: `${videos} left · +${EARN_RULES.watch.points} each`, done: videos === 0 }] : []),
+    { label: 'Like posts', detail: `${open('like')} left · +${EARN_RULES.like.points} each`, done: open('like') === 0 },
+    { label: 'Save posts', detail: `${open('save')} left · +${EARN_RULES.save.points} each`, done: open('save') === 0 },
+  ]
+
+  return (
+    <section aria-labelledby="connection-title" className="mb-5 rounded-3xl bg-ink-900 p-5 text-white">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="connection-title" className="text-sm font-medium text-ink-200">
+            Your CP with {first}
+          </h2>
+          <p className="mt-1 flex items-center gap-2 font-display text-4xl font-extrabold tabular-nums">
+            <SparkIcon className="h-8 w-8" />
+            {balance}
+            <span className="text-base font-bold text-ink-300">CP</span>
+          </p>
+        </div>
+        <button type="button" onClick={onShowRewards} className="rounded-full bg-white/10 px-3 py-1.5 text-[13px] font-semibold hover:bg-white/20">
+          {ready > 0 ? `${ready} reward${ready === 1 ? '' : 's'} ready` : `${first}'s rewards`}
+        </button>
+      </div>
+      {next && (
+        <div className="mt-3">
+          <div className="flex justify-between gap-2 text-[12px] text-ink-200">
+            <span className="truncate">Next: {next.title}</span>
+            <span className="shrink-0 tabular-nums">
+              {balance} / {next.cost}
+            </span>
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-label={`Progress toward ${next.title}`} aria-valuemin={0} aria-valuemax={next.cost} aria-valuenow={balance}>
+            <div className="h-full rounded-full bg-spark-400" style={{ width: `${rewardProgress(balance, next.cost) * 100}%` }} />
+          </div>
+        </div>
+      )}
+      <h3 className="mt-4 text-[12px] font-semibold uppercase tracking-wider text-ink-300">Ways to earn with {first}</h3>
+      <ul className="mt-2 space-y-1.5 text-[13px]">
+        {items.map((i) => (
+          <li key={i.label} className="flex items-start gap-2">
+            <span className={i.done ? 'text-brand-300' : 'text-spark-300'} aria-hidden="true">
+              {i.done ? '✓' : '•'}
+            </span>
+            <span>
+              <span className="font-semibold">{i.label}</span> <span className="text-ink-300">{i.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[12px] leading-snug text-ink-300">CP earned here can only be spent on {first}'s rewards. Demo points, no cash value.</p>
+    </section>
   )
 }

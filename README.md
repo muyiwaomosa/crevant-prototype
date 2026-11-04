@@ -30,6 +30,7 @@ Other scripts:
 | `npm run build` | Type checks and builds a production bundle into `dist/` |
 | `npm run preview` | Serves the production build locally |
 | `npm run typecheck` | Runs the TypeScript compiler only |
+| `npm test` | Runs the unit tests |
 
 ## Deploying to Vercel
 
@@ -43,9 +44,9 @@ Import the repository in Vercel and accept the detected defaults (framework: Vit
 - **Posts.** Text, illustrated images, and short sample videos. Like, comment, and save. Opening a post shows its full comment thread.
 - **Discover.** Eight sample creators across food, travel, tech, music, art, fitness, books, and wellness. Search, filter by interest, and follow or unfollow. Following someone adds their posts to Home immediately.
 - **Creator profiles.** Cover, bio, follower count, all posts newest first, and that creator's rewards.
-- **Connection Points.** Balance, lifetime earned and redeemed totals, the earning rules with today's usage, your top creator connections, and a day-by-day activity history.
-- **Rewards.** Browse rewards from creators you follow or from everyone. Each card shows its cost, type, and remaining stock. Redeeming asks for confirmation, deducts CP, and shows a demo confirmation code. Redemption history lives on the Rewards and Profile pages.
-- **Profile.** Edit your name, handle, and bio. See saved posts, who you follow, and what you have redeemed. **Reset demo** restores the original state.
+- **Connection Points.** A separate balance with each creator, progress toward that creator's next reward, a non spendable lifetime total, the earning rules with today's usage, and a day by day activity history showing which creator each entry belongs to.
+- **Rewards.** Grouped and filterable by creator. Each group shows your balance with that creator, and each card shows the cost, the CP still needed, a progress bar, and a link to earn more with that creator. Redeeming asks for confirmation, deducts CP, and shows a demo confirmation code. Redemption history lives on the Rewards and Profile pages.
+- **Profile.** Add, change, or remove a profile picture. Edit your name, handle, and bio. See saved posts, who you follow, and what you have redeemed. **Reset demo** restores the original state.
 
 ### Creator mode
 
@@ -56,26 +57,54 @@ Switch with the **Fan / Creator** toggle in the header (phones) or sidebar (desk
 - **Posts.** Everything you have published, with per-post stats and delete.
 - **Rewards.** Create a demo reward with a title, description, type, CP cost, and optional limited quantity. It shows up on the fan Rewards page marked as yours.
 
-## How Connection Points work
+## How Connection Points work (Release 1)
 
-| Action | CP | Earned at most | Daily limit |
+Since Release 1, **CP belongs to individual creators**. Points you earn by engaging with Amara can only be spent on Amara's rewards. A lifetime "CP earned" total is shown for reference but cannot be spent. See [docs/RELEASE-1.md](docs/RELEASE-1.md) for the hypothesis, tradeoffs, and reasoning.
+
+| Action | CP (to that creator) | Earned at most | Daily limit, all creators |
 | --- | --- | --- | --- |
-| Daily check in | 5 | Once per day | 1 |
-| Follow a creator | 10 | Once per creator, ever | 5 |
-| Comment (12+ characters) | 5 | Once per post | 6 |
-| Watch a video to the end | 3 | Once per video | 5 |
+| Follow a creator | 10 | Held while you follow; returned when you unfollow | 5 |
+| Comment | 5 | Once per post, if it passes basic quality checks | 6 |
+| Watch a video | 3 | Once per video, after 85% genuine playback | 5 |
 | Like a post | 2 | Once per post | 10 |
 | Save a post | 1 | Once per post | 10 |
 
-Guardrails against farming:
+Guardrails:
 
-- Every award is keyed to the action and the item (for example `like:p_amara_1`). Unliking and liking again, or unfollowing and following again, never earns twice.
-- Each action type has a daily limit. Past it, the action still works but earns nothing, and a message explains why.
+- Each like, save, comment, and watch is keyed to the post, so repeating it never earns twice.
+- Comments earn nothing if they are under 12 characters, mostly one repeated character, repetitive (fewer than 3 different words or one word dominating), a copy of an earlier comment, or contain links or self promotion. The comment still posts.
+- Video CP needs at least 85% of the video actually played and covered. Seeking or skipping ahead does not count.
+- Unfollowing returns the follow bonus. If the balance cannot cover it (because CP was spent), the balance goes to zero and the rest is settled from your next CP with that creator, so balances never go negative.
 - Engaging with your own posts earns nothing.
-- The four creators you follow at the start are pre-marked as rewarded, so unfollowing and refollowing them does not mint points.
-- New visitors get a 50 CP welcome bonus so a cheap reward is reachable quickly.
+- Rewards need you to follow the creator, hold enough CP with that creator, and have stock left. Each reward can be redeemed once per fan.
 
-Rewards require you to follow the creator, have enough CP, and have stock left, and each reward can be redeemed once per fan.
+These checks run in the browser. They stop accidental and casual farming but not someone who edits `localStorage` directly; a real version must enforce them on a server.
+
+## Profile pictures
+
+Fans and creators can add a profile picture from the Profile page or the Creator Studio. In this prototype the fan and the creator are the same demo person, so one picture is used everywhere your identity appears: profile, creator page, posts, comments, studio, and rewards. Pictures are checked (JPEG, PNG, WebP, or GIF up to 8 MB), cropped to a square, shrunk to 256 pixels, and stored as a small JPEG **in this browser only**. They are not uploaded to a server or shared across devices. Without a picture, initials are shown. Reset Demo removes it.
+
+## Tests
+
+```bash
+npm test
+```
+
+Runs 65 unit tests (Vitest) for earning, reversal, redemption, eligibility, comment checks, video tracking, picture validation, and storage migration.
+
+A browser end to end script checks the acceptance criteria against a running build. It needs Playwright with Chromium installed separately:
+
+```bash
+npm run build
+```
+
+```bash
+npx vite preview --port 4175 --strictPort
+```
+
+```bash
+node e2e/release1.e2e.cjs http://localhost:4175
+```
 
 ## Technical choices
 
@@ -85,7 +114,7 @@ Rewards require you to follow the creator, have enough CP, and have stock left, 
 - **lucide-react** for icons and **clsx** for class names. No other UI library, which keeps the bundle around 120 KB gzipped.
 - **Self-contained media.** Post artwork is inline SVG (`src/components/Artwork.tsx`) and the two sample videos in `public/media/` were generated locally with ffmpeg, so the demo never depends on third-party image hosts.
 - **State.** A single React context (`src/state/store.tsx`) holds everything and persists it to `localStorage` under a versioned key. Seed content (`src/data/seed.ts`) is not copied into storage; only your own activity is, and seed timestamps are anchored to the moment you first opened the demo so the feed looks fresh.
-- **Points engine.** `src/lib/points.ts` is pure and has no React dependency, so the same rules can move to a server later.
+- **Points engine.** `src/lib/points.ts` is pure and has no React dependency, so the same rules can move to a server later. `src/lib/wallets.ts` decides which wallet a point belongs to, so a universal or hybrid model can be compared by swapping one object.
 
 ### Project layout
 
@@ -108,7 +137,7 @@ src/
 - No accounts, authentication, or backend. Everything lives in one browser; clearing site data or using another device starts fresh.
 - Points are calculated on the client and could be edited in dev tools. That is fine for a demo and is exactly why the engine is isolated for a server move.
 - Engagement on posts you publish is simulated and grows over time. Comments from other fans are seeded and static.
-- Uploaded images are stored as compressed data URLs in `localStorage`, which typically holds about 5 MB. The app warns you if saving fails.
+- Uploaded post images and profile pictures are stored as compressed data URLs in `localStorage`, which typically holds about 5 MB. The app warns you if saving fails, and a profile picture that cannot be saved is not applied.
 - Video posts use two short generated clips. Creators cannot upload video yet.
 - No notifications, direct messages, or moderation tools.
 - Light theme only.

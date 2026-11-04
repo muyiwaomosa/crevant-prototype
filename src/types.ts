@@ -38,6 +38,8 @@ export interface Creator {
   /** Hue (0 to 360) used to colour the generated avatar. */
   hue: number
   cover: ArtworkKind
+  /** Uploaded profile picture (data URL). Falls back to initials. */
+  avatar?: string
   isSelf?: boolean
 }
 
@@ -84,15 +86,28 @@ export interface Reward {
   createdAt: number
 }
 
-export type EarnAction = 'like' | 'comment' | 'save' | 'follow' | 'watch' | 'checkin'
+/** Interactions that can earn CP with a specific creator. */
+export type EarnAction = 'like' | 'comment' | 'save' | 'follow' | 'watch'
+
+/**
+ * Ledger entry kinds.
+ * - EarnAction: points granted for an interaction
+ * - redeem: points spent on a reward
+ * - reversal: a follow bonus taken back after an unfollow
+ * - clawback: part of a new grant used to settle an earlier reversal that the
+ *   balance could not cover at the time (keeps balances from going negative)
+ */
+export type LedgerKind = EarnAction | 'redeem' | 'reversal' | 'clawback'
 
 export interface LedgerEntry {
   id: string
   at: number
+  /** Positive when earned, negative when spent or reversed. */
   amount: number
-  kind: EarnAction | 'redeem' | 'welcome'
+  kind: LedgerKind
   label: string
-  creatorId?: string
+  /** The creator whose CP balance this entry belongs to. */
+  creatorId: string
   refId?: string
 }
 
@@ -104,6 +119,8 @@ export interface Redemption {
   code: string
   rewardTitle: string
   creatorId: string
+  /** Redeemed with the retired universal balance before Release 1. */
+  legacy?: boolean
 }
 
 export type Mode = 'fan' | 'creator'
@@ -113,6 +130,18 @@ export interface Profile {
   handle: string
   bio: string
   category: Category
+  /** Small square JPEG data URL. Stored only in this browser. */
+  avatar?: string
+}
+
+/** Shown once after older demo data is migrated to creator specific CP. */
+export interface MigrationNotice {
+  fromVersion: number
+  at: number
+  /** The universal balance that was retired rather than converted. */
+  retiredBalance: number
+  legacyRedemptions: number
+  dismissed: boolean
 }
 
 /** Everything that is persisted to localStorage. */
@@ -133,6 +162,11 @@ export interface PersistedState {
   deletedPostIds: string[]
   ledger: LedgerEntry[]
   redemptions: Redemption[]
-  /** Keys of actions that have already earned CP, e.g. "like:post_12". */
+  /** Once per item earning keys, e.g. "like:p_amara_1" -> timestamp. */
   earnedKeys: Record<string, number>
+  /** Creators whose follow bonus the fan currently holds -> time granted. */
+  followBonus: Record<string, number>
+  /** Wallet -> CP still owed from a reversal the balance could not cover. */
+  clawbacks: Record<string, number>
+  migrationNotice: MigrationNotice | null
 }

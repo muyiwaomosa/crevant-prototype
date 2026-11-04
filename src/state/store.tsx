@@ -1,15 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type {
-  Comment,
-  Creator,
-  EarnAction,
-  PersistedState,
-  Post,
-  PostMedia,
-  Redemption,
-  Reward,
-  RewardKind,
-} from '../types'
+import type { Comment, Creator, PersistedState, Post, PostMedia, Redemption, Reward, RewardKind } from '../types'
 import {
   CREATORS,
   SELF_BASE_FOLLOWERS,
@@ -18,10 +8,26 @@ import {
   buildSeedPosts,
   buildSeedRewards,
 } from '../data/seed'
-import { EARN_RULES, MIN_COMMENT_LENGTH, balanceOf, evaluateEarn, explainNoEarn } from '../lib/points'
+import {
+  EARN_RULES,
+  balancesByWallet,
+  earnForFollow,
+  earnForInteraction,
+  explainNoEarn,
+  lifetimeEarned,
+  redeemReward,
+  remainingStock as remainingStockOf,
+  reverseFollow,
+  rewardEligibility,
+  type Ctx,
+  type EarnOutcome,
+  type Eligibility,
+  type InteractionInput,
+} from '../lib/points'
+import { ACTIVE_MODEL } from '../lib/wallets'
 import { demoCode, uid } from '../lib/format'
 import { simulatedEngagement } from '../lib/simulate'
-import { dayKey } from '../lib/time'
+import { AVATAR_ERROR_TEXT } from '../lib/avatar'
 import { clearState, createInitialState, loadState, saveState } from './storage'
 
 // ---------------------------------------------------------------------------
@@ -60,13 +66,10 @@ export interface PostStats {
   comments: number
 }
 
-export type RewardStatus =
-  | { canRedeem: true }
-  | { canRedeem: false; reason: 'own' | 'follow' | 'soldOut' | 'redeemed' | 'points'; needed?: number }
+export type RedeemResult = { ok: true; redemption: Redemption } | { ok: false; reason: string }
 
 interface Store {
   state: PersistedState
-  balance: number
   creators: Creator[]
   creatorById: (id: string) => Creator | undefined
   followerCount: (creatorId: string) => number
@@ -75,24 +78,32 @@ interface Store {
   commentsFor: (postId: string) => Comment[]
   statsFor: (post: Post) => PostStats
   rewards: Reward[]
-  rewardStatus: (reward: Reward) => RewardStatus
+  /** Spendable CP with one creator. */
+  balanceWith: (creatorId: string) => number
+  /** Creator id -> spendable CP, for creators with any activity. */
+  balances: Record<string, number>
+  /** Total CP ever earned across creators. Not spendable. */
+  lifetime: number
+  eligibility: (reward: Reward) => Eligibility
   remainingStock: (reward: Reward) => number | null
-  checkedInToday: boolean
   toasts: Toast[]
 
   toggleFollow: (creatorId: string) => void
   toggleLike: (postId: string) => void
   toggleSave: (postId: string) => void
   addComment: (postId: string, text: string) => void
+  /** Call only after genuine playback has been verified. */
   markWatched: (postId: string) => void
-  checkIn: () => void
-  redeem: (rewardId: string) => Redemption | null
+  redeem: (rewardId: string) => RedeemResult
   setMode: (mode: PersistedState['mode']) => void
   publishPost: (input: { text: string; media?: PostMedia }) => Post | null
   deletePost: (postId: string) => void
   createReward: (input: { title: string; description: string; cost: number; kind: RewardKind; stock: number | null }) => Reward
   deleteReward: (rewardId: string) => void
-  updateProfile: (patch: Partial<PersistedState['profile']>) => void
+  updateProfile: (patch: Partial<Omit<PersistedState['profile'], 'avatar'>>) => void
+  /** Save or remove (null) the profile picture. Fails cleanly if storage is full. */
+  setAvatar: (dataUrl: string | null) => { ok: true } | { ok: false; error: string }
+  dismissMigrationNotice: () => void
   resetDemo: () => void
   pushToast: (toast: Omit<Toast, 'id'>) => void
   dismissToast: (id: string) => void
@@ -106,6 +117,8 @@ export function useStore(): Store {
   return ctx
 }
 
+const firstName = (name: string) => name.split(' ')[0]
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedState>(loadState)
   const stateRef = useRef(state)
@@ -113,9 +126,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const now = useTicker(30_000)
   const storageWarned = useRef(false)
 
-  // Apply an update synchronously to the ref so several actions in one tick stay consistent.
+  /**
+   * Apply an update synchronously to the ref, then to React state.
+   * Every action reads stateRef.current, so a second rapid click sees the result
+   * of the first one. This is what prevents double spending on redemption.
+   */
   const commit = useCallback((fn: (s: PersistedState) => PersistedState) => {
     const next = fn(stateRef.current)
+    if (next === stateRef.current) return
     stateRef.current = next
     setState(next)
   }, [])
@@ -123,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const pushToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const id = uid('t')
     setToasts((ts) => [...ts.slice(-2), { ...toast, id }])
-    window.setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), toast.tone === 'earn' ? 3200 : 4200)
+    window.setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), toast.tone === 'earn' ? 4000 : 5000)
   }, [])
 
   const dismissToast = useCallback((id: string) => setToasts((ts) => ts.filter((t) => t.id !== id)), [])
@@ -140,6 +158,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state, pushToast])
 
+  const ctx = (): Ctx => ({ now: Date.now(), id: () => uid('l'), model: ACTIVE_MODEL })
+
   // ---- Derived data --------------------------------------------------------
 
   const selfCreator: Creator = useMemo(
@@ -153,6 +173,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       baseFollowers: SELF_BASE_FOLLOWERS,
       hue: 168,
       cover: 'sunrise',
+      avatar: state.profile.avatar,
       isSelf: true,
     }),
     [state.profile],
@@ -166,9 +187,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const posts = useMemo(() => {
     const deleted = new Set(state.deletedPostIds)
-    return [...state.myPosts, ...seedPosts]
-      .filter((p) => !deleted.has(p.id))
-      .sort((a, b) => b.createdAt - a.createdAt)
+    return [...state.myPosts, ...seedPosts].filter((p) => !deleted.has(p.id)).sort((a, b) => b.createdAt - a.createdAt)
   }, [seedPosts, state.myPosts, state.deletedPostIds])
 
   const postMap = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts])
@@ -184,13 +203,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return map
   }, [seedComments, state.myComments])
 
-  const rewards = useMemo(
-    () => [...state.myRewards, ...seedRewards].sort((a, b) => a.cost - b.cost),
-    [seedRewards, state.myRewards],
-  )
+  const rewards = useMemo(() => [...state.myRewards, ...seedRewards].sort((a, b) => a.cost - b.cost), [seedRewards, state.myRewards])
+  const rewardMap = useMemo(() => new Map(rewards.map((r) => [r.id, r])), [rewards])
 
-  const balance = useMemo(() => balanceOf(state.ledger), [state.ledger])
-  const checkedInToday = Boolean(state.earnedKeys[`checkin:${dayKey(now)}`])
+  const balances = useMemo(() => balancesByWallet(state.ledger, ACTIVE_MODEL), [state.ledger])
+  const lifetime = useMemo(() => lifetimeEarned(state.ledger), [state.ledger])
+  const balanceWith = useCallback((creatorId: string) => Math.max(0, balances[ACTIVE_MODEL.walletForCreator(creatorId)] ?? 0), [balances])
 
   const followerCount = useCallback(
     (creatorId: string) => {
@@ -203,10 +221,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const statsFor = useCallback(
     (post: Post): PostStats => {
-      const sim =
-        post.creatorId === SELF_ID && post.baseLikes === 0
-          ? simulatedEngagement(post, now, SELF_BASE_FOLLOWERS)
-          : { likes: 0, saves: 0 }
+      const sim = post.creatorId === SELF_ID && post.baseLikes === 0 ? simulatedEngagement(post, now, SELF_BASE_FOLLOWERS) : { likes: 0, saves: 0 }
       return {
         likes: post.baseLikes + sim.likes + (state.liked[post.id] ? 1 : 0),
         saves: post.baseSaves + sim.saves + (state.saved[post.id] ? 1 : 0),
@@ -216,65 +231,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commentsByPost, now, state.liked, state.saved],
   )
 
-  const remainingStock = useCallback(
-    (reward: Reward) => {
-      if (reward.stock === null) return null
-      const mine = state.redemptions.filter((r) => r.rewardId === reward.id).length
-      return Math.max(0, reward.stock - reward.claimedByOthers - mine)
-    },
-    [state.redemptions],
-  )
+  const remainingStock = useCallback((reward: Reward) => remainingStockOf(state, reward), [state])
+  const eligibility = useCallback((reward: Reward) => rewardEligibility(state, reward, { selfId: SELF_ID, model: ACTIVE_MODEL }), [state])
 
-  const rewardStatus = useCallback(
-    (reward: Reward): RewardStatus => {
-      if (reward.creatorId === SELF_ID) return { canRedeem: false, reason: 'own' }
-      if (state.redemptions.some((r) => r.rewardId === reward.id)) return { canRedeem: false, reason: 'redeemed' }
-      const left = remainingStock(reward)
-      if (left !== null && left <= 0) return { canRedeem: false, reason: 'soldOut' }
-      if (!state.following.includes(reward.creatorId)) return { canRedeem: false, reason: 'follow' }
-      if (balance < reward.cost) return { canRedeem: false, reason: 'points', needed: reward.cost - balance }
-      return { canRedeem: true }
-    },
-    [balance, remainingStock, state.following, state.redemptions],
-  )
+  // ---- Feedback ------------------------------------------------------------
 
-  // ---- Points helper -------------------------------------------------------
-
-  /**
-   * Try to award CP for an action. Returns the next state.
-   * `quiet` suppresses the "no points" explanation for actions where it would be noise.
-   */
-  const earn = useCallback(
-    (
-      s: PersistedState,
-      action: EarnAction,
-      refId: string,
-      creatorId: string | undefined,
-      opts: { quiet?: boolean; tooShort?: boolean } = {},
-    ): PersistedState => {
-      const at = Date.now()
-      if (opts.tooShort) {
-        if (!opts.quiet) pushToast({ tone: 'info', title: 'Comment posted', body: explainNoEarn(action, 'tooShort') })
-        return s
-      }
-      const decision = evaluateEarn(s, action, refId, { now: at, isOwnContent: creatorId === SELF_ID })
-      if (!decision.ok) {
-        if (!opts.quiet && decision.reason !== 'own') {
-          pushToast({ tone: 'info', title: 'No CP this time', body: explainNoEarn(action, decision.reason) })
-        }
-        return s
-      }
-      const creator = creatorId ? creatorMap.get(creatorId) : undefined
-      const rule = EARN_RULES[action]
-      const label = creator ? `${rule.label} ${creator.name}` : rule.label
-      pushToast({ tone: 'earn', title: `+${decision.points} CP`, body: label, points: decision.points })
-      return {
-        ...s,
-        earnedKeys: { ...s.earnedKeys, [decision.key]: at },
-        ledger: [
-          { id: uid('l'), at, amount: decision.points, kind: action, label, creatorId, refId },
-          ...s.ledger,
-        ],
+  const announce = useCallback(
+    (outcome: EarnOutcome, action: keyof typeof EARN_RULES, creatorId: string, quiet = false) => {
+      const creator = creatorMap.get(creatorId)
+      const name = creator?.name ?? 'this creator'
+      if (outcome.earned) {
+        const settledNote = outcome.settled > 0 ? ` ${outcome.settled} CP settled what you owed from an earlier unfollow.` : ''
+        pushToast({
+          tone: 'earn',
+          title: `+${outcome.points} CP with ${name}`,
+          body: `${EARN_RULES[action].title}. Your ${firstName(name)} balance is now ${outcome.balance} CP.${settledNote}`,
+          points: outcome.points,
+        })
+      } else if (!quiet && outcome.reason !== 'own') {
+        pushToast({ tone: 'info', title: 'No CP this time', body: explainNoEarn(action, outcome.reason) })
       }
     },
     [creatorMap, pushToast],
@@ -284,66 +259,92 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const toggleFollow = useCallback(
     (creatorId: string) => {
-      if (creatorId === SELF_ID) return
+      const creator = creatorMap.get(creatorId)
+      if (!creator || creator.isSelf) return
       commit((s) => {
-        const isFollowing = s.following.includes(creatorId)
-        if (isFollowing) {
-          const name = creatorMap.get(creatorId)?.name ?? 'this creator'
-          pushToast({ tone: 'info', title: `Unfollowed ${name}`, body: 'Their posts are no longer in your Home feed.' })
-          return { ...s, following: s.following.filter((id) => id !== creatorId) }
+        if (s.following.includes(creatorId)) {
+          const unfollowed = { ...s, following: s.following.filter((id) => id !== creatorId) }
+          const rev = reverseFollow(unfollowed, { creatorId, creatorName: creator.name }, ctx())
+          let body = 'Their posts are no longer in your Home feed.'
+          if (rev.outcome.reversed > 0 || rev.outcome.owed > 0) {
+            body += ` Your ${EARN_RULES.follow.points} CP follow bonus with ${firstName(creator.name)} was returned.`
+            if (rev.outcome.owed > 0) {
+              body += ` Your balance only had ${rev.outcome.reversed} CP, so the other ${rev.outcome.owed} CP will come out of what you earn with them next.`
+            }
+          }
+          pushToast({ tone: 'info', title: `Unfollowed ${creator.name}`, body })
+          return rev.state
         }
-        const next = { ...s, following: [...s.following, creatorId] }
-        // Following quietly skips the "already earned" note; the feed update is the main feedback.
-        const alreadyEarned = Boolean(s.earnedKeys[`follow:${creatorId}`])
-        if (alreadyEarned) {
-          const name = creatorMap.get(creatorId)?.name ?? 'this creator'
-          pushToast({ tone: 'success', title: `Following ${name}`, body: 'Their posts are back in your Home feed.' })
+        const followed = { ...s, following: [...s.following, creatorId] }
+        const res = earnForFollow(followed, { creatorId, creatorName: creator.name, isSelf: false }, ctx())
+        if (res.outcome.earned) announce(res.outcome, 'follow', creatorId)
+        else {
+          pushToast({
+            tone: 'success',
+            title: `Following ${creator.name}`,
+            body: res.outcome.reason === 'limit' ? explainNoEarn('follow', 'limit') : 'Their posts are now in your Home feed.',
+          })
         }
-        return earn(next, 'follow', creatorId, creatorId, { quiet: true })
+        return res.state
       })
     },
-    [commit, creatorMap, earn, pushToast],
+    [announce, commit, creatorMap, pushToast],
+  )
+
+  const interaction = useCallback(
+    (s: PersistedState, input: Omit<InteractionInput, 'creatorName' | 'isOwnContent'>, quiet = false) => {
+      const creator = creatorMap.get(input.creatorId)
+      const res = earnForInteraction(
+        s,
+        { ...input, creatorName: creator?.name ?? 'a creator', isOwnContent: input.creatorId === SELF_ID },
+        ctx(),
+      )
+      announce(res.outcome, input.action, input.creatorId, quiet)
+      return res.state
+    },
+    [announce, creatorMap],
   )
 
   const toggleLike = useCallback(
     (postId: string) => {
+      const post = postMap.get(postId)
+      if (!post) return
       commit((s) => {
-        const post = postMap.get(postId)
         if (s.liked[postId]) {
           const liked = { ...s.liked }
           delete liked[postId]
           return { ...s, liked }
         }
-        const next = { ...s, liked: { ...s.liked, [postId]: true as const } }
-        return earn(next, 'like', postId, post?.creatorId)
+        return interaction({ ...s, liked: { ...s.liked, [postId]: true as const } }, { action: 'like', refId: postId, creatorId: post.creatorId })
       })
     },
-    [commit, earn, postMap],
+    [commit, interaction, postMap],
   )
 
   const toggleSave = useCallback(
     (postId: string) => {
+      const post = postMap.get(postId)
+      if (!post) return
       commit((s) => {
-        const post = postMap.get(postId)
         if (s.saved[postId]) {
           const saved = { ...s.saved }
           delete saved[postId]
           pushToast({ tone: 'info', title: 'Removed from saved' })
           return { ...s, saved }
         }
-        const next = { ...s, saved: { ...s.saved, [postId]: Date.now() } }
-        return earn(next, 'save', postId, post?.creatorId)
+        return interaction({ ...s, saved: { ...s.saved, [postId]: Date.now() } }, { action: 'save', refId: postId, creatorId: post.creatorId })
       })
     },
-    [commit, earn, postMap, pushToast],
+    [commit, interaction, postMap, pushToast],
   )
 
   const addComment = useCallback(
     (postId: string, text: string) => {
       const trimmed = text.trim()
-      if (!trimmed) return
+      const post = postMap.get(postId)
+      if (!trimmed || !post) return
       commit((s) => {
-        const post = postMap.get(postId)
+        const previous = s.myComments.map((c) => c.text)
         const comment: Comment = {
           id: uid('c'),
           postId,
@@ -355,74 +356,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           createdAt: Date.now(),
         }
         const next = { ...s, myComments: [...s.myComments, comment] }
-        return earn(next, 'comment', postId, post?.creatorId, { tooShort: trimmed.length < MIN_COMMENT_LENGTH })
+        return interaction(next, { action: 'comment', refId: postId, creatorId: post.creatorId, comment: { text: trimmed, previous } })
       })
     },
-    [commit, earn, postMap],
+    [commit, interaction, postMap],
   )
 
   const markWatched = useCallback(
     (postId: string) => {
-      commit((s) => earn(s, 'watch', postId, postMap.get(postId)?.creatorId, { quiet: true }))
+      const post = postMap.get(postId)
+      if (!post) return
+      commit((s) => interaction(s, { action: 'watch', refId: postId, creatorId: post.creatorId }))
     },
-    [commit, earn, postMap],
+    [commit, interaction, postMap],
   )
-
-  const checkIn = useCallback(() => {
-    commit((s) => earn(s, 'checkin', dayKey(Date.now()), undefined))
-  }, [commit, earn])
 
   const redeem = useCallback(
-    (rewardId: string): Redemption | null => {
-      const reward = rewards.find((r) => r.id === rewardId)
-      if (!reward) return null
-      const status = rewardStatus(reward)
-      if (!status.canRedeem) return null
-      const redemption: Redemption = {
-        id: uid('rd'),
-        rewardId,
-        at: Date.now(),
-        cost: reward.cost,
-        code: demoCode(),
-        rewardTitle: reward.title,
-        creatorId: reward.creatorId,
-      }
-      commit((s) => ({
-        ...s,
-        redemptions: [redemption, ...s.redemptions],
-        ledger: [
-          {
-            id: uid('l'),
-            at: redemption.at,
-            amount: -reward.cost,
-            kind: 'redeem',
-            label: `Redeemed “${reward.title}”`,
-            creatorId: reward.creatorId,
-            refId: redemption.id,
-          },
-          ...s.ledger,
-        ],
-      }))
-      return redemption
+    (rewardId: string): RedeemResult => {
+      const reward = rewardMap.get(rewardId)
+      if (!reward) return { ok: false, reason: 'missing' }
+      const creatorName = creatorMap.get(reward.creatorId)?.name ?? 'the creator'
+      // Evaluated against the live state inside commit, never a render snapshot.
+      let result: RedeemResult = { ok: false, reason: 'unknown' }
+      commit((s) => {
+        const r = redeemReward(s, reward, { creatorName, code: demoCode(), selfId: SELF_ID }, ctx())
+        result = 'redemption' in r ? { ok: true, redemption: r.redemption } : { ok: false, reason: r.error }
+        return r.state
+      })
+      return result
     },
-    [commit, rewardStatus, rewards],
+    [commit, creatorMap, rewardMap],
   )
 
-  const setMode = useCallback((mode: PersistedState['mode']) => commit((s) => ({ ...s, mode })), [commit])
+  const setMode = useCallback((mode: PersistedState['mode']) => commit((s) => (s.mode === mode ? s : { ...s, mode })), [commit])
 
   const publishPost = useCallback(
     (input: { text: string; media?: PostMedia }): Post | null => {
       const text = input.text.trim()
       if (!text && !input.media) return null
-      const post: Post = {
-        id: uid('p_me'),
-        creatorId: SELF_ID,
-        createdAt: Date.now(),
-        text,
-        media: input.media,
-        baseLikes: 0,
-        baseSaves: 0,
-      }
+      const post: Post = { id: uid('p_me'), creatorId: SELF_ID, createdAt: Date.now(), text, media: input.media, baseLikes: 0, baseSaves: 0 }
       commit((s) => ({ ...s, myPosts: [post, ...s.myPosts] }))
       return post
     },
@@ -460,13 +432,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   )
 
-  const deleteReward = useCallback(
-    (rewardId: string) => commit((s) => ({ ...s, myRewards: s.myRewards.filter((r) => r.id !== rewardId) })),
+  const deleteReward = useCallback((rewardId: string) => commit((s) => ({ ...s, myRewards: s.myRewards.filter((r) => r.id !== rewardId) })), [commit])
+
+  const updateProfile = useCallback(
+    (patch: Partial<Omit<PersistedState['profile'], 'avatar'>>) => commit((s) => ({ ...s, profile: { ...s.profile, ...patch } })),
     [commit],
   )
 
-  const updateProfile = useCallback(
-    (patch: Partial<PersistedState['profile']>) => commit((s) => ({ ...s, profile: { ...s.profile, ...patch } })),
+  const setAvatar = useCallback(
+    (dataUrl: string | null): { ok: true } | { ok: false; error: string } => {
+      const profile = { ...stateRef.current.profile }
+      if (dataUrl) profile.avatar = dataUrl
+      else delete profile.avatar
+      const next = { ...stateRef.current, profile }
+      // Save first, synchronously, so a full storage quota is reported instead of silently lost.
+      if (!saveState(next)) return { ok: false, error: AVATAR_ERROR_TEXT.storage }
+      commit(() => next)
+      return { ok: true }
+    },
+    [commit],
+  )
+
+  const dismissMigrationNotice = useCallback(
+    () => commit((s) => (s.migrationNotice ? { ...s, migrationNotice: { ...s.migrationNotice, dismissed: true } } : s)),
     [commit],
   )
 
@@ -479,7 +467,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     state,
-    balance,
     creators,
     creatorById: (id) => creatorMap.get(id),
     followerCount,
@@ -488,16 +475,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     commentsFor: (id) => commentsByPost.get(id) ?? [],
     statsFor,
     rewards,
-    rewardStatus,
+    balanceWith,
+    balances,
+    lifetime,
+    eligibility,
     remainingStock,
-    checkedInToday,
     toasts,
     toggleFollow,
     toggleLike,
     toggleSave,
     addComment,
     markWatched,
-    checkIn,
     redeem,
     setMode,
     publishPost,
@@ -505,6 +493,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     createReward,
     deleteReward,
     updateProfile,
+    setAvatar,
+    dismissMigrationNotice,
     resetDemo,
     pushToast,
     dismissToast,

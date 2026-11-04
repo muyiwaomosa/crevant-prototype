@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, Bookmark, Heart, MessageCircle, PenSquare, Ticket, TrendingUp, Users } from 'lucide-react'
+import { AvatarEditor } from '../../components/AvatarEditor'
+import { ArrowUpRight, Bookmark, Camera, Heart, MessageCircle, PenSquare, Ticket, TrendingUp, Users } from 'lucide-react'
 import { useNow, useStore } from '../../state/store'
 import { Card, CreatorAvatar, Notice, PageHeader, buttonClass } from '../../components/ui'
 import { formatCompact, formatNumber } from '../../lib/format'
@@ -21,6 +23,7 @@ function Stat({ icon: Icon, label, value, hint }: { icon: typeof Heart; label: s
 export function StudioOverview() {
   const { creatorById, posts, statsFor, followerCount, rewards } = useStore()
   const now = useNow()
+  const [editingPhoto, setEditingPhoto] = useState(false)
   const me = creatorById(SELF_ID)!
   const myPosts = posts.filter((p) => p.creatorId === SELF_ID)
   const totals = myPosts.reduce(
@@ -55,7 +58,17 @@ export function StudioOverview() {
       />
 
       <Card className="mb-4 flex items-center gap-3 p-4">
-        <CreatorAvatar creator={me} size={52} />
+        <button
+          type="button"
+          onClick={() => setEditingPhoto(true)}
+          className="group relative shrink-0 rounded-full"
+          aria-label={me.avatar ? 'Change creator profile picture' : 'Add creator profile picture'}
+        >
+          <CreatorAvatar creator={me} size={52} />
+          <span className="absolute -bottom-0.5 -right-0.5 grid h-6 w-6 place-items-center rounded-full bg-ink-900 text-white ring-2 ring-white group-hover:bg-brand-700">
+            <Camera className="h-3 w-3" />
+          </span>
+        </button>
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">{me.name}</p>
           <p className="truncate text-[13px] text-ink-500">
@@ -130,6 +143,7 @@ export function StudioOverview() {
           {myPosts.length === 0 && <p className="px-4 py-6 text-center text-sm text-ink-500">No posts yet.</p>}
         </Card>
       </section>
+      <AvatarEditor open={editingPhoto} onClose={() => setEditingPhoto(false)} />
     </div>
   )
 }
