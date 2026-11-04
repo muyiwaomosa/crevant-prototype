@@ -38,24 +38,16 @@ Import the repository in Vercel and accept the detected defaults (framework: Vit
 
 ## What you can do
 
-### Fan mode
+Since Release 2 there is **one experience for everyone**. There is no Fan or Creator mode: anyone can follow people, engage, publish, and offer rewards from the same navigation. See [docs/RELEASE-2.md](docs/RELEASE-2.md) for why.
 
-- **Home feed.** Posts from creators you follow, sorted strictly by time, grouped under Today, Yesterday, and date headings. Each post shows a relative time and the exact clock time. A short explainer describes how the feed works, a creator filter narrows it to one person, and an "all caught up" marker shows where the feed ends.
-- **Posts.** Text, illustrated images, and short sample videos. Like, comment, and save. Opening a post shows its full comment thread.
-- **Discover.** Eight sample creators across food, travel, tech, music, art, fitness, books, and wellness. Search, filter by interest, and follow or unfollow. Following someone adds their posts to Home immediately.
-- **Creator profiles.** Cover, bio, follower count, all posts newest first, and that creator's rewards.
-- **Connection Points.** A separate balance with each creator, progress toward that creator's next reward, a non spendable lifetime total, the earning rules with today's usage, and a day by day activity history showing which creator each entry belongs to.
-- **Rewards.** Grouped and filterable by creator. Each group shows your balance with that creator, and each card shows the cost, the CP still needed, a progress bar, and a link to earn more with that creator. Redeeming asks for confirmation, deducts CP, and shows a demo confirmation code. Redemption history lives on the Rewards and Profile pages.
-- **Profile.** Add, change, or remove a profile picture. Edit your name, handle, and bio. See saved posts, who you follow, and what you have redeemed. **Reset demo** restores the original state.
+- **Welcome.** First time visitors get a short, skippable introduction and choose who to follow. Nobody is asked to pick a role. It can be replayed from Profile.
+- **Home.** Posts from people you follow, strictly newest first, grouped by day, with a filter by person and an "all caught up" marker. A "Share something" prompt leads to Create.
+- **Discover.** Find people by interest or search, follow and unfollow, and open their profiles to see their posts, rewards, and your CP with them.
+- **Create.** Publish a text post with an optional uploaded photo or sample illustration. It appears on your profile and at the top of your followers' feeds.
+- **Rewards.** Three tabs: *Rewards* (grouped by person, filter by people you follow or everyone), *My CP* (your separate balance with each person, ways to earn, activity history), and *Redeemed* (history with demo codes).
+- **Profile.** Your one profile: picture, name, handle, bio, your posts, saved posts, who you follow, and a simulated follower count. **Creator tools** (Profile → Creator tools) holds reward management and a clearly labelled simulated audience overview. Replay the welcome or **Reset demo** here.
 
-### Creator mode
-
-Switch with the **Fan / Creator** toggle in the header (phones) or sidebar (desktop).
-
-- **Overview.** Followers, likes, comments, saves, engagement rate, reward count, a seven-day follower chart, and recent post performance.
-- **Create.** Publish a text post, optionally with an uploaded photo (resized in the browser) or a sample illustration. New posts appear at the top of the chronological Home feed.
-- **Posts.** Everything you have published, with per-post stats and delete.
-- **Rewards.** Create a demo reward with a title, description, type, CP cost, and optional limited quantity. It shows up on the fan Rewards page marked as yours.
+Old links from earlier releases (`/studio`, `/studio/new`, `/studio/posts`, `/studio/rewards`, `/points`, `/creator/me`) redirect to their new homes.
 
 ## How Connection Points work (Release 1)
 
@@ -82,7 +74,7 @@ These checks run in the browser. They stop accidental and casual farming but not
 
 ## Profile pictures
 
-Fans and creators can add a profile picture from the Profile page or the Creator Studio. In this prototype the fan and the creator are the same demo person, so one picture is used everywhere your identity appears: profile, creator page, posts, comments, studio, and rewards. Pictures are checked (JPEG, PNG, WebP, or GIF up to 8 MB), cropped to a square, shrunk to 256 pixels, and stored as a small JPEG **in this browser only**. They are not uploaded to a server or shared across devices. Without a picture, initials are shown. Reset Demo removes it.
+Everyone has one profile and can add a profile picture from the Profile page. It is used everywhere you appear: profile, posts, comments, the Create page, and the rewards you offer. Pictures are checked (JPEG, PNG, WebP, or GIF up to 8 MB), cropped to a square, shrunk to 256 pixels, and stored as a small JPEG **in this browser only**. They are not uploaded to a server or shared across devices. Without a picture, initials are shown. Reset Demo removes it.
 
 ## Tests
 
@@ -90,7 +82,7 @@ Fans and creators can add a profile picture from the Profile page or the Creator
 npm test
 ```
 
-Runs 65 unit tests (Vitest) for earning, reversal, redemption, eligibility, comment checks, video tracking, picture validation, and storage migration.
+Runs 72 unit tests (Vitest) for earning, reversal, redemption, eligibility, mutual followers, comment checks, video tracking, picture validation, and storage migration (versions 1, 2, and 3).
 
 A browser end to end script checks the acceptance criteria against a running build. It needs Playwright with Chromium installed separately:
 
@@ -103,8 +95,14 @@ npx vite preview --port 4175 --strictPort
 ```
 
 ```bash
+node e2e/release2.e2e.cjs http://localhost:4175
+```
+
+```bash
 node e2e/release1.e2e.cjs http://localhost:4175
 ```
+
+`release2` covers the unified experience and onboarding; `release1` covers creator specific CP, anti farming, redemption, and pictures.
 
 ## Technical choices
 
@@ -129,7 +127,8 @@ src/
   state/store.tsx       App state, derived data, and all actions
   components/           Layout, PostCard, CreatorCard, RewardCard, Artwork, UI primitives
   pages/                Home, Discover, Creator, Post, Points, Rewards, Profile
-  pages/studio/         Creator overview, composer, posts, rewards
+  pages/tools/          Creator tools: reward manager, simulated audience, your posts list
+  pages/OnboardingPage  First run welcome and choosing who to follow
 ```
 
 ## Known limitations
