@@ -1,4 +1,4 @@
-// Simulated audience activity for posts the visitor publishes in creator mode.
+// Simulated audience activity for posts the visitor publishes.
 // Numbers grow smoothly with the post's age so the creator overview feels alive.
 // Everything here is clearly labelled as simulated in the UI.
 

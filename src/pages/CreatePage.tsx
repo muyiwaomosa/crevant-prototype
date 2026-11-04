@@ -2,16 +2,16 @@ import clsx from 'clsx'
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ImagePlus, Loader2, Palette, Send, X } from 'lucide-react'
-import type { ArtworkKind, PostMedia } from '../../types'
-import { useStore } from '../../state/store'
-import { Artwork, ARTWORK_KINDS } from '../../components/Artwork'
-import { Button, Card, CreatorAvatar, Notice, PageHeader } from '../../components/ui'
-import { compressImage } from '../../lib/image'
-import { SELF_ID } from '../../data/seed'
+import type { ArtworkKind, PostMedia } from '../types'
+import { useStore } from '../state/store'
+import { Artwork, ARTWORK_KINDS } from '../components/Artwork'
+import { Button, Card, CreatorAvatar, Notice, PageHeader } from '../components/ui'
+import { compressImage } from '../lib/image'
+import { SELF_ID } from '../data/seed'
 
 const MAX = 500
 
-export function StudioCreate() {
+export function CreatePage() {
   const { creatorById, publishPost, pushToast } = useStore()
   const navigate = useNavigate()
   const me = creatorById(SELF_ID)!
@@ -52,14 +52,14 @@ export function StudioCreate() {
     pushToast({
       tone: 'success',
       title: 'Published',
-      body: 'Your post is now at the top of the chronological feed for your followers.',
+      body: 'It is on your profile and at the top of your followers’ chronological feeds.',
     })
-    navigate('/studio/posts')
+    navigate('/profile')
   }
 
   return (
     <div>
-      <PageHeader title="New post" subtitle="Share an update with everyone who follows you." />
+      <PageHeader title="Create a post" subtitle="Anyone on Crevant can post. It goes to the people who follow you, newest first." />
 
       <Card className="p-4 sm:p-5">
         <div className="flex gap-3">
@@ -113,7 +113,7 @@ export function StudioCreate() {
 
         {error && <p className="mt-3 text-sm font-medium text-[#b2342a]">{error}</p>}
 
-        <div className="mt-4 flex items-center gap-1 border-t border-ink-100 pt-3">
+        <div className="mt-4 flex flex-wrap items-center gap-1 border-t border-ink-100 pt-3">
           <input ref={fileRef} type="file" accept="image/*" className="sr-only" id="post-image" onChange={(e) => onFile(e.target.files?.[0])} />
           <label
             htmlFor="post-image"

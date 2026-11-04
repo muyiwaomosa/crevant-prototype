@@ -4,12 +4,13 @@ import { Plus, Trash2 } from 'lucide-react'
 import type { RewardKind } from '../../types'
 import { useStore } from '../../state/store'
 import { KIND_META } from '../../components/RewardCard'
-import { Button, CPAmount, Card, DemoTag, Notice, PageHeader } from '../../components/ui'
+import { Button, CPAmount, Card, DemoTag, Notice } from '../../components/ui'
 import { SELF_ID } from '../../data/seed'
 
 const PRESETS = [15, 30, 60, 100, 150]
 
-export function StudioRewards() {
+/** Create and manage the rewards this participant offers. Lives in Profile → Creator tools. */
+export function RewardManager() {
   const { rewards, createReward, deleteReward, pushToast } = useStore()
   const mine = rewards.filter((r) => r.creatorId === SELF_ID)
   const [title, setTitle] = useState('')
@@ -35,21 +36,20 @@ export function StudioRewards() {
 
   return (
     <div>
-      <PageHeader title="Rewards for your fans" subtitle="Thank loyal followers with perks they can redeem using Connection Points." />
 
       <Notice tone="spark" className="mb-5">
-        Rewards you create here are demonstrations. Fans redeem them with CP earned with you only. Nothing is sold, delivered, or paid for.
+        Rewards you create are demonstrations. People redeem them only with CP they earned engaging with you. Nothing is sold, delivered, or paid for.
       </Notice>
 
       <Card className="mb-6 p-4 sm:p-5">
-        <h2 className="mb-4 font-display text-lg font-bold">Create a reward</h2>
+        <h3 className="mb-4 font-display text-lg font-bold">Create a reward</h3>
         <form onSubmit={submit} className="space-y-4">
           <label className="block text-sm font-semibold">
             Title
             <input value={title} onChange={(e) => setTitle(e.target.value.slice(0, 60))} placeholder="e.g. Signed sketchbook page" className={field} />
           </label>
           <label className="block text-sm font-semibold">
-            What fans get
+            What people get
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value.slice(0, 200))}
@@ -113,7 +113,7 @@ export function StudioRewards() {
               />
             </div>
             <p id="cost-help" className="mt-1.5 text-[12px] text-ink-500">
-              Between 5 and 1,000. Fans can only spend CP they earned with you. A fan who likes, saves, and comments on a post earns
+              Between 5 and 1,000. People can only spend CP they earned with you. Someone who likes, saves, and comments on a post earns
               about 8 CP, so 15 CP is one or two posts and 100 CP is several weeks of regular engagement.
             </p>
           </div>
@@ -144,10 +144,10 @@ export function StudioRewards() {
         </form>
       </Card>
 
-      <h2 className="mb-3 font-display text-lg font-bold">Your rewards</h2>
+      <h3 className="mb-3 font-display text-lg font-bold">Rewards you offer</h3>
       {mine.length === 0 ? (
         <p className="rounded-2xl bg-white px-4 py-6 text-center text-sm text-ink-500 ring-1 ring-ink-100">
-          No rewards yet. Create one above and it will appear on the Rewards page for your fans.
+          No rewards yet. Create one above and it will appear on the Rewards page under your name.
         </p>
       ) : (
         <div className="space-y-3">

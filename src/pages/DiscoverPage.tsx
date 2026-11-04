@@ -26,11 +26,11 @@ export function DiscoverPage() {
     <div>
       <PageHeader
         title="Discover"
-        subtitle={`Browse creators by interest. You follow ${state.following.length} of ${creators.length - 1}.`}
+        subtitle={`Find people to follow, by interest. You follow ${state.following.length} of ${creators.length - 1}.`}
       />
 
       <label className="relative mb-3 block">
-        <span className="sr-only">Search creators</span>
+        <span className="sr-only">Search people</span>
         <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
         <input
           type="search"
@@ -63,7 +63,7 @@ export function DiscoverPage() {
       </p>
 
       {list.length === 0 ? (
-        <EmptyState icon={<SearchX className="h-7 w-7" />} title="No creators match" body="Try a different word or interest." />
+        <EmptyState icon={<SearchX className="h-7 w-7" />} title="No one matches" body="Try a different word or interest." />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {list.map((c) => (

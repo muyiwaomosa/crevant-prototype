@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { Bookmark, Gift, Heart, Info, MessageCircle, PlayCircle, Scale, ShieldCheck, Undo2, UserPlus, X } from 'lucide-react'
 import type { LedgerEntry, LedgerKind } from '../types'
 import { useNow, useStore } from '../state/store'
-import { Card, CreatorAvatar, Notice, PageHeader, SparkIcon, buttonClass } from '../components/ui'
+import { Card, CreatorAvatar, Notice, SparkIcon, buttonClass } from '../components/ui'
 import { EARN_ORDER, EARN_RULES, earnedTodayCount, rewardProgress } from '../lib/points'
 import { dayLabel, relativeTime } from '../lib/time'
 
@@ -55,7 +55,8 @@ function MigrationBanner() {
   )
 }
 
-export function PointsPage() {
+/** Connection Points by person: balances, ways to earn, and history. Shown in Rewards → My CP. */
+export function CPOverview() {
   const { state, balanceWith, lifetime, creatorById, rewards } = useStore()
   const now = useNow()
 
@@ -80,13 +81,11 @@ export function PointsPage() {
 
   return (
     <div>
-      <PageHeader title="Connection Points" subtitle="CP is earned and spent with each creator separately." />
-
       <MigrationBanner />
 
       <Notice className="mb-5">
-        <strong className="font-semibold text-ink-900">How balances work.</strong> CP you earn by engaging with a creator can only be spent on that
-        creator's rewards. Demo points only: no cash value, and they cannot be bought, sold, or transferred.
+        <strong className="font-semibold text-ink-900">How balances work.</strong> CP belongs to a relationship. What you earn by engaging with
+        someone's posts can only be spent on the rewards they offer. Demo points only: no cash value, and they cannot be bought, sold, or transferred.
       </Notice>
 
       <section aria-labelledby="balances-title" className="mb-7">
@@ -95,9 +94,9 @@ export function PointsPage() {
         </h2>
         {rows.length === 0 ? (
           <Card className="p-5 text-sm text-ink-600">
-            Follow a creator and engage with their posts to start a balance with them.{' '}
+            Follow someone and engage with their posts to start a balance with them.{' '}
             <Link to="/discover" className="font-semibold text-brand-700 hover:underline">
-              Discover creators
+              Discover people
             </Link>
           </Card>
         ) : (
@@ -151,7 +150,7 @@ export function PointsPage() {
                     </p>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Link to={`/rewards?tab=all&creator=${c.id}`} className={buttonClass(ready > 0 ? 'spark' : 'secondary', 'sm')}>
+                    <Link to={`/rewards?scope=all&creator=${c.id}`} className={buttonClass(ready > 0 ? 'spark' : 'secondary', 'sm')}>
                       <Gift className="h-4 w-4" /> {ready > 0 ? `${ready} ready to redeem` : `${first}'s rewards`}
                     </Link>
                     <Link to={`/creator/${c.id}`} className={buttonClass('ghost', 'sm')}>
@@ -165,7 +164,7 @@ export function PointsPage() {
         )}
         <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-dashed border-ink-300 px-4 py-3 text-sm">
           <div>
-            <p className="font-semibold text-ink-800">Lifetime CP earned, all creators</p>
+            <p className="font-semibold text-ink-800">Lifetime CP earned, everyone</p>
             <p className="text-[12px] text-ink-600">A record of your participation. This total cannot be spent.</p>
           </div>
           <span className="font-display text-xl font-bold tabular-nums text-ink-700">{lifetime}</span>
@@ -177,7 +176,7 @@ export function PointsPage() {
           Ways to earn
         </h2>
         <p className="mb-3 text-[13px] text-ink-600">
-          Points go to the creator you engaged with. Each action earns once per post or creator, with a daily limit across all creators.
+          Points go to the person whose post you engaged with. Each action earns once per post or person, with a daily limit across everyone.
         </p>
         <Card className="divide-y divide-ink-100">
           {EARN_ORDER.map((action) => {

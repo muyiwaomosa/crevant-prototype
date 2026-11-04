@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Comment, Creator, PersistedState, Post, PostMedia, Redemption, Reward, RewardKind } from '../types'
 import {
   CREATORS,
+  DEFAULT_FOLLOWING,
   SELF_BASE_FOLLOWERS,
   SELF_ID,
   buildSeedComments,
@@ -95,7 +96,12 @@ interface Store {
   /** Call only after genuine playback has been verified. */
   markWatched: (postId: string) => void
   redeem: (rewardId: string) => RedeemResult
-  setMode: (mode: PersistedState['mode']) => void
+  /**
+   * Finish the welcome flow. Pass the accounts the person chose to follow,
+   * or 'skip' to follow the starter accounts so the feed is not empty.
+   */
+  completeOnboarding: (choice: string[] | 'skip') => void
+  dismissUnifiedNotice: () => void
   publishPost: (input: { text: string; media?: PostMedia }) => Post | null
   deletePost: (postId: string) => void
   createReward: (input: { title: string; description: string; cost: number; kind: RewardKind; stock: number | null }) => Reward
@@ -388,7 +394,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit, creatorMap, rewardMap],
   )
 
-  const setMode = useCallback((mode: PersistedState['mode']) => commit((s) => (s.mode === mode ? s : { ...s, mode })), [commit])
+  const completeOnboarding = useCallback(
+    (choice: string[] | 'skip') => {
+      commit((s) => {
+        if (choice === 'skip') {
+          // Starter follows are chosen by the demo, not the person, so they do not hold a follow bonus.
+          const following = [...new Set([...s.following, ...DEFAULT_FOLLOWING])]
+          pushToast({
+            tone: 'info',
+            title: 'Welcome to Crevant',
+            body: `You're following ${DEFAULT_FOLLOWING.length} starter accounts so your feed isn't empty. Unfollow them any time.`,
+          })
+          return { ...s, following, onboarding: { status: 'skipped', at: Date.now() } }
+        }
+        let next: PersistedState = { ...s, onboarding: { status: 'completed', at: Date.now() } }
+        let earned = 0
+        for (const id of choice) {
+          const creator = creatorMap.get(id)
+          if (!creator || creator.isSelf || next.following.includes(id)) continue
+          next = { ...next, following: [...next.following, id] }
+          const res = earnForFollow(next, { creatorId: id, creatorName: creator.name, isSelf: false }, ctx())
+          if (res.outcome.earned) earned++
+          next = res.state
+        }
+        const n = choice.length
+        pushToast({
+          tone: earned > 0 ? 'earn' : 'success',
+          title: n > 0 ? `Following ${n} account${n === 1 ? '' : 's'}` : 'Welcome to Crevant',
+          body:
+            earned > 0
+              ? `+${EARN_RULES.follow.points} CP with each of ${earned} account${earned === 1 ? '' : 's'}. Each balance is only for that person's rewards.`
+              : 'Find people to follow any time in Discover.',
+          points: earned > 0 ? EARN_RULES.follow.points : undefined,
+        })
+        return next
+      })
+    },
+    [commit, creatorMap, pushToast],
+  )
+
+  const dismissUnifiedNotice = useCallback(() => commit((s) => (s.unifiedNotice === 'pending' ? { ...s, unifiedNotice: 'dismissed' } : s)), [commit])
 
   const publishPost = useCallback(
     (input: { text: string; media?: PostMedia }): Post | null => {
@@ -487,7 +532,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addComment,
     markWatched,
     redeem,
-    setMode,
+    completeOnboarding,
+    dismissUnifiedNotice,
     publishPost,
     deletePost,
     createReward,

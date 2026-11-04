@@ -107,6 +107,7 @@ export const CREATORS: Creator[] = [
   },
 ]
 
+// Starter accounts followed only if someone skips onboarding, so the feed is not empty.
 export const DEFAULT_FOLLOWING = ['amara', 'theo', 'priya', 'sofia']
 
 interface SeedPost {

@@ -1,19 +1,18 @@
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
-import { StoreProvider } from './state/store'
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
+import { Compass } from 'lucide-react'
+import { StoreProvider, useStore } from './state/store'
 import { Layout } from './components/Layout'
 import { EmptyState, buttonClass } from './components/ui'
 import { HomePage } from './pages/HomePage'
 import { DiscoverPage } from './pages/DiscoverPage'
 import { CreatorPage } from './pages/CreatorPage'
 import { PostPage } from './pages/PostPage'
-import { PointsPage } from './pages/PointsPage'
 import { RewardsPage } from './pages/RewardsPage'
 import { ProfilePage } from './pages/ProfilePage'
-import { StudioOverview } from './pages/studio/StudioOverview'
-import { StudioCreate } from './pages/studio/StudioCreate'
-import { StudioPosts } from './pages/studio/StudioPosts'
-import { StudioRewards } from './pages/studio/StudioRewards'
-import { Compass } from 'lucide-react'
+import { CreatePage } from './pages/CreatePage'
+import { OnboardingPage } from './pages/OnboardingPage'
+import { CreatorToolsPage } from './pages/tools/CreatorToolsPage'
+import { SELF_ID } from './data/seed'
 
 function NotFound() {
   return (
@@ -30,23 +29,51 @@ function NotFound() {
   )
 }
 
+/** First time visitors see the welcome once; returning visitors go straight to their feed. */
+function HomeGate() {
+  const { state } = useStore()
+  if (state.onboarding.status === 'pending') return <Navigate to="/welcome" replace />
+  return <HomePage />
+}
+
+/** Your own profile has one home: /profile. Other people's profiles stay at /creator/:id. */
+function CreatorRoute() {
+  const { id } = useParams()
+  if (id === SELF_ID) return <Navigate to="/profile" replace />
+  return <CreatorPage />
+}
+
+/** /points moved into Rewards → My CP. Keep any query string. */
+function PointsRedirect() {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  params.set('tab', 'cp')
+  return <Navigate to={`/rewards?${params.toString()}`} replace />
+}
+
 export default function App() {
   return (
     <StoreProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="welcome" element={<OnboardingPage />} />
           <Route element={<Layout />}>
-            <Route index element={<HomePage />} />
+            <Route index element={<HomeGate />} />
             <Route path="discover" element={<DiscoverPage />} />
-            <Route path="creator/:id" element={<CreatorPage />} />
+            <Route path="create" element={<CreatePage />} />
+            <Route path="creator/:id" element={<CreatorRoute />} />
             <Route path="post/:id" element={<PostPage />} />
-            <Route path="points" element={<PointsPage />} />
             <Route path="rewards" element={<RewardsPage />} />
             <Route path="profile" element={<ProfilePage />} />
-            <Route path="studio" element={<StudioOverview />} />
-            <Route path="studio/new" element={<StudioCreate />} />
-            <Route path="studio/posts" element={<StudioPosts />} />
-            <Route path="studio/rewards" element={<StudioRewards />} />
+            <Route path="profile/tools" element={<CreatorToolsPage />} />
+
+            {/* Routes from the old Fan/Creator modes redirect to their new homes. */}
+            <Route path="points" element={<PointsRedirect />} />
+            <Route path="studio" element={<Navigate to="/profile/tools" replace />} />
+            <Route path="studio/new" element={<Navigate to="/create" replace />} />
+            <Route path="studio/posts" element={<Navigate to="/profile" replace />} />
+            <Route path="studio/rewards" element={<Navigate to="/profile/tools#rewards" replace />} />
+
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

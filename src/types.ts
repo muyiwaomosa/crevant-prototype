@@ -123,7 +123,11 @@ export interface Redemption {
   legacy?: boolean
 }
 
-export type Mode = 'fan' | 'creator'
+/** First run welcome flow. Returning users are never sent through it again. */
+export interface OnboardingState {
+  status: 'pending' | 'completed' | 'skipped'
+  at: number | null
+}
 
 export interface Profile {
   name: string
@@ -148,16 +152,18 @@ export interface MigrationNotice {
 export interface PersistedState {
   version: number
   seededAt: number
-  mode: Mode
+  onboarding: OnboardingState
+  /** One time note for people who used the old Fan and Creator modes. */
+  unifiedNotice: 'none' | 'pending' | 'dismissed'
   profile: Profile
   following: string[]
   liked: Record<string, true>
   saved: Record<string, number>
-  /** Posts the visitor created in creator mode. */
+  /** Posts the visitor published. */
   myPosts: Post[]
   /** Comments the visitor wrote. */
   myComments: Comment[]
-  /** Rewards the visitor created in creator mode. */
+  /** Rewards the visitor offers to people who engage with them. */
   myRewards: Reward[]
   deletedPostIds: string[]
   ledger: LedgerEntry[]
