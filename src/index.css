@@ -1,0 +1,98 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: #f7f4ee;
+  --color-card: #ffffff;
+
+  --color-ink-50: #f4f5f5;
+  --color-ink-100: #e7e9e9;
+  --color-ink-200: #d0d5d6;
+  --color-ink-300: #aab2b5;
+  --color-ink-400: #7b878b;
+  --color-ink-500: #5a666a;
+  --color-ink-600: #455054;
+  --color-ink-700: #333b3e;
+  --color-ink-800: #21282a;
+  --color-ink-900: #13191b;
+
+  --color-brand-50: #e9f6f3;
+  --color-brand-100: #c9e9e1;
+  --color-brand-200: #9dd6c8;
+  --color-brand-300: #62baa7;
+  --color-brand-400: #2f9d88;
+  --color-brand-500: #0e7c6b;
+  --color-brand-600: #0b6a5c;
+  --color-brand-700: #0a564b;
+  --color-brand-800: #0a453d;
+  --color-brand-900: #083832;
+
+  --color-spark-50: #fff8ea;
+  --color-spark-100: #feecc6;
+  --color-spark-200: #fcd78c;
+  --color-spark-300: #f9bf51;
+  --color-spark-400: #f5a524;
+  --color-spark-500: #df8a0b;
+  --color-spark-600: #b46a07;
+  --color-spark-700: #8a4f0b;
+
+  --color-heart: #e0483a;
+
+  --animate-pop: pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.4);
+  --animate-rise: rise 320ms ease-out;
+  --animate-float: float-up 1100ms ease-out forwards;
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.32); }
+  100% { transform: scale(1); }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(4px); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-26px); }
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink-900);
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    min-height: 100dvh;
+    font-family: var(--font-sans);
+    background: var(--color-paper);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2.5px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
