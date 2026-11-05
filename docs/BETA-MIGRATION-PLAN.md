@@ -1,6 +1,6 @@
 # Crevant 60-day pilot: development plan
 
-**Status:** approved by the founder. Phase 0 engineering has started on its own branch; nothing is merged, provisioned, or live.
+**Status:** approved by the founder, with three adjustments under review (tipping economics wording, Canadian and US creators, pilot timeline). Phase 0 engineering is in PR #5; nothing is merged, provisioned, or live.
 **Goal:** build a real MVP and run a 60-day pilot with creators and fans, to produce credible evidence for fundraising.
 **Branding:** Crevant. All naming and logo changes are paused (Appendix A). The repository and the live demo (`crevant-prototype.vercel.app`) stay unchanged.
 
@@ -16,6 +16,7 @@ Contents
 8. Publishing, video, carousels, feed, engagement
 9. Connection Points and rewards
 10. Direct tipping (80:20 after processing fees)
+10a. Canadian and US creators: evaluation
 11. Financial reconciliation
 12. Free analytics and Creator Pro
 13. Simulated advertising
@@ -24,7 +25,7 @@ Contents
 16. Investor dashboard
 17. Phases: dependencies, deliverables, tests, risks, costs, effort
 18. Launch readiness criteria
-19. 60-day operating and measurement plan
+19. Pilot timeline and 60-day measurement plan
 20. Costs
 21. Risks to the credibility of investor results
 22. Founder setup checklist
@@ -66,12 +67,12 @@ Validate whether Crevant can become a scalable, creator first social network.
 | D10 | Blocking, reporting, prioritised moderation queue, emergency escalation; no automatic global hiding |
 | D11 | Mux is the preferred video service, subject to official pricing verification |
 | D12 | Crevant branding kept; FlipSocial name and logo **paused** |
-| D13 | **Direct tips are real:** processing fees deducted first, remaining eligible amount split 80% creator, 20% Crevant |
-| D14 | Tip policy for the pilot: $3 to $100 per tip; **US creators and USD only**; Crevant absorbs refund fees, dispute fees, and Stripe Connect account and payout fees, so creators keep a clean 80% of net; refunds only for errors or fraud; weekly creator payouts |
-| D15 | **Creator Pro:** free trial, then paid; proposed $19 a month (not final); 21 day trial with no card; eligible after 7 days on Crevant and 3 posts; never charged without explicit authorisation |
+| D13 | **Direct tips are real.** The actual payment processing fee on each tip is deducted first; the remaining eligible net amount is split 80% creator, 20% Crevant. Refunds, disputes, payout fees, Connect account fees, and currency conversion on transfers are **separate costs**, never part of the split (section 10, Money rules) |
+| D14 | Tip policy for the pilot: tips from 3 to 100 in the tip's currency; Crevant absorbs the separate costs (refund fees, dispute fees, Connect account and payout fees, transfer conversion), so creators keep a clean 80% of net; refunds only for errors or fraud; weekly creator payouts. **Geography under evaluation:** Canadian and US creators (section 10a). Not expanded in the build until confirmed |
+| D15 | **Creator Pro:** free trial, then paid; proposed $19 a month (not final); no card for the trial; eligible after 7 days on Crevant and 3 posts; never charged without explicit authorisation. Trial length: 21 days approved; **14 days recommended** so conversions fall inside the measurement window (section 19) |
 | D16 | **Advertising simulated for the whole pilot.** Feed ads: 100% Crevant in the model. Ads in creator carousels: 50:50 in the model. Illustrative only, never payable, never added to real balances |
 | D17 | Public landing page is the first experience; the platform stays invite only |
-| D18 | **Staged launch:** social pilot first; tipping switched on around pilot day 14 once live payments reconcile; Pro trials around day 21 |
+| D18 | **Staged rollout before measurement (recommended, awaiting confirmation):** features are staged during a founding creator rollout period, so tipping and Pro eligibility are live from Day 0 of the 60-day measurement window and every cohort has the same product. A 30-day follow-up window observes first renewals, late refunds, and disputes (section 19). Replaces the earlier in-pilot staging (tips day 14, Pro day 21) |
 | D19 | Weekly email digest included (opt out) |
 | D20 | Financial reconciliation is a launch requirement for tipping, not a later feature |
 
@@ -134,8 +135,8 @@ No servers of our own.
 | Must | Free creator analytics (real, never simulated) |
 | Must | Reporting, blocking, moderation queue, emergency escalation, account deletion |
 | Must | Pilot analytics, internal account flagging, investor dashboard, data quality checks |
-| Must (staged, about day 14) | Real tipping with Stripe Connect, finance ledger, reconciliation |
-| Must (staged, about day 21) | Creator Pro trial and subscription |
+| Must (live from Day 0; proven during rollout) | Real tipping with Stripe Connect, finance ledger, reconciliation |
+| Must (eligible from Day 0) | Creator Pro trial and subscription |
 | Should | Simulated feed and carousel advertising with illustrative earnings |
 | Should | In app surveys (creators days 14 and 45; fans day 30); weekly email digest |
 | Paused | FlipSocial rename and logo |
@@ -263,7 +264,7 @@ Signed out visitors see the landing page; signed in members go to their feed.
 - **Why not destination charges:** they require the platform fee at charge time, before the actual fee is known.
 - **Delayed fee information:** with asynchronous capture, the balance transaction can arrive later in a `charge.updated` event, which Stripe documents as within about an hour. The tip stays "processing" until the fee is known. This delays the start of the creator's pending period, not settlement itself, which follows Stripe's availability schedule.
 - **Fee payer:** under this flow Stripe assesses processing fees on the platform account, and the platform carries negative balance liability for connected accounts.
-- **Creator onboarding:** Stripe hosted Express onboarding handles identity verification and bank details. Creators must be in the US.
+- **Creator onboarding:** Stripe hosted Express onboarding handles identity verification and bank details. Eligible creator countries are under evaluation (section 10a).
 
 ### Calculation (integer cents, server side)
 
@@ -272,6 +273,38 @@ Signed out visitors see the landing page; signed in members go to their feed.
 - `crevant = net − creator`, so the two always sum to `net`
 
 **Example:** gross $10.00, fee $0.59 (hypothetical), net $9.41, creator $7.53, Crevant $1.88.
+
+### Money rules: what is inside the 80:20 split and what is not
+
+**Inside the split (deducted before splitting):**
+
+- The **processing fee** is the total fee Stripe deducts on that tip's charge, as shown on its balance transaction. This includes the card fee, any international card surcharge, and any currency conversion Stripe applies to the charge itself.
+- Whether sales tax that Stripe charges on its own fee (for example GST or HST on a Canadian account) counts as part of the processing fee is a question for the accountant. Until confirmed, it is recorded on its own line and treated as part of the processing fee.
+
+**Outside the split (separate costs, recorded on their own ledger lines, never deducted from the creator's 80%):**
+
+| Cost | When it happens | Who bears it in the pilot | Effect on the creator |
+| --- | --- | --- | --- |
+| Processing fee not returned on a refund | A tip is refunded (errors or fraud only) | Crevant | The creator's allocation for that tip is reversed, because the fan got the money back. Nothing more is taken from the creator |
+| Dispute fee | A fan's bank opens a dispute | Crevant | None beyond the reversal below |
+| Disputed amount, if lost | Dispute lost | Creator and Crevant allocations reversed; Crevant absorbs any part the creator was already paid out | The creator's allocation for that tip is reversed if still in their Stripe balance; if already paid out, Crevant absorbs it during the pilot |
+| Connect active account fee | Each month a creator receives a payout | Crevant | None |
+| Payout fees | Each payout to a creator's bank | Crevant | None |
+| Cross border and currency conversion costs on transfers | Only if Crevant's balance currency differs from the creator's (section 10a) | Crevant | None |
+| Stripe Billing fees | Creator Pro subscriptions only | Crevant (separate flow) | Not related to tips |
+
+**Reporting.** Creator earnings are always reported as the sum of creator allocations on completed tips. Crevant's tip revenue is reported twice: before and after these separate costs. Separate costs are never netted into the processing fee.
+
+**Test vectors** (become automated tests in Phase 5):
+
+| Gross | Fee | Net | Creator 80% | Crevant 20% |
+| --- | --- | --- | --- | --- |
+| 10.00 | 0.59 | 9.41 | 7.53 | 1.88 |
+| 3.00 | 0.39 | 2.61 | 2.09 | 0.52 |
+| 100.00 | 3.20 | 96.80 | 77.44 | 19.36 |
+| 7.77 | 0.53 | 7.24 | 5.79 | 1.45 |
+
+Each row sums exactly: creator plus Crevant equals net, and net plus fee equals gross. Fees shown are examples; real fees come from Stripe.
 
 ### Tip states
 
@@ -297,9 +330,9 @@ Signed out visitors see the landing page; signed in members go to their feed.
 ### Refunds, disputes, failures (pilot policy, D14)
 
 - **Refunds:** full refunds only, for errors or fraud, at Crevant's discretion. Creator and Crevant shares are reversed. Stripe does not return its processing fee on refunds; **Crevant absorbs it**.
-- **Disputes:** the creator transfer is reversed where possible. Crevant absorbs the $15 dispute fee, and any shortfall if the creator has already been paid out (limited by the $100 cap). A won dispute restores the shares.
+- **Disputes:** the creator transfer is reversed where possible. Crevant absorbs the dispute fee (about $15 in the US; confirm the Canadian amount), and any shortfall if the creator has already been paid out (limited by the 100 cap). A won dispute restores the shares.
 - **Failed payments** never create a tip.
-- **Connect costs:** about $2 per creator paid out in a month, plus 0.25% and 25¢ per payout, absorbed by Crevant. Payouts are weekly.
+- **Connect costs:** about $2 per creator paid out in a month, plus 0.25% and 25¢ per payout (US figures; Canadian pricing to be confirmed), absorbed by Crevant. Payouts are weekly.
 
 ### Legal and tax (counsel and accountant)
 
@@ -309,6 +342,74 @@ Signed out visitors see the landing page; signed in members go to their feed.
 - Sales tax on subscriptions.
 
 **This plan is not legal or tax advice.**
+
+---
+
+## 10a. Canadian and US creators: evaluation
+
+**Status:** evaluated, not implemented. The build stays single country until the founder decides and Stripe confirms the points below.
+
+**Key correction.** Crevant is developed from Canada, so its Stripe platform account would normally be opened by the Canadian entity, as a Canadian Stripe account. A "US only" pilot would then be a cross border setup, not the simplest one. The real choice is between **Canada only** and **Canada plus US**.
+
+### What Stripe supports
+
+- **Funds flow.** Stripe's documentation for separate charges and transfers lists cross border transfers on the payments balance as supported between the United States, Canada, the United Kingdom, the EEA, and Switzerland. A Canadian platform transferring to US creators, and to Canadian creators, is therefore within the documented corridors.
+- **Restriction.** Stripe's cross border payout documentation describes this as working for separate charges and transfers **without** `on_behalf_of`, which matches our design. It also notes limits for accounts on the "recipient" service agreement. Which service agreement our creators' Express accounts use must be confirmed with Stripe.
+- **Onboarding.** Stripe hosted Express onboarding is available for both Canadian and US individuals. Each creator onboards in their own country, and Stripe verifies identity and bank details.
+
+### Currencies
+
+**Recommended design:** each creator's tips are charged in the creator's own currency. Canadian creators receive tips in CAD; US creators in USD.
+
+- **CAD tips to Canadian creators:** domestic for Crevant. No conversion.
+- **USD tips to US creators:** Crevant's Canadian account receives USD. If the account can hold and settle USD, the creator's transfer is made in USD with no conversion. Third party sources disagree on whether a Canadian account can settle in USD, so this must be confirmed with Stripe. If it cannot, Stripe converts USD to CAD on the charge (a fee inside the processing fee, which lowers the net before the split), and converts again on the transfer to the US creator (a separate cost Crevant absorbs). That double conversion is the main cost risk of including US creators.
+- **Fans paying across the border** (a Canadian fan tipping a US creator, or the reverse) use an international card. Stripe adds an international card surcharge, which is part of the processing fee, and the fan's bank may add its own foreign exchange fee.
+
+### Costs
+
+Canadian pricing figures are from third party guides and are **not verified**.
+
+| Item | Canadian Stripe account (unverified) |
+| --- | --- |
+| Domestic card | about 2.9% plus C$0.30 |
+| International card surcharge | sources disagree: 0.8% or 1.5% |
+| Currency conversion | about 2% for non US accounts |
+| Cross border payouts | Stripe documents a 0.25% fee per cross border payout |
+| Connect active account and payout fees | Canadian amounts not found; confirm |
+| Dispute fee | Canadian amount not found; confirm |
+
+### Implications for the build
+
+- Every money amount already carries a currency. Reconciliation, ledgers, and reports run **per currency**.
+- Investor reports show CAD and USD separately, plus a combined figure converted at a stated rate, with the rate source shown.
+- Tip presets per currency: for example C$3, C$5, C$10 and US$3, US$5, US$10, with the 3 to 100 range in each currency.
+- **Creator Pro** is priced in each currency (for example US$19 and a CAD equivalent to be set).
+- **Testing.** Phase 5 tests cover four routes: Canadian fan to Canadian creator, US to US, Canadian to US, and US to Canadian.
+- **Effort.** About 1 to 2 extra working sessions over a single currency build, plus Stripe confirmations before starting.
+
+### Tax and reporting (accountant and counsel)
+
+These are not answered here and are not tax advice:
+
+- GST or HST registration and collection for Crevant's commission and Creator Pro.
+- US sales tax on subscriptions.
+- Whether Canada's reporting rules for digital platform operators (Part XX) apply to tips through Crevant.
+- What reporting a Canadian platform owes for US creators (for example Form 1099 obligations).
+- Whether Stripe's tax form features are available to a Canadian platform.
+
+### Questions for Stripe before deciding
+
+1. Can Crevant's Canadian platform account hold and settle USD (multi currency settlement), so USD tips are transferred to US creators without conversion?
+2. For a Canadian platform using separate charges and transfers to US Express accounts: which service agreement applies, and what fees apply to transfers and payouts?
+3. Canadian Connect pricing: active account fee, payout fees, and dispute fee.
+4. Is a tipping or creator support platform an accepted business type for Connect in both countries?
+5. Are negative balance liability and transfer reversals handled the same way for US and Canadian connected accounts?
+
+### Recommendation
+
+- **If Stripe confirms USD settlement and the cross border transfer terms:** support Canadian and US creators, each paid in their own currency. This widens creator recruitment and adds about 1 to 2 sessions of work.
+- **If not:** launch with **Canadian creators only, in CAD**, which is domestic and simplest for a Canadian company, and add US creators after the pilot. Fans in either country can still tip Canadian creators.
+- Do not expand the implementation until the founder decides and Stripe confirms.
 
 ---
 
@@ -621,17 +722,17 @@ Effort is in working sessions.
 
 **Total:** about 20 to 29 working sessions.
 
-**Timing (staged launch, D18):**
+**Timing (recommended, D18; see section 19):**
 
-- The social pilot launches after Phases 0 to 4, 7, and 8: about **7 to 9 weeks**.
-- Tipping is switched on around pilot day 14 after Phase 5 passes the live rehearsal and reconciliation.
-- Pro trials open around day 21.
+- **Build:** Phases 0 to 5, 7, and 8 must be complete before the rollout period starts, because founding creators onboard to payouts during rollout. About **9 to 11 weeks**.
+- **Rollout:** 3 weeks with founding creators. Phase 6 (Creator Pro) finishes during rollout.
+- **Day 0** of the 60-day measurement window is therefore about **12 to 14 weeks** from the start of Phase 1. That is later than the earlier in-pilot staging, but every cohort is measured on the same product.
 
 ---
 
 ## 18. Launch readiness criteria
 
-**Social pilot:**
+**Before the rollout period starts:**
 
 - All Phase 0 to 4, 7, and 8 tests pass on staging and on beta with internal accounts.
 - Video device matrix passes; no console errors; 320 px layouts clean.
@@ -643,14 +744,20 @@ Effort is in working sessions.
 - Email domain authenticated and tested with Gmail and Outlook.
 - Privacy notice, terms, guidelines, and research consent reviewed by counsel.
 
-**Before tipping is switched on:**
+**Before founding creators can receive tips (start of rollout):**
 
 - Stripe live account approved; creator Express onboarding tested.
 - **Live rehearsal** by internal (excluded) accounts with real cards and small amounts, including a refund. Disputes are verified in test mode, where Stripe's test cards can trigger them.
 - **100% of rehearsal transactions reconcile**, with zero unresolved exceptions, and the alert email is confirmed to reach admins.
 - Tip terms, refund policy, and tax setup reviewed.
 
-**Before Pro trials open:**
+**Before Day 0:**
+
+- Everything above, plus at least 7 days of rollout with real tips reconciling daily and zero unresolved exceptions.
+- Founding creators have published, set up rewards, and completed payout onboarding.
+- Metric definitions frozen at v1.0 and thresholds written down; the measurement clock starts.
+
+**Before Pro trials open (Day 0):**
 
 - Price and terms copy reviewed.
 - A trial confirmed to end without any charge.
@@ -658,37 +765,87 @@ Effort is in working sessions.
 
 ---
 
-## 19. 60-day operating and measurement plan
+## 19. Pilot timeline and 60-day measurement plan
 
-**Weeks −2 to 0:**
+### Why the earlier staging weakens the evidence
 
-- Recruit about 25 creators (to allow for drop off) and brief each one on what is real, simulated, and measured.
+With tipping from day 14, Pro from day 21, a 21 day trial, and creators joining until day 35:
+
+- **Tips:** the first creators have 14 days without tipping, so "time to first tip" and tip volume are measured on unequal exposure.
+- **Pro conversion:** a creator joining on day 30 is eligible around day 37, and a 21 day trial ends around day 58. The 7 day conversion window then closes after day 60, so many outcomes fall outside the pilot.
+- **Paid retention:** the first renewal comes about 30 days after conversion, around days 72 to 95. That is not observable in a 60 day window at all.
+- **Late refunds and disputes** for tips in the final weeks arrive after day 60, so final monetization numbers would not be stable at day 60.
+
+### Recommended timeline: four separate periods
+
+| Period | When | What happens | Measured? |
+| --- | --- | --- | --- |
+| **Build** | About 9 to 11 weeks | Phases 0 to 5, 7, 8 | No |
+| **Rollout** | 3 weeks before Day 0 | 6 to 8 founding creators publish real posts, set up rewards, and complete payout onboarding. Internal live payment rehearsal; real tips may start among founding creators' early fans with daily reconciliation. Pro finishes building | Reported separately as "rollout", never mixed into the 60 day figures |
+| **Measurement window** | Day 0 to Day 59 | Fan invitations open. Tipping and Pro eligibility live for every cohort from Day 0 | Yes: the 60 day investor dataset |
+| **Follow-up window** | Day 60 to Day 89 | No new creators or fans. Observe first Pro renewals, late refunds and disputes, and later cohorts' retention | Reported as a clearly labelled extension |
+
+Founding creators' rollout posts are real content by real people, not seeded traction. They are disclosed as rollout activity.
+
+### Creator Pro trial length
+
+| | 14 day trial (recommended) | 21 day trial (approved) |
+| --- | --- | --- |
+| Last creator join date for conversion inside Day 59 | About Day 28 (eligible Day 35, trial ends Day 49, conversion window ends Day 56) | About Day 21 (eligible Day 28, trial ends Day 49, window ends Day 56) |
+| Founding creators | Trial ends about Day 14; first renewal about Day 44 to 51, **inside the window** | Trial ends about Day 21; first renewal about Day 51 to 58, inside the window |
+| Trade off | Less time with data per creator | More time, but creator recruitment must close a week earlier |
+
+Recommendation: **14 days**, with Pro eligibility at 7 days and 3 posts, and creator recruitment closing on Day 28.
+
+### Measurement window schedule
+
+**Before rollout:**
+
+- Recruit about 25 creators (to allow for drop off).
+- Brief each one on what is real, simulated, and measured.
 - Pre register success thresholds.
 
-**Days 1 to 7:** wave 1, 6 to 8 creators, each posting at least 3 times before fans arrive.
+**Rollout weeks 1 to 3:** founding creators onboard, publish at least 3 posts, set up rewards and payouts. Daily reconciliation of any real tips.
 
-**Days 8 to 21:**
+**Day 0:** fan invites open; tips live; founding creators eligible for Pro trials.
 
-- Creators invite fans in batches; wave 2 creators join.
-- **Tipping on around day 14.**
-- Creator survey on day 14.
+**Days 0 to 14:**
 
-**Days 22 to 35:**
+- Fans join in batches through creator links.
+- Wave 2 creators join (Days 7 to 14).
+- Creator survey on Day 14.
 
-- Wave 3 brings the total to 20 creators.
-- **Pro trials open around day 21.**
+**Days 15 to 28:**
+
+- Wave 3 creators join, bringing the total to 20.
+- **Creator recruitment closes Day 28.**
 - Carousel ad slots introduced.
-- Fan survey on day 30.
+- Fan survey on Day 30.
 
-**Days 36 to 60:**
+**Days 29 to 45:**
 
-- Steady state; invites close around day 45.
-- Creator survey on day 45.
-- About 10 creator interviews on days 50 to 60.
+- Steady state; **fan invites close Day 45**, so every fan cohort has at least 14 days of data.
+- Creator survey on Day 45.
 
-**Day 60:** data freeze, final snapshot, report.
+**Days 46 to 59:** about 10 creator interviews.
 
-**Weekly:**
+**Day 60:** measurement data freeze and **interim investor report** (60 day results).
+
+**Days 60 to 89:** follow-up window.
+
+**Day 90:** final report with renewals, late refunds and disputes, and complete cohort retention.
+
+### Monetization metric windows
+
+| Metric | Window | Included creators or fans |
+| --- | --- | --- |
+| Tips per creator, time to first tip | First 30 days after tips are enabled for the creator | Creators enabled by Day 30 |
+| Contributing fan rate | First 30 days after fan registration | Fans registered by Day 30 |
+| Trial to paid conversion | Within 7 days after trial end | Trials ending by Day 52 (Day 60 report) or Day 82 (Day 90 report) |
+| Paid retention | First renewal | Conversions by Day 29 (Day 60 report) or Day 59 (Day 90 report) |
+| Net monetization | Tips completed in the window, minus refunds and lost disputes known at the report date | Reported again at Day 90 with later reversals |
+
+### Weekly operating rhythm
 
 - **Monday:** snapshot and data quality check.
 - **Midweek:** creator check ins.
@@ -744,7 +901,7 @@ A 2 to 3 month build (mostly staging, about $20 to $45 a month) plus the 60 day 
 
 **Start now (long lead times, in parallel):**
 
-1. Apply for a Stripe account as a platform and start Connect setup in test mode. Stripe's review has the longest lead time.
+1. Open Crevant's Stripe account through the entity Crevant operates from (expected: Canada), start Connect setup in test mode, and ask Stripe the five questions in section 10a. Stripe's review has the longest lead time.
 2. Brief counsel and an accountant: privacy notice, terms, tip terms and refund policy, community guidelines, emergency process, tax treatment. Claude can draft first versions.
 3. Name at least two moderators, their on call hours, and an appeals email.
 4. Check a Crevant domain's availability (and a basic trademark check).
@@ -769,7 +926,7 @@ A 2 to 3 month build (mostly staging, about $20 to $45 a month) plus the 60 day 
 14. Supabase Pro organisation with project `crevant-pilot`, with the spend cap set.
 15. Mux production environment.
 16. Point `pilot.<domain>` at Vercel and apply the Supabase Auth settings Claude provides.
-17. Stripe live mode approval before tipping goes on.
+17. Stripe live mode approval before the rollout period starts.
 
 ---
 
