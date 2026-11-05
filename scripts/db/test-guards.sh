@@ -8,10 +8,17 @@ PW='Sup3rSecretPw'
 pass=0; failed=0
 
 expect() { # expect <ok|fail> <description> <url> [project_ref] [confirm]
-  local want=$1 desc=$2 url=$3 pref=${4-$REF} conf=${5-$REF} out code
-  out=$(EXPECTED_PROJECT_REF=$REF SUPABASE_PROJECT_REF=$pref CONFIRM_PROJECT_REF=$conf \
+  local want=$1 desc=$2 url=$3 pref=${4-$REF} conf=${5-$REF} out visible code
+  # Run as GitHub Actions does, so masking is exercised the same way locally and in CI.
+  out=$(GITHUB_ACTIONS=true EXPECTED_PROJECT_REF=$REF SUPABASE_PROJECT_REF=$pref CONFIRM_PROJECT_REF=$conf \
         STAGING_DATABASE_URL=$url scripts/db/verify-staging-target.sh 2>&1); code=$?
-  if [[ "$out" == *"$PW"* ]]; then echo "FAIL  $desc (password appeared in output)"; failed=$((failed+1)); return; fi
+  # "::add-mask::" lines are consumed by the runner and never shown in logs.
+  # The password must not appear anywhere else.
+  visible=$(grep -v '^::add-mask::' <<<"$out" || true)
+  if [[ "$visible" == *"$PW"* ]]; then echo "FAIL  $desc (password appeared in output)"; failed=$((failed+1)); return; fi
+  if [ "$want" = ok ] && ! grep -q "^::add-mask::.*$PW" <<<"$out"; then
+    echo "FAIL  $desc (password was not masked)"; failed=$((failed+1)); return
+  fi
   if { [ "$want" = ok ] && [ $code -eq 0 ]; } || { [ "$want" = fail ] && [ $code -ne 0 ]; }; then
     echo "PASS  $desc"; pass=$((pass+1))
   else

@@ -47,8 +47,8 @@ except ValueError:
     fail("STAGING_DATABASE_URL is not a valid URL (check that special characters in the password are URL-encoded).")
 
 if u.password and os.environ.get("GITHUB_ACTIONS") == "true":
-    print(f"::add-mask::{u.password}")
-    print(f"::add-mask::{unquote(u.password)}")
+    for secret in {u.password, unquote(u.password)}:
+        print(f"::add-mask::{secret}")
 
 if u.scheme not in ("postgres", "postgresql"):
     fail("STAGING_DATABASE_URL must start with postgresql://")
