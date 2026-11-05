@@ -43,10 +43,11 @@ If the product is ever renamed, update these alongside `src/brand.ts`:
 
 ## Founder steps this phase depends on
 
-1. **Protect the demo before anything merges to `main`.** In the existing Crevant Vercel project: Settings, Git, Production Branch, set to `demo`. Until this is done, merging pilot work to `main` would change the live demo.
-2. Create the staging accounts from the setup checklist in `docs/BETA-MIGRATION-PLAN.md`: a free Supabase project `crevant-staging`, a Mux staging environment, and a Vercel Pro project `crevant-pilot` linked to this repository.
+1. **Protect the demo before anything merges to `main`.** Done: the existing Crevant Vercel project's production branch is `demo` (Settings, Environments, Production, Branch Tracking), and the current production deployment is built from `demo` at `421a0a1`.
+2. **Create the free Supabase staging project** `crevant-staging`. This is the only new account Phase 1 needs. Staging previews run as preview deployments of the existing Vercel project, with the staging Supabase values set as **Preview only** environment variables, so production (the demo) never receives them.
+3. Later, when they are needed: Mux (Phase 2, video), an email provider on the Crevant domain, and the paid beta services before rollout (`docs/BETA-MIGRATION-PLAN.md`, sections 20 and 22).
 
-When the staging accounts exist, Phase 0 finishes by applying this migration to `crevant-staging` and pointing Vercel preview deployments at it. Secrets will be requested through a secure form, never in chat.
+Phase 0 finishes by applying this migration to `crevant-staging`. Secrets are never shared in chat.
 
 ## Not in this phase
 
