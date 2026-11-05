@@ -1,6 +1,6 @@
 # Crevant 60-day pilot: development plan
 
-**Status:** approved in principle; revised for Support Intent. Phase 0 engineering is in PR #5. Nothing is merged, provisioned, deployed, or live.
+**Status:** approved. Final pilot decisions recorded (D13, D16, and section 26). Phase 0 engineering is in PR #5. Nothing is merged, provisioned, deployed, or live.
 **Goal:** launch a real multi-user Crevant quickly, run a 60-day pilot with creators and fans, and produce credible evidence for fundraising.
 **Branding:** Crevant. Naming and logo changes are paused (Appendix A). The repository and the live demo (`crevant-prototype.vercel.app`) stay unchanged.
 **Money:** the pilot collects **no payments**. Monetization demand is tested through nonbinding **Support Intent**, Creator Pro willingness to pay, and simulated advertising.
@@ -32,6 +32,7 @@ Contents
 23. Future real payments: research already done
 24. Sources
 25. How this plan was produced
+26. Final pilot decisions
 Appendix A. Paused: FlipSocial working name and logo concept
 
 ---
@@ -68,10 +69,10 @@ Appendix A. Paused: FlipSocial working name and logo concept
 | D10 | Blocking, reporting, prioritised moderation queue, emergency escalation; no automatic global hiding |
 | D11 | Crevant branding kept; FlipSocial paused |
 | D12 | **No payments in the pilot.** No Stripe, no payouts, no recurring billing, no financial liabilities |
-| D13 | **Support Intent:** fans indicate nonbinding one time or monthly support amounts ($3, $5, $10, $20) for a creator; no money collected, no subscription created, no payable balance |
+| D13 | **Support Intent:** fans indicate nonbinding one time or monthly support amounts using **presets only ($3, $5, $10, $20); no custom amounts in the MVP**; no money collected, no subscription created, no payable balance |
 | D14 | **Creator Memberships** (fans paying creators monthly) are a future feature; the pilot only tests demand through monthly Support Intent. No membership checkout, billing, or exclusive content |
 | D15 | Proposed future economics: tips and memberships 80% creator, 20% Crevant of the amount left after actual processing fees; other payment costs separate (section 23). Not used in the pilot |
-| D16 | **Creator Pro:** Free and Pro analytics; creators try Pro during the pilot; **paid subscription processing deferred**; proposed $19 a month price tested through stated willingness to pay |
+| D16 | **Creator Pro:** Free and Pro analytics; **14 day free trial, no billing during the pilot**; proposed $19 a month price tested through stated willingness to pay |
 | D17 | Advertising simulated throughout: feed ads 100% Crevant and carousel ads 50:50 in the illustrative model; no advertiser billing or payouts |
 | D18 | Public landing page first; invite only access |
 | D19 | Weekly email digest included (opt out) |
@@ -273,7 +274,7 @@ On a creator's profile, and from the creator's posts, a **Support this creator**
 - A fan can hold one current one time indication and one current monthly indication per creator.
 - No indicating support for yourself, and none between people in a block relationship.
 - Creators can switch the panel off for themselves.
-- Founder decision: presets only, which is recommended for clean, comparable data, or presets plus a custom amount.
+- **Presets only** ($3, $5, $10, $20). No custom amounts in the MVP (D13).
 
 ### Data model (`intent` schema)
 
@@ -345,7 +346,7 @@ None of this is restricted by Pro.
 **Trial without billing:**
 
 - Eligible after 7 days on Crevant and 3 posts.
-- One trial per creator. **14 days recommended** (configurable); 21 was the earlier proposal.
+- One trial per creator, **14 days** (D16; stored as a setting).
 - No card, no checkout, no charge. When the trial ends, Pro switches back to Free with all data kept.
 - **Willingness to pay** is asked at trial end and recorded in `intent.pro_willingness`: "Creator Pro is proposed at $19 a month. Would you pay this?" The answers are: yes; yes at a lower amount (which amount?); no (why?).
 - Creators can also join a "Notify me when Pro launches" list.
@@ -729,6 +730,16 @@ Kept for when Crevant moves from Support Intent to real tips, memberships, or Pr
 ## 25. How this plan was produced
 
 Drafted by Claude (an AI assistant) in Claude Code at the founder's direction, from reviews of the codebase and earlier plans, the founder's written decisions, a headless browser codec experiment, cost calculations, and web research. Costs and legal points are flagged for human verification.
+
+---
+
+## 26. Final pilot decisions (confirmed by the founder)
+
+1. Creator Pro: 14 day free trial, no billing during the pilot.
+2. Support Intent: preset amounts of $3, $5, $10, and $20 only; no custom amounts in the MVP.
+3. Connection Points: existing system unchanged.
+4. No payment processing and no additional points currencies during the pilot.
+5. Product name: Crevant.
 
 ---
 
