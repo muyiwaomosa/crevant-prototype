@@ -1,0 +1,152 @@
+name: Deploy database to staging
+
+# Applies approved database migrations to the Crevant STAGING Supabase project
+# only. It never runs automatically: someone must start it by hand from the
+# Actions tab, on the main branch, and type the staging project reference.
+#
+# Modes:
+#   plan  (default) Verifies everything and lists pending migrations. Changes nothing.
+#   apply           Same checks, then applies the pending approved migrations and
+#                   runs the security and separation checks against staging.
+#
+# Safety:
+#   - The only credential used is the STAGING_DATABASE_URL secret of the GitHub
+#     "staging" environment. No other secret or environment is referenced.
+#   - The target must match the staging project reference hard-coded below, the
+#     staging environment variable, the reference typed by the person running
+#     it, and the project named inside the connection string. A production
+#     project can never match.
+#   - Migrations must be on the reviewed approved list with matching checksums,
+#     and must pass on a throwaway database before staging is touched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan = dry run, no changes. apply = apply approved migrations and run checks."
+        type: choice
+        options:
+          - plan
+          - apply
+        default: plan
+        required: true
+      confirm_project_ref:
+        description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-staging
+  cancel-in-progress: false
+
+env:
+  # The one project this workflow may ever touch. Changing it requires a reviewed PR.
+  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
+  # Pinned Supabase CLI. Update deliberately, in a reviewed PR.
+  SUPABASE_CLI_VERSION: 2.122.1
+
+jobs:
+  verify-migrations:
+    name: Verify approved migrations on a throwaway database
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: crevant_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard tests (target check and approved list)
+        run: scripts/db/test-guards.sh
+
+      - name: Only approved, unchanged migrations are present
+        run: scripts/db/check-approved-migrations.sh
+
+      - name: Migrations and security checks pass on an empty database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/crevant_test
+        run: scripts/db/test.sh
+
+  staging:
+    name: ${{ inputs.mode == 'apply' && 'Apply to staging' || 'Plan for staging (no changes)' }}
+    needs: verify-migrations
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved staging project
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-staging-target.sh
+
+      - name: Only approved, unchanged migrations are present
+        run: scripts/db/check-approved-migrations.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install the pinned Supabase CLI
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/supabase-cli" "supabase@${SUPABASE_CLI_VERSION}"
+          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Confirm the CLI version
+        run: |
+          set -euo pipefail
+          installed="$(supabase --version | tr -d '[:space:]')"
+          if [ "$installed" != "$SUPABASE_CLI_VERSION" ]; then
+            echo "::error::Expected Supabase CLI $SUPABASE_CLI_VERSION but found $installed."
+            exit 1
+          fi
+          echo "Supabase CLI $installed"
+
+      - name: Plan (dry run, lists pending migrations, changes nothing)
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: supabase db push --db-url "$STAGING_DATABASE_URL" --dry-run
+
+      - name: Apply approved migrations
+        if: inputs.mode == 'apply'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: supabase db push --db-url "$STAGING_DATABASE_URL" --yes
+
+      - name: Security and separation checks on staging
+        if: inputs.mode == 'apply'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          PGSSLMODE: require
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          for f in supabase/tests/*.sql; do
+            echo "Running $f"
+            psql "$STAGING_DATABASE_URL" -v ON_ERROR_STOP=1 -q -X -f "$f"
+          done
+          echo "Staging security and separation checks passed"
+
+      - name: Applied migrations on staging
+        if: inputs.mode == 'apply'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: supabase migration list --db-url "$STAGING_DATABASE_URL"

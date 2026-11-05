@@ -41,6 +41,10 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      - name: Staging deploy guard tests (target check and approved list)
+        run: scripts/db/test-guards.sh
+      - name: Only approved, unchanged migrations are present
+        run: scripts/db/check-approved-migrations.sh
       - name: Apply migrations to an empty database and run checks
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/crevant_test

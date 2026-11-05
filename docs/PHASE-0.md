@@ -13,6 +13,7 @@ Part of the Crevant 60-day pilot plan (`docs/BETA-MIGRATION-PLAN.md`, section 17
 | Secret scan | `scripts/check-bundle-secrets.sh` (`npm run check:secrets`) | Fails if a secret key pattern (Supabase secret, Mux secret, email API key, private key, and payment provider keys as a precaution) appears in the built frontend |
 | Environment template | `.env.example` | Lists the public values the frontend needs and the secrets that must never be there |
 | Brand configuration | `src/brand.ts` | One place for the product name. The Wordmark reads from it. Crevant stays the brand; renames are paused |
+| Staging database deploy | `.github/workflows/deploy-db-staging.yml`, `docs/STAGING-DATABASE.md` | Manually started workflow that applies approved migrations to `crevant-staging` only, after target, approval list and throwaway database checks |
 | CI | `.github/workflows/ci.yml` | On every pull request and push to `main`: types, unit tests, build, secret scan, and the database checks against a fresh PostgreSQL 16 |
 
 ## Running the checks locally
@@ -47,7 +48,7 @@ If the product is ever renamed, update these alongside `src/brand.ts`:
 2. **Create the free Supabase staging project** `crevant-staging`. This is the only new account Phase 1 needs. Staging previews run as preview deployments of the existing Vercel project, with the staging Supabase values set as **Preview only** environment variables, so production (the demo) never receives them.
 3. Later, when they are needed: Mux (Phase 2, video), an email provider on the Crevant domain, and the paid beta services before rollout (`docs/BETA-MIGRATION-PLAN.md`, sections 20 and 22).
 
-Phase 0 finishes by applying this migration to `crevant-staging`. Secrets are never shared in chat.
+Phase 0 finishes by applying this migration to `crevant-staging` with the staging deploy workflow (`docs/STAGING-DATABASE.md`). Secrets are never shared in chat.
 
 ## Not in this phase
 
