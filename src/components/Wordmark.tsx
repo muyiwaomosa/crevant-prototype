@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { BRAND } from '../brand'
 
 /**
  * Crevant mark: an open "C" (the creator) with a spark held inside it (the fan).
@@ -24,9 +25,9 @@ export function Wordmark({ className, size = 'md' }: { className?: string; size?
     <span className={clsx('inline-flex items-center gap-2', className)}>
       <LogoMark className={sizes.mark} />
       <span aria-hidden="true" className={clsx('font-display font-extrabold tracking-[-0.03em] text-ink-900', sizes.text)}>
-        crevant
+        {BRAND.wordmark}
       </span>
-      <span className="sr-only">Crevant</span>
+      <span className="sr-only">{BRAND.name}</span>
     </span>
   )
 }
