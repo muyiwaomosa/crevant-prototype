@@ -6,6 +6,7 @@ import { useStore } from '../state/store'
 import { Wordmark } from '../components/Wordmark'
 import { Button, CreatorAvatar, SparkIcon } from '../components/ui'
 import { Toasts } from '../components/Toasts'
+import { TourBannerSlot } from '../components/TourBanner'
 
 type Step = 0 | 1 | 2
 
@@ -47,6 +48,7 @@ export function OnboardingPage() {
 
   return (
     <div className="min-h-dvh bg-paper">
+      <TourBannerSlot />
       <div className="mx-auto flex min-h-dvh w-full max-w-[560px] flex-col px-5 pb-8 pt-[max(env(safe-area-inset-top),20px)]">
         <header className="flex items-center justify-between gap-3 py-2">
           <Wordmark size="sm" />

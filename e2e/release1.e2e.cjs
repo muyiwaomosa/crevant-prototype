@@ -10,6 +10,9 @@
 const { chromium, devices } = require('playwright')
 
 const BASE = process.argv[2] || 'http://localhost:4175'
+// The suites also run against the tour on `main`: pass http://localhost:4175/tour.
+const PREFIX = new URL(BASE).pathname.replace(/\/$/, '')
+const HOME = PREFIX ? BASE.replace(/\/$/, '') : BASE + '/'
 const SHOTS = process.argv[3] || null
 const KEY = 'crevant-demo-state'
 let failures = 0
@@ -75,7 +78,7 @@ async function comment(page, postId, text) {
   // Release 2: new visitors see onboarding. Skipping follows the four starter accounts.
   await page.waitForURL(/\/welcome/)
   await page.getByRole('button', { name: 'Skip' }).click()
-  await page.waitForURL(BASE + '/')
+  await page.waitForURL(HOME)
   check('fresh demo starts with no CP', Object.keys(await balances(page)).length === 0)
 
   // ---- Journey 1: chronological home feed --------------------------------

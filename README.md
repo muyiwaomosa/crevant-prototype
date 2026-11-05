@@ -7,6 +7,8 @@ Crevant is a creator-first platform built around two ideas:
 
 This repository is an interactive, mobile-first web prototype of that idea. It runs entirely in the browser with seeded sample data. There are no accounts, no server, and no payments.
 
+> **Phase 1A (pilot) layout on `main`.** The public site (landing page, and placeholders for sign in and invitation requests) is served at `/`. The prototype described below lives at **`/tour`**, with a banner on every screen saying it is sample data; old links such as `/discover` redirect to `/tour/discover`. The live demo is the frozen `demo` branch and is unchanged. See `docs/PHASE-1A.md`.
+
 > **Prototype notice.** Every creator, post, comment, follower count, point, and reward in this app is fictional or simulated. Connection Points have no monetary value and rewards are never delivered. The chronological feed demonstrates that followers *can* see every post in order; it does not claim that every follower *will* see every post.
 
 ## Quick start
@@ -30,11 +32,14 @@ Other scripts:
 | `npm run build` | Type checks and builds a production bundle into `dist/` |
 | `npm run preview` | Serves the production build locally |
 | `npm run typecheck` | Runs the TypeScript compiler only |
-| `npm test` | Runs the unit tests |
+| `npm test` | Runs the unit tests and the build guard tests |
+| `npm run check:production` | Checks the live production site is still the frozen demo build |
 
 ## Deploying to Vercel
 
 Import the repository in Vercel and accept the detected defaults (framework: Vite, build command `npm run build`, output directory `dist`). `vercel.json` adds a rewrite so deep links such as `/creator/amara` load the app instead of a 404. No environment variables or API keys are needed.
+
+**Production is the `demo` branch.** Vercel's production branch setting (`demo`) is the primary safeguard. On `main`, `npm run build` also refuses to build when `VERCEL_ENV` is `production`, and if a `main` build is ever served on the production address it shows only the sample prototype. Never use "Promote to Production" on a `main` preview. See `docs/PHASE-1A.md`.
 
 ## What you can do
 
@@ -82,7 +87,7 @@ Everyone has one profile and can add a profile picture from the Profile page. It
 npm test
 ```
 
-Runs 72 unit tests (Vitest) for earning, reversal, redemption, eligibility, mutual followers, comment checks, video tracking, picture validation, and storage migration (versions 1, 2, and 3).
+Runs the Vitest unit tests for earning, reversal, redemption, eligibility, mutual followers, comment checks, video tracking, picture validation, and storage migration (versions 1, 2, and 3), plus the Phase 1A public site, tour routing and production fallback tests, then the build guard tests with Node's test runner.
 
 A browser end to end script checks the acceptance criteria against a running build. It needs Playwright with Chromium installed separately:
 
@@ -95,14 +100,18 @@ npx vite preview --port 4175 --strictPort
 ```
 
 ```bash
-node e2e/release2.e2e.cjs http://localhost:4175
+node e2e/phase1a-landing.e2e.cjs http://localhost:4175
 ```
 
 ```bash
-node e2e/release1.e2e.cjs http://localhost:4175
+node e2e/release2.e2e.cjs http://localhost:4175/tour
 ```
 
-`release2` covers the unified experience and onboarding; `release1` covers creator specific CP, anti farming, redemption, and pictures.
+```bash
+node e2e/release1.e2e.cjs http://localhost:4175/tour
+```
+
+`phase1a-landing` covers the public site, layout at 320 to 1280 pixels, no data collection, redirects, keyboard access and the production fallback. `release2` covers the unified experience and onboarding; `release1` covers creator specific CP, anti farming, redemption, and pictures.
 
 ## Technical choices
 

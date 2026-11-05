@@ -13,6 +13,7 @@ import { CreatePage } from './pages/CreatePage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { CreatorToolsPage } from './pages/tools/CreatorToolsPage'
 import { SELF_ID } from './data/seed'
+import { TourBannerProvider } from './components/TourBanner'
 
 function NotFound() {
   return (
@@ -51,33 +52,40 @@ function PointsRedirect() {
   return <Navigate to={`/rewards?${params.toString()}`} replace />
 }
 
-export default function App() {
+/**
+ * The sample-data prototype. On `main` it lives under /tour with a banner
+ * saying so. Without a basename it renders at the root, which is only used by
+ * the production fallback in `src/entry.ts`.
+ */
+export default function App({ basename, banner = false }: { basename?: string; banner?: boolean } = {}) {
   return (
     <StoreProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="welcome" element={<OnboardingPage />} />
-          <Route element={<Layout />}>
-            <Route index element={<HomeGate />} />
-            <Route path="discover" element={<DiscoverPage />} />
-            <Route path="create" element={<CreatePage />} />
-            <Route path="creator/:id" element={<CreatorRoute />} />
-            <Route path="post/:id" element={<PostPage />} />
-            <Route path="rewards" element={<RewardsPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="profile/tools" element={<CreatorToolsPage />} />
+      <TourBannerProvider enabled={banner}>
+        <BrowserRouter basename={basename}>
+          <Routes>
+            <Route path="welcome" element={<OnboardingPage />} />
+            <Route element={<Layout />}>
+              <Route index element={<HomeGate />} />
+              <Route path="discover" element={<DiscoverPage />} />
+              <Route path="create" element={<CreatePage />} />
+              <Route path="creator/:id" element={<CreatorRoute />} />
+              <Route path="post/:id" element={<PostPage />} />
+              <Route path="rewards" element={<RewardsPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="profile/tools" element={<CreatorToolsPage />} />
 
-            {/* Routes from the old Fan/Creator modes redirect to their new homes. */}
-            <Route path="points" element={<PointsRedirect />} />
-            <Route path="studio" element={<Navigate to="/profile/tools" replace />} />
-            <Route path="studio/new" element={<Navigate to="/create" replace />} />
-            <Route path="studio/posts" element={<Navigate to="/profile" replace />} />
-            <Route path="studio/rewards" element={<Navigate to="/profile/tools#rewards" replace />} />
+              {/* Routes from the old Fan/Creator modes redirect to their new homes. */}
+              <Route path="points" element={<PointsRedirect />} />
+              <Route path="studio" element={<Navigate to="/profile/tools" replace />} />
+              <Route path="studio/new" element={<Navigate to="/create" replace />} />
+              <Route path="studio/posts" element={<Navigate to="/profile" replace />} />
+              <Route path="studio/rewards" element={<Navigate to="/profile/tools#rewards" replace />} />
 
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </TourBannerProvider>
     </StoreProvider>
   )
 }
