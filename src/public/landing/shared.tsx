@@ -46,14 +46,14 @@ export function Section({
   className?: string
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className={clsx('px-4 py-16 sm:px-6 sm:py-24', className)}>
+    <section id={id} aria-labelledby={`${id}-title`} className={clsx('px-4 py-12 sm:px-6 sm:py-20', className)}>
       <div className="mx-auto max-w-6xl">
         <p className="text-sm font-semibold uppercase tracking-wider text-brand-600">{eyebrow}</p>
         <h2 id={`${id}-title`} className="mt-2 max-w-3xl font-display text-[1.9rem] font-extrabold leading-[1.1] tracking-[-0.02em] text-ink-900 sm:text-[2.5rem]">
           {title}
         </h2>
         {intro && <div className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-600">{intro}</div>}
-        <div className="mt-10">{children}</div>
+        <div className="mt-8">{children}</div>
       </div>
     </section>
   )

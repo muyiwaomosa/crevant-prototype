@@ -102,19 +102,65 @@ describe('why: distribution', () => {
   })
 })
 
-describe('who: four audiences', () => {
-  it('shows the four audience examples', () => {
+describe('who: creators and fans, with equal prominence', () => {
+  const groups = () => {
     const { container } = renderAt('/')
-    const items = [...container.querySelectorAll('#who li')].map(norm)
-    expect(items).toHaveLength(4)
-    expect(items[0]).toContain('500 followers')
-    expect(items[0]).toContain('struggling to get discovered')
-    expect(items[1]).toContain('100,000 followers')
-    expect(items[1]).toContain("can't consistently reach it or build sustainable income")
-    expect(items[2]).toContain('Teachers, artists, experts, storytellers')
-    expect(items[2]).toContain('respected profession')
-    expect(items[3]).toContain('Supporters')
-    expect(items[3]).toContain('see posts from the creators they follow')
+    return [...container.querySelectorAll('#who [data-group]')]
+  }
+  it('shows exactly two groups, creators and fans, side by side', () => {
+    const g = groups()
+    expect(g.map((el) => el.getAttribute('data-group'))).toEqual(['creators', 'fans'])
+    // Equal structure: each has one heading, one title line and one description.
+    for (const el of g) {
+      expect(el.querySelectorAll('h3')).toHaveLength(1)
+      expect(el.querySelectorAll('p')).toHaveLength(2)
+    }
+  })
+  it('uses the approved copy for each group', () => {
+    const [creators, fans] = groups().map((g) => [norm(g.querySelector('h3')), ...[...g.querySelectorAll('p')].map(norm)])
+    expect(creators).toEqual([
+      'For creators',
+      'You have something valuable to share.',
+      'Build relationships with people who genuinely appreciate your work, recognize loyal supporters and work toward sustainable income.',
+    ])
+    expect(fans).toEqual([
+      'For fans',
+      'You believe in creators whose work matters to you.',
+      'Discover them, support their journey, earn recognition for meaningful participation and explore rewards they choose to offer.',
+    ])
+  })
+  it('keeps one account for everyone, with no separate account types', () => {
+    const { container } = renderAt('/')
+    expect(norm(container.querySelector('[data-testid="one-account"]'))).toContain('One account for everyone.')
+    expect(norm(container)).not.toMatch(/fan account|creator account|switch (to|between) (fan|creator)|fan mode|creator mode/i)
+  })
+})
+
+describe('how: fans', () => {
+  const panel = () => {
+    const { container } = renderAt('/')
+    return container.querySelector('#how [data-testid="fan-panel"]')!
+  }
+  it('puts the fan message next to the rewards screenshot', () => {
+    const p = panel()
+    expect(norm(p.querySelector('h3'))).toBe('Your support should count for something.')
+    expect(norm(p)).toContain("You don't have to create content to be part of Crevant. We're testing ways to recognize meaningful participation through Connection Points.")
+    expect(norm(p)).toContain('Because creators build communities. But fans help make those communities possible.')
+    expect(p.querySelector('figure[data-screenshot="rewards"]')).not.toBeNull()
+  })
+  it('states what Connection Points and rewards are not', () => {
+    const a = norm(panel().querySelector('[data-testid="points-accuracy"]'))
+    expect(a).toContain('Connection Points are noncash participation points.')
+    expect(a).toContain("They aren't money, investments, ownership or wages, and they can't be cashed out.")
+    expect(a).toContain('Not every interaction earns points.')
+    expect(a).toContain('Rewards are chosen by each creator and subject to availability, so not every fan will receive one.')
+  })
+  it('never implies every interaction earns points or every fan gets a reward', () => {
+    const t = textOf('/')
+    // Negated statements ("Not every interaction earns points") are the
+    // disclosure itself, so only un-negated claims are rejected.
+    expect(t).not.toMatch(/(?<!not )\b(every|each|any) (interaction|like|comment|share|post) (automatically )?earns|guaranteed (reward|points)|(?<!not )\bevery fan (will )?(get|receive)s?\b|earn points for everything/i)
+    expect(t).toContain('Not every interaction earns points.')
   })
 })
 

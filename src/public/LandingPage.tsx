@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Clock3, GraduationCap, HandCoins, HeartHandshake, Megaphone, Sprout, Users } from 'lucide-react'
+import { ArrowRight, Clock3, HandCoins, HeartHandshake, Sprout, Users } from 'lucide-react'
 import { buttonClass, SparkIcon } from '../components/ui'
 import { TOUR_BASE } from '../entry'
 import { cardShadow, Section, StatusBadge, TourScreenshot, type Status } from './landing/shared'
@@ -98,71 +98,50 @@ function Why() {
   )
 }
 
-const AUDIENCES: Array<{ tag: string; title: string; body: string; icon: ReactNode; tone: 'brand' | 'spark' | 'ink' | 'card' }> = [
+const GROUPS: Array<{ id: 'creators' | 'fans'; label: string; title: string; body: string; icon: ReactNode }> = [
   {
-    tag: '500 followers',
-    title: 'The undiscovered creator',
-    body: 'Valuable knowledge or talent, but struggling to get discovered.',
-    icon: <Sprout className="h-5 w-5" />,
-    tone: 'spark',
+    id: 'creators',
+    label: 'For creators',
+    title: 'You have something valuable to share.',
+    body: 'Build relationships with people who genuinely appreciate your work, recognize loyal supporters and work toward sustainable income.',
+    icon: <Sprout className="h-6 w-6" />,
   },
   {
-    tag: '100,000 followers',
-    title: 'The established creator',
-    body: "A big audience, but can't consistently reach it or build sustainable income.",
-    icon: <Megaphone className="h-5 w-5" />,
-    tone: 'brand',
-  },
-  {
-    tag: 'Teachers, artists, experts, storytellers',
-    title: 'The professional',
-    body: 'Want content creation to be a respected profession, not just a hobby.',
-    icon: <GraduationCap className="h-5 w-5" />,
-    tone: 'ink',
-  },
-  {
-    tag: 'Supporters',
-    title: 'The people who show up',
-    body: 'Want to see posts from the creators they follow and take part in their communities.',
-    icon: <Users className="h-5 w-5" />,
-    tone: 'card',
+    id: 'fans',
+    label: 'For fans',
+    title: 'You believe in creators whose work matters to you.',
+    body: 'Discover them, support their journey, earn recognition for meaningful participation and explore rewards they choose to offer.',
+    icon: <Users className="h-6 w-6" />,
   },
 ]
 
 function Who() {
   return (
-    <Section id="who" eyebrow="Who Crevant is for" title="For people with something valuable to say. And the people who want to hear it.">
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {AUDIENCES.map((a) => (
+    <Section id="who" eyebrow="Who Crevant is for" title="For creators. And for the fans who help them build something lasting.">
+      <ul className="grid gap-4 md:grid-cols-2">
+        {GROUPS.map((g) => (
           <li
-            key={a.title}
-            className={clsx(
-              'flex flex-col rounded-3xl p-6',
-              a.tone === 'brand' && 'bg-brand-700 text-white',
-              a.tone === 'spark' && 'bg-spark-50 ring-1 ring-spark-200',
-              a.tone === 'ink' && 'bg-ink-900 text-white',
-              a.tone === 'card' && clsx('bg-card', cardShadow),
-            )}
+            key={g.id}
+            data-group={g.id}
+            className={clsx('flex flex-col rounded-[28px] p-7 sm:p-8', g.id === 'creators' ? 'bg-brand-700 text-white' : 'bg-spark-100 text-ink-900 ring-1 ring-spark-200')}
           >
-            <span
-              aria-hidden="true"
-              className={clsx(
-                'grid h-10 w-10 place-items-center rounded-2xl',
-                a.tone === 'brand' || a.tone === 'ink' ? 'bg-white/10 text-white' : 'bg-white text-brand-600 ring-1 ring-ink-100',
-              )}
-            >
-              {a.icon}
-            </span>
-            <p className={clsx('mt-4 font-display text-xl font-extrabold leading-tight', a.tone === 'brand' || a.tone === 'ink' ? 'text-white' : 'text-ink-900')}>
-              {a.tag}
-            </p>
-            <h3 className={clsx('mt-1 text-sm font-semibold uppercase tracking-wide', a.tone === 'brand' || a.tone === 'ink' ? 'text-white/70' : 'text-brand-700')}>
-              {a.title}
-            </h3>
-            <p className={clsx('mt-3 leading-relaxed', a.tone === 'brand' || a.tone === 'ink' ? 'text-white/85' : 'text-ink-600')}>{a.body}</p>
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className={clsx('grid h-12 w-12 place-items-center rounded-2xl', g.id === 'creators' ? 'bg-white/10 text-white' : 'bg-white text-spark-700')}
+              >
+                {g.icon}
+              </span>
+              <h3 className={clsx('font-display text-2xl font-extrabold', g.id === 'creators' ? 'text-white' : 'text-ink-900')}>{g.label}</h3>
+            </div>
+            <p className={clsx('mt-5 font-display text-xl font-bold leading-snug', g.id === 'creators' ? 'text-white' : 'text-ink-900')}>{g.title}</p>
+            <p className={clsx('mt-2 text-[17px] leading-relaxed', g.id === 'creators' ? 'text-white/85' : 'text-ink-700')}>{g.body}</p>
           </li>
         ))}
       </ul>
+      <p data-testid="one-account" className="mt-5 text-center text-[15px] text-ink-600">
+        One account for everyone. Create, follow and support, with no separate modes or account types.
+      </p>
     </Section>
   )
 }
@@ -251,28 +230,46 @@ const FAQ: Array<{ q: string; a: string }> = [
 function How() {
   return (
     <Section id="how" eyebrow="How Crevant is different" title="Built around the people you chose, not predicted engagement.">
-      <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid items-start gap-10 lg:grid-cols-[1.4fr_0.6fr]">
         <ol className="grid gap-4 sm:grid-cols-2">
           {POINTS.map((p) => (
-            <li key={p.title} className={clsx('flex flex-col rounded-3xl bg-card p-6', cardShadow)}>
+            <li key={p.title} className={clsx('flex flex-col rounded-3xl bg-card p-5 sm:p-6', cardShadow)}>
               <div className="flex items-start justify-between gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-600" aria-hidden="true">
                   {p.icon}
                 </span>
                 <StatusBadge status={p.status} />
               </div>
-              <h3 className="mt-4 font-display text-lg font-bold text-ink-900">{p.title}</h3>
+              <h3 className="mt-3 font-display text-lg font-bold text-ink-900">{p.title}</h3>
               <p className="mt-1.5 leading-relaxed text-ink-600">{p.body}</p>
             </li>
           ))}
         </ol>
-        <div className="grid grid-cols-2 content-start gap-4">
-          <TourScreenshot screen="creator" caption="Connection Points" />
-          <TourScreenshot screen="rewards" caption="Creator rewards" />
-        </div>
+        <TourScreenshot screen="creator" caption="Connection Points with one creator" className="max-w-[220px] lg:max-w-[250px]" />
       </div>
 
-      <div data-testid="pilot-targets" className="mt-10 rounded-[28px] bg-white p-5 ring-1 ring-ink-100 sm:p-6">
+      <div data-testid="fan-panel" className="mt-8 grid items-center gap-6 rounded-[32px] bg-spark-50 p-6 ring-1 ring-spark-200 sm:p-8 md:grid-cols-[1.4fr_0.6fr]">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wider text-spark-700">For fans</p>
+          <h3 className="mt-2 font-display text-[1.7rem] font-extrabold leading-tight tracking-[-0.02em] text-ink-900 sm:text-[2rem]">
+            Your support should count for something.
+          </h3>
+          <p className="mt-3 text-[17px] leading-relaxed text-ink-700">
+            You don't have to create content to be part of Crevant. We're testing ways to recognize meaningful participation through Connection
+            Points.
+          </p>
+          <p className="mt-3 font-display text-lg font-bold leading-snug text-ink-900">
+            Because creators build communities. But fans help make those communities possible.
+          </p>
+          <p data-testid="points-accuracy" className="mt-4 text-[13px] leading-relaxed text-ink-500">
+            Connection Points are noncash participation points. They aren't money, investments, ownership or wages, and they can't be cashed out.
+            Not every interaction earns points. Rewards are chosen by each creator and subject to availability, so not every fan will receive one.
+          </p>
+        </div>
+        <TourScreenshot screen="rewards" caption="Rewards a creator chooses to offer" className="max-w-[220px]" />
+      </div>
+
+      <div data-testid="pilot-targets" className="mt-8 rounded-[28px] bg-white p-5 ring-1 ring-ink-100 sm:p-6">
         <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-500">The pilot</p>
         <p className="mt-2 text-[15px] leading-relaxed text-ink-700">
           An invitation-only pilot for adults 18+, free to join, with approximately 10–20 creators and 200–300 supporters. These are planning
