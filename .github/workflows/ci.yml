@@ -89,3 +89,55 @@ jobs:
           fi
       - name: Run the integration test
         run: STOP_AFTER=1 scripts/db/integration.sh
+
+  browser:
+    # The full sign-in journey in a real browser (Chromium) against a real
+    # local Supabase in Docker: invitation, Continue, password, sign in and
+    # out, password reset, expired and reused links, email-scanner
+    # protection, safe redirects, and the vercel.json security headers.
+    # Isolated to this runner: local development keys only, never staging.
+    name: Browser (sign-in journey on local Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_CLI_VERSION: 2.122.1
+      PLAYWRIGHT_VERSION: 1.63.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install the pinned Supabase CLI
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/supabase-cli" "supabase@${SUPABASE_CLI_VERSION}"
+          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Confirm the CLI version
+        run: |
+          set -euo pipefail
+          installed="$(supabase --version | tr -d '[:space:]')"
+          if [ "$installed" != "$SUPABASE_CLI_VERSION" ]; then
+            echo "::error::Expected Supabase CLI $SUPABASE_CLI_VERSION but found $installed."
+            exit 1
+          fi
+      - name: Install the pinned Playwright and Chromium
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund "playwright@${PLAYWRIGHT_VERSION}"
+          npx playwright install --with-deps chromium
+      - name: Start local Supabase (one retry, for image downloads only)
+        run: |
+          set -euo pipefail
+          EXCLUDE=realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+          if ! supabase start -x "$EXCLUDE"; then
+            echo "::warning::supabase start failed; retrying once (start-up only, tests are never retried)"
+            supabase stop --no-backup || true
+            supabase start -x "$EXCLUDE"
+          fi
+      - name: Run the sign-in journey
+        run: scripts/e2e/auth-journey.sh
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup || true

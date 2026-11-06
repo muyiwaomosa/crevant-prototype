@@ -18,7 +18,7 @@ export function RequestInvitePage() {
             We're finishing our privacy notice first. We'd rather ask for your email once we can tell you exactly how
             it's handled.
           </p>
-          <p>Until then, nothing on this site collects your personal information.</p>
+          <p>Until then, this page collects nothing.</p>
         </>
       }
     />

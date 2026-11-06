@@ -66,5 +66,17 @@ check_copy fail "an approved migration is edited"        "echo '-- edit' >> supa
 check_copy fail "an approved migration is deleted"       "rm supabase/migrations/20261106000000_foundations.sql"
 check_copy fail "the approved list is missing"           "rm supabase/approved-migrations.sha256"
 
+# The staging workflow: the only step that can install migrations runs in
+# "apply" mode only, so "plan" and "check" can never change the database.
+wf=.github/workflows/deploy-db-staging.yml
+installs=$(grep -c 'supabase db push' "$wf" || true)
+writes=$(grep 'supabase db push' "$wf" | grep -vc -- '--dry-run' || true)
+guard=$(grep -B4 -- 'db push --db-url "$STAGING_DATABASE_URL" --yes' "$wf" | grep -c "if: inputs.mode == 'apply'$" || true)
+if [ "$installs" = 2 ] && [ "$writes" = 1 ] && [ "$guard" = 1 ]; then
+  echo "PASS  staging workflow installs migrations in apply mode only"; pass=$((pass+1))
+else
+  echo "FAIL  staging workflow: db push steps=$installs, non-dry-run=$writes, apply-only guard=$guard"; failed=$((failed+1))
+fi
+
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]

@@ -8,6 +8,10 @@ name: Deploy database to staging
 #   plan  (default) Verifies everything and lists pending migrations. Changes nothing.
 #   apply           Same checks, then applies the pending approved migrations and
 #                   runs the security and separation checks against staging.
+#   check           Read-only checks: runs only the staging security and separation
+#                   checks and lists applied migrations. Never runs db push. Nothing
+#                   persists (two Phase 0 checks create test objects inside
+#                   transactions that are always rolled back).
 #
 # Safety:
 #   - The only credential used is the STAGING_DATABASE_URL secret of the GitHub
@@ -23,11 +27,12 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "plan = dry run, no changes. apply = apply approved migrations and run checks."
+        description: "plan = dry run, no changes. apply = apply approved migrations and run checks. check = read-only security checks only."
         type: choice
         options:
           - plan
           - apply
+          - check
         default: plan
         required: true
       confirm_project_ref:
@@ -81,7 +86,7 @@ jobs:
         run: scripts/db/test.sh
 
   staging:
-    name: ${{ inputs.mode == 'apply' && 'Apply to staging' || 'Plan for staging (no changes)' }}
+    name: ${{ inputs.mode == 'apply' && 'Apply to staging' || inputs.mode == 'check' && 'Read-only checks on staging' || 'Plan for staging (no changes)' }}
     needs: verify-migrations
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -121,6 +126,7 @@ jobs:
           echo "Supabase CLI $installed"
 
       - name: Plan (dry run, lists pending migrations, changes nothing)
+        if: inputs.mode == 'plan' || inputs.mode == 'apply'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
         run: supabase db push --db-url "$STAGING_DATABASE_URL" --dry-run
@@ -132,7 +138,7 @@ jobs:
         run: supabase db push --db-url "$STAGING_DATABASE_URL" --yes
 
       - name: Security and separation checks on staging
-        if: inputs.mode == 'apply'
+        if: inputs.mode == 'apply' || inputs.mode == 'check'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           PGSSLMODE: require
@@ -146,7 +152,7 @@ jobs:
           echo "Staging security and separation checks passed"
 
       - name: Applied migrations on staging
-        if: inputs.mode == 'apply'
+        if: inputs.mode == 'apply' || inputs.mode == 'check'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
         run: supabase migration list --db-url "$STAGING_DATABASE_URL"

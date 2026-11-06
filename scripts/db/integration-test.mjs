@@ -64,8 +64,11 @@ async function inviteLink(email, type = 'invite', subject = 'invited') {
       const full = await fetch(`${MAIL}/api/v1/message/${m.ID}`).then((x) => x.json())
       const href = (full.HTML || full.Text).match(/href="([^"]+)"/)[1].replace(/&amp;/g, '&')
       const u = new URL(href)
-      if (u.searchParams.get('type') !== type) continue
-      return u.searchParams.get('token_hash')
+      // The code must travel in the fragment (#), never the query string.
+      if (u.search) throw new Error(`Email link has a query string: ${u.pathname}${u.search.replace(/token_hash=[^&]+/, 'token_hash=…')}`)
+      const params = new URLSearchParams(u.hash.slice(1))
+      if (params.get('type') !== type) continue
+      return params.get('token_hash')
     }
     await sleep(250)
   }

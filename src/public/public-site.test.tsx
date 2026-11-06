@@ -4,7 +4,10 @@ import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PublicRoutes } from './PublicApp'
 
-const PUBLIC_PATHS = ['/', '/request-invite', '/sign-in', '/no-such-page']
+const PUBLIC_PATHS = ['/', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
+// Pages that must never collect anything until the privacy notice is approved.
+// (Sign-in and password reset are for invited members and are tested in src/public/auth.)
+const FORM_FREE_PATHS = ['/', '/request-invite', '/no-such-page']
 
 function renderAt(path: string) {
   return render(
@@ -191,12 +194,12 @@ describe('copy rules', () => {
 })
 
 describe('no personal data collection', () => {
-  it.each(PUBLIC_PATHS)('%s renders no form or input of any kind', (path) => {
+  it.each(FORM_FREE_PATHS)('%s renders no form or input of any kind', (path) => {
     const { container } = renderAt(path)
     expect(container.querySelectorAll('form, input, textarea, select, [contenteditable="true"]')).toHaveLength(0)
   })
 
-  it.each(PUBLIC_PATHS)('%s makes no network requests and stores nothing', (path) => {
+  it.each(FORM_FREE_PATHS)('%s makes no network requests and stores nothing', (path) => {
     const fetchSpy = vi.fn()
     vi.stubGlobal('fetch', fetchSpy)
     const xhrSpy = vi.spyOn(XMLHttpRequest.prototype, 'open')
@@ -213,11 +216,14 @@ describe('no personal data collection', () => {
   it('the request page says requests are closed until the privacy notice is ready', () => {
     const t = textOf('/request-invite')
     expect(t).toContain('Invitation requests open soon.')
-    expect(t).toContain('nothing on this site collects your personal information')
+    expect(t).toContain('this page collects nothing')
   })
 
-  it('the sign in page has no sign in form yet', () => {
-    expect(textOf('/sign-in')).toContain('Sign in opens soon for invited participants.')
+  it('without a connected Supabase project, the sign in page explains it is unavailable and shows no form', () => {
+    const { container } = renderAt('/sign-in')
+    expect(container.textContent).toContain("Sign-in isn't available here")
+    expect(container.querySelectorAll('form, input')).toHaveLength(0)
+    cleanup()
   })
 })
 
