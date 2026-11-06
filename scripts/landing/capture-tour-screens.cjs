@@ -27,7 +27,10 @@ const SCREENS = [
 ;(async () => {
   fs.mkdirSync(OUT, { recursive: true })
   const browser = await chromium.launch()
-  const ctx = await browser.newContext({ ...devices['iPhone 13'], reducedMotion: 'reduce', colorScheme: 'light' })
+  // A real phone screen is 390 x 844 points. The landing page draws the
+  // 47-point status bar and the 34-point home indicator area itself, so the
+  // app gets the 763 points in between, as a full-screen web app would.
+  const ctx = await browser.newContext({ ...devices['iPhone 13'], viewport: { width: 390, height: 763 }, reducedMotion: 'reduce', colorScheme: 'light' })
   const page = await ctx.newPage()
   await page.goto(BASE + '/')
   await page.evaluate(() => localStorage.clear())

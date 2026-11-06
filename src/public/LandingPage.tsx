@@ -69,8 +69,8 @@ function Hero() {
           </p>
         </div>
         <div className="relative">
-          <div aria-hidden="true" className="absolute -inset-6 rounded-[48px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-80" />
-          <TourScreenshot screen="feed" caption="Your Following feed, newest first" priority className="relative" />
+          <div aria-hidden="true" className="absolute -inset-6 rounded-[48px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-50" />
+          <TourScreenshot screen="feed" caption="Your Following feed, newest first" priority className="relative max-w-[260px]" />
         </div>
       </div>
     </section>
@@ -245,7 +245,7 @@ function How() {
             </li>
           ))}
         </ol>
-        <TourScreenshot screen="creator" caption="Connection Points with one creator" className="max-w-[220px] lg:max-w-[250px]" />
+        <TourScreenshot screen="creator" caption="Connection Points with one creator" className="max-w-[200px] lg:max-w-[230px]" />
       </div>
 
       <div data-testid="fan-panel" className="mt-8 grid items-center gap-6 rounded-[32px] bg-spark-50 p-6 ring-1 ring-spark-200 sm:p-8 md:grid-cols-[1.4fr_0.6fr]">
@@ -266,7 +266,7 @@ function How() {
             Not every interaction earns points. Rewards are chosen by each creator and subject to availability, so not every fan will receive one.
           </p>
         </div>
-        <TourScreenshot screen="rewards" caption="Rewards a creator chooses to offer" className="max-w-[220px]" />
+        <TourScreenshot screen="rewards" caption="Rewards a creator chooses to offer" className="max-w-[200px]" />
       </div>
 
       <div data-testid="pilot-targets" className="mt-8 rounded-[28px] bg-white p-5 ring-1 ring-ink-100 sm:p-6">
