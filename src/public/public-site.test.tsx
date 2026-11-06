@@ -51,8 +51,9 @@ describe('positioning', () => {
     const { container } = renderAt('/')
     const hero = container.querySelector('#hero')!
     expect(norm(hero.querySelector('[data-testid="supporting-headline"]'))).toBe(SUPPORTING)
-    expect(norm(hero)).toContain("But here's the question: what are you actually building for yourself?")
-    expect(norm(hero)).toContain("That's the future we're building at Crevant.")
+    expect(norm(hero.querySelector('[data-testid="hero-opening"]'))).toBe(
+      'You can spend years building an audience without building a sustainable career. Crevant is being built to help you grow real relationships with the people who value your work, and work toward opportunities that last beyond your next viral post.',
+    )
     expect(norm(hero)).toContain('An invitation-only platform being built with creators and supporters. Free to join during our pilot. Ages 18+.')
   })
 
@@ -138,6 +139,15 @@ describe('status of every feature claim', () => {
     expect(norm(container.querySelector('#vision'))).toContain("Where we're headed")
     expect(norm(container.querySelector('#vision'))).toContain('A long-term aim, not something Crevant does today.')
   })
+  it('keeps advertising as a future supplement, not the centre of the model', () => {
+    const principle = card('Create more opportunities to earn')
+    expect(principle).toContain("Advertising may come later as a supplement to these opportunities, not the centre of Crevant's model. It isn't available today.")
+    expect(principle).toContain("Where we're headed")
+    const { container } = renderAt('/')
+    const built = norm(container.querySelector('#pilot'))
+    expect(built.slice(built.indexOf('Still being built'))).toContain('Advertising on eligible creator content, as a supplement, not the centre of the model')
+    expect(built.slice(0, built.indexOf('Still being built'))).not.toMatch(/advertis/i)
+  })
   it('separates what the pilot includes from what is still being built', () => {
     const { container } = renderAt('/')
     const pilot = norm(container.querySelector('#pilot'))
@@ -151,6 +161,31 @@ describe('status of every feature claim', () => {
     const targets = norm(container.querySelector('[data-testid="pilot-targets"]'))
     expect(targets).toContain('approximately 10–20 creators and 200–300 supporters')
     expect(targets).toContain('These are planning targets, not promises about how many people will take part.')
+  })
+})
+
+describe('layout', () => {
+  it('shows the four steps once, as a single sequence', () => {
+    const { container } = renderAt('/')
+    const how = container.querySelector('#how')!
+    expect(how.querySelectorAll('[data-testid="journey-diagram"] > li')).toHaveLength(4)
+    for (const title of ['Create and share', 'Find your people', 'Build relationships', 'Grow toward opportunity']) {
+      expect(norm(how).split(title).length - 1).toBe(1)
+    }
+  })
+  it('keeps the final call to action short', () => {
+    const { container } = renderAt('/')
+    const cta = container.querySelector('#cta')!
+    expect(cta.querySelectorAll('p').length).toBeLessThanOrEqual(4)
+    expect(norm(cta).length).toBeLessThan(500)
+  })
+  it('uses "Explore Crevant" for every link to the tour', () => {
+    for (const path of PUBLIC_PATHS) {
+      const { container } = renderAt(path)
+      for (const a of container.querySelectorAll('a[href="/tour"]')) expect(norm(a).trim()).toBe('Explore Crevant')
+      expect(norm(container)).not.toMatch(/take the tour/i)
+      cleanup()
+    }
   })
 })
 

@@ -47,17 +47,10 @@ function Hero() {
           <p data-testid="supporting-headline" className="mt-6 max-w-xl font-display text-[1.35rem] font-bold leading-snug text-ink-800 sm:text-[1.55rem]">
             Your content should build your future. Not just someone else's platform.
           </p>
-          <div className="mt-5 max-w-xl space-y-4 text-lg leading-relaxed text-ink-600">
-            <p>You spend hours creating content that educates, entertains, inspires and helps people. You build an audience. You get views. People follow you.</p>
-            <p>
-              But here's the question: <strong className="font-semibold text-ink-900">what are you actually building for yourself?</strong>
-            </p>
-            <p>
-              Imagine if every piece of content you created could help you build something that lasts beyond the next viral post. A community that
-              believes in you. Relationships that grow stronger. Opportunities to earn from the value you create.
-            </p>
-            <p>That's the future we're building at Crevant.</p>
-          </div>
+          <p data-testid="hero-opening" className="mt-4 max-w-xl text-lg leading-relaxed text-ink-600">
+            You can spend years building an audience without building a sustainable career. Crevant is being built to help you grow real
+            relationships with the people who value your work, and work toward opportunities that last beyond your next viral post.
+          </p>
           <div className="mt-8 flex flex-col items-start gap-3 min-[420px]:flex-row min-[420px]:flex-wrap">
             <div>
               <a href={TOUR_BASE} className={buttonClass('primary', 'lg')}>
@@ -101,19 +94,17 @@ function Why() {
     >
       <div className="grid gap-12 lg:grid-cols-[1fr_1fr]">
         <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
-          <p>Think about someone who spends four hours creating a video that teaches people something valuable.</p>
           <p>
-            The video gets 100,000 views. People share it. Some leave comments saying how much it helped them. A few thousand new people follow.
-            That's wonderful.
-          </p>
-          <p>But the following month, when the creator needs to pay their bills, those 100,000 views may not translate into enough income.</p>
-          <p>
-            So what do they do? They create another video. And another. And another. Not always because they have something new to say, but
-            because they feel they can't afford to stop. The moment they stop creating, they're afraid the attention will disappear.
+            Think about someone who spends four hours creating a video that teaches people something valuable. It gets 100,000 views. People share
+            it, thank them in the comments, and a few thousand new people follow. That's wonderful.
           </p>
           <p>
-            Now imagine someone else. They have only 500 followers, but 100 of those people genuinely value their work. They trust them,
-            recommend them and would gladly support what they do.
+            But next month, when the bills arrive, those views may not translate into enough income. So they create another video. And another.
+            Not always because they have something new to say, but because they're afraid the attention will disappear the moment they stop.
+          </p>
+          <p>
+            Now imagine someone with only 500 followers, where 100 of those people genuinely value their work. They trust them, recommend them and
+            would gladly support what they do.
           </p>
           <p className="font-semibold text-ink-900">Shouldn't that creator also have an opportunity to build a sustainable career? We believe they should.</p>
         </div>
@@ -198,14 +189,12 @@ function Who() {
             <Sprout className="h-4 w-4" aria-hidden="true" /> For creators
           </p>
           <div className="mt-4 space-y-4 leading-relaxed text-brand-50">
-            <p>Maybe you're a teacher, artist, musician, comedian, writer, storyteller or someone with knowledge worth sharing.</p>
-            <p>Maybe you already have 50,000 followers. Or maybe you're just starting with 50.</p>
             <p>
-              What matters to us isn't how famous you are. It's that you have something valuable to share and want to build meaningful
-              relationships with the people who appreciate your work.
+              Teachers, artists, musicians, comedians, writers, storytellers. Maybe you already have 50,000 followers, or you're just starting with
+              50. What matters isn't how famous you are. It's that you have something valuable to share.
             </p>
             <p>
-              You don't have to abandon the platforms you're already using. Crevant is being built to help you turn the attention you've earned into
+              You don't have to abandon the platforms you already use. Crevant is being built to help you turn the attention you've earned into
               relationships and opportunities that can grow over time.
             </p>
           </div>
@@ -216,13 +205,12 @@ function Who() {
           </p>
           <div className="mt-4 space-y-4 leading-relaxed text-ink-600">
             <p>
-              Think about a creator whose work has genuinely helped you. Maybe they taught you a skill, encouraged you through a difficult time or
-              simply made you laugh when you needed it.
+              Think about a creator who taught you a skill, got you through a difficult time or made you laugh when you needed it. You've watched,
+              shared and told others about them.
             </p>
-            <p>You've watched their videos. You've shared their work. You've told others about them.</p>
             <p>
-              But what if supporting them could become more meaningful than pressing Like? Crevant is being built to help you connect, participate
-              and be recognized for the role you play in a creator's community.
+              What if supporting them could mean more than pressing Like? Crevant is being built to help you connect, participate and be recognized
+              for the role you play in a creator's community.
             </p>
             <p className="font-semibold text-ink-900">Because behind every successful creator are people who helped them get there.</p>
           </div>
@@ -235,7 +223,7 @@ function Who() {
 const IDEAS: Array<{ title: string; body: ReactNode; status: Status; icon: ReactNode }> = [
   {
     title: 'Build relationships, not just followers',
-    body: 'Followers are numbers. Relationships are built through trust, shared interests and meaningful participation. Crevant is designed to help creators and supporters build stronger communities around the content they value.',
+    body: 'Followers are numbers. Relationships are built through trust, shared interests and meaningful participation. Crevant is designed to help creators and supporters build stronger communities around the work they value.',
     status: 'pilot',
     icon: <HeartHandshake className="h-5 w-5" />,
   },
@@ -256,13 +244,22 @@ const IDEAS: Array<{ title: string; body: ReactNode; status: Status; icon: React
   },
   {
     title: 'Create more opportunities to earn',
-    body: 'We want creators to have more ways to build sustainable income from their work, including direct support from their communities and potential brand partnerships. These earning tools are part of our longer-term product direction, not a promise that every creator will earn money during the pilot.',
+    body: (
+      <>
+        We want creators to have more ways to build sustainable income from their work, including direct support from their communities and
+        potential brand partnerships. These earning tools are part of our longer-term product direction, not a promise that every creator will earn
+        money during the pilot.{' '}
+        <span data-testid="advertising-principle">
+          Advertising may come later as a supplement to these opportunities, not the centre of Crevant's model. It isn't available today.
+        </span>
+      </>
+    ),
     status: 'vision',
     icon: <HandCoins className="h-5 w-5" />,
   },
   {
     title: 'Build something that lasts',
-    body: 'Imagine looking back at five years of creating content and seeing more than a collection of posts. You see a body of work, a community that values it, and opportunities that grew from the relationships you built. That\'s what we want Crevant to help make possible.',
+    body: 'Imagine looking back at five years of creating and seeing more than a collection of posts: a body of work, a community that values it, and opportunities that grew from the relationships you built.',
     status: 'vision',
     icon: <Gift className="h-5 w-5" />,
   },
@@ -301,32 +298,7 @@ function How() {
   return (
     <Section id="how" eyebrow="How Crevant works" title="From creating content to building meaningful opportunities." className="bg-white">
       <JourneyDiagram />
-      <div className="mt-12 grid gap-6 md:grid-cols-2">
-        {[
-          {
-            t: 'Step 1. Create and share',
-            b: "Share what you know, what you've experienced or what you love creating. It might be a lesson, a story, an idea, a performance or something that makes someone's day better. Start by creating value.",
-          },
-          {
-            t: 'Step 2. Find your people',
-            b: "Let others discover your work and choose to follow your journey. You don't need to appeal to everyone. You need to find the people who genuinely appreciate what you bring.",
-          },
-          {
-            t: 'Step 3. Build relationships',
-            b: "As people engage with your work, build a community where participation matters. We're testing ways to recognize consistent supporters and make those relationships more meaningful.",
-          },
-          {
-            t: 'Step 4. Grow toward opportunity',
-            b: 'Over time, our goal is to introduce tools that help creators turn strong communities into sustainable earning opportunities. Because creating value should open doors.',
-          },
-        ].map((s) => (
-          <div key={s.t} className="rounded-3xl bg-paper p-6 ring-1 ring-ink-100">
-            <h3 className="font-display text-lg font-bold text-ink-900">{s.t}</h3>
-            <p className="mt-1.5 leading-relaxed text-ink-600">{s.b}</p>
-          </div>
-        ))}
-      </div>
-      <p className="mt-8 max-w-3xl rounded-2xl bg-spark-50 px-5 py-4 text-[15px] leading-relaxed text-ink-700 ring-1 ring-spark-200">
+      <p className="mt-10 max-w-3xl rounded-2xl bg-spark-50 px-5 py-4 text-[15px] leading-relaxed text-ink-700 ring-1 ring-spark-200">
         Crevant is in development. The first pilot will test the core social experience and community participation features. Additional earning
         capabilities are planned and will be introduced only when ready.
       </p>
@@ -335,7 +307,7 @@ function How() {
 }
 
 const IN_PILOT = ['Profiles and posts', 'A Following feed shown newest first', 'Comments, likes and shares', 'Connection Points with each creator', 'Rewards that creators choose and offer']
-const IN_DEVELOPMENT = ['Direct, voluntary support from audiences to creators', 'Advertising on eligible creator content', 'Ways to see your active supporters alongside your follower count']
+const IN_DEVELOPMENT = ['Direct, voluntary support from audiences to creators', 'Advertising on eligible creator content, as a supplement, not the centre of the model', 'Ways to see your active supporters alongside your follower count']
 
 function Pilot() {
   return (
@@ -471,21 +443,12 @@ function FinalCta() {
       <div className="mx-auto max-w-6xl overflow-hidden rounded-[36px] bg-ink-900 px-6 py-12 sm:px-12 sm:py-16">
         <div className="mx-auto max-w-3xl text-center">
           <h2 id="cta-title" className="font-display text-[1.9rem] font-extrabold leading-tight tracking-[-0.02em] text-white sm:text-[2.6rem]">
-            What if the next five years of creating content could build more than an audience?
+            What if the next five years of creating could build more than an audience?
           </h2>
-          <div className="mt-6 space-y-4 text-lg leading-relaxed text-ink-300">
-            <p>Think about everything you've created over the last five years. Every video. Every post. Every idea. Every hour you invested.</p>
-            <p>
-              Now imagine the next five years. What if that same effort could help you build a loyal community, develop new opportunities and create
-              something that becomes more valuable over time?
-            </p>
-            <p>You don't have to become famous to begin building something meaningful. And you shouldn't have to figure it all out alone.</p>
-            <p className="font-semibold text-white">Your content has value. Your relationships have value. Your future matters.</p>
-            <p>
-              We're building Crevant because we believe more creators deserve the opportunity to turn those things into something lasting. Come help
-              us build that future.
-            </p>
-          </div>
+          <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-ink-300">
+            You don't have to become famous to begin building something meaningful. Your content has value. Your relationships have value. Come
+            see what we're building, and help shape it.
+          </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 min-[420px]:flex-row min-[420px]:items-start">
             <div>
               <a href={TOUR_BASE} className={buttonClass('spark', 'lg')}>

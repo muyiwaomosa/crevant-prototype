@@ -38,7 +38,7 @@ export function PlaceholderPage({ title, body }: { title: string; body: ReactNod
         <div className="mt-3 space-y-3 leading-relaxed text-ink-600">{body}</div>
         <div className="mt-7 flex flex-col justify-center gap-3 min-[400px]:flex-row">
           <a href={TOUR_BASE} className={buttonClass('primary')}>
-            Take the tour
+            Explore Crevant
           </a>
           <Link to="/" className={buttonClass('secondary')}>
             Back to Crevant

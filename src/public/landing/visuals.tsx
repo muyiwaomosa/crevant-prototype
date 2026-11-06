@@ -77,17 +77,38 @@ export function AttentionAndRelationships() {
 }
 
 const JOURNEY: Array<{ title: string; body: string; status: Status; icon: ReactNode }> = [
-  { title: 'Create and share', body: 'Start by creating value.', status: 'pilot', icon: <PenLine className="h-5 w-5" /> },
-  { title: 'Find your people', body: 'The people who genuinely appreciate what you bring.', status: 'pilot', icon: <Users className="h-5 w-5" /> },
-  { title: 'Build relationships', body: 'A community where participation matters.', status: 'testing', icon: <HeartHandshake className="h-5 w-5" /> },
-  { title: 'Grow toward opportunity', body: 'Tools to turn strong communities into earning opportunities.', status: 'vision', icon: <Sprout className="h-5 w-5" /> },
+  {
+    title: 'Create and share',
+    body: "Share what you know, what you've lived or what you love making. Start by creating value.",
+    status: 'pilot',
+    icon: <PenLine className="h-5 w-5" />,
+  },
+  {
+    title: 'Find your people',
+    body: "You don't need everyone. Find the people who genuinely appreciate what you bring.",
+    status: 'pilot',
+    icon: <Users className="h-5 w-5" />,
+  },
+  {
+    title: 'Build relationships',
+    body: "Grow a community where participation matters. We're testing ways to recognize consistent supporters.",
+    status: 'testing',
+    icon: <HeartHandshake className="h-5 w-5" />,
+  },
+  {
+    title: 'Grow toward opportunity',
+    body: 'Over time, tools to help strong communities become sustainable earning opportunities. Because creating value should open doors.',
+    status: 'vision',
+    icon: <Sprout className="h-5 w-5" />,
+  },
 ]
 
 /** The journey from creating to opportunity, with each step's real status. */
 export function JourneyDiagram() {
   return (
-    <ol aria-label="The Crevant journey" data-testid="journey-diagram" className="relative grid gap-4 md:grid-cols-4">
+    <ol aria-label="The Crevant journey" data-testid="journey-diagram" className="relative grid gap-8 md:grid-cols-4 md:gap-4">
       <div aria-hidden="true" className="absolute left-[12%] right-[12%] top-[34px] hidden h-0.5 bg-gradient-to-r from-brand-500 via-brand-300 to-ink-200 md:block" />
+      <div aria-hidden="true" className="absolute bottom-8 left-[33px] top-8 w-0.5 bg-gradient-to-b from-brand-500 via-brand-300 to-ink-200 md:hidden" />
       {JOURNEY.map((step, i) => (
         <li key={step.title} className="relative flex gap-4 md:flex-col md:items-center md:text-center">
           <span
