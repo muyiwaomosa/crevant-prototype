@@ -118,7 +118,7 @@ One server function, `can_earn(supporter, creator, time)`, decides eligibility a
 
 **Minimum product surface (treatment arm only):** a "Your Core" picker listing followed creators; a "Try earning with this creator" action on other creators' profiles for Discovery Slots; the not-earning messages above. The control arm sees nothing new. No paid expansion.
 
-**Emerging creators: tracked, not restricted.** Proposed definition, to be validated with pilot data: an account that publishes at least one post during the pilot, was **not** recruited or invited by Crevant as a creator, and had fewer than 100 followers when the pilot began. It is used only to report emerging-creator outcomes separately (Discovery Slot use, CP earned, new supporters). Restricting Discovery Slots to emerging creators is a later decision, made only after the definition is validated.
+**Emerging creators: tracked, not restricted.** Proposed definition, to be validated with pilot data: an account that publishes at least one post during the pilot, was **not** invited through a Crevant creator-recruitment source or campaign (the optional `source` and `campaign` labels on `ops.invitations`), and had fewer than 100 followers when the pilot began. Invitations carry no creator or supporter type: the labels are neutral and never decide what an account can do. It is used only to report emerging-creator outcomes separately (Discovery Slot use, CP earned, new supporters). Restricting Discovery Slots to emerging creators is a later decision, made only after the definition is validated.
 
 **Measures**
 

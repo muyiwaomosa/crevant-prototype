@@ -12,7 +12,7 @@ Each step is its own pull request and stops for the founder's review. Nothing is
 | --- | --- | --- |
 | PR 1 | Public landing page, prototype moved to `/tour`, production safeguards, this document. No Supabase, no forms. | This PR |
 | Validation | Invitation, email confirmation and password setting with public sign up disabled: first locally (done, below), then on staging with the founder's own email after the settings below are approved | Local done |
-| PR 2 | Migration proposal: private `ops` schema (invitations, requests, admins, rate limits) and `public.profiles` with RLS. Run in CI only, not applied. | Planned |
+| PR 2 | Database foundation: private `ops` schema (admins, invitations) and `public.profiles` with RLS, profile creation on email confirmation, and tests (see "Database foundation" below). Invitation requests and rate limits wait for the privacy notice. Run in CI only, not applied. | In review |
 | PR 3 | Sign in, sign out, password reset, protected `/app`, `/auth/confirm` | Planned |
 | PR 4 | Edge Functions `request-invite` and `send-invitation`, admin invite page, staging-only function deploy workflow. The request form exists but stays switched off. | Planned |
 | Privacy | Draft privacy notice for the founder (and a lawyer) to review. Its approval is required before the request form can be switched on. | Planned |
@@ -123,6 +123,46 @@ No paid upgrade is proposed during Phase 1A.
 * Vercel Hobby is limited to non-commercial personal use. A startup's pilot is at best a grey area, and real payments would clearly be commercial.
 * Vercel Hobby protects preview URLs behind Vercel login, so invited participants could not use previews anyway. During Phase 1A only the founder views previews, so nothing changes and the cost is $0.
 * Before real participants arrive, compare with current terms and prices: Vercel Pro (about $20 a month), Cloudflare Pages free plan (500 builds a month; commercial terms to verify), and Netlify free (to verify). The comparison, with sources, comes to the founder at the end of Phase 1A.
+
+## Database foundation (PR 2)
+
+Migration: `supabase/migrations/20261107000000_profiles_and_ops.sql`. It changes no Supabase Auth configuration.
+
+**`public.profiles`: one profile per confirmed login identity.**
+
+| Column | What it is |
+| --- | --- |
+| `id` | The same id as the login identity in Supabase Auth. Deleting the identity deletes the profile (Phase 1A). |
+| `username` | Unique handle: lowercase letters, numbers and underscores, 3 to 30 characters, not a reserved name. Empty until onboarding. Only lowercase is allowed, so uniqueness is case-insensitive. |
+| `display_name` | 1 to 50 Unicode code points, any language and emoji. Leading and trailing whitespace and invisible characters are trimmed; invisible-only names and control characters are rejected. Empty until onboarding. |
+| `created_at`, `updated_at` | Set by the database, never by members. |
+
+No email, no role, no account type: everyone can create and support (unified accounts). Email and password stay in Supabase Auth.
+
+**Who can do what with profiles (Phase 1A).**
+
+* Visitors who aren't signed in: nothing.
+* Signed-in members: read their own profile, and change only their own `username` and `display_name`. They cannot change any other column, add profiles or delete them.
+* Server code (service role): everything.
+
+**`ops`: private admin data**, locked like `intent`, `sim` and `analytics`. Members and visitors have no access, and it is not exposed through the Data API.
+
+* `ops.admins`: who may send invitations. Added by hand with the founder's approval.
+* `ops.invitations`: one row per invitation: email, optional neutral `source` and `campaign` labels (analysis only, never deciding what an account can do), who sent it, expiry, last sent, revoked, and who accepted it and when. At most one open invitation per email address.
+
+**Profile creation.** A trigger on Supabase Auth's identity table creates a profile when an email is confirmed. It copies only the id and ignores anything attached at sign-up. Repeated confirmations are harmless, and invitees who never accept get no profile. The migration also backfills profiles for any identities already confirmed when it runs. Reserved usernames are written into the table's own rule, so members never need access to anything private.
+
+**Triggers.** The profile creation function runs with elevated rights (Supabase Auth's role has none on profiles), a fixed empty search path, and cannot be called by members. The profile cleanup function (trimming display names and setting `updated_at`) runs with the caller's own rights and a fixed empty search path, and changes nothing else.
+
+**Tests, in three layers.**
+
+1. `supabase/tests/`: read-only, staging-safe checks of privileges, policies, functions, triggers and counts. CI runs them, and the staging deploy workflow runs them against staging after each apply.
+2. `supabase/tests-local/`: tests that create fake identities (profile creation, backfill, isolation, validation), plus deliberate violations that the checks must catch. Throwaway databases only (`scripts/db/test.sh`, which refuses to run against a Supabase project or a database that already has an auth schema).
+3. `scripts/db/integration.sh`: a real local Supabase in Docker (`supabase/config.toml`, local only), exercising real Supabase Auth and the Data API, including Unicode and protected-field attempts. Runs in CI as the "Integration" job.
+
+## Privacy and retention requirement (before Connection Points or money)
+
+In Phase 1A, deleting an account deletes its profile. **Before any Connection Points or financial records are implemented, a separate privacy and retention design must be approved.** It must support appropriate anonymization and legally required recordkeeping. No later table may silently delete history when an account is deleted; its deletion behaviour is decided by that design.
 
 ## Supabase settings for later approval
 
