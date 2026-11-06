@@ -9,6 +9,9 @@
 const { chromium, devices } = require('playwright')
 
 const BASE = process.argv[2] || 'http://localhost:4175'
+// The suites also run against the tour on `main`: pass http://localhost:4175/tour.
+const PREFIX = new URL(BASE).pathname.replace(/\/$/, '')
+const HOME = PREFIX ? BASE.replace(/\/$/, '') : BASE + '/'
 const SHOTS = process.argv[3] || null
 const KEY = 'crevant-demo-state'
 let failures = 0
@@ -77,14 +80,14 @@ async function pngBuffer(page, w, h) {
   await shot(page, 'onboarding-3')
   check('final step points out that anyone can post', (await page.getByText('Anyone can post').count()) === 1)
   await page.getByRole('button', { name: 'Go to my feed' }).click()
-  await page.waitForURL(BASE + '/')
+  await page.waitForURL(HOME)
   let s = await stored(page)
   check('chosen accounts are followed, nothing else', JSON.stringify([...s.following].sort()) === JSON.stringify(['amara', 'hana', 'marcus']))
   const ob = await balances(page)
   check('each chosen follow earns CP with that person only', Object.keys(ob).length === 3 && ob.amara === 10 && ob.marcus === 10 && ob.hana === 10, JSON.stringify(ob))
   check('onboarding is recorded as completed', s.onboarding.status === 'completed')
   await page.reload()
-  check('returning visitor is not sent through onboarding again', page.url() === BASE + '/')
+  check('returning visitor is not sent through onboarding again', page.url() === HOME)
 
   // Skipping on a fresh browser.
   const skipCtx = await browser.newContext({ ...devices['iPhone 13'] })
@@ -92,7 +95,7 @@ async function pngBuffer(page, w, h) {
   watch(skip)
   await skip.goto(BASE + '/')
   await skip.getByRole('button', { name: 'Skip' }).click()
-  await skip.waitForURL(BASE + '/')
+  await skip.waitForURL(HOME)
   await skip.locator('article').first().waitFor()
   const sk = await stored(skip)
   const skArticles = await skip.locator('article').count()
@@ -106,8 +109,8 @@ async function pngBuffer(page, w, h) {
   check('no Fan or Creator switch anywhere', (await page.getByRole('radio', { name: /^(Fan|Creator)$/ }).count()) === 0 && (await page.getByText(/^Fan$/).count()) === 0)
   for (const [label, path] of [['Discover', '/discover'], ['Create', '/create'], ['Rewards', '/rewards'], ['Profile', '/profile'], ['Home', '/']]) {
     await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: label, exact: true }).click()
-    await page.waitForURL(BASE + path)
-    check(`nav reaches ${label}`, new URL(page.url()).pathname === path)
+    await page.waitForURL(BASE + path === BASE + '/' ? HOME : BASE + path)
+    check(`nav reaches ${label}`, new URL(page.url()).pathname === (PREFIX + path).replace(/(.)\/$/, '$1'))
   }
   await shot(page, 'home')
 
@@ -225,7 +228,7 @@ async function pngBuffer(page, w, h) {
   for (const [from, to] of redirects) {
     await page.goto(BASE + from)
     await page.waitForTimeout(100)
-    check(`old route ${from} redirects to ${to}`, new URL(page.url()).pathname === to, page.url().replace(BASE, ''))
+    check(`old route ${from} redirects to ${to}`, new URL(page.url()).pathname === PREFIX + to, page.url().replace(BASE, ''))
   }
   const pages = ['/', '/discover', '/create', '/rewards', '/rewards?tab=cp', '/rewards?tab=history', '/profile', '/profile/tools', '/creator/amara', '/post/p_amara_1']
   const hrefs = new Set()
@@ -235,7 +238,8 @@ async function pngBuffer(page, w, h) {
   }
   const broken = []
   for (const h of hrefs) {
-    await page.goto(BASE + h)
+    // Rendered links are absolute and already include any prefix.
+    await page.goto(new URL(h, BASE).href)
     if ((await page.getByText('Page not found').count()) > 0 || (await page.getByText('Creator not found').count()) > 0 || (await page.getByText('Post not found').count()) > 0) broken.push(h)
   }
   check(`no broken internal links (${hrefs.size} checked)`, broken.length === 0, broken.join(', '))
@@ -305,7 +309,7 @@ async function pngBuffer(page, w, h) {
   const ms = await stored(mig)
   check('Release 1 data migrates: mode removed, version 3', ms.version === 3 && !('mode' in ms))
   check('migrated user keeps posts, CP, follows, and picture', ms.myPosts[0].id === 'p_me_old' && ms.ledger[0].amount === 12 && ms.following.length === 2 && !!ms.profile.avatar)
-  check('old creator mode link lands in creator tools without onboarding', new URL(mig.url()).pathname === '/profile/tools')
+  check('old creator mode link lands in creator tools without onboarding', new URL(mig.url()).pathname === PREFIX + '/profile/tools')
   await mig.goto(BASE + '/')
   check('migrated user sees the one time "modes are now one" note', (await mig.getByText('Fan and Creator modes are now one').count()) === 1)
   await shot(mig, 'migrated-notice')

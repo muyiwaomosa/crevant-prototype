@@ -6,6 +6,7 @@ import { useStore } from '../state/store'
 import { Wordmark } from './Wordmark'
 import { CreatorAvatar, SparkIcon } from './ui'
 import { Toasts } from './Toasts'
+import { TourBannerSlot } from './TourBanner'
 
 // One navigation for everyone. There is no Fan or Creator mode: anyone can
 // follow, engage, publish, and offer rewards from the same place.
@@ -111,6 +112,7 @@ export function Layout() {
       </aside>
 
       <div className="min-w-0 flex-1">
+        <TourBannerSlot />
         {/* Top bar for phones */}
         <header className="sticky top-0 z-40 border-b border-ink-100/80 bg-paper/90 pt-[env(safe-area-inset-top)] backdrop-blur-md md:hidden">
           <div className="flex h-14 items-center justify-between gap-3 px-4">
