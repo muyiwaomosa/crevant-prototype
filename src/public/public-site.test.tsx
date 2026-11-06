@@ -32,86 +32,138 @@ afterEach(() => {
 })
 
 const HEADLINE = "You don't need a million followers. You need the right 1,000."
+const SUPPORTING = "Your content should build your future. Not just someone else's platform."
 const HYPOTHESIS_NOTE = "This is the idea we're testing in our pilot, not a promise of earnings."
+const SECTION_ORDER = ['hero', 'why', 'vision', 'who', 'building', 'how', 'pilot', 'faq', 'cta']
+const norm = (el: Element | null) => (el?.textContent || '').replace(/\s+/g, ' ')
 
 describe('positioning', () => {
-  it('leads with the right 1,000 and offers the three ways in', () => {
+  it('leads with the right 1,000 and offers the ways in', () => {
     const { getByRole, getAllByRole } = renderAt('/')
     expect(getByRole('heading', { level: 1 }).textContent).toBe(HEADLINE)
-    expect(getAllByRole('link', { name: /request an invitation/i }).length).toBeGreaterThan(0)
-    expect(getAllByRole('link', { name: /take the tour/i }).some((a) => a.getAttribute('href') === '/tour')).toBe(true)
+    expect(getAllByRole('link', { name: /explore crevant/i }).every((a) => a.getAttribute('href') === '/tour')).toBe(true)
+    expect(getAllByRole('link', { name: /explore crevant/i }).length).toBeGreaterThanOrEqual(2)
+    expect(getAllByRole('link', { name: /join the invitation list|request an invitation/i }).every((a) => a.getAttribute('href') === '/request-invite')).toBe(true)
     expect(getAllByRole('link', { name: /sign in/i }).some((a) => a.getAttribute('href') === '/sign-in')).toBe(true)
   })
 
-  it('uses the approved supporting copy in the hero', () => {
-    const { container } = renderAt('/')
-    const hero = (container.querySelector('#hero')!.textContent || '').replace(/\s+/g, ' ')
-    expect(hero).toContain(
-      "What if your success as a creator wasn't determined by how many people followed you, but by how many people genuinely valued what you created?",
-    )
-    expect(hero).toContain(
-      'Crevant is building a social network where meaningful connections matter, loyal supporters are recognized, and creators have more opportunities to turn their work into sustainable income.',
-    )
-  })
-
-  it('labels the right 1,000 as a hypothesis, right where it appears', () => {
+  it('uses the approved supporting headline and hero copy', () => {
     const { container } = renderAt('/')
     const hero = container.querySelector('#hero')!
-    expect(hero.querySelector('[data-testid="hypothesis-note"]')?.textContent).toContain(HYPOTHESIS_NOTE)
-    expect(hero.textContent).toContain('No money changes hands on Crevant yet.')
-    // The FAQ says 1,000 is not a magic number and nothing is promised.
-    const faq = container.querySelector('#faq')!.textContent || ''
+    expect(norm(hero.querySelector('[data-testid="supporting-headline"]'))).toBe(SUPPORTING)
+    expect(norm(hero)).toContain("But here's the question: what are you actually building for yourself?")
+    expect(norm(hero)).toContain("That's the future we're building at Crevant.")
+    expect(norm(hero)).toContain('An invitation-only platform being built with creators and supporters. Free to join during our pilot. Ages 18+.')
+  })
+
+  it('keeps the pilot disclaimer right next to the headline', () => {
+    const { container } = renderAt('/')
+    const hero = container.querySelector('#hero')!
+    const note = hero.querySelector('[data-testid="hypothesis-note"]')!
+    expect(note.textContent).toContain(HYPOTHESIS_NOTE)
+    expect(note.textContent).toContain('No money changes hands on Crevant yet.')
+    expect(hero.querySelector('h1')!.nextElementSibling).toBe(note)
+    const faq = norm(container.querySelector('#faq'))
     expect(faq).toContain('Is 1,000 a magic number?')
     expect(faq).toContain("we can't promise what any community will earn")
   })
 
-  it('makes the contrast between audience size and relationship depth explicit', () => {
+  it('uses the headline once, and explains relationships in different words in Why', () => {
+    const t = textOf('/')
+    expect(t.split('You need the right 1,000').length - 1).toBe(1)
     const { container } = renderAt('/')
-    const why = container.querySelector('#why')!
-    expect(why.textContent).toContain("A big audience isn't the same as a committed one.")
-    const rows = [...why.querySelectorAll('ul[aria-label="Chasing size compared with building depth"] li')]
-    expect(rows.length).toBeGreaterThanOrEqual(4)
-    expect(why.textContent).toContain('Chasing size')
-    expect(why.textContent).toContain('Building depth')
-    expect(container.querySelector('#success')!.textContent).toContain('Measured by the people who show up, not just the people who follow.')
+    const why = norm(container.querySelector('#why'))
+    expect(why).toContain("A creator's future shouldn't depend only on how many people watch.")
+    expect(why).toContain('the relationships they build')
+  })
+
+  it('shows attention and relationships side by side without comparing income', () => {
+    const { container } = renderAt('/')
+    const diagram = container.querySelector('#why [data-testid="attention-diagram"]')!
+    const d = norm(diagram)
+    expect(d).toContain('100,000 views')
+    expect(d).toContain('100 people who value your work')
+    expect(d).toContain('neither one is a promise of income')
+    expect(d).toContain('Illustration')
+    expect(d).not.toMatch(/income than|earn(s)? more|more (money|income)|[$£€]/i)
   })
 
   it('has every section in the approved order', () => {
     const { container } = renderAt('/')
-    const ids = [...container.querySelectorAll('main section[id], section[id]')].map((s) => s.id)
-    expect(ids).toEqual(['hero', 'why', 'building-blocks', 'success', 'how', 'who', 'points', 'pilot', 'faq'])
+    const ids = [...container.querySelectorAll('section[id]')].map((s) => s.id)
+    expect(ids).toEqual(SECTION_ORDER)
+  })
+
+  it('never suggests supporters share financially in a creator\'s success', () => {
+    const t = textOf('/')
+    expect(t).not.toMatch(/participate in their success/i)
+    expect(t).toContain('be part of their journey')
+    expect(t).toContain("they don't receive ownership, profits or financial returns")
+  })
+
+  it('never suggests creators own their followers', () => {
+    expect(textOf('/')).not.toMatch(/own (your|their) (followers|audience|fans|supporters)/i)
   })
 })
 
-describe('building blocks', () => {
-  const blocks = () => {
+describe('status of every feature claim', () => {
+  const card = (title: string) => {
     const { container } = renderAt('/')
-    return [...container.querySelectorAll('#building-blocks li')].map((li) => li.textContent || '')
+    const li = [...container.querySelectorAll('#building li')].find((el) => (el.textContent || '').includes(title))
+    return norm(li || null)
   }
-  const find = (title: string) => blocks().find((t) => t.includes(title)) || ''
 
-  it('shows all five, each tied to the vision', () => {
-    expect(blocks()).toHaveLength(5)
+  it('shows the four ideas, each with its real status', () => {
+    const { container } = renderAt('/')
+    expect(container.querySelectorAll('#building ol > li')).toHaveLength(4)
+    expect(card('Build relationships, not just followers')).toContain('In the pilot')
+    expect(card('Make meaningful participation count')).toContain('Testing in the pilot')
+    expect(card('Create more opportunities to earn')).toContain("Where we're headed")
+    expect(card('Build something that lasts')).toContain("Where we're headed")
   })
-  it('marks the feed, Connection Points and rewards as in the pilot', () => {
-    for (const t of ['A Following feed in time order', 'Connection Points', 'Creator rewards']) expect(find(t)).toContain('In the pilot')
+  it('says Connection Points are not money where they are introduced', () => {
+    expect(card('Make meaningful participation count')).toContain("Connection Points aren't money, and they don't promise financial returns.")
   })
-  it('marks voluntary support and advertising as in development, and says they are not live', () => {
-    for (const t of ['Voluntary support', 'Creator-content advertising']) {
-      expect(find(t)).toContain('In development')
-      expect(find(t)).toContain("isn't live yet")
-    }
+  it('says earning tools are a longer-term direction, not a pilot promise', () => {
+    expect(card('Create more opportunities to earn')).toContain('not a promise that every creator will earn money during the pilot')
   })
-  it('keeps advertising as a supplement, not the centre of the model', () => {
-    expect(find('Creator-content advertising')).toContain('not the centre of the model')
+  it('marks each journey step with its status, ending with where we are headed', () => {
+    const { container } = renderAt('/')
+    const steps = [...container.querySelectorAll('#how [data-testid="journey-diagram"] li')].map((li) => li.querySelector('[data-status]')?.getAttribute('data-status'))
+    expect(steps).toEqual(['pilot', 'pilot', 'testing', 'vision'])
+    expect(norm(container.querySelector('#how'))).toContain('Additional earning capabilities are planned and will be introduced only when ready.')
+  })
+  it('labels the vision as a long-term aim', () => {
+    const { container } = renderAt('/')
+    expect(norm(container.querySelector('#vision'))).toContain("Where we're headed")
+    expect(norm(container.querySelector('#vision'))).toContain('A long-term aim, not something Crevant does today.')
   })
   it('separates what the pilot includes from what is still being built', () => {
     const { container } = renderAt('/')
-    const pilot = container.querySelector('#pilot')!.textContent || ''
+    const pilot = norm(container.querySelector('#pilot'))
     expect(pilot).toContain('What the pilot includes')
     const built = pilot.slice(pilot.indexOf('Still being built'))
     expect(built).toContain('Direct, voluntary support')
     expect(built).toContain('Advertising on eligible creator content')
+  })
+  it('gives pilot numbers as planning targets only', () => {
+    const { container } = renderAt('/')
+    const targets = norm(container.querySelector('[data-testid="pilot-targets"]'))
+    expect(targets).toContain('approximately 10–20 creators and 200–300 supporters')
+    expect(targets).toContain('These are planning targets, not promises about how many people will take part.')
+  })
+})
+
+describe('interface images', () => {
+  it('are genuine tour screenshots, each labelled as sample data', () => {
+    const { container } = renderAt('/')
+    const figures = [...container.querySelectorAll('figure[data-screenshot]')]
+    expect(figures.length).toBe(3)
+    for (const f of figures) {
+      expect(f.querySelector('img')!.getAttribute('src')).toMatch(/^\/media\/landing\/tour-[a-z-]+\.jpg$/)
+      expect(f.querySelector('img')!.getAttribute('alt')!.length).toBeGreaterThan(40)
+      expect(norm(f)).toContain('From the Crevant tour, with sample data.')
+    }
   })
 })
 
@@ -124,7 +176,6 @@ describe('required disclosures', () => {
     const t = text()
     expect(t).toContain('No money changes hands on Crevant')
     expect(t).toMatch(/can't promise anyone earnings/)
-    expect(t).toContain("That's what we're working toward, not something we can promise.")
   })
   it('describes the feed by its order only, and does not promise reach', () => {
     const t = text()
@@ -175,9 +226,30 @@ describe('copy rules', () => {
     /join (thousands|millions)/i,
     /#1|number one|best platform/i,
   ]
+  // The one approved exception: the Why section's heading describes the
+  // problem creators face ("...still struggle to make a living from what you
+  // create"). It is allowed only as that exact heading, only in #why, and the
+  // rest of the page is still checked against every banned phrase.
+  const PROBLEM_STATEMENT = 'You can have thousands of followers and still struggle to make a living from what you create.'
+  const pageTextWithoutProblemStatement = (path: string) => {
+    const { container } = renderAt(path)
+    for (const h of container.querySelectorAll('#why > div > h2')) {
+      if (norm(h) === PROBLEM_STATEMENT) h.remove()
+    }
+    const text = norm(container)
+    cleanup()
+    return text
+  }
+
   it.each(PUBLIC_PATHS)('%s contains no banned phrases', (path) => {
-    const t = textOf(path)
+    const t = pageTextWithoutProblemStatement(path)
     for (const re of BANNED) expect(t, `matched ${re}`).not.toMatch(re)
+  })
+
+  it('allows the problem statement only as the Why heading', () => {
+    const { container } = renderAt('/')
+    expect(norm(container.querySelector('#why-title'))).toBe(PROBLEM_STATEMENT)
+    expect(norm(container).split('make a living').length - 1).toBe(1)
   })
 
   it('every mention of "1,000" sits on the landing page next to its hypothesis label or in the FAQ that explains it', () => {

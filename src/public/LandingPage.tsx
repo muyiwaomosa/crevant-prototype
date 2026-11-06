@@ -1,413 +1,391 @@
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Clock3, Gift, HandCoins, HeartHandshake, Megaphone, MessageCircle, UserPlus } from 'lucide-react'
+import { ArrowRight, BookOpen, Briefcase, Feather, Gift, HandCoins, HeartHandshake, Music, Sprout, Users } from 'lucide-react'
 import { buttonClass, SparkIcon } from '../components/ui'
 import { TOUR_BASE } from '../entry'
+import { cardShadow, Section, StatusBadge, TourScreenshot, type Status } from './landing/shared'
+import { AttentionAndRelationships, JourneyDiagram } from './landing/visuals'
 
-// Positioning: "You don't need a million followers. You need the right 1,000."
-// It is a hypothesis we are testing in the pilot, never an earnings claim.
+export { StatusBadge } from './landing/shared'
+
+// Landing page, version 2. WHY, WHO, WHAT, HOW in eight sections, plus a
+// short FAQ before the closing call to action.
 //
 // Copy rules (enforced by src/public/public-site.test.tsx):
-//  * The "right 1,000" line always travels with its hypothesis label, and is
-//    never paired with a money figure or a promise of a living.
-//  * Never imply guaranteed reach or guaranteed earnings.
-//  * The Following feed is described by its ordering only: newest first, not
-//    ranked by engagement. It does not promise that anyone sees a post.
-//  * Everything carries its real status: in the pilot, in development, or
-//    where we're headed. Nothing involving money is live.
+//  * "You need the right 1,000" is the hero headline only, always next to the
+//    pilot disclaimer. It is a belief we are testing, never an earnings claim.
+//  * Never imply guaranteed reach, guaranteed earnings, financial returns for
+//    supporters, or that creators own their followers.
+//  * Connection Points are never presented as money.
+//  * Every feature claim carries its real status: in the pilot, testing in the
+//    pilot, in development, or where we're headed. Nothing involving money is
+//    live.
+//  * Interface images are genuine tour screenshots, labelled as sample data.
 
-export type Status = 'pilot' | 'development' | 'vision'
+const HEADLINE_LEAD = "You don't need a million followers."
+const HEADLINE_FOCUS = 'You need the right 1,000.'
 
-const STATUS_LABEL: Record<Status, string> = {
-  pilot: 'In the pilot',
-  development: 'In development',
-  vision: "Where we're headed",
-}
-
-export function StatusBadge({ status }: { status: Status }) {
+function Hero() {
   return (
-    <span
-      className={clsx(
-        'inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
-        status === 'pilot' && 'bg-brand-50 text-brand-700 ring-1 ring-brand-100',
-        status === 'development' && 'bg-spark-50 text-spark-700 ring-1 ring-spark-200',
-        status === 'vision' && 'border border-dashed border-ink-300 text-ink-500',
-      )}
-    >
-      {STATUS_LABEL[status]}
-    </span>
-  )
-}
-
-function Section({ id, eyebrow, title, children, className }: { id: string; eyebrow?: string; title: string; children: ReactNode; className?: string }) {
-  return (
-    <section id={id} aria-labelledby={`${id}-title`} className={clsx('px-4 py-14 sm:px-6 sm:py-20', className)}>
-      <div className="mx-auto max-w-6xl">
-        {eyebrow && <p className="text-sm font-semibold uppercase tracking-wider text-brand-600">{eyebrow}</p>}
-        <h2 id={`${id}-title`} className="mt-2 max-w-3xl font-display text-[1.9rem] font-extrabold leading-[1.1] tracking-[-0.02em] text-ink-900 sm:text-[2.4rem]">
-          {title}
-        </h2>
-        <div className="mt-8">{children}</div>
+    <section id="hero" aria-labelledby="hero-title" className="overflow-hidden px-4 pb-16 pt-10 sm:px-6 sm:pt-16 lg:pb-24">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="min-w-0">
+          <p className="inline-flex flex-wrap items-center gap-x-2 rounded-full bg-white px-3 py-1 text-[13px] font-semibold text-ink-600 ring-1 ring-ink-100">
+            <span>Invitation-only pilot</span>
+            <span aria-hidden="true">·</span>
+            <span>Free</span>
+            <span aria-hidden="true">·</span>
+            <span>18+</span>
+          </p>
+          <h1 id="hero-title" className="mt-5 font-display text-[2.45rem] font-extrabold leading-[1.03] tracking-[-0.035em] text-ink-900 sm:text-[3.4rem] lg:text-[3.85rem]">
+            {HEADLINE_LEAD} <span className="text-brand-600">{HEADLINE_FOCUS}</span>
+          </h1>
+          <p data-testid="hypothesis-note" className="mt-4 max-w-xl text-sm leading-relaxed text-ink-500">
+            This is the idea we're testing in our pilot, not a promise of earnings. No money changes hands on Crevant yet.
+          </p>
+          <p data-testid="supporting-headline" className="mt-6 max-w-xl font-display text-[1.35rem] font-bold leading-snug text-ink-800 sm:text-[1.55rem]">
+            Your content should build your future. Not just someone else's platform.
+          </p>
+          <div className="mt-5 max-w-xl space-y-4 text-lg leading-relaxed text-ink-600">
+            <p>You spend hours creating content that educates, entertains, inspires and helps people. You build an audience. You get views. People follow you.</p>
+            <p>
+              But here's the question: <strong className="font-semibold text-ink-900">what are you actually building for yourself?</strong>
+            </p>
+            <p>
+              Imagine if every piece of content you created could help you build something that lasts beyond the next viral post. A community that
+              believes in you. Relationships that grow stronger. Opportunities to earn from the value you create.
+            </p>
+            <p>That's the future we're building at Crevant.</p>
+          </div>
+          <div className="mt-8 flex flex-col items-start gap-3 min-[420px]:flex-row min-[420px]:flex-wrap">
+            <div>
+              <a href={TOUR_BASE} className={buttonClass('primary', 'lg')}>
+                Explore Crevant <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </a>
+              <p className="mt-1.5 text-center text-[13px] text-ink-500">A tour with sample data</p>
+            </div>
+            <div>
+              <Link to="/request-invite" className={buttonClass('secondary', 'lg')}>
+                Join the invitation list
+              </Link>
+              <p className="mt-1.5 text-center text-[13px] text-ink-500">When available</p>
+            </div>
+          </div>
+          <p className="mt-6 max-w-xl text-sm leading-relaxed text-ink-500">
+            An invitation-only platform being built with creators and supporters. Free to join during our pilot. Ages 18+.
+          </p>
+          <p className="mt-2 text-sm text-ink-500">
+            Already invited?{' '}
+            <Link to="/sign-in" className="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800">
+              Sign in
+            </Link>
+          </p>
+        </div>
+        <div className="relative">
+          <div aria-hidden="true" className="absolute -inset-6 rounded-[48px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-80" />
+          <TourScreenshot screen="feed" caption="Your Following feed, newest first" priority className="relative" />
+        </div>
       </div>
     </section>
   )
 }
 
-const cardShadow = 'shadow-[0_1px_2px_rgb(19_25_27/0.06),0_0_0_1px_rgb(19_25_27/0.05)]'
-
-/** Decorative only: a sketch of a post in the Following feed. */
-function HeroIllustration() {
+function Why() {
   return (
-    <div aria-hidden="true" className="relative mx-auto w-full max-w-[400px] select-none">
-      <div className="absolute -inset-6 rounded-[44px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-80" />
-      <div className="relative rounded-[28px] bg-card p-4 shadow-[0_18px_50px_-20px_rgb(11_106_92/0.45),0_0_0_1px_rgb(19_25_27/0.05)]">
-        <div className="mb-3 flex items-center justify-between text-xs font-semibold text-ink-500">
-          <span className="inline-flex items-center gap-1.5">
-            <Clock3 className="h-3.5 w-3.5" /> Following · newest first
-          </span>
-          <span className="rounded-full border border-dashed border-ink-300 px-2 py-0.5 text-[10px] uppercase tracking-wide">Illustration</span>
+    <Section
+      id="why"
+      eyebrow="Why Crevant exists"
+      title="You can have thousands of followers and still struggle to make a living from what you create."
+      className="bg-white"
+    >
+      <div className="grid gap-12 lg:grid-cols-[1fr_1fr]">
+        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
+          <p>Think about someone who spends four hours creating a video that teaches people something valuable.</p>
+          <p>
+            The video gets 100,000 views. People share it. Some leave comments saying how much it helped them. A few thousand new people follow.
+            That's wonderful.
+          </p>
+          <p>But the following month, when the creator needs to pay their bills, those 100,000 views may not translate into enough income.</p>
+          <p>
+            So what do they do? They create another video. And another. And another. Not always because they have something new to say, but
+            because they feel they can't afford to stop. The moment they stop creating, they're afraid the attention will disappear.
+          </p>
+          <p>
+            Now imagine someone else. They have only 500 followers, but 100 of those people genuinely value their work. They trust them,
+            recommend them and would gladly support what they do.
+          </p>
+          <p className="font-semibold text-ink-900">Shouldn't that creator also have an opportunity to build a sustainable career? We believe they should.</p>
         </div>
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-700 font-display text-sm font-bold text-white">AM</span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-ink-900">A creator you follow</p>
-            <p className="text-xs text-ink-500">Posted 2 minutes ago</p>
+        <div className="space-y-6">
+          <AttentionAndRelationships />
+          <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
+            <p>
+              The problem isn't that social media has no value. These platforms have helped millions of people find audiences they could never have
+              reached before.
+            </p>
+            <p>
+              The problem is that building an audience and building a sustainable career are not the same thing. And too many creators are still
+              struggling to bridge that gap.
+            </p>
+            <p className="font-display text-xl font-bold leading-snug text-ink-900">
+              That's why we're building Crevant. A creator's future shouldn't depend only on how many people watch. It should also depend on the
+              relationships they build and the value they create for the people who care.
+            </p>
           </div>
-        </div>
-        <div className="mt-3 aspect-[16/10] rounded-2xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 p-4">
-          <div className="flex h-full items-end">
-            <p className="max-w-[80%] font-display text-lg font-bold leading-tight text-white">Behind the scenes of this week's episode</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-ink-500">
-            <HeartHandshake className="h-5 w-5" />
-            <MessageCircle className="h-5 w-5" />
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-spark-50 px-2.5 py-1 text-xs font-semibold text-spark-700 ring-1 ring-spark-200">
-            <SparkIcon className="h-3.5 w-3.5" /> +2 CP with this creator
-          </span>
         </div>
       </div>
-      <div className="relative mt-3 ml-auto w-[78%] rounded-2xl bg-card px-4 py-3 shadow-[0_10px_30px_-18px_rgb(19_25_27/0.4),0_0_0_1px_rgb(19_25_27/0.05)]">
-        <p className="flex items-center gap-2 text-xs font-semibold text-ink-700">
-          <Gift className="h-4 w-4 text-brand-600" /> Reward unlocked: early access
-        </p>
-      </div>
-    </div>
+    </Section>
   )
 }
 
-/** The central contrast: audience size versus relationship depth. */
-const CONTRAST: Array<{ size: string; depth: string }> = [
-  { size: 'How many people follow you', depth: 'How many people genuinely value what you make' },
-  { size: 'Chasing views and virality', depth: 'Showing up for the people who show up for you' },
-  { size: 'An algorithm decides the order', depth: 'Your Following feed shows posts newest first' },
-  { size: 'Followers are a number', depth: 'Supporters are people you can recognise and reward' },
-  { size: 'Earning depends on reaching huge audiences', depth: 'We\'re building ways for the people who value your work to back it' },
+const IMAGINE: Array<{ who: string; text: string; icon: ReactNode }> = [
+  { who: 'A teacher', text: 'being able to build a career from the knowledge they share.', icon: <BookOpen className="h-5 w-5" /> },
+  { who: 'A musician', text: 'earning a sustainable living from a community that loves their music.', icon: <Music className="h-5 w-5" /> },
+  { who: 'A storyteller', text: 'turning their creativity into opportunities they never imagined.', icon: <Feather className="h-5 w-5" /> },
+  {
+    who: 'Someone with a full-time job',
+    text: 'gradually building a second source of income from the things they love teaching or creating.',
+    icon: <Briefcase className="h-5 w-5" />,
+  },
 ]
 
-const BLOCKS: Array<{ verb: string; title: string; body: string; status: Status; icon: ReactNode }> = [
+function Vision() {
+  return (
+    <Section id="vision" eyebrow="Our vision" title="We envision a world where content creation is a respected profession, not just a hobby.">
+      <div className="flex items-center gap-3">
+        <StatusBadge status="vision" />
+        <p className="text-sm text-ink-500">A long-term aim, not something Crevant does today.</p>
+      </div>
+      <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {IMAGINE.map((item) => (
+          <li key={item.who} className={clsx('rounded-3xl bg-card p-6', cardShadow)}>
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-50 text-brand-600" aria-hidden="true">
+              {item.icon}
+            </span>
+            <p className="mt-4 leading-relaxed text-ink-600">
+              <span className="font-display text-lg font-bold text-ink-900">Imagine {item.who.toLowerCase()}</span> {item.text}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-10 grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
+          <p className="font-semibold text-ink-900">Not because they became famous. But because they created something valuable for the right people.</p>
+          <p>
+            We want to help build a creator economy where opportunities aren't reserved for the biggest names. Where creators can grow meaningful
+            communities, develop sustainable income opportunities and build something that becomes more valuable over time.
+          </p>
+          <p>And where the people supporting creators can be part of their journey, instead of being treated as numbers on a screen.</p>
+        </div>
+        <div className="rounded-[28px] bg-ink-900 p-7 text-white">
+          <p className="font-display text-[1.7rem] font-extrabold leading-tight tracking-[-0.02em]">
+            Create value. <span className="text-brand-300">Own value.</span> <span className="text-spark-300">Build wealth.</span>
+          </p>
+          <p className="mt-2 text-ink-300">That's our vision.</p>
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+function Who() {
+  return (
+    <Section id="who" eyebrow="Who Crevant is for" title="For people who create value. And the people who believe in them." className="bg-white">
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="rounded-[28px] bg-brand-700 p-7 text-white sm:p-8">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-brand-100">
+            <Sprout className="h-4 w-4" aria-hidden="true" /> For creators
+          </p>
+          <div className="mt-4 space-y-4 leading-relaxed text-brand-50">
+            <p>Maybe you're a teacher, artist, musician, comedian, writer, storyteller or someone with knowledge worth sharing.</p>
+            <p>Maybe you already have 50,000 followers. Or maybe you're just starting with 50.</p>
+            <p>
+              What matters to us isn't how famous you are. It's that you have something valuable to share and want to build meaningful
+              relationships with the people who appreciate your work.
+            </p>
+            <p>
+              You don't have to abandon the platforms you're already using. Crevant is being built to help you turn the attention you've earned into
+              relationships and opportunities that can grow over time.
+            </p>
+          </div>
+        </div>
+        <div className={clsx('rounded-[28px] bg-card p-7 sm:p-8', cardShadow)}>
+          <p className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-brand-600">
+            <Users className="h-4 w-4" aria-hidden="true" /> For supporters
+          </p>
+          <div className="mt-4 space-y-4 leading-relaxed text-ink-600">
+            <p>
+              Think about a creator whose work has genuinely helped you. Maybe they taught you a skill, encouraged you through a difficult time or
+              simply made you laugh when you needed it.
+            </p>
+            <p>You've watched their videos. You've shared their work. You've told others about them.</p>
+            <p>
+              But what if supporting them could become more meaningful than pressing Like? Crevant is being built to help you connect, participate
+              and be recognized for the role you play in a creator's community.
+            </p>
+            <p className="font-semibold text-ink-900">Because behind every successful creator are people who helped them get there.</p>
+          </div>
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+const IDEAS: Array<{ title: string; body: ReactNode; status: Status; icon: ReactNode }> = [
   {
-    verb: 'Find them',
-    title: 'A Following feed in time order',
-    body: "When someone follows you, your posts appear in their Following feed newest first. The order isn't ranked by likes, comments or any engagement score, so you can build your community without second-guessing an algorithm.",
+    title: 'Build relationships, not just followers',
+    body: 'Followers are numbers. Relationships are built through trust, shared interests and meaningful participation. Crevant is designed to help creators and supporters build stronger communities around the content they value.',
     status: 'pilot',
-    icon: <Clock3 className="h-5 w-5" />,
+    icon: <HeartHandshake className="h-5 w-5" />,
   },
   {
-    verb: 'Recognise them',
-    title: 'Connection Points',
-    body: "Points your supporters earn with you by taking part. They show you who keeps showing up, not just who clicked follow. They're not money and only work with you.",
-    status: 'pilot',
+    title: 'Make meaningful participation count',
+    body: (
+      <>
+        Someone who consistently supports your work can contribute more to your journey than someone who watches one viral video and disappears.
+        We're experimenting with Connection Points to recognize participation and loyalty.{' '}
+        <strong className="font-semibold text-ink-800">
+          Connection Points aren't money, and they don't promise financial returns.
+        </strong>{' '}
+        They're a way to explore how creators can recognize and reward meaningful support.
+      </>
+    ),
+    status: 'testing',
     icon: <SparkIcon className="h-5 w-5" />,
   },
   {
-    verb: 'Reward them',
-    title: 'Creator rewards',
-    body: 'Thank the people who matter with things you choose: a shout-out, early access, a live Q&A. The kind of thanks that works best with a community you actually know.',
-    status: 'pilot',
-    icon: <Gift className="h-5 w-5" />,
-  },
-  {
-    verb: 'Let them back you',
-    title: 'Voluntary support',
-    body: "Ways for the people who value your work to support it directly. It isn't live yet, and we're still deciding how to test it safely. No money changes hands on Crevant today.",
-    status: 'development',
+    title: 'Create more opportunities to earn',
+    body: 'We want creators to have more ways to build sustainable income from their work, including direct support from their communities and potential brand partnerships. These earning tools are part of our longer-term product direction, not a promise that every creator will earn money during the pilot.',
+    status: 'vision',
     icon: <HandCoins className="h-5 w-5" />,
   },
   {
-    verb: 'Add to it',
-    title: 'Creator-content advertising',
-    body: "Advertising on eligible creator content, as a possible extra source of value. It isn't live yet. We see it as a supplement to direct support, not the centre of the model.",
-    status: 'development',
-    icon: <Megaphone className="h-5 w-5" />,
+    title: 'Build something that lasts',
+    body: 'Imagine looking back at five years of creating content and seeing more than a collection of posts. You see a body of work, a community that values it, and opportunities that grew from the relationships you built. That\'s what we want Crevant to help make possible.',
+    status: 'vision',
+    icon: <Gift className="h-5 w-5" />,
   },
 ]
 
-const STEPS = [
-  { title: 'Create and follow', body: 'Share your work and follow the creators you care about.', icon: <UserPlus className="h-5 w-5" /> },
-  { title: 'Take part', body: 'Comments, shares and showing up earn you Connection Points with that creator.', icon: <MessageCircle className="h-5 w-5" /> },
-  { title: 'Get recognised and rewarded', body: 'Creators see who keeps showing up, and offer rewards that supporters redeem with their points.', icon: <Gift className="h-5 w-5" /> },
-]
-
-const IN_PILOT = [
-  'Profiles and posts',
-  'A Following feed shown newest first',
-  'Comments, likes and shares',
-  'Connection Points with each creator',
-  'Rewards that creators choose and offer',
-]
-
-const IN_DEVELOPMENT = [
-  'Direct, voluntary support from audiences to creators',
-  'Advertising on eligible creator content',
-  'Ways to see your active supporters alongside your follower count',
-]
-
-const FAQ: Array<{ q: string; a: ReactNode }> = [
-  {
-    q: 'Is 1,000 a magic number?',
-    a: "No. It's our way of saying that depth matters more than size. Every creator's right number is different, and we can't promise what any community will earn.",
-  },
-  {
-    q: 'Can my supporters become a sustainable income?',
-    a: "That's what we're working toward, not something we can promise. During the pilot no money changes hands on Crevant.",
-  },
-  { q: 'Is it free?', a: 'Yes.' },
-  {
-    q: 'Are Connection Points money?',
-    a: "No. They can't be bought, sold, cashed out or moved to another creator, and they only work with the creator who gave them.",
-  },
-  {
-    q: 'Can I earn money on Crevant now?',
-    a: "Not yet. We're building ways for creators to earn, and we'll be upfront about when and how they arrive. We can't promise anyone earnings.",
-  },
-  {
-    q: 'Will my followers see everything I post?',
-    a: "Your posts appear in your followers' Following feed, newest first. Whether they open the app and scroll to them is up to them, and we don't promise any particular reach.",
-  },
-  {
-    q: 'Do follower counts still exist?',
-    a: "Yes. We just don't think they tell the whole story, so we want to put the people who actively support you alongside them.",
-  },
-  { q: 'Who can join?', a: 'Adults 18 and over, by invitation, during the pilot.' },
-  { q: 'Why invitation only?', a: 'A small group lets us test this idea properly, with the people using it.' },
-]
-
-export function LandingPage() {
+function Building() {
   return (
-    <>
-      {/* Hero */}
-      <section id="hero" aria-labelledby="hero-title" className="overflow-hidden px-4 pb-16 pt-12 sm:px-6 sm:pt-20 lg:pb-24">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="min-w-0">
-            <p className="inline-flex flex-wrap items-center gap-x-2 rounded-full bg-white px-3 py-1 text-[13px] font-semibold text-ink-600 ring-1 ring-ink-100">
-              <span>Invitation-only pilot</span>
-              <span aria-hidden="true">·</span>
-              <span>Free</span>
-              <span aria-hidden="true">·</span>
-              <span>18+</span>
-            </p>
-            <h1
-              id="hero-title"
-              className="mt-5 font-display text-[2.45rem] font-extrabold leading-[1.03] tracking-[-0.035em] text-ink-900 sm:text-[3.4rem] lg:text-[3.85rem]"
-            >
-              You don't need a million followers. <span className="text-brand-600">You need the right 1,000.</span>
-            </h1>
-            <div className="mt-6 max-w-xl space-y-4 text-lg leading-relaxed text-ink-600">
-              <p>
-                What if your success as a creator wasn't determined by how many people followed you, but by how many
-                people genuinely valued what you created?
-              </p>
-              <p>
-                Crevant is building a social network where meaningful connections matter, loyal supporters are
-                recognized, and creators have more opportunities to turn their work into sustainable income.
-              </p>
-            </div>
-            <div className="mt-8 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:flex-wrap">
-              <Link to="/request-invite" className={buttonClass('primary', 'lg')}>
-                Request an invitation <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-              <a href={TOUR_BASE} className={buttonClass('secondary', 'lg')}>
-                Take the tour
-              </a>
-            </div>
-            <p data-testid="hypothesis-note" className="mt-5 max-w-xl text-sm leading-relaxed text-ink-500">
-              This is the idea we're testing in our pilot, not a promise of earnings. No money changes hands on Crevant
-              yet.
-            </p>
-            <p className="mt-2 text-sm text-ink-500">
-              Already invited?{' '}
-              <Link to="/sign-in" className="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800">
-                Sign in
-              </Link>
-            </p>
-          </div>
-          <HeroIllustration />
-        </div>
-      </section>
-
-      {/* The problem: size versus depth */}
-      <Section id="why" eyebrow="Why we're building Crevant" title="A big audience isn't the same as a committed one." className="bg-white">
-        <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
-            <p>
-              Most platforms reward reach. Creators are told to post more, chase trends and hope the algorithm picks them
-              up. Follower counts grow, but they rarely tell you who actually values your work, and a big number on its
-              own doesn't pay the bills.
-            </p>
-            <p>
-              We think creation is a profession, and that a smaller community of people who genuinely value what you
-              make can matter more than a huge audience that scrolls past. That's the hypothesis our pilot is here to
-              test.
-            </p>
-          </div>
-          <div className={clsx('overflow-hidden rounded-3xl bg-paper ring-1 ring-ink-100')}>
-            <div className="grid grid-cols-2 border-b border-ink-100 text-[12px] font-semibold uppercase tracking-wide">
-              <p className="px-4 py-3 text-ink-500 sm:px-5">Chasing size</p>
-              <p className="bg-brand-50 px-4 py-3 text-brand-700 sm:px-5">Building depth</p>
-            </div>
-            <ul aria-label="Chasing size compared with building depth">
-              {CONTRAST.map((row) => (
-                <li key={row.size} className="grid grid-cols-2 border-b border-ink-100 last:border-b-0">
-                  <p className="px-4 py-3.5 text-[15px] leading-snug text-ink-500 sm:px-5">{row.size}</p>
-                  <p className="bg-brand-50/60 px-4 py-3.5 text-[15px] font-medium leading-snug text-ink-900 sm:px-5">{row.depth}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </Section>
-
-      {/* How Crevant helps: the building blocks */}
-      <Section id="building-blocks" eyebrow="How Crevant helps" title="Find them. Recognise them. Reward them. Let them back you.">
-        <p className="-mt-4 mb-8 max-w-2xl leading-relaxed text-ink-600">
-          Every part of Crevant is built around the people who value your work, not the size of your audience. Here's
-          what each piece does, and what's ready today.
-        </p>
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {BLOCKS.map((b) => (
-            <li key={b.title} className={clsx('flex flex-col rounded-3xl bg-card p-6', cardShadow)}>
+    <Section id="building" eyebrow="What we're building" title="Your audience should be the beginning of something bigger." intro={<p>We're building Crevant around four ideas.</p>}>
+      <div className="grid gap-10 lg:grid-cols-[1.25fr_0.75fr]">
+        <ol className="grid gap-4 sm:grid-cols-2">
+          {IDEAS.map((idea, i) => (
+            <li key={idea.title} className={clsx('flex flex-col rounded-3xl bg-card p-6', cardShadow)}>
               <div className="flex items-start justify-between gap-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-600">{b.icon}</span>
-                <StatusBadge status={b.status} />
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-600" aria-hidden="true">
+                  {idea.icon}
+                </span>
+                <StatusBadge status={idea.status} />
               </div>
-              <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-brand-600">{b.verb}</p>
-              <h3 className="mt-1 font-display text-xl font-bold text-ink-900">{b.title}</h3>
-              <p className="mt-2 leading-relaxed text-ink-600">{b.body}</p>
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      {/* What success looks like */}
-      <Section id="success" eyebrow="What success looks like here" title="Measured by the people who show up, not just the people who follow." className="bg-white">
-        <div className="grid items-start gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
-            <p>
-              A follower can be one click and gone. A supporter keeps coming back, takes part and cares how your work
-              does. We want Crevant to help you see the difference, and to treat your community of supporters as one of
-              the most valuable things you build.
-            </p>
-            <p>
-              Follower counts aren't going away. During the pilot we're learning how best to show your active supporters
-              alongside them, and we'll shape it with the creators taking part.
-            </p>
-          </div>
-          <div className={clsx('rounded-3xl bg-paper p-6 ring-1 ring-ink-100')}>
-            <StatusBadge status="vision" />
-            <p className="mt-4 font-display text-lg font-bold leading-snug text-ink-900">
-              Over time, we want your body of work, and the community around it, to keep creating opportunities for you.
-            </p>
-            <p className="mt-3 text-[15px] leading-relaxed text-ink-600">
-              That's a long-term aim, not a feature you can use today.
-            </p>
-          </div>
-        </div>
-      </Section>
-
-      {/* How it works */}
-      <Section id="how" eyebrow="How it works" title="Three steps, for everyone">
-        <p className="-mt-4 mb-8 max-w-2xl leading-relaxed text-ink-600">
-          There's one kind of account. Anyone can create, follow and offer rewards, with no switching between modes.
-        </p>
-        <ol className="grid gap-4 md:grid-cols-3">
-          {STEPS.map((s, i) => (
-            <li key={s.title} className="rounded-3xl bg-white p-6 ring-1 ring-ink-100">
-              <div className="flex items-center gap-3">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-600 font-display text-sm font-bold text-white">{i + 1}</span>
-                <span className="text-brand-600">{s.icon}</span>
-              </div>
-              <h3 className="mt-4 font-display text-lg font-bold text-ink-900">{s.title}</h3>
-              <p className="mt-1.5 leading-relaxed text-ink-600">{s.body}</p>
+              <h3 className="mt-4 font-display text-xl font-bold text-ink-900">
+                <span className="text-brand-600">{i + 1}.</span> {idea.title}
+              </h3>
+              <p className="mt-2 leading-relaxed text-ink-600">{idea.body}</p>
             </li>
           ))}
         </ol>
-      </Section>
-
-      {/* Creators and supporters */}
-      <Section id="who" eyebrow="Who it's for" title="Good for creators. Good for the people who show up." className="bg-white">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-3xl bg-brand-700 p-7 text-white">
-            <h3 className="font-display text-xl font-bold">For creators</h3>
-            <ul className="mt-4 space-y-3 leading-relaxed text-brand-50">
-              <li>Know who your right people are, not just how many follow you.</li>
-              <li>Recognise and reward them on your terms.</li>
-              <li>Help shape how creators earn here.</li>
-            </ul>
-          </div>
-          <div className={clsx('rounded-3xl bg-card p-7', cardShadow)}>
-            <h3 className="font-display text-xl font-bold text-ink-900">For supporters</h3>
-            <ul className="mt-4 space-y-3 leading-relaxed text-ink-600">
-              <li>Be one of the people who matters to a creator.</li>
-              <li>See posts from the creators you follow, newest first.</li>
-              <li>Get recognised for showing up, and unlock rewards from creators you care about.</li>
-            </ul>
-          </div>
+        <div className="grid content-start gap-8 sm:grid-cols-2 lg:grid-cols-1">
+          <TourScreenshot screen="creator" caption="Connection Points with one creator" />
+          <TourScreenshot screen="rewards" caption="Rewards a creator chooses to offer" />
         </div>
-      </Section>
+      </div>
+    </Section>
+  )
+}
 
-      {/* Connection Points */}
-      <Section id="points" eyebrow="Connection Points" title="Recognition you earn with each creator">
-        <div className="grid items-start gap-8 lg:grid-cols-[1fr_0.9fr]">
-          <p className="text-[17px] leading-relaxed text-ink-600">
-            Points you earn with one specific creator by taking part. They're not money. They can't be bought, sold,
-            cashed out or moved to another creator, and they only work with the creator who gave them. Creators decide
-            which rewards to offer and what each one costs in points.
-          </p>
-          <ul className="grid gap-2.5 text-[15px] font-medium text-ink-700">
-            {['Earned by taking part', 'Specific to one creator', 'Never bought, sold or cashed out', 'Redeemed for rewards the creator offers'].map((t) => (
-              <li key={t} className="flex items-center gap-3 rounded-2xl bg-spark-50 px-4 py-3 ring-1 ring-spark-100">
-                <SparkIcon className="h-5 w-5 shrink-0" />
+function How() {
+  return (
+    <Section id="how" eyebrow="How Crevant works" title="From creating content to building meaningful opportunities." className="bg-white">
+      <JourneyDiagram />
+      <div className="mt-12 grid gap-6 md:grid-cols-2">
+        {[
+          {
+            t: 'Step 1. Create and share',
+            b: "Share what you know, what you've experienced or what you love creating. It might be a lesson, a story, an idea, a performance or something that makes someone's day better. Start by creating value.",
+          },
+          {
+            t: 'Step 2. Find your people',
+            b: "Let others discover your work and choose to follow your journey. You don't need to appeal to everyone. You need to find the people who genuinely appreciate what you bring.",
+          },
+          {
+            t: 'Step 3. Build relationships',
+            b: "As people engage with your work, build a community where participation matters. We're testing ways to recognize consistent supporters and make those relationships more meaningful.",
+          },
+          {
+            t: 'Step 4. Grow toward opportunity',
+            b: 'Over time, our goal is to introduce tools that help creators turn strong communities into sustainable earning opportunities. Because creating value should open doors.',
+          },
+        ].map((s) => (
+          <div key={s.t} className="rounded-3xl bg-paper p-6 ring-1 ring-ink-100">
+            <h3 className="font-display text-lg font-bold text-ink-900">{s.t}</h3>
+            <p className="mt-1.5 leading-relaxed text-ink-600">{s.b}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-8 max-w-3xl rounded-2xl bg-spark-50 px-5 py-4 text-[15px] leading-relaxed text-ink-700 ring-1 ring-spark-200">
+        Crevant is in development. The first pilot will test the core social experience and community participation features. Additional earning
+        capabilities are planned and will be introduced only when ready.
+      </p>
+    </Section>
+  )
+}
+
+const IN_PILOT = ['Profiles and posts', 'A Following feed shown newest first', 'Comments, likes and shares', 'Connection Points with each creator', 'Rewards that creators choose and offer']
+const IN_DEVELOPMENT = ['Direct, voluntary support from audiences to creators', 'Advertising on eligible creator content', 'Ways to see your active supporters alongside your follower count']
+
+function Pilot() {
+  return (
+    <Section id="pilot" eyebrow="Why we're starting small" title="We're not trying to attract a million users on day one.">
+      <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
+          <p>We're looking for people who believe the creator economy can work differently.</p>
+          <ul className="space-y-3">
+            {[
+              'People who believe a creator with 500 loyal supporters deserves a meaningful opportunity.',
+              'People who believe valuable content should do more than generate attention.',
+              'People who believe creators and their communities should have a greater voice in shaping the platforms they use.',
+            ].map((t) => (
+              <li key={t} className="flex gap-3">
+                <span aria-hidden="true" className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
                 {t}
               </li>
             ))}
           </ul>
+          <p>Together, we'll test the experience, learn what works and improve what doesn't.</p>
+          <p className="font-semibold text-ink-900">
+            We're not promising that joining Crevant will make you wealthy. We're inviting you to help build a platform that takes your future as
+            seriously as you take your creativity.
+          </p>
         </div>
-      </Section>
-
-      {/* The pilot */}
-      <Section id="pilot" eyebrow="The pilot" title="Testing the idea, carefully" className="bg-white">
-        <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
-          <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
-            <p>
-              Our pilot asks a simple question: can a smaller, committed community create more meaningful value for a
-              creator than a large, passive audience? We don't know the answer yet, and we'll share what we learn with the
-              people taking part.
-            </p>
-            <p>
-              Invited creators join first, then each creator invites the people who follow them. The 60 days begin when
-              invited participants can actually use Crevant, not when this page goes live.
-            </p>
-            <p>
-              We're also working on real, voluntary support from audiences to creators. It isn't available yet. Before
-              anything involving money goes live, participants will hear from us first, with the full details.
+        <div className="space-y-4">
+          <div data-testid="pilot-targets" className="rounded-[28px] bg-white p-6 ring-1 ring-ink-100">
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-500">Our planning targets</p>
+            <dl className="mt-3 grid grid-cols-3 gap-3 text-center">
+              {[
+                ['10–20', 'creators'],
+                ['200–300', 'supporters'],
+                ['60', 'days'],
+              ].map(([n, l]) => (
+                <div key={l} className="rounded-2xl bg-paper px-2 py-4">
+                  <dt className="sr-only">{l}</dt>
+                  <dd>
+                    <span className="block whitespace-nowrap font-display text-xl font-extrabold text-ink-900 sm:text-2xl">{n}</span>
+                    <span className="text-[13px] text-ink-500">{l}</span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-4 text-[15px] leading-relaxed text-ink-600">
+              We're starting with a small, invitation-only pilot of approximately 10–20 creators and 200–300 supporters. These are planning targets,
+              not promises about how many people will take part. The 60 days begin when invited participants can actually use Crevant, not when this page goes live.
             </p>
           </div>
-          <div className="grid content-start gap-4 sm:grid-cols-2">
-            <div className={clsx('rounded-3xl bg-paper p-5 ring-1 ring-ink-100')}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-3xl bg-white p-5 ring-1 ring-ink-100">
               <StatusBadge status="pilot" />
               <h3 className="mt-3 font-display text-base font-bold text-ink-900">What the pilot includes</h3>
               <ul className="mt-2 space-y-1.5 text-[15px] leading-snug text-ink-600">
@@ -416,7 +394,7 @@ export function LandingPage() {
                 ))}
               </ul>
             </div>
-            <div className={clsx('rounded-3xl bg-paper p-5 ring-1 ring-ink-100')}>
+            <div className="rounded-3xl bg-white p-5 ring-1 ring-ink-100">
               <StatusBadge status="development" />
               <h3 className="mt-3 font-display text-base font-bold text-ink-900">Still being built</h3>
               <ul className="mt-2 space-y-1.5 text-[15px] leading-snug text-ink-600">
@@ -427,44 +405,122 @@ export function LandingPage() {
             </div>
           </div>
         </div>
-      </Section>
+      </div>
+    </Section>
+  )
+}
 
-      {/* FAQ */}
-      <Section id="faq" eyebrow="Questions" title="The honest answers">
-        <div className="max-w-3xl divide-y divide-ink-100 rounded-3xl bg-white ring-1 ring-ink-100">
-          {FAQ.map((f) => (
-            <details key={f.q} className="group px-5 py-4 [&_summary::-webkit-details-marker]:hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-ink-900">
-                {f.q}
-                <span aria-hidden="true" className="text-xl leading-none text-ink-400 transition group-open:rotate-45">
-                  +
-                </span>
-              </summary>
-              <p className="mt-2 leading-relaxed text-ink-600">{f.a}</p>
-            </details>
-          ))}
-        </div>
-      </Section>
+const FAQ: Array<{ q: string; a: ReactNode }> = [
+  {
+    q: 'Is 1,000 a magic number?',
+    a: "No. It's our way of saying that depth matters more than size. Every creator's right number is different, and we can't promise what any community will earn.",
+  },
+  {
+    q: 'Can I earn money on Crevant now?',
+    a: "Not yet. No money changes hands on Crevant during the pilot. We're building ways for creators to earn, and we'll be upfront about when and how they arrive. We can't promise anyone earnings.",
+  },
+  {
+    q: 'Are Connection Points money?',
+    a: "No. They're not money. They can't be bought, sold, cashed out or moved to another creator, and they only work with the creator who gave them.",
+  },
+  {
+    q: 'Do supporters get a financial share in a creator\'s success?',
+    a: "No. Supporters can be recognized and rewarded by creators, but they don't receive ownership, profits or financial returns.",
+  },
+  {
+    q: 'Will my followers see everything I post?',
+    a: "Your posts appear in your followers' Following feed, newest first. It isn't ranked by likes, comments or any engagement score. Whether people open the app and scroll to your posts is up to them, and we don't promise any particular reach.",
+  },
+  {
+    q: 'Do follower counts still exist?',
+    a: "Yes. Follower counts aren't going away. We just don't think they tell the whole story, so we want to show the people who actively support you alongside them.",
+  },
+  {
+    q: 'How long is the pilot, and who can join?',
+    a: 'About 60 days, starting when invited participants can actually use Crevant. Adults 18 and over can join, by invitation. It is free.',
+  },
+  {
+    q: 'When will anything involving money go live?',
+    a: "We're working on real, voluntary support from audiences to creators. It isn't available yet. Before anything involving money goes live, participants will hear from us first, with the full details.",
+  },
+]
 
-      {/* Closing call to action */}
-      <section aria-labelledby="cta-title" className="px-4 pb-16 sm:px-6 sm:pb-20">
-        <div className="mx-auto max-w-6xl rounded-[32px] bg-ink-900 px-6 py-12 text-center sm:px-12">
-          <h2 id="cta-title" className="mx-auto max-w-2xl font-display text-[1.9rem] font-extrabold leading-tight tracking-[-0.02em] text-white sm:text-[2.4rem]">
-            Build with the people who matter most.
+function Faq() {
+  return (
+    <Section id="faq" eyebrow="Questions" title="The honest answers" className="bg-white">
+      <div className="max-w-3xl divide-y divide-ink-100 rounded-3xl bg-paper ring-1 ring-ink-100">
+        {FAQ.map((f) => (
+          <details key={f.q} className="group px-5 py-4 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-ink-900">
+              {f.q}
+              <span aria-hidden="true" className="text-xl leading-none text-ink-400 transition group-open:rotate-45 motion-reduce:transition-none">
+                +
+              </span>
+            </summary>
+            <p className="mt-2 leading-relaxed text-ink-600">{f.a}</p>
+          </details>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+function FinalCta() {
+  return (
+    <section id="cta" aria-labelledby="cta-title" className="px-4 py-16 sm:px-6 sm:py-20">
+      <div className="mx-auto max-w-6xl overflow-hidden rounded-[36px] bg-ink-900 px-6 py-12 sm:px-12 sm:py-16">
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 id="cta-title" className="font-display text-[1.9rem] font-extrabold leading-tight tracking-[-0.02em] text-white sm:text-[2.6rem]">
+            What if the next five years of creating content could build more than an audience?
           </h2>
-          <p className="mx-auto mt-3 max-w-xl leading-relaxed text-ink-300">
-            We're inviting a small group of creators first. Requests open once our privacy notice is ready.
-          </p>
-          <div className="mt-7 flex flex-col justify-center gap-3 min-[420px]:flex-row">
-            <Link to="/request-invite" className={buttonClass('spark', 'lg')}>
-              Request an invitation
-            </Link>
-            <a href={TOUR_BASE} className={clsx(buttonClass('ghost', 'lg'), 'text-white hover:bg-white/10')}>
-              Take the tour
-            </a>
+          <div className="mt-6 space-y-4 text-lg leading-relaxed text-ink-300">
+            <p>Think about everything you've created over the last five years. Every video. Every post. Every idea. Every hour you invested.</p>
+            <p>
+              Now imagine the next five years. What if that same effort could help you build a loyal community, develop new opportunities and create
+              something that becomes more valuable over time?
+            </p>
+            <p>You don't have to become famous to begin building something meaningful. And you shouldn't have to figure it all out alone.</p>
+            <p className="font-semibold text-white">Your content has value. Your relationships have value. Your future matters.</p>
+            <p>
+              We're building Crevant because we believe more creators deserve the opportunity to turn those things into something lasting. Come help
+              us build that future.
+            </p>
           </div>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 min-[420px]:flex-row min-[420px]:items-start">
+            <div>
+              <a href={TOUR_BASE} className={buttonClass('spark', 'lg')}>
+                Explore Crevant <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </a>
+              <p className="mt-1.5 text-[13px] text-ink-400">A tour with sample data</p>
+            </div>
+            <div>
+              <Link to="/request-invite" className={clsx(buttonClass('ghost', 'lg'), 'text-white ring-1 ring-white/25 hover:bg-white/10')}>
+                Request an invitation
+              </Link>
+              <p className="mt-1.5 text-[13px] text-ink-400">Once invitations open</p>
+            </div>
+          </div>
+          <p className="mt-10 font-display text-lg font-bold text-white">
+            Crevant <span className="font-semibold text-ink-400">·</span> <span className="text-ink-300">Create value. Own value. Build wealth.</span>
+          </p>
         </div>
-      </section>
+      </div>
+    </section>
+  )
+}
+
+export function LandingPage() {
+  return (
+    <>
+      <Hero />
+      <Why />
+      <Vision />
+      <Who />
+      <Building />
+      <How />
+      <Pilot />
+      <Faq />
+      <FinalCta />
     </>
   )
 }
