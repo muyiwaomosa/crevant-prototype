@@ -13,7 +13,7 @@ Each step is its own pull request and stops for the founder's review. Nothing is
 | PR 1 | Public landing page, prototype moved to `/tour`, production safeguards, this document. No Supabase, no forms. | This PR |
 | Validation | Invitation, email confirmation and password setting with public sign up disabled: first locally (done, below), then on staging with the founder's own email after the settings below are approved | Local done |
 | PR 2 | Database foundation: private `ops` schema (admins, invitations) and `public.profiles` with RLS, profile creation on email confirmation, and tests (see "Database foundation" below). Invitation requests and rate limits wait for the privacy notice. Run in CI only, not applied. | In review |
-| PR 3 | Sign in, sign out, password reset, protected `/app`, `/auth/confirm` | Planned |
+| PR 3 | Sign in, sign out, password reset, protected `/app`, `/auth/confirm` (see "Sign-in and accounts" below) | In review |
 | PR 4 | Edge Functions `request-invite` and `send-invitation`, admin invite page, staging-only function deploy workflow. The request form exists but stays switched off. | Planned |
 | Privacy | Draft privacy notice for the founder (and a lawyer) to review. Its approval is required before the request form can be switched on. | Planned |
 | PR 5 | Minimal onboarding: display name and unique username, then the `/app` welcome | Planned |
@@ -41,13 +41,15 @@ Independent verification of the Vercel setting, by the founder: the Branch Track
 
 ## Personal information
 
-No page collects personal information until all of these are true:
+The invitation request form stays closed, and no page collects personal information from the public, until all of these are true:
 
 1. The privacy notice is published and approved by the founder.
 2. The server side request function has its captcha, rate limit and retention rule in place.
 3. The founder approves switching the request form on.
 
-PR 1 has no forms, inputs, storage, cookies or calls to outside services on public pages, and tests enforce it.
+The landing page, `/request-invite` and the not-found page have no forms, inputs, storage, cookies or calls to outside services, and tests enforce it.
+
+From PR 3, invited members sign in with their email address and password, and Supabase keeps their session in their own browser. **Until the privacy notice is approved, nobody is invited except the founder's own test account.**
 
 ## Positioning
 
@@ -163,6 +165,30 @@ No email, no role, no account type: everyone can create and support (unified acc
 ## Privacy and retention requirement (before Connection Points or money)
 
 In Phase 1A, deleting an account deletes its profile. **Before any Connection Points or financial records are implemented, a separate privacy and retention design must be approved.** It must support appropriate anonymization and legally required recordkeeping. No later table may silently delete history when an account is deleted; its deletion behaviour is decided by that design.
+
+## Sign-in and accounts (PR 3)
+
+| Page | What it does |
+| --- | --- |
+| `/auth/confirm` | Where invitation and password-reset emails land. Opening it does nothing: the one-time code is sent to Supabase only when a person presses **Continue**, so email scanners that open links cannot use them up. The code is removed from the address bar straight away. |
+| `/auth/set-password` | Choose a password (at least 10 characters) after accepting an invitation or resetting it. Signed-in members only. |
+| `/sign-in` | Email and password. The same message for a wrong password and an unknown email. No sign-up option: accounts are invitation-only. |
+| `/forgot-password` | Asks for a reset email. Always shows the same message, so it never reveals whether an email has an account. |
+| `/app` | Signed-in home. Reads only the member's own profile and shows "Your profile is ready". |
+| `/app/account` | Email address, **Sign out**, and **Sign out of all devices**. |
+
+Signed-in pages send other visitors to sign in and back afterwards, only ever to a page on this site.
+
+**Safeguards.**
+
+* The browser only ever gets the staging project URL and its publishable key. `scripts/check-supabase-target.mjs` runs before every build: Preview builds must use the staging project with a publishable key, Production builds must have no Supabase values, and any build fails if the key looks like a secret or service key. The app also refuses secret-looking keys at runtime.
+* The app never calls Supabase's sign-up or one-time-code sign-in, and a test fails the build if it ever does. Supabase's own "Allow new users to sign up" stays off.
+* `vercel.json` adds a content security policy on `main` Preview builds: scripts only from this site, connections only to this site and the staging project, no framing. The `demo` branch keeps its own `vercel.json`.
+* The production demo is unaffected: it is built only from `demo`, has no Supabase values, and a `main` build on the production address shows only the sample tour.
+
+**Tests.** Unit tests cover every page state. `scripts/e2e/auth-journey.sh` runs the complete journey in a real browser against a real local Supabase with the real security headers, including email-scanner protection, expired and reused links, safe redirects and signing out of all devices. It runs in CI as the "Browser" job.
+
+**Supabase settings.** PR 3 changes no Supabase settings. The exact dashboard steps (Site URL, redirect address, email templates, minimum password length of 10, one-hour link expiry) are provided after the PR is reviewed, for the founder to apply by hand.
 
 ## Supabase settings for later approval
 

@@ -13,7 +13,10 @@ const BASE = (process.argv[2] || 'http://localhost:4175').replace(/\/$/, '')
 const SHOTS = process.argv[3] || null
 const PRODUCTION = 'https://crevant-prototype.vercel.app'
 const ALLOWED_THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com']
-const PUBLIC_PAGES = ['/', '/request-invite', '/sign-in', '/no-such-page']
+const PUBLIC_PAGES = ['/', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
+// Must never collect anything until the privacy notice is approved. Sign-in
+// and password reset are for invited members (e2e/auth-journey.e2e.cjs).
+const FORM_FREE_PAGES = ['/', '/request-invite', '/no-such-page']
 
 let failures = 0
 const check = (name, ok, detail = '') => {
@@ -47,7 +50,7 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
         const host = new URL(r.url()).host
         if (host !== new URL(BASE).host && !ALLOWED_THIRD_PARTY.includes(host)) external.push(r.url())
       })
-      for (const path of PUBLIC_PAGES) {
+      for (const path of FORM_FREE_PAGES) {
         await page.goto(BASE + path)
         await page.waitForLoadState('networkidle')
         const controls = await page.locator('form, input, textarea, select, [contenteditable="true"]').count()
@@ -110,11 +113,11 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
         if (r.url().startsWith(PRODUCTION) && !r.response) leaked++
       })
       const page = await ctx.newPage()
-      for (const path of ['/', '/sign-in', '/request-invite']) {
+      for (const path of ['/', '/sign-in', '/request-invite', '/app', '/auth/confirm']) {
         await page.goto(PRODUCTION + path)
         await page.waitForLoadState('networkidle')
         const text = await page.locator('body').innerText()
-        check(`production address ${path} shows only the sample prototype`, !text.includes('You need the right 1,000') && !text.includes('Request an invitation') && !text.includes('Sign in opens soon'))
+        check(`production address ${path} shows only the sample prototype`, !text.includes('You need the right 1,000') && !text.includes('Request an invitation') && !text.includes('Email address') && !text.includes("Sign-in isn't available") && !text.includes('Your profile'))
         check(`production address ${path} has no tour banner`, (await page.getByRole('note', { name: 'Sample tour' }).count()) === 0)
       }
       check('no request reached the real production site', leaked === 0)

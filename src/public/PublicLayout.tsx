@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Wordmark } from '../components/Wordmark'
 import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
+import { useAuth } from '../auth/AuthProvider'
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -13,6 +14,7 @@ function ScrollToTop() {
 }
 
 export function PublicLayout() {
+  const signedIn = useAuth().status === 'signed-in'
   return (
     <div className="flex min-h-dvh flex-col">
       <ScrollToTop />
@@ -36,9 +38,15 @@ export function PublicLayout() {
                 Take the tour
               </a>
             </span>
-            <Link to="/sign-in" className={buttonClass('ghost', 'sm')}>
-              Sign in
-            </Link>
+            {signedIn ? (
+              <Link to="/app" className={buttonClass('ghost', 'sm')}>
+                Your account
+              </Link>
+            ) : (
+              <Link to="/sign-in" className={buttonClass('ghost', 'sm')}>
+                Sign in
+              </Link>
+            )}
             <span className="hidden min-[440px]:contents">
               <Link to="/request-invite" className={buttonClass('primary', 'sm')}>
                 Request an invitation
@@ -57,8 +65,8 @@ export function PublicLayout() {
           <div className="max-w-md">
             <Wordmark size="sm" />
             <p className="mt-3 text-sm leading-relaxed text-ink-500">
-              Crevant is in an invitation-only pilot for adults 18 and over. We'll publish our privacy notice before we
-              collect any personal information.
+              Crevant is in an invitation-only pilot for adults 18 and over. Invitation requests open once our privacy
+              notice is published.
             </p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-ink-600">

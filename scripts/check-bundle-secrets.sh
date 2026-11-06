@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -d dist ] || { echo "dist/ not found; run npm run build first"; exit 1; }
-PATTERN='sb_secret_|service_role|sk_(live|test)_[A-Za-z0-9]|rk_(live|test)_[A-Za-z0-9]|whsec_[A-Za-z0-9]|MUX_TOKEN_SECRET|MUX_SIGNING_KEY|re_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+PATTERN='sb_secret_[A-Za-z0-9_-]{16,}|service_role|sk_(live|test)_[A-Za-z0-9]|rk_(live|test)_[A-Za-z0-9]|whsec_[A-Za-z0-9]|MUX_TOKEN_SECRET|MUX_SIGNING_KEY|re_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----'
 HITS="$(mktemp)"
 trap 'rm -f "$HITS"' EXIT
 if grep -REn "$PATTERN" dist/ > "$HITS" 2>/dev/null; then

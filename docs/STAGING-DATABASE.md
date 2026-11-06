@@ -27,6 +27,8 @@ Actions, **Deploy database to staging**, **Run workflow**:
 
 `apply` repeats every check, applies the pending approved migrations, runs the security and separation checks in `supabase/tests/` against staging, and prints the applied migration list. Running `apply` again when nothing is pending is harmless: it reports that the database is up to date.
 
+`check` is read-only. It verifies the target, then runs only the security and separation checks in `supabase/tests/` and lists the applied migrations. It never runs `db push`. Use it to confirm the state of staging, for example that a new account received its profile ("N confirmed, N profiles"). Nothing persists: two Phase 0 checks create test objects inside transactions that are always rolled back. It stops at the approval gate like every other mode. A guard test in CI fails if the install step could ever run in any mode other than `apply`.
+
 ## What it checks, in order
 
 | Step | Fails when |
