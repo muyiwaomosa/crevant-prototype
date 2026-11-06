@@ -170,7 +170,7 @@ In Phase 1A, deleting an account deletes its profile. **Before any Connection Po
 
 | Page | What it does |
 | --- | --- |
-| `/auth/confirm` | Where invitation and password-reset emails land. Opening it does nothing: the one-time code is sent to Supabase only when a person presses **Continue**, so email scanners that open links cannot use them up. The code is removed from the address bar straight away. |
+| `/auth/confirm` | Where invitation and password-reset emails land. Opening it does nothing: the one-time code is sent to Supabase only when a person presses **Continue**, so email scanners that open links cannot use them up. The code arrives after the `#` in the link, so it is removed from the address bar straight away. |
 | `/auth/set-password` | Choose a password (at least 10 characters) after accepting an invitation or resetting it. Signed-in members only. |
 | `/sign-in` | Email and password. The same message for a wrong password and an unknown email. No sign-up option: accounts are invitation-only. |
 | `/forgot-password` | Asks for a reset email. Always shows the same message, so it never reveals whether an email has an account. |
@@ -183,6 +183,8 @@ Signed-in pages send other visitors to sign in and back afterwards, only ever to
 
 * The browser only ever gets the staging project URL and its publishable key. `scripts/check-supabase-target.mjs` runs before every build: Preview builds must use the staging project with a publishable key, Production builds must have no Supabase values, and any build fails if the key looks like a secret or service key. The app also refuses secret-looking keys at runtime.
 * The app never calls Supabase's sign-up or one-time-code sign-in, and a test fails the build if it ever does. Supabase's own "Allow new users to sign up" stays off.
+* **One-time codes stay out of server logs.** Email links put the code after `#` (`/auth/confirm#token_hash=...&type=invite`). Browsers never send that part to the web server, so the code does not reach Vercel or its request logs, and it is never included in a Referer header. A code in the query string (`?token_hash=`) is deliberately ignored, so a wrongly set up email template fails safely instead of leaking codes. The browser journey records every request Chromium sends and checks that the codes appear only in the body of the verification request to Supabase, and never in storage or the console.
+* **Remaining limit: browser history.** The page removes the code from the address bar and from this tab's Back and Forward history. The browser's own history list (and anything that syncs it) can still remember the original link. The code is only useful to someone with access to that browser, works once, stops working after one hour, and does nothing until Continue is pressed. A link checker that rewrites links in an email (for example a company mail filter) sees the full link, as it would with any email link; the Continue button stops it from using the code.
 * `vercel.json` adds a content security policy on `main` Preview builds: scripts only from this site, connections only to this site and the staging project, no framing. The `demo` branch keeps its own `vercel.json`.
 * The production demo is unaffected: it is built only from `demo`, has no Supabase values, and a `main` build on the production address shows only the sample tour.
 
@@ -196,7 +198,7 @@ None of these are changed until the founder approves each one:
 
 * Auth site URL and allowed redirect URLs (the `main` preview address and `/auth/confirm`).
 * Minimum password length of 10.
-* Invite and password reset email templates using token-hash links to `/auth/confirm` (see the validation below).
+* Invite and password reset email templates using token-hash links to `/auth/confirm`, with the code after `#` (see the validation below).
 * Captcha (Cloudflare Turnstile) for the request function.
 * The founder's own admin account, created once from the Supabase dashboard.
 * `SUPABASE_ACCESS_TOKEN` in the `staging` GitHub environment for function deploys. This token can reach every project in the Supabase organisation, so a future production project belongs in a separate organisation.

@@ -57,8 +57,27 @@ async function emailLink(email, type) {
 
 const cspViolations = []
 const verifyCalls = []
+// Every request Chromium actually puts on the wire (from its own network
+// layer), every console message, and every page's storage, so we can prove the
+// one-time codes go nowhere except the single verification request.
+const wire = []
+const consoleLines = []
+async function watchWire(page) {
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Network.enable')
+  cdp.on('Network.requestWillBeSent', ({ request }) => {
+    const referer = Object.entries(request.headers || {}).find(([k]) => k.toLowerCase() === 'referer')?.[1] || ''
+    wire.push({ method: request.method, url: request.url, referer, body: request.postData || '' })
+  })
+}
 async function newContext(browser) {
   const ctx = await browser.newContext()
+  const openPage = ctx.newPage.bind(ctx)
+  ctx.newPage = async () => {
+    const page = await openPage()
+    await watchWire(page)
+    return page
+  }
   await ctx.route(`${APP}/**`, async (route) => {
     const res = await route.fetch()
     const headers = { ...res.headers() }
@@ -74,6 +93,7 @@ async function newContext(browser) {
     if (r.url().startsWith(`${API}/auth/v1/verify`)) verifyCalls.push(r.method())
   })
   ctx.on('console', (m) => {
+    consoleLines.push(m.text())
     if (/Content Security Policy/i.test(m.text())) cspViolations.push(m.text())
   })
   return ctx
@@ -88,6 +108,8 @@ async function signIn(page, email, password, next = '') {
   await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Sign in' }).click()
 }
+const storedText = (page) => page.evaluate(() => JSON.stringify([{ ...localStorage }, { ...sessionStorage }, document.cookie]))
+const codeOf = (link) => new URLSearchParams(new URL(link).hash.slice(1)).get('token_hash') || ''
 const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('sb-')))
 
 ;(async () => {
@@ -100,6 +122,7 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
   })
   try {
     const emailA = `founder-${RUN}@example.test`
+    let resetCode = ''
 
     // 1. Signed-out visitors are sent to sign in; there is no sign-up.
     {
@@ -123,7 +146,8 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
     // 2. Invitation email points at our Continue page.
     await admin('/auth/v1/invite', { email: emailA })
     const inviteLink = await emailLink(emailA, 'invite')
-    check('invitation link opens /auth/confirm with a one-time code', inviteLink.startsWith(`${APP}/auth/confirm?token_hash=`) && inviteLink.includes('type=invite'), inviteLink.replace(/token_hash=[^&]+/, 'token_hash=…'))
+    check('invitation link carries the one-time code after # (never sent to the web server)', inviteLink.startsWith(`${APP}/auth/confirm#token_hash=`) && inviteLink.includes('type=invite') && !inviteLink.includes('?'), inviteLink.replace(/token_hash=[^&]+/, 'token_hash=…'))
+    const inviteCode = codeOf(inviteLink)
 
     // 3. Email scanners: fetching the link, or opening it without pressing Continue, uses nothing.
     {
@@ -131,11 +155,22 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
       check('a scanner fetching the link gets the page and nothing else', r.status === 200)
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
+      // An old-style link with the code in the query string is ignored.
+      await page.goto(`${APP}/auth/confirm?token_hash=query-string-code-0123456789&type=invite`)
+      await page.getByText('Open the link from your email').waitFor()
+      check('a code in the query string (?) is ignored and removed', page.url() === `${APP}/auth/confirm` && !(await page.getByRole('button', { name: 'Continue' }).isVisible()))
+      await page.goto(`${APP}/sign-in`)
       await page.goto(inviteLink)
       await page.getByRole('button', { name: 'Continue' }).waitFor()
       await sleep(2500)
       check('opening the link without pressing Continue sends nothing to Supabase', verifyCalls.length === 0, `${verifyCalls.length} verify calls`)
       check('the one-time code is removed from the address bar', page.url() === `${APP}/auth/confirm`, page.url())
+      check('the one-time code is not kept in browser storage or cookies', !(await storedText(page)).includes(inviteCode))
+      await page.goBack()
+      const back = page.url()
+      await page.goForward()
+      await page.getByText('Open the link from your email').waitFor()
+      check('Back and Forward never bring the code back', back === `${APP}/sign-in` && page.url() === `${APP}/auth/confirm`, `${back} then ${page.url()}`)
       check('the invitation is still unused afterwards', userBy(emailA).split('|')[1] === '' && profileCount(emailA) === 0)
       await collectCsp(page)
       await ctx.close()
@@ -231,12 +266,14 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
       }
       check('reset gives the same message for unknown and real emails', messages[0] === messages[1], messages[0].slice(0, 50))
       const resetLink = await emailLink(emailA, 'recovery')
-      check('reset link opens /auth/confirm with a one-time code', resetLink.startsWith(`${APP}/auth/confirm?token_hash=`))
+      check('reset link carries the one-time code after # (never sent to the web server)', resetLink.startsWith(`${APP}/auth/confirm#token_hash=`) && !resetLink.includes('?'))
+      resetCode = codeOf(resetLink)
       const before = verifyCalls.length
       await page.goto(resetLink)
       await page.getByRole('button', { name: 'Continue' }).waitFor()
       await sleep(1000)
       check('opening the reset link sends nothing until Continue', verifyCalls.length === before)
+      check('the reset code is not kept in browser storage or cookies', !(await storedText(page)).includes(resetCode))
       await page.getByRole('button', { name: 'Continue' }).click()
       await page.waitForURL(`${APP}/auth/set-password`)
       check('reset asks for a new password', await page.getByRole('heading', { name: 'Choose a new password' }).isVisible())
@@ -312,6 +349,30 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
     }
 
     check('no security policy violations on any page', cspViolations.length === 0, cspViolations.slice(0, 3).join(' | '))
+
+    // 13. Where did the one-time codes go? Only into the body of the single
+    // verification request to Supabase each time Continue was pressed: never
+    // into an address sent to the web server, a Referer header, a request to
+    // any other site, the console, or storage (checked above).
+    {
+      const codes = [inviteCode, resetCode]
+      check('both one-time codes were captured for the leak checks', codes.every((c) => c.length >= 16))
+      const has = (text) => codes.some((c) => text.includes(c))
+      const toSite = wire.filter((w) => w.url.startsWith(APP))
+      const toSupabase = wire.filter((w) => w.url.startsWith(API))
+      const elsewhere = wire.filter((w) => !w.url.startsWith(APP) && !w.url.startsWith(API) && !w.url.startsWith('data:'))
+      check('control: the recorder does see a code placed in an address (the old ? style)', toSite.some((w) => w.url.includes('query-string-code-0123456789')))
+      check('requests to the web server never contain a code', toSite.length > 20 && !toSite.some((w) => has(w.url) || has(w.body)), `${toSite.length} requests`)
+      check('no Referer header ever contains a code', !wire.some((w) => has(w.referer)), `${wire.length} requests`)
+      check('requests to other sites (fonts) never contain a code', !elsewhere.some((w) => has(w.url) || has(w.body) || has(w.referer)), `${elsewhere.length} requests`)
+      const carrying = toSupabase.filter((w) => has(w.body) || has(w.url))
+      check(
+        'Supabase receives a code only in the body of a POST to /auth/v1/verify',
+        carrying.length >= 2 && carrying.every((w) => w.method === 'POST' && new URL(w.url).pathname === '/auth/v1/verify' && !has(w.url)),
+        carrying.map((w) => `${w.method} ${new URL(w.url).pathname}`).join(', '),
+      )
+      check('no console message contains a code', !consoleLines.some(has), `${consoleLines.length} messages`)
+    }
     await ctxA.close()
   } catch (e) {
     failures++

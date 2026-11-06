@@ -41,16 +41,21 @@ function makeClient({ session = null as unknown, profile = { id: 'user-1', creat
 }
 
 let where = ''
+function splitPath(path: string) {
+  const [beforeHash, hash = ''] = path.split('#')
+  const [pathname, search = ''] = beforeHash.split('?')
+  return { pathname, search: search ? `?${search}` : '', hash: hash ? `#${hash}` : '' }
+}
 function WhereAmI() {
   const l = useLocation()
-  where = l.pathname + l.search
+  where = l.pathname + l.search + l.hash
   return null
 }
 
 function renderAt(path: string, client: Fake | null, state?: unknown) {
   return render(
     <AuthProvider client={client as unknown as SupabaseClient | null}>
-      <MemoryRouter initialEntries={[{ pathname: path.split('?')[0], search: path.includes('?') ? `?${path.split('?')[1]}` : '', state }]}>
+      <MemoryRouter initialEntries={[{ ...splitPath(path), state }]}>
         <PublicRoutes />
         <WhereAmI />
       </MemoryRouter>
@@ -66,18 +71,27 @@ afterEach(() => cleanup())
 
 describe('email links (/auth/confirm)', () => {
   it('reads only invite and recovery links with a plausible code', () => {
-    expect(readEmailLink(`?token_hash=${TOKEN}&type=invite`)).toEqual({ tokenHash: TOKEN, type: 'invite' })
-    expect(readEmailLink(`?token_hash=${TOKEN}&type=recovery`)?.type).toBe('recovery')
-    expect(readEmailLink(`?token_hash=${TOKEN}&type=signup`)).toBeNull()
-    expect(readEmailLink(`?token_hash=${TOKEN}&type=magiclink`)).toBeNull()
-    expect(readEmailLink('?token_hash=short&type=invite')).toBeNull()
-    expect(readEmailLink(`?token_hash=${TOKEN}<script>&type=invite`)).toBeNull()
+    expect(readEmailLink(`#token_hash=${TOKEN}&type=invite`)).toEqual({ tokenHash: TOKEN, type: 'invite' })
+    expect(readEmailLink(`#token_hash=${TOKEN}&type=recovery`)?.type).toBe('recovery')
+    expect(readEmailLink(`#token_hash=${TOKEN}&type=signup`)).toBeNull()
+    expect(readEmailLink(`#token_hash=${TOKEN}&type=magiclink`)).toBeNull()
+    expect(readEmailLink('#token_hash=short&type=invite')).toBeNull()
+    expect(readEmailLink(`#token_hash=${TOKEN}<script>&type=invite`)).toBeNull()
     expect(readEmailLink('')).toBeNull()
+  })
+
+  it('ignores a code sent in the query string (it would reach the server) and removes it from the address', async () => {
+    const client = makeClient()
+    renderAt(`/auth/confirm?token_hash=${TOKEN}&type=invite`, client)
+    expect(await screen.findByText('Open the link from your email')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    await waitFor(() => expect(where).toBe('/auth/confirm'))
+    expect(client.auth.verifyOtp).not.toHaveBeenCalled()
   })
 
   it('does nothing until Continue is pressed (protects against email scanners), and removes the code from the address', async () => {
     const client = makeClient()
-    renderAt(`/auth/confirm?token_hash=${TOKEN}&type=invite`, client)
+    renderAt(`/auth/confirm#token_hash=${TOKEN}&type=invite`, client)
     expect(await screen.findByRole('button', { name: 'Continue' })).toBeTruthy()
     expect(screen.getByText('Welcome to Crevant')).toBeTruthy()
     await waitFor(() => expect(where).toBe('/auth/confirm'))
@@ -87,7 +101,7 @@ describe('email links (/auth/confirm)', () => {
 
   it('verifies the code on Continue and moves on to choosing a password', async () => {
     const client = makeClient()
-    renderAt(`/auth/confirm?token_hash=${TOKEN}&type=invite`, client)
+    renderAt(`/auth/confirm#token_hash=${TOKEN}&type=invite`, client)
     fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(client.auth.verifyOtp).toHaveBeenCalledWith({ token_hash: TOKEN, type: 'invite' }))
     act(() => client.emit('SIGNED_IN', SESSION))
@@ -97,7 +111,7 @@ describe('email links (/auth/confirm)', () => {
   it('explains an expired or used link without retrying', async () => {
     const client = makeClient()
     client.auth.verifyOtp.mockResolvedValueOnce({ data: { session: null }, error: { code: 'otp_expired', status: 403 } } as never)
-    renderAt(`/auth/confirm?token_hash=${TOKEN}&type=recovery`, client)
+    renderAt(`/auth/confirm#token_hash=${TOKEN}&type=recovery`, client)
     fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     expect(await screen.findByText(/This link has expired or was already used/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()

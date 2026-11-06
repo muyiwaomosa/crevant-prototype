@@ -54,6 +54,7 @@ describe('after sign-in, only pages on this site', () => {
     ['/%0d%0aSet-Cookie', '/%0d%0aSet-Cookie'],
     ['/sign-in', '/app'],
     ['/auth/confirm?token_hash=x', '/app'],
+    ['/auth/confirm#token_hash=x', '/app'],
     ['/auth/set-password', '/auth/set-password'],
     ['/' + 'a'.repeat(600), '/app'],
   ])('%s goes to %s', (input, expected) => {

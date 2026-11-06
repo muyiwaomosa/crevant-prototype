@@ -7,9 +7,18 @@ import { AuthCard, Message, Unavailable } from './AuthUi'
 export type EmailLinkType = 'invite' | 'recovery'
 export type EmailLink = { tokenHash: string; type: EmailLinkType }
 
-/** Reads the one-time code from an invitation or reset email link. */
-export function readEmailLink(search: string): EmailLink | null {
-  const params = new URLSearchParams(search)
+/**
+ * Reads the one-time code from an invitation or reset email link.
+ *
+ * The code travels in the fragment (the part after #), for example
+ * /auth/confirm#token_hash=...&type=invite. Browsers never send the fragment
+ * to the web server, so the code does not reach Vercel or its request logs,
+ * and it is never included in a Referer header. A code in the query string
+ * (?token_hash=) is deliberately ignored, so a misconfigured email template
+ * fails safely instead of leaking codes to the server.
+ */
+export function readEmailLink(hash: string): EmailLink | null {
+  const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash)
   const tokenHash = params.get('token_hash') ?? ''
   const type = params.get('type')
   if (!/^[A-Za-z0-9_-]{16,256}$/.test(tokenHash)) return null
@@ -22,20 +31,21 @@ export function readEmailLink(search: string): EmailLink | null {
  *
  * Protection against email scanners: opening this page does nothing. The
  * one-time code is only sent to Supabase when a person presses Continue.
- * The code is removed from the address bar straight away, so it is not
- * left in browser history.
+ * The code is removed from the address bar straight away, so it is not left
+ * in this tab's back and forward history. (The browser's own history list can
+ * still remember the original link; see docs/PHASE-1A.md.)
  */
 export function ConfirmPage() {
   const { client, status } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   // Read once, before the address bar is cleaned.
-  const [link] = useState<EmailLink | null>(() => readEmailLink(location.search))
+  const [link] = useState<EmailLink | null>(() => readEmailLink(location.hash))
   const [state, setState] = useState<'ready' | 'verifying' | 'verified' | 'expired' | 'failed'>('ready')
 
   useEffect(() => {
-    if (location.search) navigate('/auth/confirm', { replace: true })
-  }, [location.search, navigate])
+    if (location.search || location.hash) navigate('/auth/confirm', { replace: true })
+  }, [location.search, location.hash, navigate])
 
   // Move on only once the new sign-in is registered, so the password page
   // never sees a signed-out visitor.
