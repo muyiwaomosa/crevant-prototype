@@ -46,6 +46,14 @@ async function pngBuffer(page, w, h) {
   return Buffer.from(b64, 'base64')
 }
 
+// A finished navigation doesn't mean the page has rendered. Wait (up to 5 s)
+// for at least `min` matches, then return the real count. A missing element
+// still fails the check, because the count is unchanged.
+async function countWhenReady(locator, min = 1, timeout = 5000) {
+  await locator.nth(min - 1).waitFor({ state: 'attached', timeout }).catch(() => {})
+  return locator.count()
+}
+
 ;(async () => {
   const browser = await chromium.launch()
   const errors = []
@@ -118,7 +126,7 @@ async function pngBuffer(page, w, h) {
   await page.goto(BASE + '/discover')
   await page.getByRole('button', { name: 'Follow Theo Lindqvist' }).click()
   await page.goto(BASE + '/')
-  check('newly followed account appears in Home', (await page.getByText('Day 4 on the Kungsleden').count()) === 1)
+  check('newly followed account appears in Home', (await countWhenReady(page.getByText('Day 4 on the Kungsleden'))) === 1)
   const times = await page.locator('article time').evaluateAll((els) => els.map((e) => Date.parse(e.getAttribute('datetime'))))
   check('feed is newest first', times.length > 5 && times.every((t, i) => i === 0 || times[i - 1] >= t), `${times.length} posts`)
 
@@ -128,7 +136,7 @@ async function pngBuffer(page, w, h) {
   await page.fill('#post-text', 'First post from the unified Create page.')
   await page.getByRole('button', { name: 'Publish' }).click()
   await page.waitForURL(/\/profile/)
-  check('published post appears on the profile', (await page.getByText('First post from the unified Create page.').count()) === 1)
+  check('published post appears on the profile', (await countWhenReady(page.getByText('First post from the unified Create page.'))) === 1)
   await page.goto(BASE + '/')
   check('published post is first in the Home feed', (await page.locator('article').first().innerText()).includes('First post from the unified Create page.'))
   check('following still works after publishing', (await stored(page)).following.includes('theo'))
@@ -152,7 +160,7 @@ async function pngBuffer(page, w, h) {
   const av = s.profile.avatar
   check('picture persists after refresh', !!av && (await page.locator(`img[src="${av}"]`).count()) >= 1)
   await page.goto(BASE + '/')
-  check('picture shows on your post in the feed', (await page.locator(`img[src="${av}"]`).count()) >= 2, 'share prompt and post')
+  check('picture shows on your post in the feed', (await countWhenReady(page.locator(`img[src="${av}"]`), 2)) >= 2, 'share prompt and post')
   await shot(page, 'profile-feed')
 
   // ---- 6. Engage and earn with another account ----------------------------
@@ -213,7 +221,7 @@ async function pngBuffer(page, w, h) {
   await page.fill('textarea', 'A signed sketch from my travel notebook.')
   await page.getByRole('button', { name: 'Create reward' }).click()
   await page.goto(BASE + '/rewards?scope=all&creator=me')
-  check('your reward is listed under your name, not redeemable by you', (await page.getByText('Signed sketch').count()) >= 1 && (await page.getByText('Your reward').count()) >= 1)
+  check('your reward is listed under your name, not redeemable by you', (await countWhenReady(page.getByText('Signed sketch'))) >= 1 && (await page.getByText('Your reward').count()) >= 1)
   await shot(page, 'tools')
 
   // ---- Redirects and broken links -----------------------------------------
@@ -234,12 +242,14 @@ async function pngBuffer(page, w, h) {
   const hrefs = new Set()
   for (const p of pages) {
     await page.goto(BASE + p)
+    await page.locator('main').first().waitFor()
     for (const h of await page.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) hrefs.add(h.split('#')[0])
   }
   const broken = []
   for (const h of hrefs) {
     // Rendered links are absolute and already include any prefix.
     await page.goto(new URL(h, BASE).href)
+    await page.locator('main').first().waitFor()
     if ((await page.getByText('Page not found').count()) > 0 || (await page.getByText('Creator not found').count()) > 0 || (await page.getByText('Post not found').count()) > 0) broken.push(h)
   }
   check(`no broken internal links (${hrefs.size} checked)`, broken.length === 0, broken.join(', '))
@@ -267,9 +277,14 @@ async function pngBuffer(page, w, h) {
   }
   check('keyboard reaches every main nav item in order', ['Home', 'Discover', 'Create', 'Rewards', 'Profile'].every((l) => reached.includes(l)), reached.join(' | '))
   await desk.goto(BASE + '/create')
+  // Wait for the page (and its skip link) to render before pressing Tab, and
+  // give the focus move up to 2 s. The focus must still end on the main content.
+  await desk.getByRole('link', { name: 'Skip to content' }).waitFor({ state: 'attached' })
   await desk.keyboard.press('Tab')
   await desk.keyboard.press('Enter')
-  check('skip link moves focus to the main content', (await desk.evaluate(() => document.activeElement?.id)) === 'main')
+  await desk.waitForFunction(() => document.activeElement?.id === 'main', null, { timeout: 2000 }).catch(() => {})
+  const focused = await desk.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)
+  check('skip link moves focus to the main content', focused === 'main', focused)
   await shot(desk, 'desktop-home')
   await desk.goto(BASE + '/profile')
   await shot(desk, 'desktop-profile')
