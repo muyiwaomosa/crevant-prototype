@@ -68,7 +68,7 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
       await page.goto(BASE + '/')
       check('landing headline', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ') === "You don't need a million followers. You need the right 1,000.")
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check('all sections in the approved order', ids === 'hero,why,vision,who,building,how,pilot,faq,cta', ids)
+      check('all sections in the approved order', ids === 'hero,why,who,what,how,cta', ids)
       // Every tour screenshot loads (lazy images included) and is labelled as sample data.
       for (const fig of await page.locator('figure[data-screenshot]').all()) {
         await fig.scrollIntoViewIfNeeded()

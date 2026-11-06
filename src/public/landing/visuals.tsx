@@ -1,132 +1,110 @@
 import clsx from 'clsx'
-import type { ReactNode } from 'react'
-import { Eye, HeartHandshake, PenLine, Sprout, Users } from 'lucide-react'
-import { StatusBadge, type Status } from './shared'
+import { ArrowRight, Clock3, Shuffle } from 'lucide-react'
 
-// Diagrams drawn in code. They illustrate ideas; none of them shows real data,
-// and none of them compares income.
+// Illustrations drawn in code. They explain ideas; none of them shows real
+// data, and none of them promises reach or income.
 
-/** A deterministic scatter of faint dots: many people passing by. */
-function PassingDots() {
-  // A fixed pseudo-random sequence, so the drawing is the same on every visit.
-  let seed = 7
-  const rand = () => {
-    seed = (seed * 16807) % 2147483647
-    return (seed - 1) / 2147483646
-  }
-  const dots = Array.from({ length: 140 }, () => ({ x: 2 + rand() * 96, y: 3 + rand() * 94, r: 0.8 + rand() * 0.9, o: 0.15 + rand() * 0.35 }))
+function FeedRow({ title, meta, muted }: { title: string; meta: string; muted?: boolean }) {
   return (
-    <svg viewBox="0 0 100 60" aria-hidden="true" className="h-32 w-full">
-      {dots.map((d, i) => (
-        <circle key={i} cx={d.x} cy={d.y * 0.6} r={d.r} className="fill-ink-400" opacity={d.o} />
-      ))}
-    </svg>
+    <li className={clsx('flex items-center gap-3 rounded-2xl px-3 py-2.5', muted ? 'bg-ink-50 text-ink-500' : 'bg-white text-ink-800 ring-1 ring-ink-100')}>
+      <span aria-hidden="true" className={clsx('h-8 w-8 shrink-0 rounded-full', muted ? 'bg-ink-200' : 'bg-gradient-to-br from-brand-400 to-brand-700')} />
+      <span className="min-w-0">
+        <span className="block truncate text-[14px] font-semibold">{title}</span>
+        <span className="block truncate text-[12px] text-ink-500">{meta}</span>
+      </span>
+    </li>
   )
 }
 
-/** A close circle of 100 connected dots: people who keep showing up. */
-function CircleDots() {
-  const dots = Array.from({ length: 100 }, (_, i) => {
-    const ring = i < 16 ? 12 : i < 44 ? 20 : 28
-    const inRing = i < 16 ? i : i < 44 ? i - 16 : i - 44
-    const count = i < 16 ? 16 : i < 44 ? 28 : 56
-    const a = (inRing / count) * Math.PI * 2 + ring
-    return { x: 50 + Math.cos(a) * ring * 1.15, y: 30 + Math.sin(a) * ring * 0.9 }
-  })
+/** Why: a feed ranked by predicted engagement next to a newest-first Following feed. */
+export function FeedComparison() {
   return (
-    <svg viewBox="0 0 100 60" aria-hidden="true" className="h-32 w-full">
-      {dots.slice(0, 16).map((d, i) => (
-        <line key={`l${i}`} x1={50} y1={30} x2={d.x} y2={d.y} className="stroke-brand-300" strokeWidth={0.3} />
-      ))}
-      {dots.map((d, i) => (
-        <circle key={i} cx={d.x} cy={d.y} r={1.25} className="fill-brand-600" />
-      ))}
-      <circle cx={50} cy={30} r={3.6} className="fill-spark-400" />
-    </svg>
-  )
-}
-
-export function AttentionAndRelationships() {
-  return (
-    <figure data-testid="attention-diagram" className="overflow-hidden rounded-[28px] bg-white ring-1 ring-ink-100">
+    <figure data-testid="feed-comparison" className="overflow-hidden rounded-[28px] bg-paper ring-1 ring-ink-100">
       <div className="grid sm:grid-cols-2">
-        <div className="border-b border-ink-100 p-6 sm:border-b-0 sm:border-r">
+        <div className="p-5 sm:border-r sm:border-ink-100">
           <p className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-ink-500">
-            <Eye className="h-4 w-4" aria-hidden="true" /> Attention
+            <Shuffle className="h-4 w-4" aria-hidden="true" /> A ranked feed
           </p>
-          <p className="mt-2 font-display text-2xl font-bold text-ink-900">100,000 views</p>
-          <PassingDots />
-          <p className="text-[15px] leading-relaxed text-ink-600">How many people see your work. It can be huge, and it can move on quickly.</p>
+          <ul aria-label="Example of a ranked feed" className="mt-3 space-y-2">
+            <FeedRow title="Suggested for you" meta="Picked for predicted engagement" muted />
+            <FeedRow title="Trending now" meta="From someone you don't follow" muted />
+            <FeedRow title="A creator you chose to follow" meta="Further down, if it appears" />
+          </ul>
         </div>
-        <div className="bg-brand-50/60 p-6">
+        <div className="border-t border-ink-100 bg-brand-50/60 p-5 sm:border-t-0">
           <p className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-brand-700">
-            <HeartHandshake className="h-4 w-4" aria-hidden="true" /> Relationships
+            <Clock3 className="h-4 w-4" aria-hidden="true" /> Crevant's Following feed
           </p>
-          <p className="mt-2 font-display text-2xl font-bold text-ink-900">100 people who value your work</p>
-          <CircleDots />
-          <p className="text-[15px] leading-relaxed text-ink-600">How many people trust you, recommend you and keep coming back.</p>
+          <ul aria-label="Example of the Crevant Following feed" className="mt-3 space-y-2">
+            <FeedRow title="A creator you follow" meta="2 minutes ago" />
+            <FeedRow title="Another creator you follow" meta="1 hour ago" />
+            <FeedRow title="A creator you follow" meta="3 hours ago" />
+          </ul>
         </div>
       </div>
-      <figcaption className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink-100 px-6 py-4 text-[14px] leading-relaxed text-ink-600">
-        <span className="rounded-full border border-dashed border-ink-300 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-500">Illustration</span>
-        Both matter, and neither one is a promise of income. Crevant is being built to help creators grow the second kind
-        alongside the first.
+      <figcaption className="border-t border-ink-100 px-5 py-3.5 text-[13px] leading-relaxed text-ink-500">
+        <span className="mr-2 rounded-full border border-dashed border-ink-300 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Illustration</span>
+        Ranked feeds differ from platform to platform. Crevant's Following feed is newest first. It isn't a promise that each post reaches each follower.
       </figcaption>
     </figure>
   )
 }
 
-const JOURNEY: Array<{ title: string; body: string; status: Status; icon: ReactNode }> = [
-  {
-    title: 'Create and share',
-    body: "Share what you know, what you've lived or what you love making. Start by creating value.",
-    status: 'pilot',
-    icon: <PenLine className="h-5 w-5" />,
-  },
-  {
-    title: 'Find your people',
-    body: "You don't need everyone. Find the people who genuinely appreciate what you bring.",
-    status: 'pilot',
-    icon: <Users className="h-5 w-5" />,
-  },
-  {
-    title: 'Build relationships',
-    body: "Grow a community where participation matters. We're testing ways to recognize consistent supporters.",
-    status: 'testing',
-    icon: <HeartHandshake className="h-5 w-5" />,
-  },
-  {
-    title: 'Grow toward opportunity',
-    body: 'Over time, tools to help strong communities become sustainable earning opportunities. Because creating value should open doors.',
-    status: 'vision',
-    icon: <Sprout className="h-5 w-5" />,
-  },
-]
-
-/** The journey from creating to opportunity, with each step's real status. */
-export function JourneyDiagram() {
+function Legend({ swatch, children }: { swatch: string; children: string }) {
   return (
-    <ol aria-label="The Crevant journey" data-testid="journey-diagram" className="relative grid gap-8 md:grid-cols-4 md:gap-4">
-      <div aria-hidden="true" className="absolute left-[12%] right-[12%] top-[34px] hidden h-0.5 bg-gradient-to-r from-brand-500 via-brand-300 to-ink-200 md:block" />
-      <div aria-hidden="true" className="absolute bottom-8 left-[33px] top-8 w-0.5 bg-gradient-to-b from-brand-500 via-brand-300 to-ink-200 md:hidden" />
-      {JOURNEY.map((step, i) => (
-        <li key={step.title} className="relative flex gap-4 md:flex-col md:items-center md:text-center">
-          <span
-            className={clsx(
-              'relative z-10 grid h-[68px] w-[68px] shrink-0 place-items-center rounded-full ring-4 ring-paper',
-              step.status === 'vision' ? 'border-2 border-dashed border-ink-300 bg-white text-ink-500' : 'bg-brand-600 text-white',
-            )}
-          >
-            {step.icon}
-            <span className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-ink-900 text-[12px] font-bold text-white">{i + 1}</span>
+    <li className="flex items-start gap-2.5 text-[14px] leading-snug text-ink-700">
+      <span aria-hidden="true" className={clsx('mt-0.5 h-3.5 w-3.5 shrink-0 rounded-[4px]', swatch)} />
+      {children}
+    </li>
+  )
+}
+
+/**
+ * What: the central visual. Today's creator economy as an upright pyramid
+ * next to Crevant's vision as an inverted one. Conceptual, not data.
+ */
+export function PyramidComparison() {
+  return (
+    <figure data-testid="pyramid-comparison" className="rounded-[32px] bg-white p-5 ring-1 ring-ink-100 sm:p-8">
+      <div className="grid items-start gap-8 md:grid-cols-[1fr_auto_1fr] md:gap-6">
+        <div data-pyramid="today">
+          <p className="text-center text-[12px] font-semibold uppercase tracking-wide text-ink-500">Today's creator economy</p>
+          <svg viewBox="0 0 200 160" role="img" aria-labelledby="pyr-today-title" className="mx-auto mt-3 w-full max-w-[300px]">
+            <title id="pyr-today-title">An upright pyramid: a small point at the top, a broad base at the bottom.</title>
+            <polygon points="100,6 121,40 79,40" className="fill-spark-400" />
+            <polygon points="79,40 121,40 194,156 6,156" className="fill-ink-200" />
+            <line x1="79" y1="40" x2="121" y2="40" className="stroke-white" strokeWidth="2" />
+          </svg>
+          <ul className="mx-auto mt-4 max-w-[300px] space-y-2">
+            <Legend swatch="bg-spark-400">Relatively few creators capture much of the income</Legend>
+            <Legend swatch="bg-ink-200">Many creators struggle to earn consistently</Legend>
+          </ul>
+        </div>
+
+        <div aria-hidden="true" className="flex items-center justify-center md:h-full md:pt-24">
+          <span className="inline-flex items-center gap-2 rounded-full bg-ink-900 px-4 py-2 text-[13px] font-semibold text-white">
+            Flip it <ArrowRight className="h-4 w-4 rotate-90 md:rotate-0" />
           </span>
-          <div className="min-w-0 md:mt-3">
-            <StatusBadge status={step.status} />
-            <p className="mt-2 font-display text-lg font-bold text-ink-900">{step.title}</p>
-            <p className="mt-1 text-[15px] leading-snug text-ink-600">{step.body}</p>
-          </div>
-        </li>
-      ))}
-    </ol>
+        </div>
+
+        <div data-pyramid="vision">
+          <p className="text-center text-[12px] font-semibold uppercase tracking-wide text-brand-700">Crevant's vision</p>
+          <svg viewBox="0 0 200 160" role="img" aria-labelledby="pyr-vision-title" className="mx-auto mt-3 w-full max-w-[300px]">
+            <title id="pyr-vision-title">An inverted pyramid: the wide side at the top, the point at the bottom.</title>
+            <polygon points="6,6 194,6 131,108 69,108" className="fill-brand-600" />
+            <polygon points="69,108 131,108 100,156" className="fill-ink-200" />
+            <line x1="69" y1="108" x2="131" y2="108" className="stroke-white" strokeWidth="2" />
+          </svg>
+          <ul className="mx-auto mt-4 max-w-[300px] space-y-2">
+            <Legend swatch="bg-brand-600">Sustainable earning opportunities for many more creators</Legend>
+            <Legend swatch="bg-ink-200">Fewer creators left without a way to earn from what they create</Legend>
+          </ul>
+        </div>
+      </div>
+      <figcaption className="mt-6 border-t border-ink-100 pt-4 text-center text-[13px] leading-relaxed text-ink-500">
+        <span className="mr-2 rounded-full border border-dashed border-ink-300 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Conceptual vision</span>
+        Not measured income data, and not a promise of any outcome.
+      </figcaption>
+    </figure>
   )
 }
