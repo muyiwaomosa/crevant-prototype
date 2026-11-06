@@ -63,7 +63,15 @@ async function comment(page, postId, text) {
   await page.waitForTimeout(150)
 }
 
-;(async () => {
+;// A finished navigation doesn't mean the page has rendered. Wait (up to 5 s)
+// for at least `min` matches, then return the real count. A missing element
+// still fails the check, because the count is unchanged.
+async function countWhenReady(locator, min = 1, timeout = 5000) {
+  await locator.nth(min - 1).waitFor({ state: 'attached', timeout }).catch(() => {})
+  return locator.count()
+}
+
+(async () => {
   const browser = await chromium.launch()
   const errors = []
   const ctx = await browser.newContext({ ...devices['iPhone 13'] })
@@ -82,6 +90,7 @@ async function comment(page, postId, text) {
   check('fresh demo starts with no CP', Object.keys(await balances(page)).length === 0)
 
   // ---- Journey 1: chronological home feed --------------------------------
+  await countWhenReady(page.locator('article time'), 6)
   const times = await page.locator('article time').evaluateAll((els) => els.map((e) => Date.parse(e.getAttribute('datetime'))))
   check('home feed is newest first', times.length > 5 && times.every((t, i) => i === 0 || times[i - 1] >= t), `${times.length} posts`)
   check('no daily check in card any more', (await page.getByText('Daily check in').count()) === 0)
@@ -220,7 +229,7 @@ async function comment(page, postId, text) {
   await page.reload()
   check('balances survive a refresh', JSON.stringify(await balances(page)) === snapshot)
   await page.goto(BASE + '/rewards?tab=history')
-  check('reward history survives a refresh', (await page.getByText('Family recipe card: slow jollof').count()) >= 1)
+  check('reward history survives a refresh', (await countWhenReady(page.getByText('Family recipe card: slow jollof'))) >= 1)
 
   await page.goto(BASE + '/points')
   await page.getByText('This total cannot be spent.').waitFor()
@@ -231,7 +240,7 @@ async function comment(page, postId, text) {
   await page.goto(BASE + '/discover')
   await page.getByRole('button', { name: 'Follow Hana Sato' }).click()
   await page.goto(BASE + '/')
-  check('following from Discover updates the feed', (await page.getByText('The Memory Police').count()) === 1)
+  check('following from Discover updates the feed', (await countWhenReady(page.getByText('The Memory Police'))) === 1)
   await page.goto(BASE + '/create')
   await page.fill('#post-text', 'Release 1 test post from the studio.')
   await page.getByRole('button', { name: 'Publish' }).click()
@@ -256,7 +265,7 @@ async function comment(page, postId, text) {
   await page.getByRole('button', { name: 'Save picture' }).click()
   const av = (await stored(page)).profile.avatar
   check('saved picture is a small square JPEG', av?.startsWith('data:image/jpeg') && av.length < 200000, `${av?.length} chars`)
-  const imgCount = async () => page.locator(`img[src="${av}"]`).count()
+  const imgCount = async () => countWhenReady(page.locator(`img[src="${av}"]`))
   check('picture shows on the fan profile', (await imgCount()) >= 1)
   await page.goto(BASE + '/')
   check('picture shows on your posts in the feed', (await imgCount()) >= 1)
@@ -267,7 +276,7 @@ async function comment(page, postId, text) {
   await page.reload()
   check('picture persists after refresh', (await imgCount()) >= 1)
   await page.goto(BASE + '/profile/tools')
-  check('creator tools page loads with the picture available on profile', (await page.getByRole('heading', { name: 'Creator tools' }).count()) === 1)
+  check('creator tools page loads with the picture available on profile', (await countWhenReady(page.getByRole('heading', { name: 'Creator tools' }))) === 1)
   // Creator side: create a reward and see the picture on the rewards page.
   await page.goto(BASE + '/profile/tools')
   await page.fill('input[placeholder^="e.g."]', 'Signed sketchbook page')
