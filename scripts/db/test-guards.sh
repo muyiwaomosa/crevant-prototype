@@ -102,5 +102,31 @@ else
   echo "FAIL  start-up script no longer reserves ports or starts Supabase in more than one place"; failed=$((failed+1))
 fi
 
+# Staging test-account workflow: main only, staging environment with approval,
+# the one approved project, only the expected secrets, and never a local or
+# other target.
+ta=.github/workflows/staging-test-accounts.yml
+ta_ok=1; ta_why=""
+grep -qx "on:" "$ta" && grep -q "^  workflow_dispatch:" "$ta" && [ "$(grep -cE '^  (push|pull_request|schedule|workflow_run|repository_dispatch):' "$ta")" = 0 ] || { ta_ok=0; ta_why="$ta_why manual-trigger-only"; }
+grep -q "if: github.ref == 'refs/heads/main'$" "$ta" || { ta_ok=0; ta_why="$ta_why main-only"; }
+grep -q "^    environment: staging$" "$ta" || { ta_ok=0; ta_why="$ta_why staging-environment"; }
+grep -q "^  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn$" "$ta" || { ta_ok=0; ta_why="$ta_why hard-coded-project"; }
+grep -q "TEST_ACCOUNTS_LOCAL_API_URL" "$ta" && { ta_ok=0; ta_why="$ta_why no-local-target"; }
+[ "$(grep -oE 'secrets\.[A-Z_]+' "$ta" | sort -u | paste -sd, -)" = "secrets.STAGING_SERVICE_ROLE_KEY,secrets.STAGING_TEST_ACCOUNT_EMAILS,secrets.STAGING_TEST_ACCOUNT_PASSWORD" ] || { ta_ok=0; ta_why="$ta_why expected-secrets-only"; }
+grep -nE 'secrets\.' "$ta" | grep -vE '^[0-9]+:          STAGING_[A-Z_]+: \$\{\{ secrets\.STAGING_[A-Z_]+ \}\}$' | grep -q . && { ta_ok=0; ta_why="$ta_why secrets-only-as-step-env"; }
+grep -qE '^        default: plan$' "$ta" && [ "$(grep -cE '^          - (plan|create|delete)$' "$ta")" = 3 ] || { ta_ok=0; ta_why="$ta_why modes"; }
+grep -lE 'STAGING_SERVICE_ROLE_KEY|STAGING_TEST_ACCOUNT' .github/workflows/*.yml | grep -vq "staging-test-accounts.yml" && { ta_ok=0; ta_why="$ta_why key-used-elsewhere"; }
+if [ $ta_ok = 1 ]; then
+  echo "PASS  staging test-account workflow: manual, main only, approval-gated, one project, expected secrets only"; pass=$((pass+1))
+else
+  echo "FAIL  staging test-account workflow guard:$ta_why"; failed=$((failed+1))
+fi
+if grep -q "MODE: \${{ inputs.mode }}" "$ta" && grep -q "if (env.GITHUB_ACTIONS === 'true' && env.SUPABASE_PROJECT_REF) refuse" scripts/staging-test-accounts.mjs \
+   && grep -q "if (!(await api.signupDisabled())) refuse('Public sign-up is enabled on this project" scripts/staging-test-accounts.mjs; then
+  echo "PASS  test-account script refuses local targets in staging runs and refuses while sign-up is enabled"; pass=$((pass+1))
+else
+  echo "FAIL  test-account script lost a refusal (local target in staging, or sign-up enabled)"; failed=$((failed+1))
+fi
+
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]
