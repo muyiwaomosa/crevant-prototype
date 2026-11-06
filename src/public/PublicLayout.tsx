@@ -35,7 +35,7 @@ export function PublicLayout() {
             {/* Wrappers control visibility: the button classes set their own display. */}
             <span className="hidden sm:contents">
               <a href={TOUR_BASE} className={buttonClass('ghost', 'sm')}>
-                Take the tour
+                Explore Crevant
               </a>
             </span>
             {signedIn ? (
@@ -71,7 +71,7 @@ export function PublicLayout() {
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-ink-600">
             <a href={TOUR_BASE} className="hover:text-ink-900">
-              Take the tour
+              Explore Crevant
             </a>
             <Link to="/request-invite" className="hover:text-ink-900">
               Request an invitation
