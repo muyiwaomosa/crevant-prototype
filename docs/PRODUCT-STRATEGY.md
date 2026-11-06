@@ -1,149 +1,236 @@
 # Crevant product strategy: creator income and the Creator Loyalty Network
 
-**Status: proposed, for the founder's approval.** This records an evolution in product strategy and how it affects the pilot. Nothing here is approved for implementation. The loyalty model, payments, subscriptions, memberships and advertising systems are not being built until each is separately approved.
+**Status: roadmap direction approved in principle by the founder; details below are proposals awaiting approval.** Nothing here is approved for implementation. The loyalty experiment, payments, recurring support and advertising partnerships are built only after each is separately approved. **All timelines and costs in this document are preliminary estimates.**
 
 Related: `docs/PHASE-1A.md` (positioning, supporter definitions, pilot economics), `docs/BETA-MIGRATION-PLAN.md` on PR #4 (original pilot plan).
 
-## 1. Long-term economic goal
+## 1. Long-term economic objective
 
-**At least 25% of active creators earn US$5,000 or more per month through Crevant**, primarily from recurring fan support and creator advertising partnerships.
+**At least 25% of eligible active creators earn US$5,000 or more per month in net creator earnings through Crevant, sustained for three consecutive months.**
 
-This is an internal, long-term goal. It must never appear as a claim or promise on the landing page or in marketing. The landing page copy rules in `docs/PHASE-1A.md` (no earnings figures, no promised living) still apply.
+This is an internal, long-term objective. It must never appear as a claim or promise on the landing page or in marketing; the copy rules in `docs/PHASE-1A.md` still apply.
 
-Definitions to agree before any reporting against the goal:
+### What counts as earnings
 
-* **Active creator:** proposed as an account that published at least 4 posts in the last 30 days and has at least one Active Supporter. Internal accounts excluded.
-* **Earns through Crevant:** creator net receipts after payment processing fees and any platform fee, in USD, for money that flowed through Crevant (recurring support, one-time support, advertising partnerships brokered or paid through Crevant). Income earned elsewhere does not count.
-* **Per month:** a calendar month, and separately a trailing 3-month average so one-off spikes don't count as reaching the goal.
+**Net creator earnings** are measured **after** Crevant platform fees and payment provider fees (processing, recurring billing, payout and dispute fees), and **before** the creator's personal taxes and business expenses. Refunds and lost disputes are deducted in the month they occur. Only money that flows through Crevant counts: recurring support, one-time support, and advertising partnerships brokered or paid through Crevant. Hypothetical Support Intent never counts. Connection Points are never money and never count.
 
-**Planning arithmetic (internal only, assumptions to validate):** $5,000 a month net from recurring support alone means roughly 600 supporters paying about $10 a month, or about 1,200 paying about $5, before fees. Card fees take a much larger share of small payments, so very small tiers make the goal harder. This is consistent with "the right 1,000" only if a large share of a creator's committed supporters pay every month, which is far above what most creator platforms see today. Advertising partnerships are therefore an important second source, not an extra. The goal is deliberately ambitious, and the 60-day pilot cannot validate it: it can only measure the leading indicators in section 5.
+### Who is an eligible active creator (proposed, for approval)
 
-## 2. The Creator Loyalty Network (hypotheses to test)
+A creator counts as an **eligible active creator** for a three-month measurement window when all of these are true for every month in the window:
 
-| Element | Proposed behaviour | Status |
+1. The account existed for the whole window, and is not internal, suspended or banned.
+2. They published at least 4 posts in the month.
+3. They had at least 1 Active Supporter (definition in `docs/PHASE-1A.md`) in the month.
+4. They had completed creator verification with the payment provider, so they were able to receive money.
+
+The definition is versioned. Any change is recorded with its date and reason, and earlier results are never quietly recalculated under a new definition.
+
+### Reporting rule
+
+Every report shows the result for **eligible active creators** and also for **all active creators** (published at least once in the month) and **all creators**, with each group's size. That way the eligibility rules cannot make the result look better than it is.
+
+### Planning arithmetic (internal only, assumptions to validate)
+
+$5,000 a month net from recurring support alone needs roughly 600 supporters paying about $10 a month, or about 1,200 paying about $5, before fees. Fees take a larger share of small payments. This fits "the right 1,000" only if a large share of a creator's committed supporters pay every month, far above what most creator platforms see today, so advertising partnerships are an important second source. The 60-day pilot cannot validate the objective; it measures the leading indicators in section 6.
+
+## 2. Financial reporting definitions
+
+Every financial report keeps these lines separate and never adds across them unless the line says so. All amounts are stored in integer minor units with a currency code; reporting is in USD.
+
+| Line | Definition |
+| --- | --- |
+| **Gross supporter contributions** | Everything supporters paid (recurring and one-time), before any fee, refund or dispute |
+| Refunds and disputes | Refunded amounts and disputes lost, shown separately and deducted below |
+| Payment provider fees | Processing, recurring billing, payout and dispute fees charged by the payment provider |
+| **Crevant revenue** | Money Crevant keeps: platform fees on support, any commission on advertising partnerships, and in future, membership fees. Proposed 0% platform fee and 0% commission during the pilot |
+| **Net creator earnings from support** | Gross supporter contributions minus refunds, lost disputes, payment provider fees and Crevant's platform fee |
+| **Creator advertising revenue** | Value of advertising partnerships to the creator: the gross deal value, and the creator's net share after any Crevant commission and fees |
+| **Total net creator earnings** | Net creator earnings from support plus the creator's net advertising revenue. This is the figure used for the long-term objective |
+| Hypothetical Support Intent | Stated, nonbinding amounts. Reported in a separate section, clearly labelled, and never added to any line above |
+
+Connection Points appear in no financial report.
+
+## 3. The Creator Loyalty Network
+
+| Element | Behaviour | Status |
 | --- | --- | --- |
 | Unlimited following | Anyone can follow and interact with any number of creators | Current model |
-| **Core 10** | Free users choose 10 creators from whom they earn Connection Points | Hypothesis |
-| **Discovery Slots** | Temporary slots to earn CP with emerging creators without replacing a Core 10 choice | Hypothesis |
-| **Paid expansion** | An optional paid membership raises the number of creators a user can earn CP with | Hypothesis |
+| **Core 10** | Users choose a set number of creators from whom they earn Connection Points | **Pilot experiment** (section 5) |
+| **Discovery Slots** | Temporary slots to earn CP with emerging creators without replacing a core choice | **Pilot experiment** (section 5) |
+| Paid expansion | An optional paid membership raises the number of creators a user can earn CP with | Hypothesis, after the pilot |
 | CP rules | Creator-specific, noncash, nontransferable | Unchanged and non-negotiable |
-| Financial support | Voluntary, recurring, and completely separate from CP | Unchanged principle |
+| Financial support | Voluntary, recurring, and completely separate from CP and from Support Intent | Unchanged principle |
 
-The 10-slot limit, the discovery mechanism and paid expansion are hypotheses, not requirements. The reasoning to test: a limit makes a user's choice meaningful, concentrates loyalty on fewer creators (deeper relationships), and gives CP signal value. Discovery Slots protect emerging creators from a closed market where everyone's slots are already full.
+Core 10 and Discovery Slots are tested as an experiment, not adopted as permanent product rules.
 
-**Open questions and risks to resolve before any implementation:**
+**Open questions before any permanent adoption:**
 
-1. **Paid expansion and "CP can't be bought".** Paying for more slots buys the ability to earn CP with more creators, not CP itself. That distinction must hold in the design (no purchase ever mints CP) and should be reviewed by a lawyer for loyalty programme and consumer protection rules in Canada and the US.
-2. **What happens to CP when a creator leaves someone's Core 10.** Proposed default: the balance stays redeemable with that creator, and only new earning stops. Swaps have a cooldown so slots can't be rotated to farm points.
-3. **Effect on emerging creators.** If established creators fill most slots, new creators may struggle. Discovery Slots are the mitigation, and their effect must be measured.
-4. **Effect on engagement.** Users may engage less with creators outside their Core 10. The pilot should compare depth and breadth, not assume the limit is better.
-5. **App stores.** If Crevant later ships native apps, paid membership may fall under in-app purchase rules and fees. The web-only pilot avoids this.
+1. **Paid expansion and "CP can't be bought".** A purchase may only change how many creators a user can earn with. No purchase ever creates CP. Lawyer review for loyalty programme and consumer protection rules in Canada and the US before it is offered.
+2. **Swapping a creator out.** Proposed: the balance stays redeemable with that creator; only new earning stops. Swaps have a cooldown so slots can't be rotated to farm points.
+3. **Emerging creators.** Discovery Slots are the mitigation for a closed market; their effect is measured.
+4. **App stores.** Native apps may bring in-app purchase rules for paid membership. The web-only pilot avoids this.
 
-## 3. Phase 1A and 1B decisions that would be expensive to reverse
+## 4. Architecture principles that must hold
 
-Most of Phase 1A is unaffected. The table lists decisions where the wrong choice now would be costly later, and the recommended choice.
+These are the decisions that would be expensive to reverse. PR #7 and the PR 2 migration proposal (Phase 1A) are compatible with all of them.
 
-| Area | Expensive mistake | Recommended decision | Phase |
-| --- | --- | --- | --- |
-| Account model | A "creator" flag that gates features, or separate fan and creator accounts | One account type; creator status is derived from activity, never a gate | 1A (PR 2), 1B |
-| Follows versus CP eligibility | Making "follows" the same thing as "earns CP from" | Keep follows and CP earning eligibility in separate tables from the start | 1B, 1C |
-| CP storage | Balance columns updated in place | Append-only CP ledger per supporter and creator; balances computed from it | 1C |
-| CP earning rules | Rules hard-coded in app code or schema | Earning policies stored as data, with each ledger entry recording the policy and rule version that applied | 1C |
-| CP placement | CP tables in `public`, outside the separation checks | CP in its own server-only `loyalty` schema, added to the separation tests so nothing ever combines CP with money (`finance`) or hypothetical amounts (`intent`) | 1C (decide before building) |
-| Experiments | No way to put users in different cohorts | A small cohort assignment table, so Core 10 can be tested against unlimited earning in the pilot | 1B |
-| Analytics events | Recording only successful CP earning | Record every earning decision, including "not eligible" with the reason, so the effect of a slot limit can be measured | 1B |
-| Invite attribution | Losing who invited whom, and through which creator | Record inviter, creator and channel on every redemption (already planned) | 1B |
-| Invite caps | A fixed 25-per-creator cap in code | Cap stored per invitation (already planned as `max_uses`) so it can be raised for income tests | 1B |
-| Money | Amounts as decimals, or no currency, or money mixed with CP | Integer minor units plus currency code, in `finance` only, linked to the creator's account | 1D |
-| Production data | Real money on the free staging project | A separate production Supabase project, in a separate organisation, before any real payment | Before 1D |
-| Landing copy | Saying CP is earned "with each creator" if Core 10 ships | Already fine for the pilot. If Core 10 is adopted, update the copy then. PR #7 is unchanged. | Later |
+1. **One account type.** Creator status is derived from activity and never gates features.
+2. **Follows are separate from CP earning eligibility.** Separate tables from the start; following someone never implies earning CP from them.
+3. **An auditable CP ledger.** Append-only entries per supporter and creator; balances are computed from the ledger; reversals are new entries that point at the original. Each entry records the earning policy and rule version that applied.
+4. **Earning rules are configuration.** Unlimited and Core 10 are rows of data, not separate code paths or schemas.
+5. **CP lives in its own server-only `loyalty` schema**, added to the separation tests so nothing combines CP with `finance`, `intent` or `sim`.
+6. **Money lives only in `finance`**, in integer minor units with currency, on a separate production database before any real payment.
 
-**PR #7 (landing page) and the PR 2 migration proposal are compatible with this strategy as planned.** Neither creates CP, follow, money or experiment tables. The only additions are the recommendations above for 1B and 1C.
+### What each phase does (and does not) add
 
-## 4. Flexible Connection Points architecture (proposal)
+* **Phase 1B:** no new loyalty infrastructure. If the pilot needs cohorts assigned at sign up, Phase 1B includes the **design** of experiment assignment so the data model is ready; it is implemented only if needed then. Emerging-creator **eligibility is defined** (section 5) before any classification is implemented.
+* **Phase 1C:** the CP engine, built on the `loyalty` schema, with **earning-attempt tracking implemented alongside it**, and the Core 10 plus Discovery Slots experiment (section 5).
 
-Goal: support unlimited earning, Core 10, Discovery Slots and paid expansion with **no database redesign**, by treating eligibility as configuration. The prototype already does a version of this: `src/lib/wallets.ts` switches between a creator-scoped and a universal points model through one setting.
+### Flexible CP data model (Phase 1C, proposal)
 
-All tables live in a server-only `loyalty` schema. Members never write to them directly; earning and slot changes go through server functions.
+All tables are in the server-only `loyalty` schema. Members never write to them directly.
 
 | Table | Purpose |
 | --- | --- |
-| `earning_policies` | One row per policy: `unlimited`, `core10_v1`, and so on. Fields: slot limit (empty means unlimited), number of discovery slots, discovery length in days, swap cooldown, and other parameters. |
-| `policy_assignments` | Which policy applies to which user, from when to when, and why: default, experiment cohort, or membership. Lets the pilot run cohorts side by side. |
-| `entitlements` | Extra slots a user holds, from when to when, and their source (future membership, promotion). Never grants CP. |
-| `earning_relationships` | Slot history: supporter, creator, kind (`core`, `discovery` or `open`), started, ended, end reason. A unique rule allows only one active row per supporter and creator. |
-| `cp_ledger` | Append-only. Supporter, creator, amount, reason, source event (unique, so nothing is counted twice), the policy and relationship that allowed it, rule version, and a link to any entry it reverses. |
-| `earn_decisions` | Every earning attempt and its outcome: earned, not eligible (with reason), daily cap reached, or blocked as farming. |
+| `earning_policies` | One row per policy, for example `unlimited` and `core_discovery_pilot`. Fields: core slot limit (empty means unlimited), discovery slots, discovery length in days, swap cooldown, other parameters |
+| `policy_assignments` | Which policy applies to which user, from when to when, and why (default, experiment arm, or future membership). **Doubles as the experiment assignment record**, so no separate experiment framework is needed |
+| `earning_relationships` | Slot history: supporter, creator, kind (`core`, `discovery` or `open`), started, ended, end reason. Only one active row per supporter and creator |
+| `cp_ledger` | Append-only. Supporter, creator, amount, reason, source event (unique, so nothing counts twice), policy, relationship, rule version, reversal link |
+| `earn_decisions` | Every earning attempt and its outcome: earned, not eligible (with reason), daily cap, or blocked as farming |
+| `entitlements` | Extra slots and their source. **Not built in the pilot**; listed so paid expansion later needs no redesign. Never grants CP |
 
-How each model works with the same tables:
+One server function, `can_earn(supporter, creator, time)`, decides eligibility and returns the policy and relationship to record. Slot changes lock the supporter's row so two requests can't both take the last slot. Existing prototype rules (creator-specific balances, daily caps, follow bonus and its reversal, clawbacks) map onto ledger reasons unchanged. The prototype already switches points models through one setting (`src/lib/wallets.ts`), which is the same idea.
 
-* **Unlimited:** the policy has no slot limit. The first time someone earns with a creator, an `open` relationship is created automatically.
-* **Core 10:** the policy's slot limit is 10. Earning is allowed only with an active `core` or `discovery` relationship. Choosing a creator creates a `core` relationship if a slot is free; removing one ends it, subject to the cooldown.
-* **Discovery Slots:** `discovery` relationships with an expiry date, limited by the policy. They can be promoted to `core`.
-* **Paid expansion:** effective slot limit = policy limit plus active entitlements. No schema change.
+## 5. Pilot experiment: Core plus Discovery Slots versus unlimited earning
 
-One server function, `can_earn(supporter, creator, time)`, answers whether earning is allowed and returns the policy and relationship to record. Slot changes lock the supporter's row so two requests can't both take the last slot. Existing prototype rules (creator-specific balances, daily caps, follow bonus and its reversal, clawbacks) map onto ledger reasons unchanged.
+The smallest practical implementation, proposed for approval.
 
-Moving from unlimited to Core 10 then needs only new policy rows and assignments, plus a decision about existing users (for example, grandfather their current creators into Core 10 for a set period). Each ledger entry keeps the policy it was earned under, so history stays interpretable.
+**Design**
 
-Separation stays strict: the schema separation tests are extended so that no view or function combines `loyalty` with `finance`, `intent` or `sim`, and memberships can never create CP.
+* **Unit:** supporters (users), randomly assigned 50/50 when they join the pilot: **control** (unlimited earning) or **treatment** (core slots plus Discovery Slots). Creators have supporters in both arms. Assignment is recorded in `policy_assignments` and never changes during the pilot.
+* **Consent:** onboarding tells participants that some features differ between groups as part of the research, in the research consent step already planned.
 
-## 5. Updated 60-day pilot measurement plan
+**Treatment rules (pilot parameters, stored as policy data)**
 
-Additions to the measurement plan in `docs/PHASE-1A.md` and the original plan. Hypothetical (Support Intent) and real money are always reported in separate columns and never added together. Every figure is per creator unless stated, and internal accounts are excluded.
+* **Core slots:** the user picks creators to earn CP with, up to the slot limit. A creator who invited the user fills the first slot by default; the user can change it.
+* **Discovery Slots:** 2 slots, each lasting 14 days, usable only with creators who meet the emerging-creator definition below. A discovery creator can be promoted to a core slot if one is free.
+* **Swaps:** 7-day cooldown per slot. Removing a creator stops new earning; their existing balance stays redeemable.
+* **Messages:** clear explanations when an action doesn't earn ("You're not earning Connection Points with Maya yet. Add her to your Core to start.").
+
+**The slot limit needs a decision.** The pilot will probably have about 10 to 20 creators, and most supporters will follow a handful. A limit of 10 would rarely bind, so the experiment would show almost nothing. Options: (a) keep 10 and report how often it binds; (b) scale the limit to the pilot, for example 3 core slots plus 2 Discovery Slots, recorded as a pilot parameter. **Recommended: (b)**, because it tests the mechanism, while being clear that the permanent number is a separate decision.
+
+**Minimum product surface (treatment arm only):** a "Your Core" picker listing followed creators; a "Try earning with this creator" action on eligible emerging creators' profiles; the not-earning messages above. The control arm sees nothing new. No paid expansion.
+
+**Emerging-creator eligibility (proposed definition, to approve before any classification is built):** an account that publishes at least one post during the pilot, was **not** recruited or invited by Crevant as a creator, and had fewer than 100 followers when the pilot began. Pilot participants who start creating ("emergent creators" in the original plan) are the main expected group. Risk: there may be few of them, which limits what Discovery Slots can show.
+
+**Measures**
+
+* **Primary:** depth of loyalty: active days per supporter-creator pair, and Committed Supporters per creator.
+* **Secondary:** breadth (creators engaged per supporter); share of CP earned with emerging creators; Discovery Slot use and promotion to core; supporter retention; reward redemption; conversion to real or hypothetical support (reported separately); a short satisfaction survey.
+* **Guardrails:** drop in overall engagement; complaints about the slot limit; any farming patterns. The founder can stop the experiment if a guardrail is hit.
+
+Analysis plan and measures are written down before the pilot starts. With a few hundred supporters, results are directional and reported as such.
+
+## 6. Updated 60-day pilot measurement plan
+
+Additions to the plan in `docs/PHASE-1A.md` and the original plan. The financial lines follow section 2. Hypothetical and real money are never combined. Internal accounts are excluded.
 
 | Area | Measures |
 | --- | --- |
-| **Creator income** (real money, only if tested) | Gross and net receipts per creator per month by source (recurring support, one-time support, advertising partnerships); monthly run-rate; share of active creators with any income; share above $100, $500, $1,000 and $5,000 monthly run-rate |
-| **Recurring supporter payments** | Paying supporters per creator; conversion from Active Supporter to paying; average monthly amount; new, cancelled and failed payments; refunds and disputes; recurring revenue per creator |
-| **Value per supporter** | Value per Active Supporter and per Committed Supporter, hypothetical and real side by side |
-| **Loyalty** | Followers, Active and Committed Supporters; supporter retention week to week; reward redemption; how concentrated each user's CP is across creators. For any Core 10 cohort: slots filled, swaps, time in slot, and engagement depth compared with the unlimited cohort |
-| **Emerging-creator discovery** | Emerging creator, proposed: joined during the pilot, not recruited by Crevant, under 100 followers at the start. New supporter relationships with emerging creators per week; share of CP earned by emerging creators; time to first 10 Active Supporters; Discovery Slot use and promotion to Core 10 (if tested) |
-| **Income distribution** | Share of total creator income, CP and Active Supporters held by the top 10% of creators; a concentration index for each; the distribution compared with the long-term goal |
-| **Advertising partnerships** (if tested) | Partnerships offered and completed; value and creator share; disclosure compliance; brand and creator satisfaction |
-| **Costs** | Platform cost per active creator; payment fees as a share of support |
+| **Creator income** (real money, limited cohort) | Total net creator earnings per creator per month, split into net support earnings and advertising revenue; monthly run-rate; share of creators with any earnings; share above $100, $500, $1,000 and $5,000 a month; reported for eligible active, all active and all creators |
+| **Recurring supporter payments** | Gross supporter contributions; paying supporters per creator; conversion from Active Supporter to paying; average monthly amount; new, cancelled and failed payments; refunds and disputes |
+| **Crevant revenue** | Shown separately (expected to be zero during the pilot at a 0% fee) |
+| **Value per supporter** | Net creator earnings per Active Supporter and per Committed Supporter, with hypothetical Support Intent per supporter alongside in a separate column |
+| **Loyalty** | Followers, Active and Committed Supporters; supporter retention week to week; reward redemption; how concentrated each user's CP is across creators; the experiment measures in section 5 |
+| **Emerging-creator discovery** | Using the section 5 definition: new supporter relationships with emerging creators per week; share of CP earned by emerging creators; time to first 10 Active Supporters; Discovery Slot use and promotion |
+| **Income distribution** | Share of total net creator earnings, CP and Active Supporters held by the top 10% of creators; a concentration index for each; comparison with the long-term objective as a reference line |
+| **Advertising partnerships** | Partnerships offered and completed; gross deal value; creator net share; Crevant commission (if any); disclosure compliance; brand and creator satisfaction |
+| **Costs** | Platform cost per active creator; payment provider fees as a share of gross contributions |
 
-**What the pilot can and can't show.** The pilot will probably have about 10 to 20 creators and a few hundred supporters. That's enough for direction (conversion rates, retention, value per supporter, early discovery patterns), not statistical proof. A Core 10 test inside the pilot would compare small groups, so results are directional and must be labelled that way. The $5,000 goal is reported only as a long-term reference line; pilot results feed an investor model as labelled assumptions, not forecasts.
+## 7. Real recurring support (limited creator cohort)
 
-## 6. Minimum infrastructure to test real support and advertising partnerships
+Included in the roadmap for a small group of creators (proposed 3 to 5), web only, in USD. It stays completely separate from CP and from Support Intent. **It is not activated until every item in the readiness checklist (section 9) is complete and the founder approves activation.**
 
-Neither is built yet. This is the smallest responsible version of each, for separate approval.
+Minimum infrastructure:
 
-### Recurring fan support (limited creator cohort)
+1. **Payment provider:** Stripe Connect with Express accounts (creator verification and payouts on Stripe's hosted pages) and Stripe Billing for monthly support. Hosted Checkout and the hosted customer portal, so Crevant never handles card details. Proposed 0% platform fee during the pilot. Fees confirmed on Stripe's pricing pages at decision time.
+2. **Server code:** an Edge Function to create checkout sessions, and a webhook Edge Function that verifies signatures, ignores duplicates and records events. Secret keys only in Edge Function secrets.
+3. **Data:** `finance` tables for connected accounts, subscriptions, payments, refunds and disputes, following section 2. RLS: supporters see their own payments; creators see their own totals. Separation tests extended.
+4. **Production environment:** a separate production Supabase project (paid plan, backups) in its own organisation, and commercial-use hosting.
 
-1. **Legal first:** a company able to contract, creator and supporter terms, a refund and dispute policy, privacy notice updates, and tax responsibilities (creators are responsible for their own taxes; the payment provider issues tax forms where required). Lawyer review for Canada and the US. Scope: USD, web only.
-2. **Payment provider:** Stripe Connect with Express accounts, so creators complete identity checks and get paid out on Stripe's hosted pages, plus Stripe Billing for monthly support. Hosted Checkout and the hosted customer portal (update card, cancel), so Crevant never handles card details. Platform fee 0% during the pilot. Fees to be checked on Stripe's pricing pages at decision time.
-3. **Server code:** an Edge Function to create checkout sessions, and one webhook Edge Function that verifies signatures, ignores duplicates, and records events. Secret keys only in Edge Function secrets.
-4. **Data:** `finance` tables for connected accounts, subscriptions, payments, refunds and disputes, in integer minor units with currency. RLS: supporters see their own payments; creators see their own totals. Separation tests extended.
-5. **Production environment:** a separate production Supabase project (paid plan, backups) in its own organisation, and commercial-use hosting. Test mode end to end before any live payment.
-6. **Operations:** a support address, a process for disputes and refunds, and a weekly reconciliation of Stripe against the `finance` tables.
+## 8. Hand-brokered advertising partnership test
 
-Rough effort once legal work is under way: about 2 to 3 weeks of development, with legal lead time running in parallel.
+A small number of brand partnerships brokered by hand for pilot creators. **No automated advertising marketplace and no ad serving.**
 
-### Creator advertising partnerships (concierge test)
+1. **Payment:** simplest is brand pays creator directly, with Crevant recording the deal. Paying through Crevant (invoice into the creator's Stripe account) can follow later and reuses section 7.
+2. **Product, minimal:** a "Paid partnership" label on posts (required disclosure under US and Canadian advertising rules); an admin-only record of each partnership in `finance` (gross deal value, creator share, any Crevant commission, dates, deliverables, status); a simple post performance summary for the brand from existing analytics.
+3. **Legal:** partnership agreement template, disclosure rules, brand safety and content guidelines.
 
-1. **No ad system.** Crevant brokers a small number of brand partnerships by hand for pilot creators.
-2. **Payment:** simplest is brand pays creator directly, with Crevant recording the deal. Paying through Crevant (invoices into the creator's Stripe account) can come later and reuses the Connect setup above.
-3. **Product, minimal:** a "Paid partnership" label on posts (required disclosure under US and Canadian advertising rules), an admin-only record of each partnership in `finance` (value, dates, deliverables, status), and a simple post performance summary for the brand from existing analytics.
-4. **Legal:** partnership agreement template, disclosure rules, brand safety and content guidelines.
+## 9. Readiness checklist before any real-money launch
 
-Self-serve brand marketplaces and ad placements with revenue sharing are later phases.
+Every item must be complete, with evidence, and the founder must approve activation. This applies to recurring support and to any partnership payment that flows through Crevant.
 
-## 7. Proposed roadmap changes (for approval)
+**Legal and policy**
 
-| Phase | Change |
+- [ ] Legal entity able to contract and receive payouts
+- [ ] Lawyer review (Canada and US) of creator terms, supporter terms, refund and dispute policy, partnership agreement, and disclosure rules
+- [ ] Privacy notice updated for payment data
+- [ ] Tax responsibilities documented (creators handle their own taxes; payment provider tax forms where required)
+
+**Creator verification**
+
+- [ ] Each cohort creator has completed verification with the payment provider and is payout-eligible
+- [ ] Creators acknowledge the support terms
+
+**Payments, cancellation, refunds and disputes**
+
+- [ ] Full flow tested end to end in test mode: subscribe, renew, fail and retry, cancel, refund, dispute
+- [ ] Supporters can cancel at any time from the hosted portal, and cancellation stops future charges
+- [ ] Refund process written down, including who decides and how fast
+- [ ] Dispute process written down, including evidence submission and who handles it
+
+**Reconciliation and reporting**
+
+- [ ] Weekly reconciliation of the payment provider against `finance` records, with any difference investigated
+- [ ] Reports show every line in section 2 separately, with Support Intent kept apart
+
+**Security**
+
+- [ ] Webhook signature verification and duplicate handling tested
+- [ ] Payment secrets only in Edge Function secrets; secret scan passes
+- [ ] RLS tests: supporters see only their own payments, creators only their own totals
+- [ ] Separation tests confirm no view or function combines `finance` with `loyalty`, `intent` or `sim`
+- [ ] Security review of the payment code and admin tools
+
+**Operations**
+
+- [ ] Separate production Supabase project with backups, in its own organisation
+- [ ] Commercial-use hosting in place
+- [ ] Support contact and response expectations published
+- [ ] Monitoring and alerts for failed webhooks and payment errors
+- [ ] Incident plan, including how to pause payments
+- [ ] Founder sign-off on activation
+
+## 10. Roadmap (approved in principle)
+
+| Phase | Plan |
 | --- | --- |
-| **1A** | No change. PR #7 stays as reviewed. PR 2 migration proposal keeps one account type and creates no CP, follow or money tables. |
-| **1B** | Add: cohort assignment table; analytics events that include earning decisions; invite cap stored per invitation (already planned); emerging-creator classification at sign up. |
-| **1C** | Build CP on the flexible `loyalty` schema in section 4, launching with the **unlimited** policy. Core 10 and Discovery Slots are built only if Decision 1 below says to test them, behind a cohort flag. |
-| **1D** | Split into: 1D-1 real support (Decision 2: existing options A to D, now including recurring support for a limited cohort); 1D-2 advertising partnerships concierge test (Decision 3); 1D-3 measurement dashboard including income and distribution. |
-| **After the pilot** | Paid expansion of slots. Not in the pilot: it needs consumer billing, pricing and legal review. Willingness to pay can be explored through interviews or a clearly labelled survey. |
+| **1A** | No change. PR #7 stays as reviewed, with separate approval. PR 2 migration proposal keeps one account type and creates no CP, follow or money tables. |
+| **1B** | Invitations, onboarding and profiles as planned. Design experiment assignment if the pilot needs cohorts at sign up (implement only if needed). Agree the emerging-creator definition. No new loyalty infrastructure. |
+| **1C** | Real posts, follows, comments and rewards. CP engine on the `loyalty` schema with an auditable ledger and earning-attempt tracking. Core plus Discovery Slots experiment against unlimited earning. |
+| **1D** | 1D-1: real recurring support for a limited cohort, activated only after the readiness checklist. 1D-2: hand-brokered advertising partnership test. 1D-3: measurement dashboard with the section 2 financial lines and section 6 measures. |
+| **After the pilot** | Decide whether to adopt the loyalty model permanently. Paid expansion only after consumer billing, pricing and legal review. |
 
-**Decisions needed, with deadlines:**
+**Preliminary estimates (to be confirmed):** real recurring support and the partnership test add roughly 3 to 4 weeks of development across Phases 1C and 1D, with legal work in parallel; the experiment adds roughly 1 week to Phase 1C. The pilot start may move accordingly. Added running costs are mainly a paid production Supabase plan (about $25 a month), commercial hosting (about $0 to $20 a month depending on provider), payment provider fees on real volume, and legal fees (to be quoted).
 
-1. **Test Core 10 in the pilot?** Before Phase 1C build starts. Options: not in the pilot (simplest); a small cohort against unlimited (directional only); or research only (interviews and prototypes using `/tour`).
-2. **Real support scope:** before Phase 1C finishes (unchanged deadline), now including recurring support for a limited cohort.
-3. **Advertising partnerships concierge test:** before Phase 1D starts.
-4. **Production infrastructure** (production Supabase project, commercial hosting): before any real money moves.
+## 11. Unresolved decisions
 
-**Timeline and cost impact (estimates to confirm):** including real recurring support for a limited cohort and a concierge advertising test adds roughly 3 to 4 weeks of development to Phases 1C and 1D, with legal work in parallel; the pilot start may move accordingly. Added running costs are mainly Supabase Pro (about $25 a month), commercial hosting (about $0 to $20 a month depending on the provider chosen), payment fees on real volume, and legal fees (to be quoted).
+1. **Eligible active creator definition** (section 1): approve or adjust.
+2. **Pilot slot limit:** keep 10, or scale to the pilot (recommended: 3 core plus 2 Discovery Slots).
+3. **Discovery Slot parameters:** 2 slots for 14 days, and the emerging-creator definition (section 5).
+4. **Platform fee and partnership commission during the pilot:** proposed 0% for both.
+5. **Real support cohort:** size (proposed 3 to 5 creators), support amounts or tiers, minimum amount, USD only.
+6. **Partnership payments:** brand pays creator directly (recommended for the test) or through Crevant.
+7. **Production hosting provider**, after the hosting comparison promised at the end of Phase 1A.
+8. **Experiment guardrail thresholds** and who can stop the experiment (proposed: the founder).
+9. **Research consent wording** for the experiment and payment cohorts.
