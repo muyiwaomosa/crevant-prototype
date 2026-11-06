@@ -46,6 +46,12 @@ The connection string is never printed. The password is masked in logs, and the 
 
 The checks in `supabase/tests/001_schema_separation.sql` run against staging after every apply. They confirm that Connection Points and other real activity (`public`), hypothetical Support Intent amounts (`intent`), simulated advertising (`sim`) and `analytics` stay separate: members and anonymous visitors have no direct access to the private schemas, new tables there start locked, and no view or function combines two amount schemas.
 
+`supabase/tests/002_profiles_and_ops.sql` (from PR 2) checks that the private `ops` schema is locked to server code, that profiles allow members to read and change only their own row and only the approved columns, that the trigger functions are locked down, and that every confirmed identity has a profile (counts only, never emails).
+
+Only `supabase/tests/` runs against staging, and everything in it is read-only. Tests that create identities live in `supabase/tests-local/` and run only on throwaway databases.
+
+`supabase/config.toml` configures the throwaway local Supabase used by the CI integration test. This workflow never pushes it: it runs only `supabase db push` and `supabase migration list`. Checked when PR 2 was built: with and without that file, `db push` (dry run and apply) and `migration list` produced identical output and an identical database schema, with no seed data and no roles pushed.
+
 ## Approving a new migration
 
 In the pull request that adds the migration:

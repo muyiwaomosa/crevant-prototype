@@ -49,3 +49,43 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/crevant_test
         run: scripts/db/test.sh
+
+  integration:
+    # Real local Supabase in Docker, isolated to this runner: standard local
+    # development keys only, no secrets, never contacts staging. Applies the
+    # migrations, then runs scripts/db/integration-test.mjs through real
+    # Supabase Auth and the Data API.
+    name: Integration (real local Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_CLI_VERSION: 2.122.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the pinned Supabase CLI
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/supabase-cli" "supabase@${SUPABASE_CLI_VERSION}"
+          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Confirm the CLI version
+        run: |
+          set -euo pipefail
+          installed="$(supabase --version | tr -d '[:space:]')"
+          if [ "$installed" != "$SUPABASE_CLI_VERSION" ]; then
+            echo "::error::Expected Supabase CLI $SUPABASE_CLI_VERSION but found $installed."
+            exit 1
+          fi
+      - name: Start local Supabase (one retry, for image downloads only)
+        run: |
+          set -euo pipefail
+          EXCLUDE=realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+          if ! supabase start -x "$EXCLUDE"; then
+            echo "::warning::supabase start failed; retrying once (start-up only, tests are never retried)"
+            supabase stop --no-backup || true
+            supabase start -x "$EXCLUDE"
+          fi
+      - name: Run the integration test
+        run: STOP_AFTER=1 scripts/db/integration.sh
