@@ -48,7 +48,7 @@ describe('production fallback rendering', () => {
     go('/discover')
     const { container, queryByRole } = render(<App />)
     expect(queryByRole('note', { name: 'Sample tour' })).toBeNull()
-    expect(container.textContent).not.toContain('Turn what you create into something that lasts')
+    expect(container.textContent).not.toContain("You need the right 1,000")
     expect(container.textContent).not.toContain('Request an invitation')
   })
 })

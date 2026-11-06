@@ -63,14 +63,14 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
     {
       const page = await browser.newPage()
       await page.goto(BASE + '/')
-      check('landing headline', (await page.getByRole('heading', { level: 1 }).innerText()) === 'Turn what you create into something that lasts.')
+      check('landing headline', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ') === "You don't need a million followers. You need the right 1,000.")
       await page.getByRole('main').getByRole('link', { name: 'Take the tour' }).first().click()
       await page.waitForURL(/\/tour\//)
       check('Take the tour opens the sample tour', new URL(page.url()).pathname.startsWith('/tour/'), page.url())
       check('tour shows the sample data banner', await page.getByRole('note', { name: 'Sample tour' }).isVisible())
       await page.getByRole('note', { name: 'Sample tour' }).getByRole('link', { name: 'Back to Crevant' }).click()
       await page.waitForURL(BASE + '/')
-      check('banner link returns to the public site', (await page.getByRole('heading', { level: 1 }).innerText()).startsWith('Turn what you create'))
+      check('banner link returns to the public site', (await page.getByRole('heading', { level: 1 }).innerText()).startsWith("You don't need a million followers."))
 
       for (const [from, to] of [['/discover', '/tour/discover'], ['/rewards?tab=cp', '/tour/rewards?tab=cp'], ['/creator/amara', '/tour/creator/amara']]) {
         await page.goto(BASE + from)
@@ -114,7 +114,7 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
         await page.goto(PRODUCTION + path)
         await page.waitForLoadState('networkidle')
         const text = await page.locator('body').innerText()
-        check(`production address ${path} shows only the sample prototype`, !text.includes('Turn what you create') && !text.includes('Request an invitation') && !text.includes('Sign in opens soon'))
+        check(`production address ${path} shows only the sample prototype`, !text.includes('You need the right 1,000') && !text.includes('Request an invitation') && !text.includes('Sign in opens soon'))
         check(`production address ${path} has no tour banner`, (await page.getByRole('note', { name: 'Sample tour' }).count()) === 0)
       }
       check('no request reached the real production site', leaked === 0)

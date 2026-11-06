@@ -49,26 +49,70 @@ No page collects personal information until all of these are true:
 
 PR 1 has no forms, inputs, storage, cookies or calls to outside services on public pages, and tests enforce it.
 
+## Positioning
+
+**"You don't need a million followers. You need the right 1,000."** (approved by the founder, Option A.)
+
+Traditional social media pushes creators to chase virality, millions of followers and huge view counts. Crevant's hypothesis is that a smaller, highly committed community can create more meaningful value for a creator than a large, passive audience. **This is a vision we are testing in the pilot, not a proven earnings claim.**
+
+Messaging hierarchy on the landing page, in order:
+
+1. The idea: the right 1,000, with its hypothesis label right beside it.
+2. The problem: audience size versus relationship depth ("Chasing size" compared with "Building depth"). This contrast runs through the whole page.
+3. How Crevant helps: five building blocks, each with its real status. Find them (Following feed, newest first: in the pilot). Recognise them (Connection Points: in the pilot). Reward them (creator rewards: in the pilot). Let them back you (voluntary support: in development). Add to it (creator-content advertising: in development, a supplement rather than the centre of the model).
+4. What success looks like here: the people who show up, not just the people who follow. Follower counts stay.
+5. How it works, for creators and for supporters, Connection Points, the pilot, the FAQ, and the call to action.
+
 ## Landing page rules
 
-* Lead with the long-term vision: creating as a profession, meaningful relationships, opportunities to earn, and work that keeps its value. The chronological feed is one feature, not the whole platform.
+* The "right 1,000" line always appears with its hypothesis label ("This is the idea we're testing in our pilot, not a promise of earnings"), or in the FAQ that explains 1,000 is not a magic number.
+* Never pair an audience number with a money figure, and never promise a living, a replacement income or quitting a job.
 * Describe the Following feed by its order only: newest first, not ranked by engagement. Never imply that followers will see every post or that reach is guaranteed.
 * Never imply guaranteed earnings or that any money feature is live.
 * Label every feature with its real status: in the pilot, in development, or where we're headed.
 * No invented user counts, testimonials or traction.
+* Follower counts are not hidden, and PR 1 introduces no new engagement mechanics.
 
-`src/public/public-site.test.tsx` enforces the required disclosures and a list of banned phrases.
+`src/public/public-site.test.tsx` enforces the required disclosures, the hypothesis label, the section order and a list of banned patterns, including money figures near audience numbers.
+
+## Supporter definitions (hypotheses to validate)
+
+These are working definitions for the pilot, **not final metrics**. They will be reviewed with real pilot data and with the creators themselves, and may change before or during the pilot. All counts are per creator, exclude the creator's own account, and exclude internal accounts.
+
+| Term | Proposed definition | Why |
+| --- | --- | --- |
+| **Follower** | An account that follows the creator. One click, no ongoing activity needed. | Context. Recorded and shown as today, but not treated as the measure of success. |
+| **Active Supporter** | A person who takes a qualifying action with the creator on at least **4 separate days in a rolling 30-day window**. Qualifying actions: a comment that passes the existing quality check, a share, a reward redemption, or an offer of support (Support Intent, or real support if tested). Likes and views alone do not qualify. | Separates people who keep showing up from people who once clicked follow. |
+| **Committed Supporter** | An Active Supporter in **two consecutive 30-day windows** who has also taken at least one commitment action with the creator: redeemed a reward, or offered support (hypothetical or real). | The "right 1,000" in miniature: sustained participation plus a sign of real value. |
+
+How they will be validated:
+
+1. **Against creators' own judgement.** Before seeing the numbers, each creator names the supporters they consider most committed. We compare that list with who the definitions pick out.
+2. **Sensitivity.** Report results at 3, 4 and 6 active days, so the threshold is chosen on evidence rather than assumed.
+3. **Stability.** Check that people do not flip in and out of each group week to week for trivial reasons.
+4. **Gaming.** Check that Connection Point anti-farming rules also keep these counts honest.
+
+Pilot reporting shows followers, Active Supporters and Committed Supporters side by side, plus the ratio of Active Supporters to followers and supporter retention week to week. Product ideas that put active supporters ahead of follower counts (profile display, a private "your core" view for creators, depth-based milestones) are for review in Phases 1B and 1C, not this PR.
+
+## Pilot economics: the key validation question
+
+**What economic value does an Active Supporter (and a Committed Supporter) represent for a creator?**
+
+* **Value per Active Supporter** = support offered or given to a creator during a period ÷ that creator's Active Supporters in the same period. Also reported per Committed Supporter.
+* **Hypothetical and real are never combined.** Support Intent (stated, nonbinding amounts) and actual payments (only if real support is approved and tested) are separate columns in every report, never added together, and always labelled.
+* **Scale honestly.** With about 25 invited supporters per creator, the pilot cannot show what 1,000 people are worth. It can measure commitment rates, retention and value per supporter. Any projection to larger communities is a clearly labelled assumption in an investor model, not a pilot result.
+* **Testing real support.** The option stays open to test real voluntary financial support with a **limited creator cohort before the pilot ends**, subject to the founder's separate approval, legal review, and payment infrastructure built and reviewed for that purpose (see the decision below).
 
 ## Decision required before launch: real voluntary support
 
-Real voluntary financial support from audiences to creators is an important objective for the pilot. Phase 1A builds no payments, and simulated Support Intent is not assumed to be the final pilot monetization strategy. The founder must choose before the pilot clock starts.
+Real voluntary financial support from audiences to creators is an important objective for the pilot, and it is central to testing the "right 1,000" hypothesis. Phase 1A builds no payments, and simulated Support Intent is not assumed to be the final pilot monetization strategy. The founder must choose before the pilot clock starts.
 
 | Option | What happens | Evidence for investors | Effort and risk |
 | --- | --- | --- | --- |
 | A. Support Intent only | Supporters state amounts; no money moves | Weakest | Already planned |
 | B. Creators' own support links | Creators link their existing tip pages; Crevant never touches money | Clicks and self-reported totals | Days; low legal risk |
 | C. Real payments through Stripe Connect | Supporters pay creators in the app; Crevant takes 0% during the pilot | Strongest (confirmed payments) | 2 to 3 weeks plus legal review; identity checks, refunds, disputes, terms, Canada and US; makes hosting commercial |
-| D. A plus C for a subset of creators | Intent for everyone, real payments for some | Strong, and allows comparison | Same as C |
+| D. A plus C for a limited creator cohort | Intent for everyone, real payments for a small cohort of creators before the pilot ends | Strong, and allows comparison of stated against real value per supporter | Same as C, at smaller scale. Needs separate approval, legal review and payment infrastructure |
 
 **Deadline:** before Phase 1C finishes, and in any case before the pilot clock starts, so that C or D has time for legal review and building. Payment provider fees must be checked on the provider's pricing page at decision time. Connection Points stay noncash, nontransferable and creator-specific whatever is chosen, and any real money lives in a separate `finance` schema that the separation tests already guard.
 
