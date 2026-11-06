@@ -41,7 +41,8 @@ echo "Building the app against the local stack"
 VITE_SUPABASE_URL="$API_URL" VITE_SUPABASE_PUBLISHABLE_KEY="$PUBLISHABLE_KEY" npm run build >/dev/null
 
 echo "Serving the build at http://127.0.0.1:$APP_PORT"
-npx vite preview --host 127.0.0.1 --port "$APP_PORT" --strictPort >/dev/null 2>&1 &
+# Run Vite directly (not through npx) so the cleanup below stops the server itself.
+node_modules/.bin/vite preview --host 127.0.0.1 --port "$APP_PORT" --strictPort >/dev/null 2>&1 &
 preview_pid=$!
 trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
 for _ in $(seq 1 60); do

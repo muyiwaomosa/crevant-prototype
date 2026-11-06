@@ -277,9 +277,14 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   }
   check('keyboard reaches every main nav item in order', ['Home', 'Discover', 'Create', 'Rewards', 'Profile'].every((l) => reached.includes(l)), reached.join(' | '))
   await desk.goto(BASE + '/create')
+  // Wait for the page (and its skip link) to render before pressing Tab, and
+  // give the focus move up to 2 s. The focus must still end on the main content.
+  await desk.getByRole('link', { name: 'Skip to content' }).waitFor({ state: 'attached' })
   await desk.keyboard.press('Tab')
   await desk.keyboard.press('Enter')
-  check('skip link moves focus to the main content', (await desk.evaluate(() => document.activeElement?.id)) === 'main')
+  await desk.waitForFunction(() => document.activeElement?.id === 'main', null, { timeout: 2000 }).catch(() => {})
+  const focused = await desk.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)
+  check('skip link moves focus to the main content', focused === 'main', focused)
   await shot(desk, 'desktop-home')
   await desk.goto(BASE + '/profile')
   await shot(desk, 'desktop-profile')
