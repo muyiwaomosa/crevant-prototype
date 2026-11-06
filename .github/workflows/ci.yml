@@ -78,15 +78,8 @@ jobs:
             echo "::error::Expected Supabase CLI $SUPABASE_CLI_VERSION but found $installed."
             exit 1
           fi
-      - name: Start local Supabase (one retry, for image downloads only)
-        run: |
-          set -euo pipefail
-          EXCLUDE=realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
-          if ! supabase start -x "$EXCLUDE"; then
-            echo "::warning::supabase start failed; retrying once (start-up only, tests are never retried)"
-            supabase stop --no-backup || true
-            supabase start -x "$EXCLUDE"
-          fi
+      - name: Start local Supabase (ports reserved, one start-up retry; tests are never retried)
+        run: scripts/ci/start-local-supabase.sh
       - name: Run the integration test
         run: STOP_AFTER=1 scripts/db/integration.sh
 
@@ -127,15 +120,8 @@ jobs:
           set -euo pipefail
           npm install --no-save --no-audit --no-fund "playwright@${PLAYWRIGHT_VERSION}"
           npx playwright install --with-deps chromium
-      - name: Start local Supabase (one retry, for image downloads only)
-        run: |
-          set -euo pipefail
-          EXCLUDE=realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
-          if ! supabase start -x "$EXCLUDE"; then
-            echo "::warning::supabase start failed; retrying once (start-up only, tests are never retried)"
-            supabase stop --no-backup || true
-            supabase start -x "$EXCLUDE"
-          fi
+      - name: Start local Supabase (ports reserved, one start-up retry; tests are never retried)
+        run: scripts/ci/start-local-supabase.sh
       - name: Run the sign-in journey
         run: scripts/e2e/auth-journey.sh
       - name: Stop local Supabase

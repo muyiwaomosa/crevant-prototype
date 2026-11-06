@@ -112,6 +112,14 @@ const storedText = (page) => page.evaluate(() => JSON.stringify([{ ...localStora
 const codeOf = (link) => new URLSearchParams(new URL(link).hash.slice(1)).get('token_hash') || ''
 const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('sb-')))
 
+// isVisible() answers instantly, even if the page is still rendering after a
+// navigation. Wait (up to 5 s) for the element to appear, then answer. A
+// missing element still fails the check.
+async function shows(locator, timeout = 5000) {
+  await locator.first().waitFor({ state: 'visible', timeout }).catch(() => {})
+  return locator.first().isVisible()
+}
+
 ;(async () => {
   // The security headers are injected by intercepting page responses. Chromium
   // then treats those pages as "public" and blocks their requests to the
@@ -135,7 +143,7 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
       check('sign-in page has no sign-up option', !/sign up|create (an )?account|register/i.test(text) && text.includes("no public sign-up"))
       for (const p of ['/sign-up', '/register']) {
         await page.goto(`${APP}${p}`)
-        check(`${p} does not exist`, await page.getByText('Page not found').isVisible())
+        check(`${p} does not exist`, await shows(page.getByText('Page not found')))
       }
       const r = await fetch(`${API}/auth/v1/signup`, { method: 'POST', headers: { apikey: PUB, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `walk-in-${RUN}@example.test`, password: PASSWORD }) }).then((x) => x.json())
       check('Supabase refuses direct sign-up', r.error_code === 'signup_disabled', r.error_code)
@@ -183,7 +191,7 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
       await pageA.goto(inviteLink)
       await pageA.getByRole('button', { name: 'Continue' }).click()
       await pageA.waitForURL(`${APP}/auth/set-password`)
-      check('Continue confirms the invitation and asks for a password', await pageA.getByRole('heading', { name: 'Choose your password' }).isVisible())
+      check('Continue confirms the invitation and asks for a password', await shows(pageA.getByRole('heading', { name: 'Choose your password' })))
       check('exactly one verification request, sent on Continue', verifyCalls.length === 1 && verifyCalls[0] === 'POST', verifyCalls.join(','))
       check('email confirmed and profile created automatically', userBy(emailA).split('|')[1] !== '' && profileCount(emailA) === 1)
 
@@ -202,7 +210,7 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
       check('home shows "Your profile is ready"', true)
       check('home shows the signed-in email', (await pageA.locator('main').innerText()).includes(emailA))
       await pageA.goto(`${APP}/`)
-      check('header offers "Your account" when signed in', await pageA.getByRole('banner').getByRole('link', { name: 'Your account' }).isVisible())
+      check('header offers "Your account" when signed in', await shows(pageA.getByRole('banner').getByRole('link', { name: 'Your account' })))
       await collectCsp(pageA)
     }
 
@@ -276,12 +284,12 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
       check('the reset code is not kept in browser storage or cookies', !(await storedText(page)).includes(resetCode))
       await page.getByRole('button', { name: 'Continue' }).click()
       await page.waitForURL(`${APP}/auth/set-password`)
-      check('reset asks for a new password', await page.getByRole('heading', { name: 'Choose a new password' }).isVisible())
+      check('reset asks for a new password', await shows(page.getByRole('heading', { name: 'Choose a new password' })))
       await page.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD)
       await page.getByLabel('Type it again', { exact: true }).fill(NEW_PASSWORD)
       await page.getByRole('button', { name: 'Save password' }).click()
       await page.waitForURL(`${APP}/app`)
-      check('new password saved', await page.getByText('Your password is saved.').isVisible())
+      check('new password saved', await shows(page.getByText('Your password is saved.')))
       await page.goto(resetLink)
       await page.getByRole('button', { name: 'Continue' }).click()
       await page.getByText(/This link has expired or was already used/).waitFor()
@@ -343,7 +351,7 @@ const storedSessionKeys = (page) => page.evaluate(() => Object.keys(localStorage
       await page.goto(`${APP}/`)
       check('landing page loads', (await page.getByRole('heading', { level: 1 }).innerText()).includes('You need the right 1,000'))
       await page.goto(`${APP}/tour/discover`)
-      check('sample tour loads', await page.getByRole('note', { name: 'Sample tour' }).isVisible())
+      check('sample tour loads', await shows(page.getByRole('note', { name: 'Sample tour' })))
       await collectCsp(page)
       await ctx.close()
     }

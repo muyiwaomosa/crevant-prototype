@@ -25,6 +25,14 @@ const check = (name, ok, detail = '') => {
 }
 const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
 
+// isVisible() answers instantly, even if the page is still rendering after a
+// navigation. Wait (up to 5 s) for the element to appear, then answer. A
+// missing element still fails the check.
+async function shows(locator, timeout = 5000) {
+  await locator.first().waitFor({ state: 'visible', timeout }).catch(() => {})
+  return locator.first().isVisible()
+}
+
 ;(async () => {
   const browser = await chromium.launch()
   try {
@@ -83,7 +91,7 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
       await page.getByRole('main').getByRole('link', { name: 'Explore Crevant' }).first().click()
       await page.waitForURL(/\/tour\//)
       check('Explore Crevant opens the sample tour', new URL(page.url()).pathname.startsWith('/tour/'), page.url())
-      check('tour shows the sample data banner', await page.getByRole('note', { name: 'Sample tour' }).isVisible())
+      check('tour shows the sample data banner', await shows(page.getByRole('note', { name: 'Sample tour' })))
       await page.getByRole('note', { name: 'Sample tour' }).getByRole('link', { name: 'Back to Crevant' }).click()
       await page.waitForURL(BASE + '/')
       check('banner link returns to the public site', (await page.getByRole('heading', { level: 1 }).innerText()).startsWith("You don't need a million followers."))
@@ -95,7 +103,7 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
         check(`old link ${from} lands on ${to}`, u.pathname + u.search === to, u.pathname + u.search)
       }
       await page.goto(BASE + '/request-invite')
-      check('request page explains requests are closed', await page.getByText('Invitation requests open soon.').isVisible())
+      check('request page explains requests are closed', await shows(page.getByText('Invitation requests open soon.')))
       await page.close()
     }
 

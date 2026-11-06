@@ -78,5 +78,29 @@ else
   echo "FAIL  staging workflow: db push steps=$installs, non-dry-run=$writes, apply-only guard=$guard"; failed=$((failed+1))
 fi
 
+# CI start-up of local Supabase: both jobs go through the shared script, which
+# reserves every configured port before images are pulled and never retries
+# the tests themselves.
+ci=.github/workflows/ci.yml
+raw_starts=$(grep -c 'supabase start' "$ci" || true)
+script_starts=$(grep -c 'run: scripts/ci/start-local-supabase.sh$' "$ci" || true)
+if [ "$raw_starts" = 0 ] && [ "$script_starts" = 2 ]; then
+  echo "PASS  CI starts local Supabase only through the port-reserving script"; pass=$((pass+1))
+else
+  echo "FAIL  CI start-up: raw supabase start=$raw_starts, script uses=$script_starts (expected 0 and 2)"; failed=$((failed+1))
+fi
+config_ports=$(grep -E '^[[:space:]]*(port|shadow_port)[[:space:]]*=' supabase/config.toml | grep -oE '[0-9]+$' | sort -un | paste -sd, -)
+script_ports=$(scripts/ci/start-local-supabase.sh --ports)
+if [ -n "$config_ports" ] && [ "$script_ports" = "$config_ports" ] && [[ ",$script_ports," == *",54321,"* ]] && [[ ",$script_ports," == *",54322,"* ]]; then
+  echo "PASS  start-up script protects every configured Supabase port ($script_ports)"; pass=$((pass+1))
+else
+  echo "FAIL  start-up script ports '$script_ports' differ from config '$config_ports'"; failed=$((failed+1))
+fi
+if grep -q 'net.ipv4.ip_local_reserved_ports' scripts/ci/start-local-supabase.sh && [ "$(grep -c 'supabase start -x' scripts/ci/start-local-supabase.sh)" = 1 ]; then
+  echo "PASS  start-up script reserves ports and starts Supabase from one place"; pass=$((pass+1))
+else
+  echo "FAIL  start-up script no longer reserves ports or starts Supabase in more than one place"; failed=$((failed+1))
+fi
+
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]
