@@ -6,9 +6,9 @@
 #           accounts exist. Changes nothing.
 #   create  Creates any missing test accounts (email confirmed, tagged as test
 #           accounts). Never touches an existing real account.
-#   delete  Removes the tagged test accounts on the approved list (and, if
-#           asked, tagged test accounts no longer on the list), with their
-#           profiles. Never touches an untagged account.
+#   delete  Removes accounts that carry the test tag AND exactly match one of
+#           the four approved addresses, with their profiles. Never touches an
+#           untagged account or a tagged account with any other address.
 #
 # Safeguards:
 #   - Runs only from main, in the "staging" GitHub environment, which waits for
@@ -39,10 +39,6 @@ on:
         description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
         type: string
         required: true
-      include_unlisted:
-        description: "delete only: also remove tagged test accounts that are no longer on the approved list"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -73,7 +69,6 @@ jobs:
         env:
           MODE: ${{ inputs.mode }}
           CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
-          INCLUDE_UNLISTED: ${{ inputs.include_unlisted }}
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           STAGING_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SERVICE_ROLE_KEY }}
           STAGING_TEST_ACCOUNT_EMAILS: ${{ secrets.STAGING_TEST_ACCOUNT_EMAILS }}

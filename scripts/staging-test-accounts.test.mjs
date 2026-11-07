@@ -174,7 +174,6 @@ test('delete removes only tagged accounts on the list, never real ones', async (
       { id: 't1', email: EMAILS[0], app_metadata: { [TEST_TAG]: true } },
       { id: 'real', email: EMAILS[1], app_metadata: { provider: 'email' } },
       { id: 'other', email: 'someone@example.test', app_metadata: { provider: 'email' } },
-      { id: 'orphan', email: 'old+t9@example.test', app_metadata: { [TEST_TAG]: true } },
       { id: 'tag-false', email: EMAILS[3], app_metadata: { [TEST_TAG]: 'true' } },
     ],
   })
@@ -182,12 +181,27 @@ test('delete removes only tagged accounts on the list, never real ones', async (
   assert.equal(r.error, null, r.error?.message)
   assert.deepEqual(r.state.writes.map((w) => w.id), ['t1'])
   assert.match(r.text, /Real accounts left untouched: 2\./)
-  assert.match(r.text, /Tagged test accounts not on the approved list: 1\./)
   assertNoSecrets(r)
-  const r2 = await go(baseEnv({ MODE: 'delete', INCLUDE_UNLISTED: 'true' }), fake)
-  assert.equal(r2.error, null)
-  assert.deepEqual(r2.state.writes.map((w) => w.id), ['t1', 'orphan'])
   assert.deepEqual(fake.state.users.map((u) => u.id).sort(), ['other', 'real', 'tag-false'])
+})
+
+test('tagged accounts outside the approved list can never be deleted', async () => {
+  const outside = [
+    { id: 'orphan', email: 'old+t9@example.test', app_metadata: { [TEST_TAG]: true } },
+    { id: 'near-miss', email: 'founder+t1@example.tests', app_metadata: { [TEST_TAG]: true } },
+    { id: 'prefix', email: 'xfounder+t2@example.test', app_metadata: { [TEST_TAG]: true } },
+  ]
+  const fake = fakeSupabase({ users: [{ id: 't3', email: EMAILS[2], app_metadata: { [TEST_TAG]: true } }, ...outside] })
+  // The removed "include unlisted" option has no effect even if it is still passed in.
+  for (const extra of [{}, { INCLUDE_UNLISTED: 'true' }, { include_unlisted: 'true' }]) {
+    const r = await go(baseEnv({ MODE: 'delete', ...extra }), fake)
+    assert.equal(r.error, null, r.error?.message)
+    assert.match(r.text, /Tagged test accounts not on the approved list: 3 \(never deleted by this workflow/)
+    assertNoSecrets(r)
+  }
+  // Only the listed, tagged account was ever deleted, once.
+  assert.deepEqual(fake.state.writes.map((w) => w.id), ['t3'])
+  assert.deepEqual(fake.state.users.map((u) => u.id).sort(), ['near-miss', 'orphan', 'prefix'])
 })
 
 test('notices if sign-up becomes enabled during a run', async () => {

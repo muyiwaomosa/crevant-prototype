@@ -11,8 +11,6 @@
 //   SUPABASE_PROJECT_REF            "staging" environment variable
 //   CONFIRM_PROJECT_REF             typed by the person running the workflow
 //   MODE                            plan (default, read-only) | create | delete
-//   INCLUDE_UNLISTED                "true" to also delete tagged test accounts
-//                                   that are no longer on the approved list
 //   STAGING_SERVICE_ROLE_KEY        "staging" environment secret (never printed)
 //   STAGING_TEST_ACCOUNT_EMAILS     "staging" environment secret: exactly four
 //                                   approved addresses, comma or newline separated
@@ -25,6 +23,9 @@
 //     any change. The invitation-only model is never altered.
 //   * Every account it creates is tagged in app_metadata, which only server
 //     code can set. It never modifies or deletes an untagged (real) account.
+//   * delete removes an account only if it carries the tag AND its address
+//     exactly matches one of the four approved addresses. Tagged accounts with
+//     any other address are reported, never deleted.
 
 export const ACCOUNT_COUNT = 4
 export const TEST_TAG = 'crevant_staging_test_account'
@@ -195,7 +196,7 @@ export async function run(env, { fetchImpl = fetch, print = console.log, mask = 
 
   const status = ({ user }) => (!user ? 'not created' : isTagged(user) ? 'exists (tagged test account)' : 'exists as a REAL account (never touched)')
   for (const a of listed) say(`Test account ${a.n}: ${status(a)}.`)
-  say(`Tagged test accounts not on the approved list: ${unlistedTagged.length}.`)
+  say(`Tagged test accounts not on the approved list: ${unlistedTagged.length}${unlistedTagged.length ? ' (never deleted by this workflow; review them in the Supabase dashboard)' : ''}.`)
 
   const realClash = listed.filter((a) => a.user && !isTagged(a.user))
   if (mode === 'plan') {
@@ -222,10 +223,11 @@ export async function run(env, { fetchImpl = fetch, print = console.log, mask = 
   }
 
   if (mode === 'delete') {
-    const targets = [...listed.filter((a) => a.user && isTagged(a.user)).map((a) => ({ label: `Test account ${a.n}`, user: a.user }))]
-    if (env.INCLUDE_UNLISTED === 'true') unlistedTagged.forEach((u, i) => targets.push({ label: `Unlisted tagged test account ${i + 1}`, user: u }))
+    // Both conditions, always: the server-only tag and an exact match with one
+    // of the four approved addresses.
+    const targets = listed.filter((a) => a.user && isTagged(a.user)).map((a) => ({ label: `Test account ${a.n}`, user: a.user }))
     for (const t of targets) {
-      if (!isTagged(t.user)) refuse('Internal check failed: an untagged account was selected for deletion.')
+      if (!isTagged(t.user) || !emails.includes(String(t.user.email || '').toLowerCase())) refuse('Internal check failed: an account without both the tag and an approved address was selected for deletion.')
       const r = await api.deleteUser(t.user.id)
       if (r.status !== 200 && r.status !== 204) refuse(`Deleting ${t.label.toLowerCase()} failed (HTTP ${r.status}).`)
       say(`${t.label}: deleted, with its profile.`)

@@ -93,11 +93,18 @@ const noSecrets = (text) => ![SECRET, PASSWORD, ...EMAILS].some((s) => text.incl
 {
   const realEmail = `real-${RUN}@example.test`
   await admin('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: realEmail, password: PASSWORD, email_confirm: true }) })
-  const r = await attempt(env('delete'))
+  // A tagged account whose address is not on the approved list.
+  const outsideEmail = `outside-${RUN}@example.test`
+  await admin('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: outsideEmail, password: PASSWORD, email_confirm: true, app_metadata: { [TEST_TAG]: true } }) })
+  const r = await attempt(env('delete', { INCLUDE_UNLISTED: 'true' }))
   check('delete succeeds', r.ok, r.ok ? '' : r.text)
   const remaining = await listUsers()
   check('all four test accounts are gone', !remaining.some((u) => EMAILS.includes(u.email)))
   check('the real account is untouched', remaining.some((u) => u.email === realEmail))
+  const outside = remaining.find((u) => u.email === outsideEmail)
+  check('a tagged account outside the approved list is not deleted', !!outside && outside.app_metadata?.[TEST_TAG] === true)
+  check('delete reports it but leaves it alone', /Tagged test accounts not on the approved list: 1 \(never deleted by this workflow/.test(r.text))
+  if (outside) await admin(`/auth/v1/admin/users/${outside.id}`, { method: 'DELETE' })
   const profiles = await admin(`/rest/v1/profiles?select=id`)
   const ids = new Set(remaining.map((u) => u.id))
   check('no profile is left without its account', Array.isArray(profiles.body) && profiles.body.every((p) => ids.has(p.id)))

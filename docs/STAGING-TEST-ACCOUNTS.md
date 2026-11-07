@@ -10,7 +10,7 @@ It can only ever touch staging. Production and the `demo` branch are never invol
 | --- | --- |
 | `plan` (default) | Read-only. Runs every check and reports, for test accounts 1 to 4, whether each exists. Changes nothing. |
 | `create` | Creates any missing test accounts with a confirmed email and the approved password, tagged as test accounts. Running it again creates nothing new. |
-| `delete` | Removes the tagged test accounts on the approved list, with their profiles. Tick "include unlisted" to also remove tagged test accounts whose address was later taken off the list. |
+| `delete` | Removes an account, with its profile, only if it carries the test tag **and** its address exactly matches one of the four approved addresses. Tagged accounts with any other address are reported and never deleted. |
 
 Each new account then goes through onboarding like any member.
 
@@ -20,7 +20,7 @@ Each new account then goes through onboarding like any member.
 * The one project it may touch is hard-coded in the workflow. The `SUPABASE_PROJECT_REF` variable and the reference typed when running it must both match, or it stops before contacting anything.
 * A server key from another project is refused: legacy keys name their project, and any key the staging project doesn't recognise fails before any change.
 * It refuses to run if public sign-up is enabled, and checks again after any change.
-* Test accounts are tagged in `app_metadata` (`crevant_staging_test_account: true`), which only server code can set; a member cannot add or remove it (tested). `create` stops, changing nothing, if an approved address already belongs to a real account. `delete` only removes tagged accounts, never a real one.
+* Test accounts are tagged in `app_metadata` (`crevant_staging_test_account: true`), which only server code can set; a member cannot add or remove it (tested). `create` stops, changing nothing, if an approved address already belongs to a real account. `delete` requires both the tag and an exact match with an approved address, so it can never remove a real account or any account outside the approved list.
 * Addresses, the password and the key are masked. The log only ever says "test account 1" to "test account 4", with counts and statuses.
 * CI tests the script on every pull request: self tests with a recording fake, and the full create, refuse and clean-up cycle against a real local Supabase. Guard tests fail if the workflow loses any of the safeguards above.
 
@@ -46,6 +46,6 @@ Actions, **Staging test accounts**, **Run workflow**:
 
 ## Cleaning up
 
-Before the pilot opens, or whenever test accounts are no longer needed, run mode `delete`. Tick "include unlisted" if the address list changed after accounts were created. Deleting an account removes its profile as well.
+Before the pilot opens, or whenever test accounts are no longer needed, run mode `delete` **before** changing the address list: it only removes accounts whose address is still on the list. If a tagged account is reported as "not on the approved list" (for example, after the list was changed), review and remove it by hand in the Supabase dashboard (Authentication, Users). Deleting an account removes its profile as well.
 
 If the key may have leaked, revoke it in the Supabase dashboard and replace the secret.

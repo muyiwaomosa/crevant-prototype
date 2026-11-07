@@ -127,6 +127,15 @@ if grep -q "MODE: \${{ inputs.mode }}" "$ta" && grep -q "if (env.GITHUB_ACTIONS 
 else
   echo "FAIL  test-account script lost a refusal (local target in staging, or sign-up enabled)"; failed=$((failed+1))
 fi
+# Deletion always needs both the server-only tag and an approved address:
+# there is no option to widen it.
+if ! grep -qiE 'include_unlisted|INCLUDE_UNLISTED' "$ta" scripts/staging-test-accounts.mjs \
+   && grep -q "const targets = listed.filter((a) => a.user && isTagged(a.user))" scripts/staging-test-accounts.mjs \
+   && grep -q "if (!isTagged(t.user) || !emails.includes(String(t.user.email || '').toLowerCase())) refuse(" scripts/staging-test-accounts.mjs; then
+  echo "PASS  test-account deletion always requires the tag and an approved address"; pass=$((pass+1))
+else
+  echo "FAIL  test-account deletion can be widened beyond tagged accounts on the approved list"; failed=$((failed+1))
+fi
 
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]
