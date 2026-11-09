@@ -36,10 +36,13 @@ function Qualifier({ testId, children }: { testId: string; children: ReactNode }
 
 function ExploreButton({ variant = 'secondary' }: { variant?: 'secondary' | 'ghost-dark' }) {
   return (
-    <div>
+    <div className="w-full min-[420px]:w-auto">
       <a
         href={TOUR_BASE}
-        className={variant === 'secondary' ? buttonClass('secondary', 'lg') : clsx(buttonClass('ghost', 'lg'), 'text-white ring-1 ring-white/25 hover:bg-white/10')}
+        className={clsx(
+          variant === 'secondary' ? buttonClass('secondary', 'lg') : clsx(buttonClass('ghost', 'lg'), 'text-white ring-1 ring-white/25 hover:bg-white/10'),
+          'w-full min-[420px]:w-auto',
+        )}
       >
         Explore Crevant
       </a>
@@ -59,27 +62,36 @@ function JoinButton() {
 // ---- 1. Hero ----------------------------------------------------------------
 
 function Hero() {
+  // Phones: headline, the one-line product explanation, the product preview,
+  // then the actions, then the rest of the approved hero copy. Desktop keeps
+  // the two-column layout (text left, phone right). Copy is unchanged; only
+  // the order differs on small screens.
   return (
-    <section id="hero" aria-labelledby="hero-title" className="overflow-hidden px-4 pb-14 pt-10 sm:px-6 sm:pt-16 lg:pb-20">
-      <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="min-w-0">
-          <h1 id="hero-title" className="font-display text-[2.45rem] font-extrabold leading-[1.03] tracking-[-0.035em] text-ink-900 sm:text-[3.4rem] lg:text-[3.85rem]">
-            You earned the follow. <span className="text-brand-600">You deserve the reach.</span>
-          </h1>
-          <div className="mt-6 max-w-xl space-y-4 text-lg leading-relaxed text-ink-600">
-            <p>You worked hard to build your audience. But what good is having thousands of followers if you can't consistently reach them?</p>
-            <p>
-              <strong className="font-semibold text-ink-900">Meet Crevant.</strong> A creator-first social network where the people who choose to
-              follow you can see your content in their Following feed, so you can focus on building connections, earning trust and creating
-              opportunities for sustainable income.
-            </p>
-            <p>Because content creation should be more than a side hustle. It should have the potential to become a profession.</p>
-          </div>
-          <div className="mt-7 flex flex-col items-start gap-3 min-[420px]:flex-row min-[420px]:flex-wrap">
+    <section id="hero" aria-labelledby="hero-title" className="overflow-hidden px-4 pb-12 pt-8 sm:px-6 sm:pt-16 lg:pb-20">
+      <div className="mx-auto flex max-w-6xl flex-col lg:grid lg:grid-cols-[1.2fr_0.8fr] lg:items-center lg:gap-x-10">
+        <h1
+          id="hero-title"
+          className="order-1 font-display text-[2.15rem] lg:order-none font-extrabold leading-[1.04] tracking-[-0.035em] text-ink-900 min-[400px]:text-[2.45rem] sm:text-[3.4rem] lg:col-start-1 lg:text-[3.85rem]"
+        >
+          You earned the follow. <span className="text-brand-600">You deserve the reach.</span>
+        </h1>
+        <p data-hero="lead" className="order-4 mt-6 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:order-none lg:col-start-1">
+          You worked hard to build your audience. But what good is having thousands of followers if you can't consistently reach them?
+        </p>
+        <p data-hero="product" className="order-2 mt-4 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:order-none lg:col-start-1">
+          <strong className="font-semibold text-ink-900">Meet Crevant.</strong> A creator-first social network where the people who choose to follow
+          you can see your content in their Following feed, so you can focus on building connections, earning trust and creating opportunities for
+          sustainable income.
+        </p>
+        <p data-hero="profession" className="order-5 mt-4 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:order-none lg:col-start-1">
+          Because content creation should be more than a side hustle. It should have the potential to become a profession.
+        </p>
+        <div data-hero="actions" className="order-3 mt-6 lg:order-none lg:col-start-1">
+          <div className="flex flex-col items-stretch gap-3 min-[420px]:flex-row min-[420px]:flex-wrap min-[420px]:items-start">
             <JoinButton />
             <ExploreButton />
           </div>
-          <p className="mt-5 max-w-xl text-sm italic leading-relaxed text-ink-500">An invitation-only platform being built for creators and their supporters.</p>
+          <p className="mt-4 max-w-xl text-sm italic leading-relaxed text-ink-500">An invitation-only platform being built for creators and their supporters.</p>
           <Qualifier testId="hero-note">
             Being built for the pilot. The Following feed shows posts from people you follow, newest first. It isn't a promise that each post reaches
             each follower.
@@ -91,9 +103,9 @@ function Hero() {
             </Link>
           </p>
         </div>
-        <div className="relative">
-          <div aria-hidden="true" className="absolute -inset-6 rounded-[48px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-50" />
-          <TourScreenshot screen="feed" caption="The Following feed, newest first" priority className="relative max-w-[260px]" />
+        <div data-hero="preview" className="relative order-2 mt-6 lg:order-none lg:col-start-2 lg:row-span-5 lg:row-start-1 lg:mt-0">
+          <div aria-hidden="true" className="absolute -inset-4 rounded-[48px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-50 lg:-inset-6" />
+          <TourScreenshot screen="feed" caption="The Following feed, newest first" priority className="relative max-w-[210px] sm:max-w-[240px] lg:max-w-[260px]" />
         </div>
       </div>
     </section>

@@ -4,6 +4,7 @@
 
 export type Category =
   | 'Food'
+  | 'Money'
   | 'Travel'
   | 'Tech'
   | 'Music'
@@ -16,6 +17,7 @@ export type ArtworkKind =
   | 'ridge'
   | 'coast'
   | 'bowl'
+  | 'budget'
   | 'citrus'
   | 'vinyl'
   | 'keys'

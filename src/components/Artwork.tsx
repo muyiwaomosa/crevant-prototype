@@ -74,6 +74,37 @@ function Bowl() {
   )
 }
 
+/** Three savings jars for a needs, wants and savings budget split. */
+function Budget() {
+  const jars = [
+    { x: 58, h: 150, fill: '#0e7c6b', label: '50%', name: 'Needs' },
+    { x: 158, h: 96, fill: '#f5a524', label: '30%', name: 'Wants' },
+    { x: 258, h: 66, fill: '#4f9d7e', label: '20%', name: 'Save' },
+  ]
+  return (
+    <>
+      <rect width={W} height={H} fill="#f3ead9" />
+      <rect x="0" y="262" width={W} height="58" fill="#e2d2b6" />
+      {jars.map((j) => (
+        <g key={j.name}>
+          <rect x={j.x - 4} y="62" width="92" height="14" rx="5" fill="#8a6a45" />
+          <rect x={j.x} y="74" width="84" height="190" rx="18" fill="#ffffff" opacity="0.55" stroke="#c9b48f" strokeWidth="3" />
+          <rect x={j.x + 6} y={258 - j.h} width="72" height={j.h} rx="12" fill={j.fill} />
+          {[0, 1, 2].map((i) => (
+            <ellipse key={i} cx={j.x + 26 + i * 16} cy={258 - j.h - 2} rx="9" ry="4" fill="#f9c74f" opacity="0.9" />
+          ))}
+          <text x={j.x + 42} y={258 - j.h / 2 + 6} textAnchor="middle" fontSize="20" fontWeight="700" fill="#ffffff" fontFamily="Inter, system-ui, sans-serif">
+            {j.label}
+          </text>
+          <text x={j.x + 42} y="292" textAnchor="middle" fontSize="16" fontWeight="600" fill="#5b4a33" fontFamily="Inter, system-ui, sans-serif">
+            {j.name}
+          </text>
+        </g>
+      ))}
+    </>
+  )
+}
+
 function Citrus() {
   const slices = [
     [120, 120, 62, '#f5a524'],
@@ -272,6 +303,7 @@ const SCENES: Record<ArtworkKind, () => React.ReactElement> = {
   ridge: Ridge,
   coast: Coast,
   bowl: Bowl,
+  budget: Budget,
   citrus: Citrus,
   vinyl: Vinyl,
   keys: Keys,

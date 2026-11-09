@@ -100,7 +100,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.goto(BASE + '/post/p_amara_1')
   await page.getByRole('button', { name: 'Like', exact: true }).first().click()
   await page.getByRole('button', { name: 'Save post' }).first().click()
-  await comment(page, 'p_amara_1', 'Pepper soup in this weather sounds perfect, saving the recipe.')
+  await comment(page, 'p_amara_1', 'Saving this for payday, the 60/25/15 tweak is really helpful.')
   await page.goto(BASE + '/post/p_amara_2')
   await page.getByRole('button', { name: 'Like', exact: true }).first().click()
   const a1 = await bal(page, 'amara')
@@ -118,7 +118,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.waitForTimeout(150)
   check('repeated character comment earns nothing', (await bal(page, 'priya')) === before)
   check('the comment itself is still posted', (await page.getByText('aaaaaaaaaaaa').count()) === 1)
-  await comment(page, 'p_priya_2', 'Pepper soup in this weather sounds perfect, saving the recipe.')
+  await comment(page, 'p_priya_2', 'Saving this for payday, the 60/25/15 tweak is really helpful.')
   check('duplicate comment on another post earns nothing', (await bal(page, 'priya')) === before)
   await comment(page, 'p_priya_3', 'great great great great')
   check('repeated word comment earns nothing', (await bal(page, 'priya')) === before)
@@ -199,7 +199,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   const theoBefore = await bal(page, 'theo')
   await page.goto(BASE + '/rewards?creator=amara')
   await shot(page, 'rewards-amara')
-  const card = page.locator('article', { hasText: 'Family recipe card' })
+  const card = page.locator('article', { hasText: 'Payday budget template' })
   await card.getByRole('button', { name: 'Redeem' }).click()
   await shot(page, 'redeem-confirm')
   await page.evaluate(() => {
@@ -221,7 +221,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.getByRole('button', { name: 'Done' }).click()
   check('a redeemed reward cannot be redeemed again', (await card.getByRole('button', { name: 'Redeem' }).count()) === 0)
 
-  const high = page.locator('article', { hasText: 'Seat at a live cook along' })
+  const high = page.locator('article', { hasText: 'Seat at a live budgeting Q&A' })
   check('higher value Amara reward is visible and locked', (await high.getByText(/CP to go/).count()) === 1)
 
   // ---- Persistence (journey 6) -------------------------------------------
@@ -229,7 +229,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.reload()
   check('balances survive a refresh', JSON.stringify(await balances(page)) === snapshot)
   await page.goto(BASE + '/rewards?tab=history')
-  check('reward history survives a refresh', (await countWhenReady(page.getByText('Family recipe card: slow jollof'))) >= 1)
+  check('reward history survives a refresh', (await countWhenReady(page.getByText('Payday budget template'))) >= 1)
 
   await page.goto(BASE + '/points')
   await page.getByText('This total cannot be spent.').waitFor()

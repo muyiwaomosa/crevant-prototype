@@ -98,6 +98,22 @@ async function shows(locator, timeout = 5000) {
         await page.waitForTimeout(300)
         check(`Back to Crevant from ${path} returns to section 9`, await page.locator('#founding').evaluate((el) => { const r = el.getBoundingClientRect(); return r.top < window.innerHeight && r.bottom > 0 }))
       }
+      // Mobile hero: headline, product line, preview and actions come before the longer paragraphs.
+      {
+        const phone = await browser.newPage({ viewport: { width: 390, height: 844 } })
+        await phone.goto(BASE + '/')
+        const top = (sel) => phone.locator(sel).first().evaluate((el) => el.getBoundingClientRect().top + window.scrollY)
+        const [h1, product, preview, actions, lead] = await Promise.all(['#hero h1', '[data-hero="product"]', '[data-hero="preview"]', '[data-hero="actions"]', '[data-hero="lead"]'].map(top))
+        check('mobile hero order: headline, product, preview, actions, then the longer copy', h1 < product && product < preview && preview < actions && actions < lead, [h1, product, preview, actions, lead].map(Math.round).join(' < '))
+        check('mobile hero shows the product preview within the first two screens', preview < 2 * 844, String(Math.round(preview)))
+        await phone.close()
+        const desk = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+        await desk.goto(BASE + '/')
+        const box = (sel) => desk.locator(sel).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top + window.scrollY } })
+        const [dh1, dlead, dprev] = await Promise.all(['#hero h1', '[data-hero="lead"]', '[data-hero="preview"]'].map(box))
+        check('desktop hero keeps text left and the phone right', dh1.y < dlead.y && dprev.x > dlead.x + 300, JSON.stringify({ dh1, dlead, dprev }))
+        await desk.close()
+      }
       await page.goto(BASE + '/')
       const founderImg = page.locator('#story img')
       await founderImg.scrollIntoViewIfNeeded()

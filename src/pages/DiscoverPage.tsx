@@ -6,7 +6,7 @@ import { CreatorCard } from '../components/CreatorCard'
 import { EmptyState, PageHeader } from '../components/ui'
 import type { Category } from '../types'
 
-const CATEGORIES: Array<Category | 'All'> = ['All', 'Food', 'Travel', 'Tech', 'Music', 'Art', 'Fitness', 'Books', 'Wellness']
+const CATEGORIES: Array<Category | 'All'> = ['All', 'Food', 'Money', 'Travel', 'Tech', 'Music', 'Art', 'Fitness', 'Books', 'Wellness']
 
 export function DiscoverPage() {
   const { creators, state } = useStore()
