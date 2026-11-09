@@ -63,18 +63,46 @@ export function YearGrid() {
   )
 }
 
+/** The two-month chart. Phones use the square version; desktop a wider, shorter one. */
+function ScissorsSvg({ wide, className }: { wide?: boolean; className?: string }) {
+  const W = wide ? 560 : 320
+  const H = wide ? 210 : 200
+  const x0 = wide ? 150 : 70
+  const x1 = wide ? 410 : 250
+  const top = wide ? 44 : 36
+  const bottom = wide ? 196 : 176
+  const yOf = (v: number, max: number) => bottom - (v / max) * (bottom - top)
+  const subs = [yOf(12000, 40000), yOf(36000, 40000)]
+  const earn = [yOf(500, 600), yOf(200, 600)]
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Subscribers rose from 12,000 to 36,000 while earnings fell from about $500 to about $200." className={clsx('block h-auto w-full', className)}>
+      {wide && (
+        <g aria-hidden="true" className="fill-ink-400 text-[10px] font-semibold uppercase tracking-wide">
+          <text x={x0} y="12" textAnchor="middle">First earnings</text>
+          <text x={x1} y="12" textAnchor="middle">The following month</text>
+        </g>
+      )}
+      <line x1={x0} y1={top - 16} x2={x0} y2={bottom + 4} className="stroke-white/15" />
+      <line x1={x1} y1={top - 16} x2={x1} y2={bottom + 4} className="stroke-white/15" />
+      <line x1={x0} y1={subs[0]} x2={x1} y2={subs[1]} className="stroke-brand-300" strokeWidth="4" strokeLinecap="round" />
+      <line x1={x0} y1={earn[0]} x2={x1} y2={earn[1]} stroke="#ff8a7a" strokeWidth="4" strokeLinecap="round" />
+      <circle cx={x0} cy={subs[0]} r="6" className="fill-brand-300" />
+      <circle cx={x1} cy={subs[1]} r="6" className="fill-brand-300" />
+      <circle cx={x0} cy={earn[0]} r="6" fill="#ff8a7a" />
+      <circle cx={x1} cy={earn[1]} r="6" fill="#ff8a7a" />
+      <text x={x0 - 12} y={subs[0] + 4} textAnchor="end" className="fill-white text-[13px] font-bold">12,000</text>
+      <text x={x0 - 12} y={earn[0] + 4} textAnchor="end" fill="#ff8a7a" className="text-[13px] font-bold">~$500</text>
+      <text x={x1 + 12} y={subs[1] + 4} className="fill-white text-[13px] font-bold">36,000</text>
+      <text x={x1 + 12} y={earn[1] + 4} fill="#ff8a7a" className="text-[13px] font-bold">~$200</text>
+    </svg>
+  )
+}
+
 /**
  * The founder's two confirmed months as a "scissors" chart: subscribers up,
  * earnings down. Each line has its own scale from zero.
  */
 export function EarningsContrast() {
-  const W = 320
-  const H = 200
-  const x0 = 70
-  const x1 = 250
-  const yOf = (v: number, max: number) => 176 - (v / max) * 140
-  const subs = [yOf(12000, 40000), yOf(36000, 40000)]
-  const earn = [yOf(500, 600), yOf(200, 600)]
   return (
     // Phones: one column. Desktop: the chart on the left, its key and caption on the right.
     <figure
@@ -82,25 +110,13 @@ export function EarningsContrast() {
       aria-labelledby="earnings-contrast-caption"
       className="overflow-hidden rounded-[28px] bg-ink-900 text-white lg:grid lg:grid-cols-[1.35fr_1fr] lg:grid-rows-[1fr_auto]"
     >
-      <div className="lg:row-span-2 lg:border-r lg:border-white/10 lg:pb-4">
-      <div className="grid grid-cols-2 border-b border-white/10 text-[12px] font-semibold uppercase tracking-wide text-ink-400">
+      <div className="lg:row-span-2 lg:border-r lg:border-white/10 lg:px-4 lg:py-6">
+      <div className="grid grid-cols-2 border-b border-white/10 text-[12px] font-semibold uppercase tracking-wide text-ink-400 lg:hidden">
         <p className="px-5 pt-5 sm:px-7">First earnings</p>
         <p className="px-5 pt-5 text-right sm:px-7">The following month</p>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Subscribers rose from 12,000 to 36,000 while earnings fell from about $500 to about $200." className="block h-auto w-full">
-        <line x1={x0} y1="20" x2={x0} y2="180" className="stroke-white/15" />
-        <line x1={x1} y1="20" x2={x1} y2="180" className="stroke-white/15" />
-        <line x1={x0} y1={subs[0]} x2={x1} y2={subs[1]} className="stroke-brand-300" strokeWidth="4" strokeLinecap="round" />
-        <line x1={x0} y1={earn[0]} x2={x1} y2={earn[1]} stroke="#ff8a7a" strokeWidth="4" strokeLinecap="round" />
-        <circle cx={x0} cy={subs[0]} r="6" className="fill-brand-300" />
-        <circle cx={x1} cy={subs[1]} r="6" className="fill-brand-300" />
-        <circle cx={x0} cy={earn[0]} r="6" fill="#ff8a7a" />
-        <circle cx={x1} cy={earn[1]} r="6" fill="#ff8a7a" />
-        <text x={x0 - 12} y={subs[0] + 4} textAnchor="end" className="fill-white text-[13px] font-bold">12,000</text>
-        <text x={x0 - 12} y={earn[0] + 4} textAnchor="end" fill="#ff8a7a" className="text-[13px] font-bold">~$500</text>
-        <text x={x1 + 12} y={subs[1] + 4} className="fill-white text-[13px] font-bold">36,000</text>
-        <text x={x1 + 12} y={earn[1] + 4} fill="#ff8a7a" className="text-[13px] font-bold">~$200</text>
-      </svg>
+      <ScissorsSvg className="lg:hidden" />
+      <ScissorsSvg wide className="hidden lg:block" />
       </div>
       <div className="grid grid-cols-2 gap-3 px-5 pb-4 text-sm sm:px-7 lg:grid-cols-1 lg:content-center lg:gap-4 lg:py-8 lg:text-base">
         <p className="text-ink-300">
@@ -298,7 +314,7 @@ export function RightThousand() {
   }, [])
   return (
     <figure ref={ref} data-testid="right-thousand" data-live={live} className="rounded-[32px] bg-white p-4 ring-1 ring-ink-100 sm:p-8">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby="rt-title" className="block h-auto w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby="rt-title" className="mx-auto block h-auto w-full lg:max-w-[880px]">
         <title id="rt-title">A field of small dots, each one a person who chose to follow, around one creator in the middle. Some dots are connected to the creator by lines that stand for relationships.</title>
         {Array.from({ length: cols * rows }, (_, i) =>
           centre(i) ? null : <circle key={i} cx={(i % cols) * gap + gap / 2} cy={Math.floor(i / cols) * gap + gap / 2} r="2.6" className="fill-ink-200" />,
@@ -317,7 +333,7 @@ export function RightThousand() {
         <circle cx={cx} cy={cy - 4} r="5" className="fill-white" />
         <path d={`M ${cx - 8} ${cy + 9} q 8 -10 16 0`} className="fill-white" />
       </svg>
-      <figcaption className="mt-4 text-[13px] leading-relaxed text-ink-500">
+      <figcaption className="mx-auto mt-4 text-[13px] leading-relaxed text-ink-500 lg:max-w-[880px]">
         Each dot is one person who chose to follow. The lines are relationships: people who come back, join the conversation and recommend your work.
       </figcaption>
     </figure>
@@ -390,7 +406,7 @@ export function FanJourney() {
 /** Step 2 is Planned: your existing audience coming with you, as a sketch. */
 export function BringYourAudience() {
   return (
-    <figure data-testid="step2-concept" className="mt-5 rounded-2xl md:mt-auto border border-dashed border-ink-300 bg-white/60 p-4">
+    <figure data-testid="step2-concept" className="mt-5 rounded-2xl md:flex md:flex-1 md:flex-col md:justify-center border border-dashed border-ink-300 bg-white/60 p-4">
       <svg viewBox="0 0 240 110" aria-hidden="true" className="block h-auto w-full">
         {[14, 46, 78].map((y, i) => (
           <g key={y}>

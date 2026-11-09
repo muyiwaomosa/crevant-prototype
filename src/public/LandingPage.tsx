@@ -255,21 +255,26 @@ function Problem() {
   return (
     <Section id="problem" eyebrow="The problem" title="You can have a million followers and still struggle to make a living.">
       <p className="max-w-2xl text-[17px] leading-relaxed text-ink-600">I started paying closer attention to other creators.</p>
-      <ul className="mt-6 grid gap-4 md:grid-cols-3">
-        <li className={clsx('space-y-4 rounded-3xl bg-card p-5 leading-relaxed text-ink-600', cardShadow)}>
+      {/* Desktop: the two short cards share the first row, and the long third
+          card runs full width below with its drawing beside the text, so no
+          card is stretched around empty space. */}
+      <ul className="mt-6 grid gap-4 md:grid-cols-3 lg:grid-cols-2">
+        <li className={clsx('space-y-4 rounded-3xl bg-card p-5 leading-relaxed text-ink-600 lg:grid lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-5 lg:space-y-0', cardShadow)}>
           <FollowersVsViews />
           <p className="px-1">
             I saw accounts with hundreds of thousands, even millions, of followers whose latest videos were getting a fraction of that number in views.
           </p>
         </li>
-        <li data-card="day-job" className={clsx('rounded-3xl bg-card p-6 leading-relaxed text-ink-600', cardShadow)}>
+        <li data-card="day-job" className={clsx('rounded-3xl bg-card p-6 leading-relaxed text-ink-600 lg:flex lg:items-center', cardShadow)}>
           I came across creators talking about having to return to regular jobs because they couldn't depend on their income from content creation.
         </li>
-        <li className={clsx('space-y-3 rounded-3xl bg-card p-5 leading-relaxed text-ink-600', cardShadow)}>
+        <li className={clsx('space-y-3 rounded-3xl bg-card p-5 leading-relaxed text-ink-600 lg:col-span-2 lg:grid lg:grid-cols-[0.75fr_1.25fr] lg:items-center lg:gap-8 lg:space-y-0', cardShadow)}>
           <AlgorithmNotes />
-          <p>Creators who started out sharing what they genuinely cared about were sometimes changing what they created just to stay visible.</p>
-          <p className="font-semibold text-ink-800">Following trends. Copying what worked for others. Creating controversy to attract attention.</p>
-          <p>Not necessarily because that's what they wanted to create, but because they felt that's what the algorithm would reward.</p>
+          <div className="space-y-3">
+            <p>Creators who started out sharing what they genuinely cared about were sometimes changing what they created just to stay visible.</p>
+            <p className="font-semibold text-ink-800">Following trends. Copying what worked for others. Creating controversy to attract attention.</p>
+            <p>Not necessarily because that's what they wanted to create, but because they felt that's what the algorithm would reward.</p>
+          </div>
         </li>
       </ul>
       <div className="mt-12 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
