@@ -204,7 +204,7 @@ function Story() {
           />
           <p className="text-sm font-semibold text-ink-700">From Crevant's founder</p>
         </div>
-        <div className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <div className="min-w-0 lg:col-start-2 lg:row-start-1">
           <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
             <p>Two years ago, I made my wife a promise. I told her she'd be able to retire by her 40th birthday.</p>
             <p>There was just one problem. I had no idea how I was going to make that happen.</p>
@@ -240,7 +240,7 @@ function Story() {
             </div>
           </details>
         </div>
-        <div className="min-w-0 max-w-[420px] lg:col-start-1 lg:row-start-2">
+        <div className="min-w-0 lg:col-span-2 lg:row-start-2">
           <EarningsContrast />
         </div>
       </div>
@@ -254,7 +254,7 @@ function Problem() {
   return (
     <Section id="problem" eyebrow="The problem" title="You can have a million followers and still struggle to make a living.">
       <p className="max-w-2xl text-[17px] leading-relaxed text-ink-600">I started paying closer attention to other creators.</p>
-      <ul className="mt-6 grid items-start gap-4 md:grid-cols-3">
+      <ul className="mt-6 grid gap-4 md:grid-cols-3">
         <li className={clsx('space-y-4 rounded-3xl bg-card p-5 leading-relaxed text-ink-600', cardShadow)}>
           <FollowersVsViews />
           <p className="px-1">
@@ -271,8 +271,9 @@ function Problem() {
           <p>Not necessarily because that's what they wanted to create, but because they felt that's what the algorithm would reward.</p>
         </li>
       </ul>
-      <div className="mt-12 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
+      <div className="mt-12 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+        {/* Desktop: the text stays beside the comparison while it scrolls past. */}
+        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600 lg:sticky lg:top-24">
           <p className="font-display text-xl font-bold text-ink-900">Think about that.</p>
           <p data-testid="problem-lead">
             You worked hard to build your audience. But what good is having thousands of followers if you can't consistently reach them?
@@ -294,8 +295,10 @@ function Problem() {
 function Why() {
   return (
     <Section id="why" eyebrow="Why Crevant exists" title="What if social media worked for the people creating the value?" className="bg-white">
-      <div className="grid gap-10 lg:grid-cols-[1fr_1fr]">
-        <ul className="space-y-3">
+      {/* Phones: What ifs, the belief, its diagram, then the rest. Desktop: the
+          diagram sits under the What ifs so both columns end together. */}
+      <div className="grid gap-x-10 gap-y-6 lg:grid-cols-[1fr_1fr]">
+        <ul className="space-y-3 lg:col-start-1 lg:row-span-2 lg:row-start-1">
           {[
             'What if you didn\'t have to constantly fight for the attention of people who already chose to follow you?',
             'What if creating something valuable mattered more than creating something controversial?',
@@ -307,13 +310,17 @@ function Why() {
             </li>
           ))}
         </ul>
-        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
+        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600 lg:col-start-2 lg:row-start-1">
           <p className="font-semibold text-ink-900">That's the future we're building with Crevant.</p>
           <p>A creator-first social network designed around a simple belief:</p>
           <blockquote className="rounded-3xl bg-brand-700 px-6 py-5 font-display text-xl font-bold leading-snug text-white">
             When someone chooses to follow you, your content should have a reliable place in their feed.
           </blockquote>
+        </div>
+        <div className="lg:col-start-1 lg:row-start-3">
           <FollowToFeed />
+        </div>
+        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600 lg:col-start-2 lg:row-span-2 lg:row-start-2">
           <p>
             We're building Crevant to help creators connect with their audiences, strengthen trust, recognize loyal supporters and develop
             opportunities to earn from the value they create.
@@ -517,7 +524,7 @@ function How() {
         <p>You don't have to abandon the audience you've already built.</p>
         <p>Crevant is being designed to help you bring those relationships into a space where you can strengthen them.</p>
       </div>
-      <ol className="mt-10 grid items-start gap-5 md:grid-cols-3">
+      <ol className="mt-10 grid gap-5 md:grid-cols-3">
         <li data-step={1} className={clsx('flex flex-col rounded-3xl bg-card p-6', cardShadow)}>
           <StatusBadge status="building" />
           <h3 className="mt-3 font-display text-lg font-bold text-ink-900">Step 1 — Create your profile.</h3>

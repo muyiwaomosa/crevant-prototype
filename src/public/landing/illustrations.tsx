@@ -76,7 +76,13 @@ export function EarningsContrast() {
   const subs = [yOf(12000, 40000), yOf(36000, 40000)]
   const earn = [yOf(500, 600), yOf(200, 600)]
   return (
-    <figure data-testid="earnings-contrast" aria-labelledby="earnings-contrast-caption" className="overflow-hidden rounded-[28px] bg-ink-900 text-white">
+    // Phones: one column. Desktop: the chart on the left, its key and caption on the right.
+    <figure
+      data-testid="earnings-contrast"
+      aria-labelledby="earnings-contrast-caption"
+      className="overflow-hidden rounded-[28px] bg-ink-900 text-white lg:grid lg:grid-cols-[1.35fr_1fr] lg:grid-rows-[1fr_auto]"
+    >
+      <div className="lg:row-span-2 lg:border-r lg:border-white/10 lg:pb-4">
       <div className="grid grid-cols-2 border-b border-white/10 text-[12px] font-semibold uppercase tracking-wide text-ink-400">
         <p className="px-5 pt-5 sm:px-7">First earnings</p>
         <p className="px-5 pt-5 text-right sm:px-7">The following month</p>
@@ -95,17 +101,18 @@ export function EarningsContrast() {
         <text x={x1 + 12} y={subs[1] + 4} className="fill-white text-[13px] font-bold">36,000</text>
         <text x={x1 + 12} y={earn[1] + 4} fill="#ff8a7a" className="text-[13px] font-bold">~$200</text>
       </svg>
-      <div className="grid grid-cols-2 gap-3 px-5 pb-4 text-sm sm:px-7">
+      </div>
+      <div className="grid grid-cols-2 gap-3 px-5 pb-4 text-sm sm:px-7 lg:grid-cols-1 lg:content-center lg:gap-4 lg:py-8 lg:text-base">
         <p className="text-ink-300">
           <span className="mr-1.5 inline-block h-2 w-4 rounded-full bg-brand-300 align-middle" aria-hidden="true" />
           subscribers <span className="font-semibold text-brand-300">(+200%)</span>
         </p>
-        <p className="text-right text-ink-300">
+        <p className="text-right text-ink-300 lg:text-left">
           <span className="mr-1.5 inline-block h-2 w-4 rounded-full bg-[#ff8a7a] align-middle" aria-hidden="true" />
           earned <span className="font-semibold text-[#ff8a7a]">(−60%)</span>
         </p>
       </div>
-      <figcaption id="earnings-contrast-caption" className="border-t border-white/10 px-5 py-3.5 text-[13px] leading-relaxed text-ink-300 sm:px-7">
+      <figcaption id="earnings-contrast-caption" className="border-t border-white/10 px-5 py-3.5 text-[13px] leading-relaxed text-ink-300 sm:px-7 lg:py-6">
         The founder's YouTube channel: subscribers tripled while earnings fell by 60%. Each line uses its own scale, starting from zero.
       </figcaption>
     </figure>
@@ -162,9 +169,9 @@ export function AlgorithmNotes() {
   )
 }
 
-function DrawnFeedRow({ title, meta, faded }: { title: string; meta: string; faded?: boolean }) {
+function DrawnFeedRow({ title, meta, faded, wide }: { title: string; meta: string; faded?: boolean; wide?: boolean }) {
   return (
-    <li className={clsx('flex items-center gap-2.5 rounded-xl px-2.5 py-2', faded ? 'bg-white/60 opacity-60 ring-1 ring-dashed ring-ink-200' : 'bg-white ring-1 ring-ink-100')}>
+    <li className={clsx('items-center gap-2.5 rounded-xl px-2.5 py-2', wide ? 'hidden sm:flex' : 'flex', faded ? 'bg-white/60 opacity-60 ring-1 ring-dashed ring-ink-200' : 'bg-white ring-1 ring-ink-100')}>
       <span aria-hidden="true" className={clsx('hidden h-7 w-7 shrink-0 rounded-full sm:block', faded ? 'bg-gradient-to-br from-brand-300 to-brand-600' : 'bg-ink-200')} />
       <span className="min-w-0">
         <span className="block text-[11px] font-semibold leading-snug text-ink-700 sm:truncate sm:text-[12px]">{title}</span>
@@ -181,14 +188,16 @@ export function FeedComparison() {
       <div className="grid grid-cols-2 items-start gap-3 sm:gap-6">
         <div>
           <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-ink-500 sm:text-[12px]">A ranked feed</p>
-          <div className="mx-auto mt-3 max-w-[230px] rounded-[30px] border-[6px] border-ink-300 bg-ink-50 p-2.5 grayscale">
-            <ul aria-label="Example of a ranked feed" className="space-y-2">
+          <div className="mx-auto mt-3 flex max-w-[230px] flex-col sm:aspect-[390/844] rounded-[30px] border-[6px] border-ink-300 bg-ink-50 p-2.5 grayscale">
+            <ul aria-label="Example of a ranked feed" className="space-y-2 overflow-hidden">
               <DrawnFeedRow title="Suggested for you" meta="Picked for predicted engagement" />
               <DrawnFeedRow title="Trending now" meta="From someone you don't follow" />
               <DrawnFeedRow title="Suggested for you" meta="Picked for predicted engagement" />
+              <DrawnFeedRow title="Trending now" meta="From someone you don't follow" wide />
+              <DrawnFeedRow title="Suggested for you" meta="Picked for predicted engagement" wide />
               <DrawnFeedRow title="A creator you chose to follow" meta="Further down, if it appears" faded />
             </ul>
-            <p aria-hidden="true" className="mt-2 text-center font-display text-2xl font-bold text-ink-400">?</p>
+            <p aria-hidden="true" className="mt-2 text-center font-display text-2xl font-bold text-ink-400 sm:mt-auto sm:pb-2 sm:text-3xl">?</p>
           </div>
           <p className="mt-2 text-center">
             <VisualTag>Illustration</VisualTag>
@@ -396,7 +405,7 @@ export function FanJourney() {
 /** Step 2 is Planned: your existing audience coming with you, as a sketch. */
 export function BringYourAudience() {
   return (
-    <figure data-testid="step2-concept" className="mt-5 rounded-2xl border border-dashed border-ink-300 bg-white/60 p-4">
+    <figure data-testid="step2-concept" className="mt-5 rounded-2xl md:mt-auto border border-dashed border-ink-300 bg-white/60 p-4">
       <svg viewBox="0 0 240 110" aria-hidden="true" className="block h-auto w-full">
         {[14, 46, 78].map((y, i) => (
           <g key={y}>
