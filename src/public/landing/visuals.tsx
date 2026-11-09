@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { ArrowRight, Clock3, Shuffle } from 'lucide-react'
+import { ArrowRight, Clock3, Shuffle, Sprout } from 'lucide-react'
 
 // Illustrations drawn in code. They explain ideas; none of them shows real
 // data, and none of them promises reach or income.
@@ -104,6 +104,79 @@ export function PyramidComparison() {
       <figcaption className="mt-6 border-t border-ink-100 pt-4 text-center text-[13px] leading-relaxed text-ink-500">
         <span className="mr-2 rounded-full border border-dashed border-ink-300 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Conceptual vision</span>
         Not measured income data, and not a promise of any outcome.
+      </figcaption>
+    </figure>
+  )
+}
+
+// ---- Landing page V1 ------------------------------------------------------
+
+/**
+ * Section 2: the founder's confirmed figures as one memorable contrast.
+ * Personal history, not a prediction or a promise.
+ */
+export function EarningsContrast() {
+  return (
+    <figure data-testid="earnings-contrast" aria-labelledby="earnings-contrast-caption" className="overflow-hidden rounded-[28px] bg-ink-900 text-white">
+      <div className="grid grid-cols-2">
+        <div className="p-5 sm:p-7">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-400">First earnings</p>
+          <p className="mt-3 font-display text-[1.9rem] font-extrabold leading-none sm:text-[2.6rem]">12,000</p>
+          <p className="mt-1 text-sm text-ink-300">subscribers</p>
+          <p className="mt-5 font-display text-[1.9rem] font-extrabold leading-none text-spark-300 sm:text-[2.6rem]">~$500</p>
+          <p className="mt-1 text-sm text-ink-300">earned</p>
+        </div>
+        <div className="border-l border-white/10 bg-white/[0.04] p-5 sm:p-7">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-400">The following month</p>
+          <p className="mt-3 font-display text-[1.9rem] font-extrabold leading-none sm:text-[2.6rem]">36,000</p>
+          <p className="mt-1 text-sm text-ink-300">
+            subscribers <span className="font-semibold text-brand-300">(+200%)</span>
+          </p>
+          <p className="mt-5 font-display text-[1.9rem] font-extrabold leading-none text-[#ff8a7a] sm:text-[2.6rem]">~$200</p>
+          <p className="mt-1 text-sm text-ink-300">
+            earned <span className="font-semibold text-[#ff8a7a]">(−60%)</span>
+          </p>
+        </div>
+      </div>
+      <figcaption id="earnings-contrast-caption" className="border-t border-white/10 px-5 py-3.5 text-[13px] leading-relaxed text-ink-300 sm:px-7">
+        The founder's YouTube channel: subscribers tripled while earnings fell by 60%.
+      </figcaption>
+    </figure>
+  )
+}
+
+/** Section 6: the one connected story the three demonstrations tell. */
+export function DifferenceRail() {
+  const steps = ['Reach', 'Loyalty', 'Income opportunities']
+  return (
+    <ol aria-label="Reach, then loyalty, then income opportunities" className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+      {steps.map((s, i) => (
+        <li key={s} className="flex items-center gap-2">
+          <a href={`#difference-${i + 1}`} className="rounded-full bg-white px-3.5 py-1.5 text-ink-800 ring-1 ring-ink-100 hover:ring-brand-300">
+            <span className="mr-1.5 text-brand-600">{i + 1}</span>
+            {s}
+          </a>
+          {i < steps.length - 1 && <ArrowRight aria-hidden="true" className="h-4 w-4 text-ink-400" />}
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+/**
+ * Section 6.3: no support or payment interface exists, so this is a plain
+ * "Planned" panel, never a mock screen.
+ */
+export function PlannedPanel() {
+  return (
+    <figure data-testid="planned-panel" className="mx-auto flex w-full max-w-[320px] flex-col items-center rounded-[32px] border-2 border-dashed border-ink-200 bg-white/70 px-6 py-10 text-center">
+      <span aria-hidden="true" className="grid h-14 w-14 place-items-center rounded-2xl bg-ink-50 text-ink-500">
+        <Sprout className="h-7 w-7" />
+      </span>
+      <p className="mt-4 text-[12px] font-semibold uppercase tracking-wide text-ink-500">Planned</p>
+      <p className="mt-2 font-display text-lg font-bold leading-snug text-ink-800">Ways for communities to support the creators they value</p>
+      <figcaption className="mt-3 text-[13px] leading-relaxed text-ink-500">
+        Not built yet, so there is no screen to show. No payments are enabled and no money changes hands on Crevant.
       </figcaption>
     </figure>
   )

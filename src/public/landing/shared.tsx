@@ -3,13 +3,14 @@ import type { ReactNode } from 'react'
 
 // Shared building blocks for the landing page.
 
-export type Status = 'pilot' | 'testing' | 'development' | 'vision'
+// Approved labels. The real app does not have these features yet: the sample
+// tour demonstrates them. "Being built for the pilot" is under development;
+// "Planned" is not implemented anywhere yet.
+export type Status = 'building' | 'planned'
 
 const STATUS_LABEL: Record<Status, string> = {
-  pilot: 'In the pilot',
-  testing: 'Testing in the pilot',
-  development: 'In development',
-  vision: "Where we're headed",
+  building: 'Being built for the pilot',
+  planned: 'Planned',
 }
 
 /** Every feature claim on the page carries one of these. */
@@ -19,9 +20,8 @@ export function StatusBadge({ status, className }: { status: Status; className?:
       data-status={status}
       className={clsx(
         'inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
-        (status === 'pilot' || status === 'testing') && 'bg-brand-50 text-brand-700 ring-1 ring-brand-100',
-        status === 'development' && 'bg-spark-50 text-spark-700 ring-1 ring-spark-200',
-        status === 'vision' && 'border border-dashed border-ink-300 bg-white/60 text-ink-500',
+        status === 'building' && 'bg-brand-50 text-brand-700 ring-1 ring-brand-100',
+        status === 'planned' && 'border border-dashed border-ink-300 bg-white/60 text-ink-500',
         className,
       )}
     >
@@ -81,6 +81,31 @@ export const TOUR_SCREENS = {
     src: '/media/landing/tour-rewards.jpg',
     statusBg: '#f7f4ef',
     alt: 'The rewards page in the Crevant sample tour: a reward from one creator, unlocked with points earned with that creator, marked as a simulated reward.',
+  },
+  feedPosts: {
+    src: '/media/landing/tour-feed-posts.jpg',
+    statusBg: '#f5f2e9',
+    alt: 'Posts from followed creators in the Following feed of the Crevant sample tour, newest first, each showing how long ago it was posted.',
+  },
+  discover: {
+    src: '/media/landing/tour-discover.jpg',
+    statusBg: '#fff7ea',
+    alt: 'The Discover page in the Crevant sample tour: search and topic filters, with creator cards to follow.',
+  },
+  myPoints: {
+    src: '/media/landing/tour-my-cp.jpg',
+    statusBg: '#f5f2ed',
+    alt: "A fan's Connection Points in the Crevant sample tour, kept separately with each creator, with progress toward each creator's next reward.",
+  },
+  profile: {
+    src: '/media/landing/tour-profile.jpg',
+    statusBg: '#fff7ea',
+    alt: 'A member profile in the Crevant sample tour, with a short bio and an Edit profile button. The follower count is marked as demo data.',
+  },
+  post: {
+    src: '/media/landing/tour-post.jpg',
+    statusBg: '#f7f4ef',
+    alt: 'A post with its comments in the Crevant sample tour, and a box to add a thoughtful comment.',
   },
 } as const
 

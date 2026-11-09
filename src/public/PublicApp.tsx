@@ -3,6 +3,7 @@ import { AuthProvider } from '../auth/AuthProvider'
 import { PublicLayout } from './PublicLayout'
 import { LandingPage } from './LandingPage'
 import { RequestInvitePage } from './RequestInvitePage'
+import { JoinPage } from './JoinPage'
 import { PublicNotFound } from './PublicNotFound'
 import { SignInPage } from './auth/SignInPage'
 import { ForgotPasswordPage } from './auth/ForgotPasswordPage'
@@ -34,6 +35,8 @@ export function PublicRoutes() {
       <Route element={<PublicLayout />}>
         <Route index element={<LandingPage />} />
         <Route path="request-invite" element={<RequestInvitePage />} />
+        <Route path="join/creator" element={<JoinPage audience="creator" />} />
+        <Route path="join/supporter" element={<JoinPage audience="supporter" />} />
         <Route path="sign-in" element={<SignInPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />

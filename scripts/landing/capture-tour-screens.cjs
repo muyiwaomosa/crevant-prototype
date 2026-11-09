@@ -22,6 +22,16 @@ const SCREENS = [
   { name: 'tour-creator-page', path: '/creator/amara', scrollTo: '#connection-title' },
   // Scrolled to the first creator's rewards.
   { name: 'tour-rewards', path: '/rewards', scrollTo: 'h2[id^="rw-"]' },
+  // Landing V1: the feed scrolled to posts from followed creators.
+  { name: 'tour-feed-posts', path: '', scrollTo: 'article' },
+  // Finding creators to follow.
+  { name: 'tour-discover', path: '/discover' },
+  // A fan's Connection Points, kept separately with each creator.
+  { name: 'tour-my-cp', path: '/rewards?tab=cp', scrollTo: '#balances-title' },
+  // A member profile.
+  { name: 'tour-profile', path: '/profile' },
+  // A post with its comments.
+  { name: 'tour-post', path: '/post/p_amara_1', scrollTo: '#comments-title', offset: 420 },
 ]
 
 ;(async () => {
@@ -45,10 +55,10 @@ const SCREENS = [
     await page.waitForLoadState('networkidle')
     await page.evaluate(() => document.fonts.ready)
     if (s.scrollTo) {
-      await page.locator(s.scrollTo).first().evaluate((el) => {
-        const top = el.getBoundingClientRect().top + window.scrollY - 104
+      await page.locator(s.scrollTo).first().evaluate((el, offset) => {
+        const top = el.getBoundingClientRect().top + window.scrollY - offset
         window.scrollTo(0, top)
-      })
+      }, s.offset || 104)
     }
     await page.waitForTimeout(400)
     const png = path.join(OUT, `${s.name}.png`)

@@ -13,10 +13,10 @@ const BASE = (process.argv[2] || 'http://localhost:4175').replace(/\/$/, '')
 const SHOTS = process.argv[3] || null
 const PRODUCTION = 'https://crevant-prototype.vercel.app'
 const ALLOWED_THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com']
-const PUBLIC_PAGES = ['/', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
+const PUBLIC_PAGES = ['/', '/join/creator', '/join/supporter', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
 // Must never collect anything until the privacy notice is approved. Sign-in
 // and password reset are for invited members (e2e/auth-journey.e2e.cjs).
-const FORM_FREE_PAGES = ['/', '/request-invite', '/no-such-page']
+const FORM_FREE_PAGES = ['/', '/join/creator', '/join/supporter', '/request-invite', '/no-such-page']
 
 let failures = 0
 const check = (name, ok, detail = '') => {
@@ -74,9 +74,35 @@ async function shows(locator, timeout = 5000) {
     {
       const page = await browser.newPage()
       await page.goto(BASE + '/')
-      check('landing headline', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ') === "You don't need a million followers. You need the right 1,000.")
+      check('landing headline', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ') === 'You earned the follow. You deserve the reach.')
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check('all sections in the approved order', ids === 'hero,why,who,what,how,cta', ids)
+      check('all nine sections in the approved order', ids === 'hero,story,problem,why,who,difference,fans,how,founding', ids)
+      // The full founder story and the pilot details open and close with the keyboard.
+      for (const [summaryName, expected] of [['Read the full story', 'My audience had grown by 200%. My income had fallen by 60%.'], ['Pilot details', 'An intended 60-day testing period.']]) {
+        const summary = page.locator('summary', { hasText: summaryName })
+        await summary.focus()
+        await page.keyboard.press('Enter')
+        check(`"${summaryName}" opens with the keyboard`, await shows(page.getByText(expected, { exact: false })))
+        await page.keyboard.press('Enter')
+      }
+      // Join the Founding Community scrolls to section 9.
+      await page.getByRole('main').getByRole('link', { name: 'Join the Founding Community' }).first().click()
+      await page.waitForTimeout(400)
+      check('Join the Founding Community moves to section 9', (await page.evaluate(() => location.hash)) === '#founding' && (await page.locator('#founding').evaluate((el) => el.getBoundingClientRect().top < window.innerHeight)))
+      for (const [name, path] of [['Learn About the Creator Pilot', '/join/creator'], ['Learn About Joining as a Supporter', '/join/supporter']]) {
+        await page.getByRole('link', { name }).click()
+        await page.waitForURL(BASE + path)
+        check(`${name} opens ${path}`, (await page.getByRole('heading', { level: 1 }).count()) === 1 && (await shows(page.getByText('This page collects nothing.'))))
+        await page.getByRole('main').getByRole('link', { name: 'Back to Crevant' }).first().click()
+        await page.waitForURL(BASE + '/#founding')
+        await page.waitForTimeout(300)
+        check(`Back to Crevant from ${path} returns to section 9`, await page.locator('#founding').evaluate((el) => { const r = el.getBoundingClientRect(); return r.top < window.innerHeight && r.bottom > 0 }))
+      }
+      await page.goto(BASE + '/')
+      const founderImg = page.locator('#story img')
+      await founderImg.scrollIntoViewIfNeeded()
+      await founderImg.evaluate((el) => (el.complete ? null : new Promise((r) => el.addEventListener('load', r, { once: true }))))
+      check('founder photo loads', (await founderImg.evaluate((el) => el.naturalWidth)) === 640)
       // Every tour screenshot loads (lazy images included) and is labelled as sample data.
       for (const fig of await page.locator('figure[data-screenshot]').all()) {
         await fig.scrollIntoViewIfNeeded()
@@ -94,7 +120,7 @@ async function shows(locator, timeout = 5000) {
       check('tour shows the sample data banner', await shows(page.getByRole('note', { name: 'Sample tour' })))
       await page.getByRole('note', { name: 'Sample tour' }).getByRole('link', { name: 'Back to Crevant' }).click()
       await page.waitForURL(BASE + '/')
-      check('banner link returns to the public site', (await page.getByRole('heading', { level: 1 }).innerText()).startsWith("You don't need a million followers."))
+      check('banner link returns to the public site', (await page.getByRole('heading', { level: 1 }).innerText()).startsWith('You earned the follow.'))
 
       for (const [from, to] of [['/discover', '/tour/discover'], ['/rewards?tab=cp', '/tour/rewards?tab=cp'], ['/creator/amara', '/tour/creator/amara']]) {
         await page.goto(BASE + from)

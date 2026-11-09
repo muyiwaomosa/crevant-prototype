@@ -33,23 +33,24 @@ export function PublicLayout() {
           <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2">
             {/* The tour is a separate app, so it needs a full page load. */}
             {/* Wrappers control visibility: the button classes set their own display. */}
-            <span className="hidden sm:contents">
-              <a href={TOUR_BASE} className={buttonClass('ghost', 'sm')}>
-                Explore Crevant
-              </a>
+            <a href={TOUR_BASE} className={buttonClass('ghost', 'sm')}>
+              Explore Crevant
+            </a>
+            {/* Below 360px only the logo and Explore Crevant fit; Sign in stays in the hero and footer. */}
+            <span className="hidden min-[360px]:contents">
+              {signedIn ? (
+                <Link to="/app" className={buttonClass('ghost', 'sm')}>
+                  Your account
+                </Link>
+              ) : (
+                <Link to="/sign-in" className={buttonClass('ghost', 'sm')}>
+                  Sign in
+                </Link>
+              )}
             </span>
-            {signedIn ? (
-              <Link to="/app" className={buttonClass('ghost', 'sm')}>
-                Your account
-              </Link>
-            ) : (
-              <Link to="/sign-in" className={buttonClass('ghost', 'sm')}>
-                Sign in
-              </Link>
-            )}
-            <span className="hidden min-[440px]:contents">
-              <Link to="/request-invite" className={buttonClass('primary', 'sm')}>
-                Request an invitation
+            <span className="hidden md:contents">
+              <Link to="/#founding" className={buttonClass('primary', 'sm')}>
+                Join the Founding Community
               </Link>
             </span>
           </nav>
@@ -64,23 +65,29 @@ export function PublicLayout() {
         <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 sm:px-6 md:grid-cols-[1fr_auto] md:items-start">
           <div className="max-w-md">
             <Wordmark size="sm" />
-            <p className="mt-3 text-sm leading-relaxed text-ink-500">
-              Crevant is in an invitation-only pilot for adults 18 and over. Invitation requests open once our privacy
-              notice is published.
-            </p>
+            <p className="mt-3 font-display text-base font-bold text-ink-800">Create value. Build connections. Grow together.</p>
+            <p className="mt-1 text-sm text-ink-500">A creator-first social network.</p>
+            <p className="mt-3 text-sm leading-relaxed text-ink-500">An invitation-only pilot for adults 18 and older.</p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-ink-600">
+            <Link to="/#story" className="hover:text-ink-900">
+              Our Story
+            </Link>
+            <Link to="/#how" className="hover:text-ink-900">
+              How It Works
+            </Link>
+            <Link to="/#founding" className="hover:text-ink-900">
+              Join the Pilot
+            </Link>
             <a href={TOUR_BASE} className="hover:text-ink-900">
               Explore Crevant
             </a>
-            <Link to="/request-invite" className="hover:text-ink-900">
-              Request an invitation
-            </Link>
             <Link to="/sign-in" className="hover:text-ink-900">
               Sign in
             </Link>
           </nav>
         </div>
+        <p className="mx-auto max-w-6xl px-4 pb-8 text-[13px] text-ink-400 sm:px-6">© 2026 Crevant. All rights reserved.</p>
       </footer>
     </div>
   )
