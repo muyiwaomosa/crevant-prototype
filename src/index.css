@@ -96,3 +96,24 @@
     transition-duration: 1ms !important;
   }
 }
+
+/* Landing page: "the right 1,000" draws its relationship lines once when it
+   scrolls into view. Lives here (not in a <style> tag) because the site's
+   Content Security Policy only allows stylesheets from this origin. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-testid='right-thousand'][data-live='true'] .rt-link {
+    stroke-dasharray: 400;
+    animation: rt-draw 1.6s ease-out backwards;
+  }
+  [data-testid='right-thousand'][data-live='true'] .rt-person {
+    animation: rt-glow 1.6s ease-out backwards;
+  }
+}
+@keyframes rt-draw {
+  from { stroke-dashoffset: 400; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes rt-glow {
+  from { opacity: 0.15; }
+  to { opacity: 1; }
+}

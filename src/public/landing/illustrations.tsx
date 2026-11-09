@@ -299,14 +299,6 @@ export function RightThousand() {
   }, [])
   return (
     <figure ref={ref} data-testid="right-thousand" data-live={live} className="rounded-[32px] bg-white p-4 ring-1 ring-ink-100 sm:p-8">
-      <style>{`
-        @media (prefers-reduced-motion: no-preference) {
-          [data-testid="right-thousand"][data-live="true"] .rt-link { stroke-dasharray: 400; animation: rt-draw 1.6s ease-out backwards; }
-          [data-testid="right-thousand"][data-live="true"] .rt-person { animation: rt-glow 1.6s ease-out backwards; }
-        }
-        @keyframes rt-draw { from { stroke-dashoffset: 400; } to { stroke-dashoffset: 0; } }
-        @keyframes rt-glow { from { opacity: 0.15; } to { opacity: 1; } }
-      `}</style>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby="rt-title" className="block h-auto w-full">
         <title id="rt-title">A field of small dots, each one a person who chose to follow, around one creator in the middle. Some dots are connected to the creator by lines that stand for relationships.</title>
         {Array.from({ length: cols * rows }, (_, i) =>

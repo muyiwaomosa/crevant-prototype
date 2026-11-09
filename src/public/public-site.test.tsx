@@ -339,6 +339,13 @@ describe('explanatory visuals', () => {
     for (const id of ['problem', 'why', 'difference']) expect(norm(section(id))).toContain('Illustration')
     expect(norm(section('difference').querySelector('[data-testid="planned-panel"]'))).toContain('Concept sketch.')
   })
+  it('adds no inline <style> blocks, which the Content Security Policy would block', () => {
+    for (const path of PUBLIC_PATHS) {
+      const { container } = renderAt(path)
+      expect(container.querySelectorAll('style'), path).toHaveLength(0)
+      cleanup()
+    }
+  })
   it('only calls out words the tour itself shows', () => {
     const callouts = [...landing().querySelectorAll('[data-callout]')].map((el) => norm(el).trim())
     expect(callouts).toEqual(['Newest first. No ranking.', '10 CP with Amara', 'Only CP earned with Amara counts here.'])
