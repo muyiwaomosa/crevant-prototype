@@ -17,13 +17,16 @@ const BASE = (process.argv[2] || 'http://localhost:4175').replace(/\/$/, '') + '
 const OUT = path.join(__dirname, '..', '..', 'public', 'media', 'landing')
 
 const SCREENS = [
+  // The hero: the first followed post, framed so its image is in view.
+  { name: 'tour-hero', path: '', scrollTo: 'article', offset: 112 },
   { name: 'tour-following-feed', path: '' },
   // Scrolled so the Connection Points card sits near the top.
   { name: 'tour-creator-page', path: '/creator/amara', scrollTo: '#connection-title' },
   // Scrolled to the first creator's rewards.
   { name: 'tour-rewards', path: '/rewards', scrollTo: 'h2[id^="rw-"]' },
-  // Landing V1: the feed scrolled to posts from followed creators.
-  { name: 'tour-feed-posts', path: '', scrollTo: 'article' },
+  // The feed further down: several followed creators' posts, newest first
+  // (the hero already shows the first one).
+  { name: 'tour-feed-posts', path: '', scrollTo: 'article >> nth=1', offset: 112 },
   // Finding creators to follow.
   { name: 'tour-discover', path: '/discover' },
   // A fan's Connection Points, kept separately with each creator.

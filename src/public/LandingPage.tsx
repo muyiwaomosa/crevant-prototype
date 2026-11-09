@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ArrowRight, Info, Send } from 'lucide-react'
 import { buttonClass } from '../components/ui'
@@ -21,7 +21,9 @@ export { StatusBadge } from './landing/shared'
 //  * Qualifications sit beside the claims they qualify, not only in Pilot
 //    details: no promise of reach, views, engagement, earnings or rewards, and
 //    Connection Points are never money.
-//  * No forms and no personal data: the join pages only inform.
+//  * No forms and no personal data yet: the waitlist pages only inform until
+//    the privacy notice is published. Joining the waitlist never secures a
+//    place in the pilot; invitations go out in small groups.
 
 const DEMO_NOTE = 'A demonstration with sample data'
 
@@ -51,42 +53,98 @@ function ExploreButton({ variant = 'secondary' }: { variant?: 'secondary' | 'gho
   )
 }
 
+export const WAITLIST_LABEL = 'Join the Waitlist'
+
 function JoinButton() {
   return (
     <a href="#founding" className={buttonClass('primary', 'lg')}>
-      Join the Founding Community <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      {WAITLIST_LABEL} <ArrowRight className="h-4 w-4" aria-hidden="true" />
     </a>
+  )
+}
+
+/** A role-specific waitlist link, placed where interest peaks. */
+function RoleWaitlistLink({ role }: { role: 'creator' | 'supporter' }) {
+  return (
+    <div data-cta={role} className="mt-10 flex flex-col items-start gap-2">
+      <Link to={`/join/${role}`} className={clsx(buttonClass('primary', 'lg'), 'h-auto! min-h-12 max-w-full whitespace-normal! py-3 text-center')}>
+        {role === 'creator' ? 'Join the Waitlist as a Creator' : 'Join the Waitlist as a Supporter'} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      </Link>
+      <p className="text-[13px] text-ink-500">Joining the waitlist doesn't secure a place in the pilot. We invite people in small groups.</p>
+    </div>
+  )
+}
+
+/**
+ * Phones only: a slim Join the Waitlist bar once the hero has scrolled away,
+ * hidden again as soon as the founding section comes into view.
+ */
+function MobileWaitlistBar() {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    let frame = 0
+    const update = () => {
+      frame = 0
+      const hero = document.getElementById('hero')
+      const founding = document.getElementById('founding')
+      if (!hero || !founding) return
+      const pastHero = hero.getBoundingClientRect().bottom < 0
+      const beforeFounding = founding.getBoundingClientRect().top > window.innerHeight
+      setShow(pastHero && beforeFounding)
+    }
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update)
+    }
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [])
+  return (
+    <div
+      data-testid="mobile-waitlist-bar"
+      aria-hidden={!show}
+      className={clsx(
+        'fixed inset-x-0 bottom-0 z-30 border-t border-ink-100 bg-paper/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-md transition-transform motion-reduce:transition-none md:hidden',
+        show ? 'translate-y-0' : 'pointer-events-none translate-y-full',
+      )}
+    >
+      <a href="#founding" tabIndex={show ? 0 : -1} className={clsx(buttonClass('primary', 'md'), 'w-full')}>
+        {WAITLIST_LABEL} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      </a>
+    </div>
   )
 }
 
 // ---- 1. Hero ----------------------------------------------------------------
 
 function Hero() {
-  // Phones: headline, the one-line product explanation, the product preview,
-  // then the actions, then the rest of the approved hero copy. Desktop keeps
-  // the two-column layout (text left, phone right). Copy is unchanged; only
-  // the order differs on small screens.
+  // Same order on every screen: headline, what Crevant is, then the actions.
+  // Phones show the product preview between the explanation and the actions;
+  // desktop shows it on the right.
   return (
     <section id="hero" aria-labelledby="hero-title" className="overflow-hidden px-4 pb-12 pt-8 sm:px-6 sm:pt-16 lg:pb-20">
       <div className="mx-auto flex max-w-6xl flex-col lg:grid lg:grid-cols-[1.2fr_0.8fr] lg:items-center lg:gap-x-10">
         <h1
           id="hero-title"
-          className="order-1 font-display text-[2.15rem] lg:order-none font-extrabold leading-[1.04] tracking-[-0.035em] text-ink-900 min-[400px]:text-[2.45rem] sm:text-[3.4rem] lg:col-start-1 lg:text-[3.85rem]"
+          className="font-display text-[2.15rem] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink-900 min-[400px]:text-[2.45rem] sm:text-[3.4rem] lg:col-start-1 lg:row-start-1 lg:self-end lg:text-[3.85rem]"
         >
           You earned the follow. <span className="text-brand-600">You deserve the reach.</span>
         </h1>
-        <p data-hero="lead" className="order-4 mt-6 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:order-none lg:col-start-1">
-          You worked hard to build your audience. But what good is having thousands of followers if you can't consistently reach them?
-        </p>
-        <p data-hero="product" className="order-2 mt-4 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:order-none lg:col-start-1">
+        <p data-hero="product" className="mt-5 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:col-start-1 lg:row-start-2">
           <strong className="font-semibold text-ink-900">Meet Crevant.</strong> A creator-first social network where the people who choose to follow
           you can see your content in their Following feed, so you can focus on building connections, earning trust and creating opportunities for
           sustainable income.
         </p>
-        <p data-hero="profession" className="order-5 mt-4 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:order-none lg:col-start-1">
-          Because content creation should be more than a side hustle. It should have the potential to become a profession.
-        </p>
-        <div data-hero="actions" className="order-3 mt-6 lg:order-none lg:col-start-1">
+        <div data-hero="preview" className="relative mt-6 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-0">
+          <div aria-hidden="true" className="absolute -inset-4 rounded-[48px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-50 lg:-inset-6" />
+          <TourScreenshot screen="hero" caption="A post in your Following feed" priority className="relative max-w-[210px] sm:max-w-[240px] lg:max-w-[260px]" />
+        </div>
+        <div data-hero="actions" className="mt-6 lg:col-start-1 lg:row-start-3 lg:self-start">
           <div className="flex flex-col items-stretch gap-3 min-[420px]:flex-row min-[420px]:flex-wrap min-[420px]:items-start">
             <JoinButton />
             <ExploreButton />
@@ -102,10 +160,6 @@ function Hero() {
               Sign in
             </Link>
           </p>
-        </div>
-        <div data-hero="preview" className="relative order-2 mt-6 lg:order-none lg:col-start-2 lg:row-span-5 lg:row-start-1 lg:mt-0">
-          <div aria-hidden="true" className="absolute -inset-4 rounded-[48px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-50 lg:-inset-6" />
-          <TourScreenshot screen="feed" caption="The Following feed, newest first" priority className="relative max-w-[210px] sm:max-w-[240px] lg:max-w-[260px]" />
         </div>
       </div>
     </section>
@@ -183,7 +237,6 @@ function Problem() {
           I came across creators talking about having to return to regular jobs because they couldn't depend on their income from content creation.
         </li>
         <li className={clsx('space-y-3 rounded-3xl bg-card p-6 leading-relaxed text-ink-600', cardShadow)}>
-          <p>And I noticed something else.</p>
           <p>Creators who started out sharing what they genuinely cared about were sometimes changing what they created just to stay visible.</p>
           <p className="font-semibold text-ink-800">Following trends. Copying what worked for others. Creating controversy to attract attention.</p>
           <p>Not necessarily because that's what they wanted to create, but because they felt that's what the algorithm would reward.</p>
@@ -192,12 +245,12 @@ function Problem() {
       <div className="mt-12 grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
         <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
           <p className="font-display text-xl font-bold text-ink-900">Think about that.</p>
-          <p>You spend years building an audience. People follow you because they want to hear from you.</p>
-          <p>Yet every time you publish something, you're left wondering how many of them will actually see it.</p>
+          <p data-testid="problem-lead">
+            You worked hard to build your audience. But what good is having thousands of followers if you can't consistently reach them?
+          </p>
           <div data-testid="problem-questions" className="space-y-3 rounded-3xl border-l-4 border-spark-400 bg-spark-50 px-5 py-4">
             <p className="font-semibold text-ink-900">How do you build trust when you can't consistently connect with your audience?</p>
             <p className="font-semibold text-ink-900">How do you build a sustainable income when you can't predict whether the people who value your work will see it?</p>
-            <p>And how can content creation become a respected profession if creators have so little control over how their work reaches their communities?</p>
           </div>
           <p className="font-semibold text-ink-900">We believe creators deserve a better opportunity.</p>
         </div>
@@ -367,6 +420,7 @@ function Difference() {
           <Qualifier testId="income-note">Sustainable income is our ambition for creators, not a promise. No payments are enabled during the pilot.</Qualifier>
         </DifferenceBlock>
       </ol>
+      <RoleWaitlistLink role="creator" />
     </Section>
   )
 }
@@ -405,6 +459,7 @@ function Fans() {
           <TourScreenshot screen="myPoints" caption="Your points with each creator" />
         </div>
       </div>
+      <RoleWaitlistLink role="supporter" />
     </Section>
   )
 }
@@ -418,7 +473,7 @@ function How() {
         <p>You don't have to abandon the audience you've already built.</p>
         <p>Crevant is being designed to help you bring those relationships into a space where you can strengthen them.</p>
       </div>
-      <ol className="mt-10 grid gap-5 md:grid-cols-3">
+      <ol className="mt-10 grid items-start gap-5 md:grid-cols-3">
         <li data-step={1} className={clsx('flex flex-col rounded-3xl bg-card p-6', cardShadow)}>
           <StatusBadge status="building" />
           <h3 className="mt-3 font-display text-lg font-bold text-ink-900">Step 1 — Create your profile.</h3>
@@ -430,9 +485,11 @@ function How() {
           <h3 className="mt-3 font-display text-lg font-bold text-ink-900">Step 2 — Invite your community.</h3>
           <p className="mt-2 leading-relaxed text-ink-600">Bring the people who already enjoy your content.</p>
           <p className="mt-2 leading-relaxed text-ink-600">Give them a reason to join you on Crevant, participate and build a stronger connection.</p>
-          <div className="mt-5 flex flex-1 flex-col items-center justify-center rounded-3xl border-2 border-dashed border-ink-200 px-4 py-8 text-center text-[13px] text-ink-500">
-            <Send aria-hidden="true" className="h-6 w-6" />
-            <p className="mt-2">Creator invite links are planned and not built yet.</p>
+          <div data-testid="step2-planned" className="mt-5 flex items-center gap-3 rounded-2xl border border-dashed border-ink-300 bg-white/60 px-4 py-3 text-[13px] leading-snug text-ink-500">
+            <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink-50">
+              <Send className="h-4 w-4" />
+            </span>
+            <p>Creator invite links are planned and not built yet.</p>
           </div>
         </li>
         <li data-step={3} className={clsx('flex flex-col rounded-3xl bg-card p-6', cardShadow)}>
@@ -459,7 +516,10 @@ function How() {
 // ---- 9. Founding community ---------------------------------------------------------
 
 const PILOT_DETAILS: Array<{ title: string; body: string }> = [
-  { title: 'Invitation-only pilot for adults 18 and older.', body: 'Invitations open once our privacy notice is published.' },
+  {
+    title: 'Invitation-only pilot for adults 18 and older.',
+    body: "The waitlist opens once our privacy notice is published. Joining it doesn't secure a place: we invite people in small groups.",
+  },
   { title: 'An intended 60-day testing period.', body: 'The 60 days begin when invited participants can actually use Crevant, not when this page goes live.' },
   {
     title: 'No real payments yet.',
@@ -506,14 +566,15 @@ function Founding() {
           </div>
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             <Link to="/join/creator" className={clsx(buttonClass('spark', 'lg'), 'h-auto! min-h-12 w-full min-w-0 whitespace-normal! py-3 text-center')}>
-              Learn About the Creator Pilot
+              Join the Waitlist as a Creator
             </Link>
             <Link to="/join/supporter" className={clsx(buttonClass('ghost', 'lg'), 'h-auto! min-h-12 w-full min-w-0 whitespace-normal! py-3 text-center text-white ring-1 ring-white/30 hover:bg-white/10')}>
-              Learn About Joining as a Supporter
+              Join the Waitlist as a Supporter
             </Link>
           </div>
           <p className="mt-5 text-sm italic leading-relaxed text-ink-400">
-            Limited pilot access. We're testing and improving the experience together. Participation does not guarantee earnings or rewards.
+            Joining the waitlist doesn't secure a place in the pilot. We invite people in small groups and improve the experience together.
+            Participation does not guarantee earnings or rewards.
           </p>
           <details id="pilot-details" className="group mt-6 rounded-3xl bg-white/[0.06] ring-1 ring-white/10 [&_summary::-webkit-details-marker]:hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold text-white">
@@ -556,6 +617,7 @@ export function LandingPage() {
       <Fans />
       <How />
       <Founding />
+      <MobileWaitlistBar />
     </>
   )
 }

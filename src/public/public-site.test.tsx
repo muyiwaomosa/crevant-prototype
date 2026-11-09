@@ -81,20 +81,46 @@ describe('structure and approved copy', () => {
       "It's built by the people who believe in them.",
       'Your content starts the conversation.',
       'Your relationships build the future.',
-      'Limited pilot access. We\'re testing and improving the experience together. Participation does not guarantee earnings or rewards.',
+      "Joining the waitlist doesn't secure a place in the pilot. We invite people in small groups and improve the experience together. Participation does not guarantee earnings or rewards.",
+      'Think about that.',
+      "You worked hard to build your audience. But what good is having thousands of followers if you can't consistently reach them?",
     ]) expect(t, passage).toContain(passage)
+  })
+  it('trims the problem section without losing its message', () => {
+    const t = norm(section('problem'))
+    expect(t).not.toContain('And I noticed something else.')
+    expect(t).not.toContain('You spend years building an audience.')
+    expect(t).not.toContain('how can content creation become a respected profession')
+    expect(section('problem').querySelectorAll('[data-testid="problem-questions"] p')).toHaveLength(2)
+    expect(t).toContain('We believe creators deserve a better opportunity.')
   })
 })
 
 describe('hero', () => {
-  it('offers Join the Founding Community (to section 9) and Explore Crevant (the sample tour)', () => {
+  it('offers Join the Waitlist (to section 9) first and Explore Crevant (the sample tour) second', () => {
     const hero = section('hero')
-    const join = [...hero.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Founding Community')!
+    const links = [...hero.querySelectorAll('a')].map((a) => norm(a).trim())
+    expect(links.indexOf('Join the Waitlist')).toBeLessThan(links.indexOf('Explore Crevant'))
+    const join = [...hero.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Waitlist')!
     expect(join.getAttribute('href')).toBe('#founding')
     const tour = [...hero.querySelectorAll('a')].find((a) => norm(a).trim() === 'Explore Crevant')!
     expect(tour.getAttribute('href')).toBe('/tour')
     expect(norm(hero)).toContain('A demonstration with sample data')
     expect([...hero.querySelectorAll('a')].some((a) => a.getAttribute('href') === '/sign-in')).toBe(true)
+  })
+  it('says what Crevant is, then the actions, in the same order on every screen', () => {
+    const hero = section('hero')
+    const parts = [...hero.querySelectorAll('[data-hero]')].map((el) => el.getAttribute('data-hero'))
+    expect(parts).toEqual(['product', 'preview', 'actions'])
+    expect(norm(hero)).not.toContain('You worked hard to build your audience.')
+    expect(norm(hero)).not.toContain('more than a side hustle')
+    for (const el of hero.querySelectorAll('h1, [data-hero]')) expect(el.className).not.toMatch(/\border-\d/)
+  })
+  it('shows the budgeting post with its illustration', () => {
+    const fig = section('hero').querySelector('figure[data-screenshot]')!
+    expect(fig.getAttribute('data-screenshot')).toBe('hero')
+    expect(fig.querySelector('img')!.getAttribute('src')).toBe('/media/landing/tour-hero.jpg')
+    expect(norm(fig)).toContain('A post in your Following feed')
   })
   it('qualifies the reach claim right beside it', () => {
     expect(norm(section('hero').querySelector('[data-testid="hero-note"]'))).toContain("It isn't a promise that each post reaches each follower.")
@@ -180,21 +206,23 @@ describe('how it works', () => {
     const steps = [...section('how').querySelectorAll('[data-step]')]
     expect(steps.map((s) => s.querySelector('[data-status]')!.getAttribute('data-status'))).toEqual(['building', 'planned', 'building'])
     expect(norm(steps[1])).toContain('Creator invite links are planned and not built yet.')
+    expect(steps[1].querySelector('[data-testid="step2-planned"]')).not.toBeNull()
     expect(steps[1].querySelectorAll('figure[data-screenshot]')).toHaveLength(0)
   })
-  it('ends with Join the Founding Community', () => {
+  it('ends with Join the Waitlist', () => {
     expect([...section('how').querySelectorAll('a')].some((a) => a.getAttribute('href') === '#founding')).toBe(true)
   })
 })
 
 describe('founding community', () => {
-  it('offers the two audience pages, not applications', () => {
+  it('offers the creator and supporter waitlists, not applications', () => {
     const f = section('founding')
     const links = [...f.querySelectorAll('a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
     expect(links).toEqual([
-      ['Learn About the Creator Pilot', '/join/creator'],
-      ['Learn About Joining as a Supporter', '/join/supporter'],
+      ['Join the Waitlist as a Creator', '/join/creator'],
+      ['Join the Waitlist as a Supporter', '/join/supporter'],
     ])
+    expect(norm(f)).toContain("Joining the waitlist doesn't secure a place in the pilot.")
     expect(norm(f)).not.toMatch(/apply to join|join as a supporter/i)
   })
   it('keeps the pilot details compact and complete', () => {
@@ -211,10 +239,28 @@ describe('founding community', () => {
   })
 })
 
+describe('waitlist calls to action', () => {
+  it('uses "Join the Waitlist" consistently and never the old labels', () => {
+    for (const path of PUBLIC_PATHS) expect(textOf(path)).not.toMatch(/Join the Founding Community|Join the Pilot|Learn About the Creator Pilot|Learn About Joining as a Supporter/)
+  })
+  it('places a creator link after the Crevant difference and a supporter link after For the fans', () => {
+    expect(section('difference').querySelector('[data-cta="creator"] a')!.getAttribute('href')).toBe('/join/creator')
+    expect(section('fans').querySelector('[data-cta="supporter"] a')!.getAttribute('href')).toBe('/join/supporter')
+    for (const id of ['difference', 'fans']) expect(norm(section(id))).toContain("Joining the waitlist doesn't secure a place in the pilot.")
+  })
+  it('has a phone-only waitlist bar that starts hidden', () => {
+    const bar = landing().querySelector('[data-testid="mobile-waitlist-bar"]')!
+    expect(bar.getAttribute('aria-hidden')).toBe('true')
+    expect(bar.className).toContain('md:hidden')
+    expect(bar.querySelector('a')!.getAttribute('href')).toBe('#founding')
+  })
+})
+
 describe('product honesty', () => {
   it('labels every screenshot as sample tour data', () => {
     const figures = [...landing().querySelectorAll('figure[data-screenshot]')]
     expect(figures.length).toBe(8)
+    expect(new Set(figures.map((f) => f.getAttribute('data-screenshot'))).size).toBe(8)
     for (const f of figures) {
       expect(f.querySelector('img')!.getAttribute('src')).toMatch(/^\/media\/landing\/tour-[a-z-]+\.jpg$/)
       expect(f.querySelector('img')!.getAttribute('alt')!.length).toBeGreaterThan(40)
@@ -237,12 +283,14 @@ describe('product honesty', () => {
 
 describe('join pages', () => {
   it.each([
-    ['/join/creator', 'Learn about the creator pilot', 'Creator applications are not open yet.'],
-    ['/join/supporter', 'Learn about joining as a supporter', 'Joining as a supporter is not open yet.'],
-  ])('%s informs, says it is not open, and links back and to the tour', (path, title, notOpen) => {
+    ['/join/creator', 'Join the Waitlist as a Creator', "The creator waitlist isn't open yet. It opens once our privacy notice is published."],
+    ['/join/supporter', 'Join the Waitlist as a Supporter', "The supporter waitlist isn't open yet. It opens once our privacy notice is published."],
+  ])('%s informs, says the waitlist is not open, and links back and to the tour', (path, title, notOpen) => {
     const { container } = renderAt(path)
     expect(norm(container.querySelector('h1'))).toBe(title)
     expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain(notOpen)
+    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain("Joining the waitlist doesn't secure a place in the pilot.")
+    expect(container.querySelector('form, input, textarea, select')).toBeNull()
     expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('This page collects nothing.')
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
     expect(hrefs).toContain('/tour')
@@ -255,11 +303,14 @@ describe('join pages', () => {
 })
 
 describe('header and footer', () => {
-  it('keeps Explore Crevant in the header and links Join to section 9', () => {
+  it('keeps Explore Crevant in the header and links Join the Waitlist to section 9', () => {
     const { container } = renderAt('/')
     const header = container.querySelector('header')!
     expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Explore Crevant' && a.getAttribute('href') === '/tour')).toBe(true)
-    expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Join the Founding Community' && a.getAttribute('href') === '/#founding')).toBe(true)
+    const join = [...header.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Waitlist')!
+    expect(join.getAttribute('href')).toBe('/#founding')
+    // Visible at every width: not inside a wrapper that hides it.
+    expect(join.closest('.hidden')).toBeNull()
   })
   it('uses the approved footer, with no Privacy or Terms links', () => {
     const { container } = renderAt('/')
@@ -271,7 +322,7 @@ describe('header and footer', () => {
     expect(links).toEqual([
       ['Our Story', '/#story'],
       ['How It Works', '/#how'],
-      ['Join the Pilot', '/#founding'],
+      ['Join the Waitlist', '/#founding'],
       ['Explore Crevant', '/tour'],
       ['Sign in', '/sign-in'],
     ])
@@ -409,9 +460,9 @@ describe('no personal data collection', () => {
     vi.unstubAllGlobals()
   })
 
-  it('the request page says requests are closed until the privacy notice is ready', () => {
+  it('the request page says the waitlist opens once the privacy notice is ready', () => {
     const t = textOf('/request-invite')
-    expect(t).toContain('Invitation requests open soon.')
+    expect(t).toContain('The waitlist opens soon.')
     expect(t).toContain('this page collects nothing')
   })
 

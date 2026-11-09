@@ -85,12 +85,12 @@ async function shows(locator, timeout = 5000) {
         check(`"${summaryName}" opens with the keyboard`, await shows(page.getByText(expected, { exact: false })))
         await page.keyboard.press('Enter')
       }
-      // Join the Founding Community scrolls to section 9.
-      await page.getByRole('main').getByRole('link', { name: 'Join the Founding Community' }).first().click()
+      // Join the Waitlist scrolls to section 9.
+      await page.getByRole('main').getByRole('link', { name: 'Join the Waitlist', exact: true }).first().click()
       await page.waitForTimeout(400)
-      check('Join the Founding Community moves to section 9', (await page.evaluate(() => location.hash)) === '#founding' && (await page.locator('#founding').evaluate((el) => el.getBoundingClientRect().top < window.innerHeight)))
-      for (const [name, path] of [['Learn About the Creator Pilot', '/join/creator'], ['Learn About Joining as a Supporter', '/join/supporter']]) {
-        await page.getByRole('link', { name }).click()
+      check('Join the Waitlist moves to section 9', (await page.evaluate(() => location.hash)) === '#founding' && (await page.locator('#founding').evaluate((el) => el.getBoundingClientRect().top < window.innerHeight)))
+      for (const [name, path] of [['Join the Waitlist as a Creator', '/join/creator'], ['Join the Waitlist as a Supporter', '/join/supporter']]) {
+        await page.locator('#founding').getByRole('link', { name }).click()
         await page.waitForURL(BASE + path)
         check(`${name} opens ${path}`, (await page.getByRole('heading', { level: 1 }).count()) === 1 && (await shows(page.getByText('This page collects nothing.'))))
         await page.getByRole('main').getByRole('link', { name: 'Back to Crevant' }).first().click()
@@ -98,21 +98,45 @@ async function shows(locator, timeout = 5000) {
         await page.waitForTimeout(300)
         check(`Back to Crevant from ${path} returns to section 9`, await page.locator('#founding').evaluate((el) => { const r = el.getBoundingClientRect(); return r.top < window.innerHeight && r.bottom > 0 }))
       }
-      // Mobile hero: headline, product line, preview and actions come before the longer paragraphs.
+      // Hero: the same order on every screen. Phones: headline, product line,
+      // preview, actions. Desktop: headline, product line, actions on the left,
+      // the phone on the right, with the actions in the first screen.
       {
         const phone = await browser.newPage({ viewport: { width: 390, height: 844 } })
         await phone.goto(BASE + '/')
         const top = (sel) => phone.locator(sel).first().evaluate((el) => el.getBoundingClientRect().top + window.scrollY)
-        const [h1, product, preview, actions, lead] = await Promise.all(['#hero h1', '[data-hero="product"]', '[data-hero="preview"]', '[data-hero="actions"]', '[data-hero="lead"]'].map(top))
-        check('mobile hero order: headline, product, preview, actions, then the longer copy', h1 < product && product < preview && preview < actions && actions < lead, [h1, product, preview, actions, lead].map(Math.round).join(' < '))
+        const [h1, product, preview, actions] = await Promise.all(['#hero h1', '[data-hero="product"]', '[data-hero="preview"]', '[data-hero="actions"]'].map(top))
+        check('mobile hero order: headline, product, preview, actions', h1 < product && product < preview && preview < actions, [h1, product, preview, actions].map(Math.round).join(' < '))
         check('mobile hero shows the product preview within the first two screens', preview < 2 * 844, String(Math.round(preview)))
+        // The hero screenshot shows the budgeting post with its illustration.
+        check('hero shows the budgeting post screenshot', (await phone.locator('#hero figure[data-screenshot="hero"] img').getAttribute('src')) === '/media/landing/tour-hero.jpg')
+        // Sticky waitlist bar: hidden in the hero, shown mid-page, hidden at section 9.
+        const bar = phone.locator('[data-testid="mobile-waitlist-bar"]')
+        const barShown = async () => (await bar.getAttribute('aria-hidden')) === 'false' && (await bar.evaluate((el) => el.getBoundingClientRect().top < window.innerHeight - 10))
+        check('mobile waitlist bar is hidden over the hero', !(await barShown()))
+        await phone.locator('#problem').scrollIntoViewIfNeeded()
+        await phone.waitForTimeout(500)
+        check('mobile waitlist bar appears once the hero has scrolled away', await barShown())
+        await phone.locator('#founding').evaluate((el) => el.scrollIntoView())
+        await phone.waitForTimeout(500)
+        check('mobile waitlist bar hides at section 9', !(await barShown()))
         await phone.close()
         const desk = await browser.newPage({ viewport: { width: 1280, height: 900 } })
         await desk.goto(BASE + '/')
-        const box = (sel) => desk.locator(sel).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top + window.scrollY } })
-        const [dh1, dlead, dprev] = await Promise.all(['#hero h1', '[data-hero="lead"]', '[data-hero="preview"]'].map(box))
-        check('desktop hero keeps text left and the phone right', dh1.y < dlead.y && dprev.x > dlead.x + 300, JSON.stringify({ dh1, dlead, dprev }))
+        const box = (sel) => desk.locator(sel).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top + window.scrollY, bottom: r.bottom + window.scrollY } })
+        const [dh1, dprod, dact, dprev] = await Promise.all(['#hero h1', '[data-hero="product"]', '[data-hero="actions"]', '[data-hero="preview"]'].map(box))
+        check('desktop hero: headline, product, actions on the left, phone on the right', dh1.y < dprod.y && dprod.y < dact.y && dprev.x > dprod.x + 300, JSON.stringify({ dh1, dprod, dact, dprev }))
+        check('desktop hero shows the waitlist button in the first screen', (await desk.locator('#hero').getByRole('link', { name: 'Join the Waitlist' }).evaluate((el) => el.getBoundingClientRect().bottom)) < 900)
+        check('desktop has no sticky waitlist bar', !(await desk.locator('[data-testid="mobile-waitlist-bar"]').isVisible()))
         await desk.close()
+        // The header always offers Join the Waitlist, down to 320px.
+        for (const width of [320, 360, 390, 768]) {
+          const p = await browser.newPage({ viewport: { width, height: 700 } })
+          await p.goto(BASE + '/')
+          const join = p.locator('header').getByRole('link', { name: 'Join the Waitlist' })
+          check(`header shows Join the Waitlist at ${width}px`, (await join.isVisible()) && (await join.evaluate((el) => el.getBoundingClientRect().right <= window.innerWidth)))
+          await p.close()
+        }
       }
       await page.goto(BASE + '/')
       const founderImg = page.locator('#story img')
@@ -145,7 +169,7 @@ async function shows(locator, timeout = 5000) {
         check(`old link ${from} lands on ${to}`, u.pathname + u.search === to, u.pathname + u.search)
       }
       await page.goto(BASE + '/request-invite')
-      check('request page explains requests are closed', await shows(page.getByText('Invitation requests open soon.')))
+      check('request page explains the waitlist is not open yet', await shows(page.getByText('The waitlist opens soon.')))
       await page.close()
     }
 

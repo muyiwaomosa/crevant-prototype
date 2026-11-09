@@ -33,11 +33,14 @@ export function PublicLayout() {
           <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2">
             {/* The tour is a separate app, so it needs a full page load. */}
             {/* Wrappers control visibility: the button classes set their own display. */}
-            <a href={TOUR_BASE} className={buttonClass('ghost', 'sm')}>
-              Explore Crevant
-            </a>
-            {/* Below 360px only the logo and Explore Crevant fit; Sign in stays in the hero and footer. */}
-            <span className="hidden min-[360px]:contents">
+            {/* Phones: logo, Sign in and Join the Waitlist; Explore Crevant stays in the hero and footer. */}
+            <span className="hidden sm:contents">
+              <a href={TOUR_BASE} className={buttonClass('ghost', 'sm')}>
+                Explore Crevant
+              </a>
+            </span>
+            {/* Below 420px only the logo and Join the Waitlist fit; Sign in stays in the hero and footer. */}
+            <span className="hidden min-[420px]:contents">
               {signedIn ? (
                 <Link to="/app" className={buttonClass('ghost', 'sm')}>
                   Your account
@@ -48,11 +51,9 @@ export function PublicLayout() {
                 </Link>
               )}
             </span>
-            <span className="hidden md:contents">
-              <Link to="/#founding" className={buttonClass('primary', 'sm')}>
-                Join the Founding Community
-              </Link>
-            </span>
+            <Link to="/#founding" className={buttonClass('primary', 'sm')}>
+              Join the Waitlist
+            </Link>
           </nav>
         </div>
       </header>
@@ -77,7 +78,7 @@ export function PublicLayout() {
               How It Works
             </Link>
             <Link to="/#founding" className="hover:text-ink-900">
-              Join the Pilot
+              Join the Waitlist
             </Link>
             <a href={TOUR_BASE} className="hover:text-ink-900">
               Explore Crevant

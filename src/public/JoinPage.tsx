@@ -4,16 +4,17 @@ import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
 
 /**
- * /join/creator and /join/supporter. Informational only: applications and
- * invitations are not open yet. Deliberately no form and no personal data,
- * like the request page, until the privacy notice and security controls exist.
+ * /join/creator and /join/supporter: the creator and supporter waitlists.
+ * Informational only until the privacy notice is published: deliberately no
+ * form and no personal data yet. Joining the waitlist never secures a place
+ * in the pilot; invitations go out in small groups.
  */
 type Audience = 'creator' | 'supporter'
 
 const CONTENT: Record<Audience, { eyebrow: string; title: string; whoTitle: string; who: string[]; what: string[]; notOpen: string }> = {
   creator: {
-    eyebrow: 'The creator pilot',
-    title: 'Learn about the creator pilot',
+    eyebrow: 'The creator waitlist',
+    title: 'Join the Waitlist as a Creator',
     whoTitle: 'Who it is for',
     // Approved Section 5 copy.
     who: [
@@ -29,11 +30,11 @@ const CONTENT: Record<Audience, { eyebrow: string; title: string; whoTitle: stri
       'Create, connect and grow. Publish content, engage with supporters and learn what your community values.',
       'Test new ideas, share honest feedback and help shape a platform designed around meaningful connections.',
     ],
-    notOpen: 'Creator applications are not open yet. They open once our privacy notice is published and the security controls are ready.',
+    notOpen: "The creator waitlist isn't open yet. It opens once our privacy notice is published.",
   },
   supporter: {
-    eyebrow: 'Joining as a supporter',
-    title: 'Learn about joining as a supporter',
+    eyebrow: 'The supporter waitlist',
+    title: 'Join the Waitlist as a Supporter',
     whoTitle: 'Who it is for',
     // Approved Section 7 copy.
     who: [
@@ -45,7 +46,7 @@ const CONTENT: Record<Audience, { eyebrow: string; title: string; whoTitle: stri
       'Through Connection Points, you can be recognized for your participation and work toward rewards those creators choose to offer.',
       'Test new ideas, share honest feedback and help shape a platform designed around meaningful connections.',
     ],
-    notOpen: 'Joining as a supporter is not open yet. Invitations open once our privacy notice is published and the security controls are ready.',
+    notOpen: "The supporter waitlist isn't open yet. It opens once our privacy notice is published.",
   },
 }
 
@@ -66,6 +67,7 @@ export function JoinPage({ audience }: { audience: Audience }) {
           <Info className="mt-0.5 h-5 w-5 shrink-0 text-spark-700" aria-hidden="true" />
           <div className="space-y-1.5 leading-relaxed">
             <p className="font-semibold text-ink-900">{c.notOpen}</p>
+            <p>Joining the waitlist doesn't secure a place in the pilot. We invite people in small groups.</p>
             <p>This page collects nothing.</p>
           </div>
         </div>

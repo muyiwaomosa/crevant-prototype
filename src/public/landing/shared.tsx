@@ -67,6 +67,12 @@ export const cardShadow = 'shadow-[0_1px_2px_rgb(19_25_27/0.06),0_0_0_1px_rgb(19
 // scripts/landing/capture-tour-screens.cjs. statusBg matches the top of each
 // screen, so the status bar reads as part of the app.
 export const TOUR_SCREENS = {
+  // The hero: Amara's budgeting post, framed so its illustration is in view.
+  hero: {
+    src: '/media/landing/tour-hero.jpg',
+    statusBg: '#f5f2e9',
+    alt: "Amara Okafor's 50/30/20 budgeting post in the Following feed of the Crevant sample tour, with an illustration of three labelled jars for needs, wants and savings.",
+  },
   feed: {
     src: '/media/landing/tour-following-feed.jpg',
     statusBg: '#fff7ea',
