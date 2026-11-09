@@ -5,6 +5,11 @@
 import type { Comment, Creator, Post, PostMedia, Profile, Reward } from '../types'
 import { minutesAgo } from '../lib/time'
 
+// Fictional people: every portrait was generated with Canva's AI image
+// generator and shows nobody real. See scripts/tour/tour-images.json.
+const tourPerson = (id: string) => `/media/tour/people/${id}.jpg`
+const tourPostImage = (id: string) => `/media/tour/posts/${id}.jpg`
+
 export const SELF_ID = 'me'
 
 export const DEFAULT_PROFILE: Profile = {
@@ -12,6 +17,7 @@ export const DEFAULT_PROFILE: Profile = {
   handle: 'jamierivera',
   bio: 'Sketchbook diaries, slow travel, and the stories behind each drawing.',
   category: 'Art',
+  avatar: tourPerson('jamie'),
 }
 
 export const SELF_BASE_FOLLOWERS = 1284
@@ -26,6 +32,7 @@ export const CREATORS: Creator[] = [
     location: 'London, UK',
     baseFollowers: 48210,
     hue: 18,
+    avatar: tourPerson('amara'),
     cover: 'budget',
   },
   {
@@ -37,6 +44,7 @@ export const CREATORS: Creator[] = [
     location: 'Abisko, Sweden',
     baseFollowers: 22940,
     hue: 205,
+    avatar: tourPerson('theo'),
     cover: 'ridge',
   },
   {
@@ -48,6 +56,7 @@ export const CREATORS: Creator[] = [
     location: 'Bengaluru, India',
     baseFollowers: 15730,
     hue: 262,
+    avatar: tourPerson('priya'),
     cover: 'terminal',
   },
   {
@@ -59,6 +68,7 @@ export const CREATORS: Creator[] = [
     location: 'Valencia, Spain',
     baseFollowers: 31420,
     hue: 330,
+    avatar: tourPerson('sofia'),
     cover: 'shapes',
   },
   {
@@ -70,6 +80,7 @@ export const CREATORS: Creator[] = [
     location: 'Atlanta, USA',
     baseFollowers: 67100,
     hue: 45,
+    avatar: tourPerson('marcus'),
     cover: 'vinyl',
   },
   {
@@ -81,6 +92,7 @@ export const CREATORS: Creator[] = [
     location: 'Toronto, Canada',
     baseFollowers: 19880,
     hue: 140,
+    avatar: tourPerson('jordan'),
     cover: 'track',
   },
   {
@@ -92,6 +104,7 @@ export const CREATORS: Creator[] = [
     location: 'Osaka, Japan',
     baseFollowers: 12460,
     hue: 0,
+    avatar: tourPerson('hana'),
     cover: 'books',
   },
   {
@@ -103,6 +116,7 @@ export const CREATORS: Creator[] = [
     location: 'Accra, Ghana',
     baseFollowers: 9340,
     hue: 100,
+    avatar: tourPerson('kofi'),
     cover: 'leaves',
   },
 ]
@@ -127,7 +141,7 @@ const SEED_POSTS: SeedPost[] = [
     creatorId: 'amara',
     minutesAgo: 14,
     text: 'The 50/30/20 budget in plain English: half your take-home pay for needs, 30% for wants, 20% for savings and paying off debt. It\'s a starting point, not a rule. When my rent went up I ran 60/25/15 for six months, then crept back. Save this for payday.',
-    media: { type: 'art', art: 'budget', alt: 'Illustration of three savings jars labelled needs 50%, wants 30% and save 20%' },
+    media: { type: 'image', src: tourPostImage('amara-budget'), alt: 'Illustration of three jars labelled Needs 50%, Wants 30% and Save 20%, with coins dropping in' },
     likes: 1284,
     saves: 412,
   },
@@ -153,7 +167,7 @@ const SEED_POSTS: SeedPost[] = [
     creatorId: 'theo',
     minutesAgo: 180,
     text: 'Day 4 on the Kungsleden. 21 km, one river crossing that was deeper than the map promised, and a sunset at 10:40pm that made every blister worth it.',
-    media: { type: 'art', art: 'ridge', alt: 'Illustration of mountain ridges at dawn' },
+    media: { type: 'image', src: tourPostImage('theo-trail'), alt: 'A trail through low birch scrub leading into a wide mountain valley at sunset' },
     likes: 2033,
     saves: 655,
   },
@@ -179,7 +193,7 @@ const SEED_POSTS: SeedPost[] = [
     creatorId: 'hana',
     minutesAgo: 470,
     text: 'This week: "The Memory Police" by Yōko Ogawa. A quiet island where things disappear and then the memory of them goes too. Calm, unsettling, and I have not stopped thinking about it. 4.5 out of 5.',
-    media: { type: 'art', art: 'books', alt: 'Illustration of a stack of books' },
+    media: { type: 'image', src: tourPostImage('hana-book'), alt: 'A paperback with a plain cover, a cup of green tea and a pencil on a cafe table' },
     likes: 611,
     saves: 198,
   },
@@ -188,7 +202,7 @@ const SEED_POSTS: SeedPost[] = [
     creatorId: 'kofi',
     minutesAgo: 610,
     text: 'First proper harvest from the balcony: three garden eggs, a fistful of okra, and more basil than one person should own. Four square metres, ten weeks.',
-    media: { type: 'art', art: 'leaves', alt: 'Illustration of leafy plants' },
+    media: { type: 'image', src: tourPostImage('kofi-harvest'), alt: 'Garden eggs, okra and a basket of greens on a balcony floor among potted plants' },
     likes: 457,
     saves: 120,
   },
@@ -361,13 +375,13 @@ export function buildSeedPosts(seededAt: number): Post[] {
 }
 
 const FANS = [
-  { name: 'Lena Brooks', handle: 'lenab', hue: 190 },
-  { name: 'Dami Adeyemi', handle: 'damiadeyemi', hue: 25 },
-  { name: 'Chris Ortega', handle: 'chriso', hue: 280 },
-  { name: 'Yuki Tan', handle: 'yukitan', hue: 330 },
-  { name: 'Sam Patel', handle: 'sampatel', hue: 120 },
-  { name: 'Noor Haddad', handle: 'noorh', hue: 50 },
-  { name: 'Eli Novak', handle: 'elinovak', hue: 210 },
+  { name: 'Lena Brooks', handle: 'lenab', hue: 190, avatar: tourPerson('lena') },
+  { name: 'Dami Adeyemi', handle: 'damiadeyemi', hue: 25, avatar: tourPerson('dami') },
+  { name: 'Chris Ortega', handle: 'chriso', hue: 280, avatar: tourPerson('chris') },
+  { name: 'Yuki Tan', handle: 'yukitan', hue: 330, avatar: tourPerson('yuki') },
+  { name: 'Sam Patel', handle: 'sampatel', hue: 120, avatar: tourPerson('sam') },
+  { name: 'Noor Haddad', handle: 'noorh', hue: 50, avatar: tourPerson('noor') },
+  { name: 'Eli Novak', handle: 'elinovak', hue: 210, avatar: tourPerson('eli') },
 ]
 
 const SEED_COMMENTS: Array<{ postId: string; fan: number; minutesAgo: number; text: string }> = [
@@ -396,6 +410,7 @@ export function buildSeedComments(seededAt: number): Comment[] {
       authorName: fan.name,
       authorHandle: fan.handle,
       authorHue: fan.hue,
+      authorAvatar: fan.avatar,
       text: c.text,
       createdAt: minutesAgo(seededAt, c.minutesAgo),
     }

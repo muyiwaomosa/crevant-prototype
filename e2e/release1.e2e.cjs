@@ -96,6 +96,31 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   check('no daily check in card any more', (await page.getByText('Daily check in').count()) === 0)
   await shot(page, 'home')
 
+  // ---- Fictional portraits and post images load everywhere --------------
+  // Scroll each page fully so lazy images load, then require every image to
+  // have decoded and no avatar to have fallen back to initials.
+  async function imagesLoaded(path) {
+    await page.goto(BASE + path)
+    await page.waitForLoadState('networkidle')
+    await page.evaluate(async () => {
+      for (let y = 0; y < document.body.scrollHeight; y += 400) {
+        window.scrollTo(0, y)
+        await new Promise((r) => setTimeout(r, 60))
+      }
+      await Promise.all([...document.images].map((i) => (i.complete ? null : new Promise((r) => (i.onload = i.onerror = r)))))
+    })
+    return page.evaluate(() => ({
+      tour: [...document.images].filter((i) => i.src.includes('/media/tour/')).length,
+      broken: [...document.images].filter((i) => !i.complete || i.naturalWidth === 0).map((i) => i.src),
+      initials: document.querySelectorAll('[data-avatar="initials"]').length,
+    }))
+  }
+  for (const [path, min] of [['/', 8], ['/post/p_amara_1', 4], ['/creator/amara', 2], ['/rewards', 1], ['/discover', 8], ['/profile', 1]]) {
+    const r = await imagesLoaded(path)
+    check(`${path}: tour images load, none broken`, r.tour >= min && r.broken.length === 0, `${r.tour} tour images, broken: ${r.broken.join(', ')}`)
+    check(`${path}: no avatar fell back to initials`, r.initials === 0, `${r.initials} initials`)
+  }
+
   // ---- Creator specific earning -----------------------------------------
   await page.goto(BASE + '/post/p_amara_1')
   await page.getByRole('button', { name: 'Like', exact: true }).first().click()

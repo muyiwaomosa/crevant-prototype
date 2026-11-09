@@ -127,7 +127,7 @@ async function shows(locator, timeout = 5000) {
         const w = await img.evaluate((el) => el.naturalWidth)
         const name = await fig.getAttribute('data-screenshot')
         check(`screenshot ${name} loads`, w === 600, String(w))
-        check(`screenshot ${name} is labelled as sample data`, (await fig.innerText()).includes('From the Crevant tour, with sample data.'))
+        check(`screenshot ${name} is labelled as sample data with fictional people`, (await fig.innerText()).includes('From the Crevant tour, with sample data and fictional people.'))
       }
       await page.evaluate(() => window.scrollTo(0, 0))
       await page.getByRole('main').getByRole('link', { name: 'Explore Crevant' }).first().click()

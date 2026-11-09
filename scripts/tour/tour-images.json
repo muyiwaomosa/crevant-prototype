@@ -1,0 +1,27 @@
+{
+  "about": "Fictional people and post images for the sample tour. Every image was generated with Canva's AI image generator in the founder's Canva account on 9 November 2026. None of them shows a real person. They are used only inside the sample tour and in landing page screenshots of the tour, which are captioned as sample data with fictional people.",
+  "people": [
+    { "id": "amara", "name": "Amara Okafor", "role": "creator", "canvaMediaId": "MAHacg72yAs", "prompt": "Black British woman, early thirties, personal finance educator, home office with a bookshelf, mustard top" },
+    { "id": "theo", "name": "Theo Lindqvist", "role": "creator", "canvaMediaId": "MAHaco25CHM", "prompt": "Swedish man, mid thirties, light beard, beanie, mountain trail in northern Sweden" },
+    { "id": "priya", "name": "Priya Raman", "role": "creator", "canvaMediaId": "MAHacg6wtXM", "prompt": "Indian woman, late twenties, glasses, bright cafe with a laptop" },
+    { "id": "sofia", "name": "Sofía Marín", "role": "creator", "canvaMediaId": "MAHacnPR9QM", "prompt": "Spanish woman, early thirties, curly dark hair, sunny art studio with prints" },
+    { "id": "marcus", "name": "Marcus Bell", "role": "creator", "canvaMediaId": "MAHaciarFTA", "prompt": "Black American man, mid thirties, short beard, headphones, home music studio" },
+    { "id": "jordan", "name": "Jordan Hayes", "role": "creator", "canvaMediaId": "MAHacs4shK4", "prompt": "Mixed race man, early forties, running jacket, Toronto park after a run" },
+    { "id": "hana", "name": "Hana Sato", "role": "creator", "canvaMediaId": "MAHacnMZz0Y", "prompt": "Japanese woman, late twenties, short bob, holding a plain covered book in an Osaka cafe" },
+    { "id": "kofi", "name": "Kofi Mensah", "role": "creator", "canvaMediaId": "MAHacjrpcL8", "prompt": "Ghanaian man, early thirties, green t-shirt, balcony with vegetable plants in Accra" },
+    { "id": "lena", "name": "Lena Brooks", "role": "supporter", "canvaMediaId": "MAHacpmelkc", "prompt": "White British woman, around thirty, blonde, denim jacket, at home by a window" },
+    { "id": "dami", "name": "Dami Adeyemi", "role": "supporter", "canvaMediaId": "MAHaco8f6R4", "prompt": "Nigerian British man, late twenties, short twists, grey hoodie, London street" },
+    { "id": "chris", "name": "Chris Ortega", "role": "supporter", "canvaMediaId": "MAHacqgaWBY", "prompt": "Latino man, around forty, moustache, kitchen with a coffee mug" },
+    { "id": "yuki", "name": "Yuki Tan", "role": "supporter", "canvaMediaId": "MAHaclkgXo4", "prompt": "Singaporean Chinese woman, early twenties, headphones, city street at dusk" },
+    { "id": "sam", "name": "Sam Patel", "role": "supporter", "canvaMediaId": "MAHacoIvRg4", "prompt": "British Indian man, around thirty, hiking jacket, green hillside" },
+    { "id": "noor", "name": "Noor Haddad", "role": "supporter", "canvaMediaId": "MAHact22fwQ", "prompt": "Lebanese woman, mid thirties, wavy dark hair, gallery with framed prints" },
+    { "id": "eli", "name": "Eli Novak", "role": "supporter", "canvaMediaId": "MAHacgs1hmk", "prompt": "Czech man, mid twenties, curly hair, corduroy shirt, small music venue" },
+    { "id": "jamie", "name": "Jamie Rivera", "role": "demo visitor", "canvaMediaId": "MAHacri7YX8", "prompt": "Woman around thirty, dark wavy hair, holding a sketchbook by a train window" }
+  ],
+  "posts": [
+    { "id": "amara-budget", "postId": "p_amara_1", "canvaMediaId": "MAHactRp8KA", "alt": "Illustration of three jars labelled Needs 50%, Wants 30% and Save 20%, with coins dropping in", "prompt": "Flat illustration of the 50/30/20 budget as three labelled jars, plain coins with no currency symbol" },
+    { "id": "theo-trail", "postId": "p_theo_1", "canvaMediaId": "MAHacii6x94", "alt": "A trail through low birch scrub leading into a wide mountain valley at sunset", "prompt": "Phone photo of a Swedish Lapland trail at a late summer sunset, no people" },
+    { "id": "hana-book", "postId": "p_hana_1", "canvaMediaId": "MAHacnGICHw", "alt": "A paperback with a plain cover, a cup of green tea and a pencil on a cafe table", "prompt": "Phone photo of a plain covered paperback, green tea and a pencil on a wooden cafe table" },
+    { "id": "kofi-harvest", "postId": "p_kofi_1", "canvaMediaId": "MAHacon-ZMQ", "alt": "Garden eggs, okra and a basket of greens on a balcony floor among potted plants", "prompt": "Phone photo of a small balcony harvest of garden eggs, okra and basil in Accra" }
+  ]
+}

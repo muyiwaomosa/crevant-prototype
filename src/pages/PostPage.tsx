@@ -96,7 +96,7 @@ export function PostPage() {
           <ol className="space-y-4">
             {comments.map((c) => (
               <li key={c.id} className="flex gap-3">
-                <Avatar name={c.isYou ? state.profile.name : c.authorName} hue={c.authorHue} src={c.isYou ? state.profile.avatar : undefined} size={36} />
+                <Avatar name={c.isYou ? state.profile.name : c.authorName} hue={c.authorHue} src={c.isYou ? state.profile.avatar : c.authorAvatar} size={36} />
                 <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md bg-white px-4 py-2.5 ring-1 ring-ink-100">
                   <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
                     <span className="font-semibold text-ink-900">{c.authorName}</span>

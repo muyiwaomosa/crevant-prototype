@@ -192,7 +192,7 @@ export function TourScreenshot({
       <figcaption className="mt-3 text-center text-[13px] leading-snug text-ink-500">
         <span className="font-semibold text-ink-700">{caption}</span>
         <br />
-        From the Crevant tour, with sample data.
+        From the Crevant tour, with sample data and fictional people.
       </figcaption>
     </figure>
   )

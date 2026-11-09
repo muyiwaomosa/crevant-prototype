@@ -218,7 +218,7 @@ describe('product honesty', () => {
     for (const f of figures) {
       expect(f.querySelector('img')!.getAttribute('src')).toMatch(/^\/media\/landing\/tour-[a-z-]+\.jpg$/)
       expect(f.querySelector('img')!.getAttribute('alt')!.length).toBeGreaterThan(40)
-      expect(norm(f)).toContain('From the Crevant tour, with sample data.')
+      expect(norm(f)).toContain('From the Crevant tour, with sample data and fictional people.')
     }
   })
   it('only uses the approved status labels', () => {
