@@ -4,10 +4,10 @@ import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PublicRoutes } from './PublicApp'
 
-const PUBLIC_PATHS = ['/', '/join/creator', '/join/supporter', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
+const PUBLIC_PATHS = ['/', '/join', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
 // Pages that must never collect anything until the privacy notice is approved.
 // (Sign-in and password reset are for invited members and are tested in src/public/auth.)
-const FORM_FREE_PATHS = ['/', '/join/creator', '/join/supporter', '/request-invite', '/no-such-page']
+const FORM_FREE_PATHS = ['/', '/join', '/join/creator', '/join/supporter', '/request-invite', '/no-such-page']
 
 function renderAt(path: string) {
   return render(
@@ -51,6 +51,8 @@ const APPROVED_GUARANTEE_SENTENCES = [
   'Connection Points are not cash and have no guaranteed monetary value.',
   'Participation does not guarantee earnings or rewards.',
   'No guaranteed income, views or engagement.',
+  // The founder-approved waitlist introduction on /join.
+  "Joining the waitlist doesn't guarantee an invitation to the pilot.",
 ]
 const POINTS_DISCLAIMER = 'Connection Points are not cash and have no guaranteed monetary value. Rewards depend on what each creator offers.'
 const landing = () => renderAt('/').container
@@ -191,10 +193,10 @@ describe('the Crevant difference', () => {
 })
 
 describe('for the fans', () => {
-  it('shows Discover and the fan points view, with the disclaimer and status beside the claim', () => {
+  it('shows Discover and the fan journey, with the disclaimer and status beside the claim', () => {
     const f = section('fans')
     expect(f.querySelector('figure[data-screenshot="discover"]')).not.toBeNull()
-    expect(f.querySelector('figure[data-screenshot="myPoints"]')).not.toBeNull()
+    expect(f.querySelector('[data-testid="fan-journey"]')).not.toBeNull()
     expect(norm(f.querySelector('[data-testid="fans-points-note"]'))).toContain(POINTS_DISCLAIMER)
     expect(norm(f.querySelector('[data-testid="fans-status"]'))).toContain('Not yet available to real members.')
     expect(f.querySelector('[data-status="building"]')).not.toBeNull()
@@ -206,7 +208,7 @@ describe('how it works', () => {
     const steps = [...section('how').querySelectorAll('[data-step]')]
     expect(steps.map((s) => s.querySelector('[data-status]')!.getAttribute('data-status'))).toEqual(['building', 'planned', 'building'])
     expect(norm(steps[1])).toContain('Creator invite links are planned and not built yet.')
-    expect(steps[1].querySelector('[data-testid="step2-planned"]')).not.toBeNull()
+    expect(norm(steps[1].querySelector('[data-testid="step2-concept"]'))).toContain('Concept · Planned')
     expect(steps[1].querySelectorAll('figure[data-screenshot]')).toHaveLength(0)
   })
   it('ends with Join the Waitlist', () => {
@@ -215,15 +217,24 @@ describe('how it works', () => {
 })
 
 describe('founding community', () => {
-  it('offers the creator and supporter waitlists, not applications', () => {
+  it('offers one waitlist, not applications or roles', () => {
     const f = section('founding')
     const links = [...f.querySelectorAll('a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
-    expect(links).toEqual([
-      ['Join the Waitlist as a Creator', '/join/creator'],
-      ['Join the Waitlist as a Supporter', '/join/supporter'],
-    ])
+    expect(links).toEqual([['Join the Waitlist', '/join']])
     expect(norm(f)).toContain("Joining the waitlist doesn't secure a place in the pilot.")
     expect(norm(f)).not.toMatch(/apply to join|join as a supporter/i)
+  })
+  it('offers the two approved opportunities, word for word', () => {
+    const tiles = [...section('founding').querySelectorAll('[data-testid="founding-opportunities"] li')].map((li) => norm(li).trim())
+    expect(tiles).toEqual([
+      "Experience Crevant early.Be among the first to use Crevant while it's being built, and see what a creator-first social network feels like.",
+      "Help shape its future.Test new ideas, tell us what works and what doesn't, and help decide what Crevant becomes.",
+    ])
+  })
+  it('is signed by the founder, with the founder photo', () => {
+    const sign = section('founding').querySelector('[data-testid="founder-signoff"]')!
+    expect(norm(sign).trim()).toBe('Muyiwa Omosa, Founder of Crevant.')
+    expect(sign.querySelector('img')!.getAttribute('src')).toBe('/media/landing/founder.jpg')
   })
   it('keeps the pilot details compact and complete', () => {
     const d = section('founding').querySelector('details#pilot-details')!
@@ -243,9 +254,13 @@ describe('waitlist calls to action', () => {
   it('uses "Join the Waitlist" consistently and never the old labels', () => {
     for (const path of PUBLIC_PATHS) expect(textOf(path)).not.toMatch(/Join the Founding Community|Join the Pilot|Learn About the Creator Pilot|Learn About Joining as a Supporter/)
   })
-  it('places a creator link after the Crevant difference and a supporter link after For the fans', () => {
-    expect(section('difference').querySelector('[data-cta="creator"] a')!.getAttribute('href')).toBe('/join/creator')
-    expect(section('fans').querySelector('[data-cta="supporter"] a')!.getAttribute('href')).toBe('/join/supporter')
+  it('places the one waitlist link after the Crevant difference and after For the fans, with no roles', () => {
+    for (const id of ['difference', 'fans']) {
+      const a = section(id).querySelector('[data-cta="waitlist"] a')!
+      expect(norm(a).trim()).toBe('Join the Waitlist')
+      expect(a.getAttribute('href')).toBe('/join')
+    }
+    expect(textOf('/')).not.toMatch(/as a Creator|as a Supporter/)
     for (const id of ['difference', 'fans']) expect(norm(section(id))).toContain("Joining the waitlist doesn't secure a place in the pilot.")
   })
   it('has a phone-only waitlist bar that starts hidden', () => {
@@ -281,15 +296,18 @@ describe('product honesty', () => {
   })
 })
 
-describe('join pages', () => {
-  it.each([
-    ['/join/creator', 'Join the Waitlist as a Creator', "The creator waitlist isn't open yet. It opens once our privacy notice is published."],
-    ['/join/supporter', 'Join the Waitlist as a Supporter', "The supporter waitlist isn't open yet. It opens once our privacy notice is published."],
-  ])('%s informs, says the waitlist is not open, and links back and to the tour', (path, title, notOpen) => {
+describe('the waitlist page', () => {
+  const INTRO = [
+    'Be among the first to experience a social network designed to help creators build meaningful relationships with their communities.',
+    "Whether you create content or support the people who do, there's a place for you on Crevant.",
+    "We're inviting people in small groups as we build and test the platform. Joining the waitlist doesn't guarantee an invitation to the pilot.",
+  ]
+  it.each(['/join', '/join/creator', '/join/supporter'])('%s shows the one waitlist, says it is not open, and links back and to the tour', (path) => {
     const { container } = renderAt(path)
-    expect(norm(container.querySelector('h1'))).toBe(title)
-    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain(notOpen)
-    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain("Joining the waitlist doesn't secure a place in the pilot.")
+    expect(norm(container.querySelector('h1'))).toBe('Join the Waitlist')
+    expect([...container.querySelectorAll('[data-testid="join-intro"] p')].map((p) => norm(p))).toEqual(INTRO)
+    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('The waitlist opens once our privacy notice is published.')
+    expect(norm(container)).not.toMatch(/as a creator|as a supporter/i)
     expect(container.querySelector('form, input, textarea, select')).toBeNull()
     expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('This page collects nothing.')
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
@@ -297,8 +315,40 @@ describe('join pages', () => {
     expect(hrefs).toContain('/#founding')
     expect(norm(container)).toContain('demonstration with sample data')
   })
-  it('the supporter page carries the Connection Points disclaimer', () => {
-    expect(textOf('/join/supporter')).toContain(POINTS_DISCLAIMER)
+})
+
+describe('explanatory visuals', () => {
+  it("draws the founder's year and keeps his figures inside the founder story", () => {
+    const story = section('story')
+    expect(norm(story.querySelector('[data-testid="year-grid"]'))).toContain('One video a day for 365 days')
+    expect(story.querySelectorAll('[data-testid="year-grid"] rect')).toHaveLength(365)
+    expect(norm(story.querySelector('[data-testid="earnings-contrast"]'))).toContain('Each line uses its own scale, starting from zero.')
+  })
+  it('shows the ranked feed as a drawing and the Following feed as the real product', () => {
+    const c = section('problem').querySelector('[data-testid="feed-comparison"]')!
+    expect(c.querySelector('figure[data-screenshot="feed"]')).not.toBeNull()
+    expect(norm(c)).toContain('Illustration')
+  })
+  it('keeps "the right 1,000" about relationships, never money', () => {
+    const t = norm(section('difference').querySelector('[data-testid="right-thousand"]'))
+    expect(t).toContain('The lines are relationships')
+    expect(t).not.toMatch(/earn|income|money|pay|support|[$£€]|\bCP\b/i)
+    expect(section('difference').querySelectorAll('[data-testid="right-thousand"] circle').length).toBeGreaterThan(950)
+  })
+  it('labels drawn visuals, and draws planned features only as concepts', () => {
+    for (const id of ['problem', 'why', 'difference']) expect(norm(section(id))).toContain('Illustration')
+    expect(norm(section('difference').querySelector('[data-testid="planned-panel"]'))).toContain('Concept sketch.')
+  })
+  it('only calls out words the tour itself shows', () => {
+    const callouts = [...landing().querySelectorAll('[data-callout]')].map((el) => norm(el).trim())
+    expect(callouts).toEqual(['Newest first. No ranking.', '10 CP with Amara', 'Only CP earned with Amara counts here.'])
+  })
+  it("shows a fan's journey in four real tour crops", () => {
+    const j = section('fans').querySelector('[data-testid="fan-journey"]')!
+    const imgs = [...j.querySelectorAll('img')]
+    expect(imgs.map((i) => i.getAttribute('src'))).toEqual(['follow', 'comment', 'points', 'reward'].map((n) => `/media/landing/tour-journey-${n}.jpg`))
+    for (const i of imgs) expect(i.getAttribute('alt')!.length).toBeGreaterThan(40)
+    expect(norm(j)).toContain('From the Crevant tour, with sample data and fictional people.')
   })
 })
 

@@ -148,11 +148,14 @@ export function TourScreenshot({
   caption,
   priority = false,
   className,
+  callout,
 }: {
   screen: keyof typeof TOUR_SCREENS
   caption: string
   priority?: boolean
   className?: string
+  /** A short label pointing at part of the screen. Use only words the tour itself shows. */
+  callout?: { text: string; top: string }
 }) {
   const s = TOUR_SCREENS[screen]
   return (
@@ -194,6 +197,16 @@ export function TourScreenshot({
             </div>
           </div>
         </div>
+        {callout && (
+          <span
+            data-callout
+            className="absolute right-[3%] z-10 hidden max-w-[78%] @[200px]:flex items-center gap-1.5 rounded-full bg-ink-900 px-2.5 py-1 text-[11px] font-semibold leading-tight text-white shadow-[0_6px_16px_-6px_rgb(19_25_27/0.6)] ring-2 ring-white"
+            style={{ top: callout.top }}
+          >
+            <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-spark-400" />
+            {callout.text}
+          </span>
+        )}
       </div>
       <figcaption className="mt-3 text-center text-[13px] leading-snug text-ink-500">
         <span className="font-semibold text-ink-700">{caption}</span>

@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../auth/AuthProvider'
 import { PublicLayout } from './PublicLayout'
 import { LandingPage } from './LandingPage'
@@ -35,8 +35,10 @@ export function PublicRoutes() {
       <Route element={<PublicLayout />}>
         <Route index element={<LandingPage />} />
         <Route path="request-invite" element={<RequestInvitePage />} />
-        <Route path="join/creator" element={<JoinPage audience="creator" />} />
-        <Route path="join/supporter" element={<JoinPage audience="supporter" />} />
+        <Route path="join" element={<JoinPage />} />
+        {/* The earlier creator and supporter pages now point to the one waitlist. */}
+        <Route path="join/creator" element={<Navigate to="/join" replace />} />
+        <Route path="join/supporter" element={<Navigate to="/join" replace />} />
         <Route path="sign-in" element={<SignInPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />

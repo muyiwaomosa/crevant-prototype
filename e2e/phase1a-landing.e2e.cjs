@@ -13,10 +13,10 @@ const BASE = (process.argv[2] || 'http://localhost:4175').replace(/\/$/, '')
 const SHOTS = process.argv[3] || null
 const PRODUCTION = 'https://crevant-prototype.vercel.app'
 const ALLOWED_THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com']
-const PUBLIC_PAGES = ['/', '/join/creator', '/join/supporter', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
+const PUBLIC_PAGES = ['/', '/join', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
 // Must never collect anything until the privacy notice is approved. Sign-in
 // and password reset are for invited members (e2e/auth-journey.e2e.cjs).
-const FORM_FREE_PAGES = ['/', '/join/creator', '/join/supporter', '/request-invite', '/no-such-page']
+const FORM_FREE_PAGES = ['/', '/join', '/join/creator', '/join/supporter', '/request-invite', '/no-such-page']
 
 let failures = 0
 const check = (name, ok, detail = '') => {
@@ -89,14 +89,41 @@ async function shows(locator, timeout = 5000) {
       await page.getByRole('main').getByRole('link', { name: 'Join the Waitlist', exact: true }).first().click()
       await page.waitForTimeout(400)
       check('Join the Waitlist moves to section 9', (await page.evaluate(() => location.hash)) === '#founding' && (await page.locator('#founding').evaluate((el) => el.getBoundingClientRect().top < window.innerHeight)))
-      for (const [name, path] of [['Join the Waitlist as a Creator', '/join/creator'], ['Join the Waitlist as a Supporter', '/join/supporter']]) {
-        await page.locator('#founding').getByRole('link', { name }).click()
-        await page.waitForURL(BASE + path)
-        check(`${name} opens ${path}`, (await page.getByRole('heading', { level: 1 }).count()) === 1 && (await shows(page.getByText('This page collects nothing.'))))
-        await page.getByRole('main').getByRole('link', { name: 'Back to Crevant' }).first().click()
-        await page.waitForURL(BASE + '/#founding')
-        await page.waitForTimeout(300)
-        check(`Back to Crevant from ${path} returns to section 9`, await page.locator('#founding').evaluate((el) => { const r = el.getBoundingClientRect(); return r.top < window.innerHeight && r.bottom > 0 }))
+      // Section 9's one waitlist button opens /join, and Back returns to section 9.
+      await page.locator('#founding').getByRole('link', { name: 'Join the Waitlist' }).click()
+      await page.waitForURL(BASE + '/join')
+      check('Join the Waitlist opens /join', (await shows(page.getByRole('heading', { level: 1, name: 'Join the Waitlist' }))) && (await shows(page.getByText('This page collects nothing.'))))
+      await page.getByRole('main').getByRole('link', { name: 'Back to Crevant' }).first().click()
+      await page.waitForURL(BASE + '/#founding')
+      await page.waitForTimeout(300)
+      check('Back to Crevant from /join returns to section 9', await page.locator('#founding').evaluate((el) => { const r = el.getBoundingClientRect(); return r.top < window.innerHeight && r.bottom > 0 }))
+      for (const old of ['/join/creator', '/join/supporter']) {
+        await page.goto(BASE + old)
+        await page.waitForURL(BASE + '/join')
+        check(`${old} redirects to the one waitlist page`, await shows(page.getByRole('heading', { level: 1, name: 'Join the Waitlist' })))
+      }
+      // The right 1,000: animates once in view, and stays still with reduced motion.
+      {
+        const still = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+        await still.goto(BASE + '/')
+        const fig = still.locator('[data-testid="right-thousand"]')
+        await fig.scrollIntoViewIfNeeded()
+        await still.waitForTimeout(400)
+        check('right 1,000 has no animation with reduced motion', (await fig.locator('.rt-link').first().evaluate((el) => getComputedStyle(el).animationName)) === 'none')
+        await still.close()
+        const moving = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'no-preference' })
+        await moving.goto(BASE + '/')
+        const fig2 = moving.locator('[data-testid="right-thousand"]')
+        await fig2.scrollIntoViewIfNeeded()
+        await moving.waitForTimeout(400)
+        check('right 1,000 animates once when it scrolls into view', (await fig2.getAttribute('data-live')) === 'true' && (await fig2.locator('.rt-link').first().evaluate((el) => getComputedStyle(el).animationName)) === 'rt-draw')
+        await moving.close()
+      }
+      // The fan journey crops load.
+      for (const img of await page.goto(BASE + '/').then(() => page.locator('[data-testid="fan-journey"] img').all())) {
+        await img.scrollIntoViewIfNeeded()
+        await img.evaluate((el) => (el.complete ? null : new Promise((r) => el.addEventListener('load', r, { once: true }))))
+        check(`fan journey ${await img.getAttribute('src')} loads`, (await img.evaluate((el) => el.naturalWidth)) === 600)
       }
       // Hero: the same order on every screen. Phones: headline, product line,
       // preview, actions. Desktop: headline, product line, actions on the left,

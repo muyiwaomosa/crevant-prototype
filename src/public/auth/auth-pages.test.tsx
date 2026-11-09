@@ -273,10 +273,18 @@ describe('signed-in pages', () => {
 
 describe('there is no way to register', () => {
   it('has no sign-up route', async () => {
-    for (const path of ['/sign-up', '/signup', '/register', '/join']) {
+    for (const path of ['/sign-up', '/signup', '/register']) {
       renderAt(path, makeClient())
       expect(await screen.findByText('Page not found')).toBeTruthy()
       cleanup()
     }
+  })
+  it('/join is the waitlist information page: no form, no password, no account creation', async () => {
+    const client = makeClient()
+    const { container } = renderAt('/join', client)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Join the Waitlist' })).toBeTruthy()
+    expect(container.querySelector('form, input, textarea, select, [type="password"]')).toBeNull()
+    expect(client.auth.signUp).not.toHaveBeenCalled()
+    cleanup()
   })
 })
