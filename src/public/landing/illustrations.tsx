@@ -8,7 +8,7 @@ import { TourScreenshot } from './shared'
 // own confirmed figures in the founder story; none promises reach or income.
 // Planned features are drawn as sketches, never as app screens.
 
-/** A small "Illustration" or "Concept · Planned" label for drawn visuals. */
+/** A small "Concept · Planned" label for sketches of features that are not built yet. */
 export function VisualTag({ children, planned = false }: { children: ReactNode; planned?: boolean }) {
   return (
     <span
@@ -58,7 +58,7 @@ export function YearGrid() {
           />
         ))}
       </svg>
-      <figcaption className="mt-2 text-[12px] text-ink-500">Illustration. One square per day; the timing is approximate.</figcaption>
+      <figcaption className="mt-2 text-[12px] text-ink-500">One square per day; the timing is approximate.</figcaption>
     </figure>
   )
 }
@@ -133,7 +133,6 @@ export function FollowersVsViews() {
         <p className="text-[12px] font-semibold text-ink-600">Views on the latest video</p>
         <div className="mt-1 h-3.5 w-[7%] rounded-full bg-spark-400" />
       </div>
-      <VisualTag>Illustration</VisualTag>
     </div>
   )
 }
@@ -162,9 +161,6 @@ export function AlgorithmNotes() {
           </g>
         ))}
       </svg>
-      <div className="mt-2">
-        <VisualTag>Illustration</VisualTag>
-      </div>
     </div>
   )
 }
@@ -199,9 +195,6 @@ export function FeedComparison() {
             </ul>
             <p aria-hidden="true" className="mt-2 text-center font-display text-2xl font-bold text-ink-400 sm:mt-auto sm:pb-2 sm:text-3xl">?</p>
           </div>
-          <p className="mt-2 text-center">
-            <VisualTag>Illustration</VisualTag>
-          </p>
         </div>
         <div>
           <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-brand-700 sm:text-[12px]">Crevant's Following feed</p>
@@ -245,12 +238,9 @@ export function FollowToFeed() {
           <span className="mt-1 block h-5 rounded-md bg-ink-100" />
         </div>
       </div>
-      <figcaption className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px] text-ink-600">
-        <span>
-          <Check className="mr-1 inline h-3.5 w-3.5 text-brand-600" aria-hidden="true" />
-          Their Following feed, newest first
-        </span>
-        <VisualTag>Illustration</VisualTag>
+      <figcaption className="mt-3 text-[12px] text-ink-600">
+        <Check className="mr-1 inline h-3.5 w-3.5 text-brand-600" aria-hidden="true" />
+        Their Following feed, newest first
       </figcaption>
     </figure>
   )
@@ -327,12 +317,8 @@ export function RightThousand() {
         <circle cx={cx} cy={cy - 4} r="5" className="fill-white" />
         <path d={`M ${cx - 8} ${cy + 9} q 8 -10 16 0`} className="fill-white" />
       </svg>
-      <figcaption className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] leading-relaxed text-ink-500">
-        <VisualTag>Illustration</VisualTag>
-        <span>
-          Each dot is one person who chose to follow. The lines are relationships: people who come back, join the conversation and recommend your
-          work.
-        </span>
+      <figcaption className="mt-4 text-[13px] leading-relaxed text-ink-500">
+        Each dot is one person who chose to follow. The lines are relationships: people who come back, join the conversation and recommend your work.
       </figcaption>
     </figure>
   )
@@ -395,7 +381,6 @@ export function FanJourney() {
           </li>
         ))}
       </ol>
-      <figcaption className="mt-3 text-[13px] text-ink-500">From the Crevant tour, with sample data and fictional people.</figcaption>
     </figure>
   )
 }

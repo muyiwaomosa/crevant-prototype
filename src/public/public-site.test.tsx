@@ -71,7 +71,7 @@ describe('structure and approved copy', () => {
   it('keeps key approved passages word for word', () => {
     const t = norm(landing())
     for (const passage of [
-      'A creator-first social network where the people who choose to follow you can see your content in their Following feed',
+      'Meet Crevant. A creator-first social network built for predictability. When someone follows you, your new posts appear in their Following feed, newest first, so you can plan, build trust and grow, instead of guessing what an algorithm will do.',
       'An invitation-only platform being built for creators and their supporters.',
       "What's the point of building an audience if you can't reliably reach the people who chose to follow you?",
       'How do you build trust when you can\'t consistently connect with your audience?',
@@ -272,14 +272,26 @@ describe('waitlist calls to action', () => {
 })
 
 describe('product honesty', () => {
-  it('labels every screenshot as sample tour data', () => {
+  it('discloses sample data and fictional people discreetly: under the hero phone and in the footer', () => {
+    const c = landing()
+    expect(norm(c.querySelector('#hero figure[data-screenshot="hero"] [data-testid="demo-note"]'))).toBe('Demo with sample data and fictional people.')
+    expect(c.querySelectorAll('[data-testid="demo-note"]')).toHaveLength(1)
+    for (const path of PUBLIC_PATHS) {
+      const { container } = renderAt(path)
+      expect(norm(container.querySelector('footer [data-testid="product-images-note"]')), path).toBe(
+        'Product images on this site show the Crevant demo, with sample data and fictional people.',
+      )
+      cleanup()
+    }
+    expect(norm(c)).not.toMatch(/\bIllustration\b|From the Crevant tour/)
+  })
+  it('uses genuine, described tour screenshots', () => {
     const figures = [...landing().querySelectorAll('figure[data-screenshot]')]
     expect(figures.length).toBe(8)
     expect(new Set(figures.map((f) => f.getAttribute('data-screenshot'))).size).toBe(8)
     for (const f of figures) {
       expect(f.querySelector('img')!.getAttribute('src')).toMatch(/^\/media\/landing\/tour-[a-z-]+\.jpg$/)
       expect(f.querySelector('img')!.getAttribute('alt')!.length).toBeGreaterThan(40)
-      expect(norm(f)).toContain('From the Crevant tour, with sample data and fictional people.')
     }
   })
   it('only uses the approved status labels', () => {
@@ -327,7 +339,6 @@ describe('explanatory visuals', () => {
   it('shows the ranked feed as a drawing and the Following feed as the real product', () => {
     const c = section('problem').querySelector('[data-testid="feed-comparison"]')!
     expect(c.querySelector('figure[data-screenshot="feed"]')).not.toBeNull()
-    expect(norm(c)).toContain('Illustration')
   })
   it('keeps "the right 1,000" about relationships, never money', () => {
     const t = norm(section('difference').querySelector('[data-testid="right-thousand"]'))
@@ -335,9 +346,9 @@ describe('explanatory visuals', () => {
     expect(t).not.toMatch(/earn|income|money|pay|support|[$£€]|\bCP\b/i)
     expect(section('difference').querySelectorAll('[data-testid="right-thousand"] circle').length).toBeGreaterThan(950)
   })
-  it('labels drawn visuals, and draws planned features only as concepts', () => {
-    for (const id of ['problem', 'why', 'difference']) expect(norm(section(id))).toContain('Illustration')
+  it('draws planned features only as labelled concepts', () => {
     expect(norm(section('difference').querySelector('[data-testid="planned-panel"]'))).toContain('Concept sketch.')
+    expect(norm(section('how').querySelector('[data-testid="step2-concept"]'))).toContain('Concept · Planned')
   })
   it('adds no inline <style> blocks, which the Content Security Policy would block', () => {
     for (const path of PUBLIC_PATHS) {
@@ -355,7 +366,6 @@ describe('explanatory visuals', () => {
     const imgs = [...j.querySelectorAll('img')]
     expect(imgs.map((i) => i.getAttribute('src'))).toEqual(['follow', 'comment', 'points', 'reward'].map((n) => `/media/landing/tour-journey-${n}.jpg`))
     for (const i of imgs) expect(i.getAttribute('alt')!.length).toBeGreaterThan(40)
-    expect(norm(j)).toContain('From the Crevant tour, with sample data and fictional people.')
   })
 })
 

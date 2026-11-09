@@ -4,6 +4,7 @@ import { Wordmark } from '../components/Wordmark'
 import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
 import { useAuth } from '../auth/AuthProvider'
+import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -69,6 +70,7 @@ export function PublicLayout() {
             <p className="mt-3 font-display text-base font-bold text-ink-800">Create value. Build connections. Grow together.</p>
             <p className="mt-1 text-sm text-ink-500">A creator-first social network.</p>
             <p className="mt-3 text-sm leading-relaxed text-ink-500">An invitation-only pilot for adults 18 and older.</p>
+            <p data-testid="product-images-note" className="mt-1 text-sm leading-relaxed text-ink-500">{PRODUCT_IMAGES_DISCLOSURE}</p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-ink-600">
             <Link to="/#story" className="hover:text-ink-900">

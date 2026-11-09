@@ -115,6 +115,11 @@ export const TOUR_SCREENS = {
   },
 } as const
 
+/** The one short disclosure shown under the hero phone. */
+export const DEMO_DISCLOSURE = 'Demo with sample data and fictional people.'
+/** The page-level disclosure in the footer, covering every product image. */
+export const PRODUCT_IMAGES_DISCLOSURE = 'Product images on this site show the Crevant demo, with sample data and fictional people.'
+
 /** Status bar icons, sized relative to the phone's width. */
 function StatusIcons() {
   return (
@@ -149,6 +154,7 @@ export function TourScreenshot({
   priority = false,
   className,
   callout,
+  disclose = false,
 }: {
   screen: keyof typeof TOUR_SCREENS
   caption: string
@@ -156,6 +162,8 @@ export function TourScreenshot({
   className?: string
   /** A short label pointing at part of the screen. Use only words the tour itself shows. */
   callout?: { text: string; top: string }
+  /** Show the sample-data note right under this screenshot (the hero). The footer covers the rest. */
+  disclose?: boolean
 }) {
   const s = TOUR_SCREENS[screen]
   return (
@@ -210,8 +218,12 @@ export function TourScreenshot({
       </div>
       <figcaption className="mt-3 text-center text-[13px] leading-snug text-ink-500">
         <span className="font-semibold text-ink-700">{caption}</span>
-        <br />
-        From the Crevant tour, with sample data and fictional people.
+        {disclose && (
+          <>
+            <br />
+            <span data-testid="demo-note">{DEMO_DISCLOSURE}</span>
+          </>
+        )}
       </figcaption>
     </figure>
   )

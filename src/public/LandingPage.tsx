@@ -150,9 +150,9 @@ function Hero() {
           You earned the follow. <span className="text-brand-600">You deserve the reach.</span>
         </h1>
         <p data-hero="product" className="mt-5 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:col-start-1 lg:row-start-2">
-          <strong className="font-semibold text-ink-900">Meet Crevant.</strong> A creator-first social network where the people who choose to follow
-          you can see your content in their Following feed, so you can focus on building connections, earning trust and creating opportunities for
-          sustainable income.
+          <strong className="font-semibold text-ink-900">Meet Crevant.</strong> A creator-first social network built for predictability. When someone
+          follows you, your new posts appear in their Following feed, newest first, so you can plan, build trust and grow, instead of guessing what an
+          algorithm will do.
         </p>
         <div data-hero="preview" className="relative mt-6 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-0">
           <div aria-hidden="true" className="absolute -inset-4 rounded-[48px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-50 lg:-inset-6" />
@@ -161,6 +161,7 @@ function Hero() {
             caption="A post in your Following feed"
             priority
             callout={{ text: 'Newest first. No ranking.', top: '9.5%' }}
+            disclose
             className="relative max-w-[210px] sm:max-w-[240px] lg:max-w-[260px]"
           />
         </div>
