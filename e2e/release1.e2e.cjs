@@ -274,8 +274,11 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   check('published post is first in the chronological feed', (await page.locator('article').first().innerText()).includes('Release 1 test post'))
 
   // ---- Profile pictures ---------------------------------------------------
+  // The demo visitor starts with Jamie's fictional sample portrait.
+  const SAMPLE = '/media/tour/people/jamie.jpg'
   await page.goto(BASE + '/profile')
-  await page.getByRole('button', { name: 'Add photo' }).click()
+  check('demo visitor starts with the sample portrait', (await stored(page)).profile.avatar === SAMPLE)
+  await page.getByRole('button', { name: 'Change photo' }).click()
   const input = page.locator('[role=dialog] input[type=file]')
   await input.setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') })
   check('wrong file type shows a helpful error', /not supported/.test(await page.getByRole('alert').innerText()))
@@ -285,7 +288,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   check('corrupt image shows a helpful error', /could not be opened/.test(await page.getByRole('alert').innerText()))
   await input.setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: await makeImage(page, 900, 600) })
   await page.getByText('Preview. Save to use this picture.').waitFor()
-  check('preview appears before saving', (await stored(page)).profile.avatar === undefined)
+  check('preview appears before saving', (await stored(page)).profile.avatar === SAMPLE)
   await shot(page, 'avatar-preview')
   await page.getByRole('button', { name: 'Save picture' }).click()
   const av = (await stored(page)).profile.avatar
@@ -346,7 +349,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.getByRole('button', { name: 'Reset', exact: true }).click()
   await page.getByRole('button', { name: 'Reset demo' }).click()
   const r = await stored(page)
-  check('reset clears CP, redemptions, and the picture', r.ledger.length === 0 && r.redemptions.length === 0 && !r.profile.avatar)
+  check('reset clears CP, redemptions, and the uploaded picture', r.ledger.length === 0 && r.redemptions.length === 0 && r.profile.avatar === SAMPLE)
 
   // ---- Migration from version 1 ------------------------------------------
   await page.evaluate((k) => {
