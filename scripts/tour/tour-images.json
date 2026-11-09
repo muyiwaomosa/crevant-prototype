@@ -5,7 +5,7 @@
     { "id": "theo", "name": "Theo Lindqvist", "role": "creator", "canvaMediaId": "MAHaco25CHM", "prompt": "Swedish man, mid thirties, light beard, beanie, mountain trail in northern Sweden" },
     { "id": "priya", "name": "Priya Raman", "role": "creator", "canvaMediaId": "MAHacg6wtXM", "prompt": "Indian woman, late twenties, glasses, bright cafe with a laptop" },
     { "id": "sofia", "name": "Sofía Marín", "role": "creator", "canvaMediaId": "MAHacnPR9QM", "prompt": "Spanish woman, early thirties, curly dark hair, sunny art studio with prints" },
-    { "id": "marcus", "name": "Marcus Bell", "role": "creator", "canvaMediaId": "MAHaciarFTA", "prompt": "Black American man, mid thirties, short beard, headphones, home music studio" },
+    { "id": "marcus", "name": "Marcus Bell", "role": "creator", "canvaMediaId": "MAHaciCKJGo", "prompt": "Black American man, mid thirties, short beard, headphones, home music studio, plain wall, no posters, text or logos" },
     { "id": "jordan", "name": "Jordan Hayes", "role": "creator", "canvaMediaId": "MAHacs4shK4", "prompt": "Mixed race man, early forties, running jacket, Toronto park after a run" },
     { "id": "hana", "name": "Hana Sato", "role": "creator", "canvaMediaId": "MAHacnMZz0Y", "prompt": "Japanese woman, late twenties, short bob, holding a plain covered book in an Osaka cafe" },
     { "id": "kofi", "name": "Kofi Mensah", "role": "creator", "canvaMediaId": "MAHacjrpcL8", "prompt": "Ghanaian man, early thirties, green t-shirt, balcony with vegetable plants in Accra" },
@@ -13,7 +13,7 @@
     { "id": "dami", "name": "Dami Adeyemi", "role": "supporter", "canvaMediaId": "MAHaco8f6R4", "prompt": "Nigerian British man, late twenties, short twists, grey hoodie, London street" },
     { "id": "chris", "name": "Chris Ortega", "role": "supporter", "canvaMediaId": "MAHacqgaWBY", "prompt": "Latino man, around forty, moustache, kitchen with a coffee mug" },
     { "id": "yuki", "name": "Yuki Tan", "role": "supporter", "canvaMediaId": "MAHaclkgXo4", "prompt": "Singaporean Chinese woman, early twenties, headphones, city street at dusk" },
-    { "id": "sam", "name": "Sam Patel", "role": "supporter", "canvaMediaId": "MAHacoIvRg4", "prompt": "British Indian man, around thirty, hiking jacket, green hillside" },
+    { "id": "sam", "name": "Sam Patel", "role": "supporter", "canvaMediaId": "MAHacp5XOPY", "prompt": "British Indian man, around thirty, plain navy hiking jacket with no logos, green hillside" },
     { "id": "noor", "name": "Noor Haddad", "role": "supporter", "canvaMediaId": "MAHact22fwQ", "prompt": "Lebanese woman, mid thirties, wavy dark hair, gallery with framed prints" },
     { "id": "eli", "name": "Eli Novak", "role": "supporter", "canvaMediaId": "MAHacgs1hmk", "prompt": "Czech man, mid twenties, curly hair, corduroy shirt, small music venue" },
     { "id": "jamie", "name": "Jamie Rivera", "role": "demo visitor", "canvaMediaId": "MAHacri7YX8", "prompt": "Woman around thirty, dark wavy hair, holding a sketchbook by a train window" }
