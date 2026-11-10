@@ -1,0 +1,7 @@
+project_id = "crevant-a3-proxy-diagnostic"
+
+# Temporary deploy folder for the A3 proxy diagnostic ONLY (never the
+# waitlist). Supabase's own key check stays on: requests need the
+# project's public key as well as the diagnostic token.
+[functions.proxy-diagnostic]
+verify_jwt = true
