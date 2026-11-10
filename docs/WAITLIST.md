@@ -70,7 +70,7 @@ Setup, once approved:
 3. Deploy the function with an approved `SUPABASE_ACCESS_TOKEN`: `supabase functions deploy join-waitlist --no-verify-jwt`.
 4. Set function secrets: `TURNSTILE_SECRET_KEY`, `WAITLIST_RATE_SALT` (random, at least 32 characters), `WAITLIST_ALLOWED_ORIGINS`, `WAITLIST_ALLOWED_HOSTNAMES`, and `WAITLIST_TRUSTED_PROXY_HOPS` once confirmed. `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by Supabase.
    Confirm the hop count before opening: send test requests with a made up `X-Forwarded-For` value and check (by rate limit behaviour, without logging addresses) that the made up value doesn't change the client bucket.
-5. Add `https://challenges.cloudflare.com` to `script-src` and `frame-src` in `vercel.json`, and the function URL is already covered by `connect-src`.
+5. The Content Security Policy in `vercel.json` already allows `https://challenges.cloudflare.com` in `script-src` and `frame-src` (added with the public site build). The function URL is covered by `connect-src`.
 6. Set Vercel env: `VITE_TURNSTILE_SITE_KEY`, `VITE_PRIVACY_NOTICE_URL`, `VITE_PRIVACY_NOTICE_VERSION`, then `VITE_WAITLIST_FORM_ENABLED=true`.
 7. Record the approved notice version: `update ops.settings set value = '<approved version>', updated_at = now() where key = 'waitlist_notice_version';`
 8. Turn on `WAITLIST_FUNCTION_ENABLED=true`, then the database switch: `update ops.settings set enabled = true, updated_at = now() where key = 'waitlist_submissions';`
