@@ -12,8 +12,12 @@ test('the page may only talk to this site and the staging Supabase project', () 
   assert.deepEqual(csp['connect-src'], ["'self'", 'https://kpudeppgokpjhvaqrprn.supabase.co'])
 })
 
-test('scripts only from this site; no inline or eval; no framing; no plugins', () => {
-  assert.deepEqual(csp['script-src'], ["'self'"])
+test('scripts only from this site and Cloudflare Turnstile; no inline or eval; no framing; no plugins', () => {
+  // Turnstile (the waitlist's bot check) loads one script and one frame from
+  // challenges.cloudflare.com. Nothing else outside the site may run or frame.
+  assert.deepEqual(csp['script-src'], ["'self'", 'https://challenges.cloudflare.com'])
+  assert.deepEqual(csp['frame-src'], ['https://challenges.cloudflare.com'])
+  assert.deepEqual(csp['default-src'], ["'self'"])
   assert.equal(headers['Content-Security-Policy'].includes('unsafe-inline'), false)
   assert.equal(headers['Content-Security-Policy'].includes('unsafe-eval'), false)
   assert.deepEqual(csp['frame-ancestors'], ["'none'"])

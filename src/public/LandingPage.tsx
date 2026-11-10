@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { ArrowRight, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
+import { useMemberLinks } from './member-links'
 import { cardShadow, Section, StatusBadge, TourScreenshot } from './landing/shared'
 import { DifferenceRail, PyramidComparison } from './landing/visuals'
 import {
@@ -137,6 +138,7 @@ function MobileWaitlistBar() {
 // ---- 1. Hero ----------------------------------------------------------------
 
 function Hero() {
+  const memberLinks = useMemberLinks()
   // Same order on every screen: headline, what Crevant is, then the actions.
   // Phones show the product preview between the explanation and the actions;
   // desktop shows it on the right.
@@ -175,12 +177,14 @@ function Hero() {
             Being built for the pilot. The Following feed shows posts from people you follow, newest first. It isn't a promise that each post reaches
             each follower.
           </Qualifier>
-          <p className="mt-3 text-sm text-ink-500">
-            Already invited?{' '}
-            <Link to="/sign-in" className="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800">
-              Sign in
-            </Link>
-          </p>
+          {import.meta.env.MODE !== 'site' && memberLinks && (
+            <p className="mt-3 text-sm text-ink-500">
+              Already invited?{' '}
+              <Link to="/sign-in" className="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800">
+                Sign in
+              </Link>
+            </p>
+          )}
         </div>
       </div>
     </section>

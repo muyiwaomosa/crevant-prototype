@@ -1,7 +1,6 @@
 // Loads Cloudflare Turnstile only when the waitlist form is switched on.
-// Activating the form also needs https://challenges.cloudflare.com added to
-// the site's Content Security Policy (script-src and frame-src) in
-// vercel.json; see docs/WAITLIST.md. Nothing here runs while the form is off.
+// vercel.json's Content Security Policy allows https://challenges.cloudflare.com
+// in script-src and frame-src for this. Nothing here runs while the form is off.
 
 type TurnstileApi = {
   render: (el: HTMLElement, opts: Record<string, unknown>) => string

@@ -1,6 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../auth/AuthProvider'
 import { PublicLayout } from './PublicLayout'
+import { MemberLinksContext } from './member-links'
+import { AccountNavLink } from './auth/AccountNavLink'
 import { LandingPage } from './LandingPage'
 import { RequestInvitePage } from './RequestInvitePage'
 import { JoinPage } from './JoinPage'
@@ -31,8 +33,9 @@ export function PublicApp() {
 /** Routes without a router or auth provider, so tests can supply their own. */
 export function PublicRoutes() {
   return (
-    <Routes>
-      <Route element={<PublicLayout />}>
+    <MemberLinksContext.Provider value>
+      <Routes>
+        <Route element={<PublicLayout account={<AccountNavLink />} />}>
         <Route index element={<LandingPage />} />
         <Route path="request-invite" element={<RequestInvitePage />} />
         <Route path="join" element={<JoinPage />} />
@@ -46,7 +49,8 @@ export function PublicRoutes() {
         <Route path="app" element={<RequireAuth><AppHomePage /></RequireAuth>} />
         <Route path="app/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
         <Route path="*" element={<PublicNotFound />} />
-      </Route>
-    </Routes>
+        </Route>
+      </Routes>
+    </MemberLinksContext.Provider>
   )
 }

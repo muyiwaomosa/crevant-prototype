@@ -24,6 +24,33 @@ jobs:
       - run: npm run build
       - run: npm run check:secrets
 
+  public-site:
+    # The public site build (npm run build:site): landing page, /join and the
+    # sample tour only. Built with made-up Supabase settings present, which
+    # must not reach the output; the bundle check fails on any member page,
+    # sign in code, Supabase client, project address, key or secret. Then
+    # browser checks in Chromium with the vercel.json security headers.
+    # Needs no Supabase and no secrets.
+    name: Public site (site-only build and browser checks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PLAYWRIGHT_VERSION: 1.63.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install the pinned Playwright and Chromium
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund "playwright@${PLAYWRIGHT_VERSION}"
+          npx playwright install --with-deps chromium
+      - name: Build the public site, check the bundle, run the browser checks
+        run: scripts/e2e/public-site.sh
+
   database:
     name: Database (migrations and separation checks)
     runs-on: ubuntu-latest

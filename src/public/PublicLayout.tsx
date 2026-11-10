@@ -1,9 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Wordmark } from '../components/Wordmark'
 import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
-import { useAuth } from '../auth/AuthProvider'
+import { useMemberLinks } from './member-links'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 
 function ScrollToTop() {
@@ -14,8 +14,13 @@ function ScrollToTop() {
   return null
 }
 
-export function PublicLayout() {
-  const signedIn = useAuth().status === 'signed-in'
+/**
+ * The public site's header and footer. `account` is the header's account link
+ * (Sign in or Your account); the public site build passes none, because it has
+ * no member pages. Kept free of auth code so the site build doesn't include it.
+ */
+export function PublicLayout({ account }: { account?: ReactNode }) {
+  const memberLinks = useMemberLinks()
   return (
     <div className="flex min-h-dvh flex-col">
       <ScrollToTop />
@@ -41,17 +46,7 @@ export function PublicLayout() {
               </a>
             </span>
             {/* Below 420px only the logo and Join the Waitlist fit; Sign in stays in the hero and footer. */}
-            <span className="hidden min-[420px]:contents">
-              {signedIn ? (
-                <Link to="/app" className={buttonClass('ghost', 'sm')}>
-                  Your account
-                </Link>
-              ) : (
-                <Link to="/sign-in" className={buttonClass('ghost', 'sm')}>
-                  Sign in
-                </Link>
-              )}
-            </span>
+            {account && <span className="hidden min-[420px]:contents">{account}</span>}
             <Link to="/#founding" className={buttonClass('primary', 'sm')}>
               Join the Waitlist
             </Link>
@@ -85,9 +80,11 @@ export function PublicLayout() {
             <a href={TOUR_BASE} className="hover:text-ink-900">
               Explore Crevant
             </a>
-            <Link to="/sign-in" className="hover:text-ink-900">
-              Sign in
-            </Link>
+            {import.meta.env.MODE !== 'site' && memberLinks && (
+              <Link to="/sign-in" className="hover:text-ink-900">
+                Sign in
+              </Link>
+            )}
           </nav>
         </div>
         <p className="mx-auto max-w-6xl px-4 pb-8 text-[13px] text-ink-400 sm:px-6">© 2026 Crevant. All rights reserved.</p>
