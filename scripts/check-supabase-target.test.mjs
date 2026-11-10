@@ -37,3 +37,19 @@ test('local builds allow nothing, staging, or a local stack only', () => {
   assert.equal(checkSupabaseTarget({ VITE_SUPABASE_URL: 'https://evil.example', VITE_SUPABASE_PUBLISHABLE_KEY: PUB }).ok, false)
   assert.equal(checkSupabaseTarget({ VITE_SUPABASE_URL: STAGING_SUPABASE_URL }).ok, false)
 })
+
+test('the waitlist address may only be the staging function (or a local stack), and never in Production yet', () => {
+  const base = { VITE_SUPABASE_URL: STAGING_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB }
+  const fn = `${STAGING_SUPABASE_URL}/functions/v1/join-waitlist`
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'preview', ...base, VITE_WAITLIST_ENDPOINT: fn }).ok, true)
+  assert.equal(checkSupabaseTarget({ VITE_WAITLIST_ENDPOINT: 'http://127.0.0.1:54321/functions/v1/join-waitlist' }).ok, true)
+  for (const bad of [
+    'https://abcdefghijabcdefghij.supabase.co/functions/v1/join-waitlist',
+    `${STAGING_SUPABASE_URL}/functions/v1/other`,
+    `${STAGING_SUPABASE_URL}/rest/v1/rpc/waitlist_submit`,
+    'https://evil.example/functions/v1/join-waitlist',
+  ])
+    assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'preview', ...base, VITE_WAITLIST_ENDPOINT: bad }).ok, false, bad)
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'preview', ...base, VITE_WAITLIST_ENDPOINT: 'http://127.0.0.1:54321/functions/v1/join-waitlist' }).ok, false)
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: fn }).ok, false)
+})

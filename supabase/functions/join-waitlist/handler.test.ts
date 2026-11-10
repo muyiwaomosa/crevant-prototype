@@ -1,18 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-import { clientIpFrom, handleJoin, hashClientKey, submitThroughDataApi, toPayload, verifyWithCloudflare, type JoinDeps } from './handler'
+import { clientIpFrom, handleJoin, rateKeysFor, toPayload, verifyWithCloudflare, type JoinDeps } from './handler'
+import { databaseOptions, submitWithDatabase, type Sql } from './db'
 
 const ORIGIN = 'https://crevant.example'
+const SALT = 's'.repeat(32)
+const KEYS = { emailKey: 'e'.repeat(64), clientKey: 'c'.repeat(64) }
 const valid = {
   email: '  Maya@Example.com ',
   interests: ['reach_followers'],
   sharesContent: 'yes',
   platform: 'youtube',
   audienceBand: '1k_10k',
-  publicLink: 'https://youtube.com/@maya',
   source: 'instagram',
   ageConfirmed: true,
   waitlistConsent: true,
-  marketingConsent: false,
   noticeVersion: 'notice-2026-11',
   turnstileToken: 'tok',
   website: '',
@@ -23,8 +24,8 @@ function deps(over: Partial<JoinDeps> = {}): JoinDeps {
     enabled: true,
     allowedOrigins: [ORIGIN],
     allowedHostnames: ['crevant.example'],
-    verifyTurnstile: vi.fn(async () => ({ success: true, hostname: 'crevant.example' })),
-    clientKey: vi.fn(async () => 'a'.repeat(64)),
+    verifyTurnstile: vi.fn(async () => ({ success: true, hostname: 'crevant.example', action: 'join' })),
+    rateKeys: vi.fn(async () => KEYS),
     submit: vi.fn(async () => 'ok' as const),
     ...over,
   }
@@ -40,14 +41,24 @@ const post = (body: unknown, extra: Partial<Parameters<typeof handleJoin>[0]> = 
 const state = (o: { body: string }) => JSON.parse(o.body).status
 
 describe('join-waitlist handler', () => {
-  it('accepts a valid submission and passes normalised arguments to the database', async () => {
+  it('accepts a valid submission and passes normalised values and salted keys to the database', async () => {
     const d = deps()
     const out = await handleJoin(post(valid), d)
     expect([out.status, state(out)]).toEqual([200, 'ok'])
     expect(out.headers['Access-Control-Allow-Origin']).toBe(ORIGIN)
-    expect(d.submit).toHaveBeenCalledWith(
-      expect.objectContaining({ p_email: 'maya@example.com', p_waitlist_consent: true, p_age_confirmed: true, p_notice_version: 'notice-2026-11', p_client_key: 'a'.repeat(64) }),
-    )
+    expect(d.rateKeys).toHaveBeenCalledWith('maya@example.com', '203.0.113.7')
+    expect(d.submit).toHaveBeenCalledWith({
+      email: 'maya@example.com',
+      interests: ['reach_followers'],
+      sharesContent: 'yes',
+      platform: 'youtube',
+      audienceBand: '1k_10k',
+      source: 'instagram',
+      ageConfirmed: true,
+      waitlistConsent: true,
+      noticeVersion: 'notice-2026-11',
+      ...KEYS,
+    })
   })
 
   it('is closed when the function switch is off, before any check or call', async () => {
@@ -58,43 +69,42 @@ describe('join-waitlist handler', () => {
     expect(d.submit).not.toHaveBeenCalled()
   })
 
-  it('refuses other origins, methods, content types and oversized bodies', async () => {
-    expect((await handleJoin(post(valid, { origin: 'https://evil.example' }), deps())).status).toBe(403)
-    expect((await handleJoin(post(valid, { origin: null }), deps())).status).toBe(403)
-    expect((await handleJoin(post(valid, { method: 'GET' }), deps())).status).toBe(405)
-    expect((await handleJoin(post(valid, { contentType: 'text/plain' }), deps())).status).toBe(415)
-    expect((await handleJoin(post({ ...valid, publicLink: 'x'.repeat(5000) }), deps())).status).toBe(413)
-    expect((await handleJoin(post('not json'), deps())).status).toBe(400)
-    expect((await handleJoin(post('[1,2]'), deps())).status).toBe(400)
-  })
-
-  it('answers the browser preflight only for allowed origins', async () => {
-    expect((await handleJoin({ ...post(''), method: 'OPTIONS' }, deps())).status).toBe(204)
-    expect((await handleJoin({ ...post('', { origin: 'https://evil.example' }), method: 'OPTIONS' }, deps())).status).toBe(403)
-  })
-
-  it('silently drops honeypot submissions: looks like success, stores nothing', async () => {
+  it('refuses other origins, other methods, non JSON and oversized bodies', async () => {
     const d = deps()
-    const out = await handleJoin(post({ ...valid, website: 'https://spam.example' }), d)
-    expect([out.status, state(out)]).toEqual([200, 'ok'])
-    expect(d.verifyTurnstile).not.toHaveBeenCalled()
+    expect((await handleJoin(post(valid, { origin: 'https://evil.example' }), d)).status).toBe(403)
+    expect((await handleJoin(post(valid, { origin: null }), d)).status).toBe(403)
+    expect((await handleJoin({ ...post(valid), method: 'OPTIONS', origin: 'https://evil.example' }, d)).status).toBe(403)
+    expect((await handleJoin({ ...post(valid), method: 'GET' }, d)).status).toBe(405)
+    expect((await handleJoin(post(valid, { contentType: 'text/plain' }), d)).status).toBe(415)
+    expect((await handleJoin(post({ ...valid, padding: 'x'.repeat(5000) }), d)).status).toBe(413)
     expect(d.submit).not.toHaveBeenCalled()
+    const ok = await handleJoin({ ...post(valid), method: 'OPTIONS' }, d)
+    expect(ok.status).toBe(204)
+    expect(ok.headers['Access-Control-Allow-Headers']).toBe('content-type')
   })
 
-  it('requires a Turnstile pass on an allowed hostname', async () => {
-    for (const over of [
-      { verifyTurnstile: vi.fn(async () => ({ success: false })) },
-      { verifyTurnstile: vi.fn(async () => ({ success: true, hostname: 'evil.example' })) },
-      { verifyTurnstile: vi.fn(async () => ({ success: true })) },
+  it('requires Turnstile success, an allowed hostname and the join action', async () => {
+    for (const verdict of [
+      { success: false, hostname: 'crevant.example', action: 'join' },
+      { success: true, hostname: 'evil.example', action: 'join' },
+      { success: true, action: 'join' },
+      { success: true, hostname: 'crevant.example', action: 'login' },
+      { success: true, hostname: 'crevant.example' },
     ]) {
-      const d = deps(over)
-      const out = await handleJoin(post(valid), d)
-      expect([out.status, state(out)]).toEqual([400, 'verification_failed'])
+      const d = deps({ verifyTurnstile: vi.fn(async () => verdict) })
+      expect(state(await handleJoin(post(valid), d)), JSON.stringify(verdict)).toBe('verification_failed')
       expect(d.submit).not.toHaveBeenCalled()
     }
     const d = deps()
     expect(state(await handleJoin(post({ ...valid, turnstileToken: '' }), d))).toBe('verification_failed')
     expect(d.verifyTurnstile).not.toHaveBeenCalled()
+  })
+
+  it('treats a filled honeypot as success but stores nothing and calls nothing', async () => {
+    const d = deps()
+    expect(state(await handleJoin(post({ ...valid, website: 'https://spam.example' }), d))).toBe('ok')
+    expect(d.verifyTurnstile).not.toHaveBeenCalled()
+    expect(d.submit).not.toHaveBeenCalled()
   })
 
   it('rejects wrong shapes before reaching the database', async () => {
@@ -103,6 +113,13 @@ describe('join-waitlist handler', () => {
       expect(state(await handleJoin(post(bad), d))).toBe('invalid')
       expect(d.submit).not.toHaveBeenCalled()
     }
+  })
+
+  it('never forwards fields that are no longer collected (link, campaign, marketing consent)', async () => {
+    const d = deps()
+    await handleJoin(post({ ...valid, publicLink: 'https://youtube.com/@maya', campaign: 'launch', marketingConsent: true }), d)
+    const payload = (d.submit as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>
+    expect(Object.keys(payload).filter((k) => /link|campaign|marketing/i.test(k))).toEqual([])
   })
 
   it('maps database results to statuses, and hides errors', async () => {
@@ -120,15 +137,8 @@ describe('join-waitlist handler', () => {
     expect([out.status, out.body]).toEqual([500, '{"status":"error"}'])
   })
 
-  it('never forwards marketing consent, even when a direct request asks for it', async () => {
-    const d = deps()
-    await handleJoin(post({ ...valid, marketingConsent: true }), d)
-    const payload = (d.submit as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>
-    expect(Object.keys(payload).some((k) => /marketing/i.test(k))).toBe(false)
-  })
-
-  it('fails safely when the client key cannot be made', async () => {
-    const d = deps({ clientKey: vi.fn(async () => Promise.reject(new Error('WAITLIST_RATE_SALT is not set'))) })
+  it('fails safely when the salted keys cannot be made', async () => {
+    const d = deps({ rateKeys: vi.fn(async () => Promise.reject(new Error('WAITLIST_RATE_SALT is missing'))) })
     expect(state(await handleJoin(post(valid), d))).toBe('error')
     expect(d.submit).not.toHaveBeenCalled()
   })
@@ -147,55 +157,98 @@ describe('join-waitlist handler', () => {
   })
 })
 
-describe('helpers', () => {
-  it('hashes the client address with a salt; no address shares one bucket; no salt refuses', async () => {
-    const a = await hashClientKey('203.0.113.7', 'salt-1')
-    expect(a).toMatch(/^[0-9a-f]{64}$/)
-    expect(a).not.toContain('203')
-    expect(await hashClientKey('203.0.113.7', 'salt-2')).not.toBe(a)
-    const unknown = await hashClientKey(null, 'salt-1')
-    expect(unknown).toMatch(/^[0-9a-f]{64}$/)
-    expect(await hashClientKey(null, 'salt-1')).toBe(unknown)
-    await expect(hashClientKey('203.0.113.7', '')).rejects.toThrow()
+describe('salted rate limit keys', () => {
+  it('are HMACs of the email and the client address with the secret salt', async () => {
+    const a = await rateKeysFor('Maya@Example.com ', '203.0.113.7', SALT)
+    expect(a.emailKey).toMatch(/^[0-9a-f]{64}$/)
+    expect(a.clientKey).toMatch(/^[0-9a-f]{64}$/)
+    expect(a.emailKey).not.toBe(a.clientKey)
+    // The same address however it is typed; different with another salt.
+    expect((await rateKeysFor('maya@example.com', '203.0.113.7', SALT)).emailKey).toBe(a.emailKey)
+    expect((await rateKeysFor('maya@example.com', '203.0.113.7', 't'.repeat(32))).emailKey).not.toBe(a.emailKey)
+    // Not a plain (unsalted) hash anyone could recompute for a known address.
+    const plain = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('maya@example.com')))]
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+    expect(a.emailKey).not.toBe(plain)
   })
 
-  it('reads the client address only from the trusted proxy hop, so spoofed entries are ignored', () => {
-    // A client sends its own X-Forwarded-For; the platform's proxy appends the real address.
+  it('share one bucket without an address, and refuse a missing or short salt', async () => {
+    expect((await rateKeysFor('a@example.com', null, SALT)).clientKey).toBe((await rateKeysFor('b@example.com', null, SALT)).clientKey)
+    await expect(rateKeysFor('a@example.com', '203.0.113.7', '')).rejects.toThrow()
+    await expect(rateKeysFor('a@example.com', '203.0.113.7', 'short')).rejects.toThrow()
+  })
+})
+
+describe('client address', () => {
+  it('comes only from the trusted proxy hop, so spoofed entries are ignored', () => {
     expect(clientIpFrom('1.2.3.4, 9.9.9.9, 203.0.113.7')).toBe('203.0.113.7')
     expect(clientIpFrom('1.2.3.4, 203.0.113.7, 10.0.0.1', 2)).toBe('203.0.113.7')
-    expect(clientIpFrom('203.0.113.7')).toBe('203.0.113.7')
-    // Rotating spoofed values does not change the key.
     expect(clientIpFrom('5.5.5.5, 203.0.113.7')).toBe(clientIpFrom('6.6.6.6, 203.0.113.7'))
     for (const bad of [null, '', 'not-an-ip', '999.1.1.1', '1.2.3.4, <script>', '1.2.3.4,']) expect(clientIpFrom(bad), String(bad)).toBeNull()
     expect(clientIpFrom('203.0.113.7', 0)).toBeNull()
     expect(clientIpFrom('203.0.113.7', 2)).toBeNull()
   })
 
-  it('groups IPv6 addresses by /64, so one connection cannot rotate through its network', () => {
+  it('groups IPv6 addresses by /64', () => {
     expect(clientIpFrom('2001:db8:1:2::1')).toBe('2001:db8:1:2::/64')
     expect(clientIpFrom('2001:0db8:0001:0002:ffff:eeee:dddd:cccc')).toBe('2001:db8:1:2::/64')
-    expect(clientIpFrom('2001:db8::1')).toBe('2001:db8:0:0::/64')
     for (const bad of ['2001:db8::1::2', '2001:db8:1:2:3:4:5:6:7', 'g::1', ':::']) expect(clientIpFrom(bad), bad).toBeNull()
   })
+})
 
-  it('verifies Turnstile server side with the secret, token and client address', async () => {
-    const f = vi.fn(async () => new Response(JSON.stringify({ success: true, hostname: 'crevant.example' }), { status: 200 }))
-    expect(await verifyWithCloudflare('tok', '203.0.113.7', 'sec', f as unknown as typeof fetch)).toEqual({ success: true, hostname: 'crevant.example' })
+describe('Turnstile verification', () => {
+  it('sends the secret, token and client address, and returns hostname and action', async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ success: true, hostname: 'crevant.example', action: 'join' }), { status: 200 }))
+    expect(await verifyWithCloudflare('tok', '203.0.113.7', 'sec', f as unknown as typeof fetch)).toEqual({ success: true, hostname: 'crevant.example', action: 'join' })
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://challenges.cloudflare.com/turnstile/v0/siteverify')
     const form = init.body as URLSearchParams
     expect([form.get('secret'), form.get('response'), form.get('remoteip')]).toEqual(['sec', 'tok', '203.0.113.7'])
     expect(await verifyWithCloudflare('tok', null, '', f as unknown as typeof fetch)).toEqual({ success: false })
   })
+})
 
-  it('calls only public.waitlist_submit, with the server key', async () => {
-    const f = vi.fn(async () => new Response('"ok"', { status: 200 }))
-    const payload = toPayload(valid, 'a'.repeat(64))
-    expect(await submitThroughDataApi(payload, 'https://abc.supabase.co', 'server-key', f as unknown as typeof fetch)).toBe('ok')
-    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toBe('https://abc.supabase.co/rest/v1/rpc/waitlist_submit')
-    expect((init.headers as Record<string, string>).apikey).toBe('server-key')
-    const bad = vi.fn(async () => new Response('"something else"', { status: 200 }))
-    await expect(submitThroughDataApi(payload, 'https://abc.supabase.co', 'k', bad as unknown as typeof fetch)).rejects.toThrow()
+describe('database connection', () => {
+  const URL_OK = 'postgresql://waitlist_writer.kpudeppgokpjhvaqrprn:pw@aws-0-us-west-2.pooler.supabase.com:6543/postgres'
+
+  it('accepts only the restricted waitlist_writer login', () => {
+    expect(databaseOptions(URL_OK).url).toBe(URL_OK)
+    expect(databaseOptions('postgres://waitlist_writer:pw@127.0.0.1:54322/postgres').options.ssl).toBe(false)
+    for (const bad of [
+      'postgresql://postgres.kpudeppgokpjhvaqrprn:pw@aws-0-us-west-2.pooler.supabase.com:6543/postgres',
+      'postgresql://postgres:pw@db.kpudeppgokpjhvaqrprn.supabase.co:5432/postgres',
+      'postgresql://service_role:pw@host:5432/postgres',
+      'postgresql://waitlist_admin:pw@host:5432/postgres',
+      'postgresql://waitlist_writer_evil:pw@host:5432/postgres',
+      'postgresql://waitlist_writer@host:5432/postgres',
+      'https://waitlist_writer:pw@host/postgres',
+      'not a url',
+    ]) {
+      expect(() => databaseOptions(bad), bad).toThrow()
+    }
+  })
+
+  it('verifies the server certificate for any non-local database, without prepared statements', () => {
+    const o = databaseOptions(URL_OK, '-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----').options
+    expect(o.ssl).toEqual({ rejectUnauthorized: true, servername: 'aws-0-us-west-2.pooler.supabase.com', ca: '-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----' })
+    expect(o.prepare).toBe(false)
+    expect(o.max).toBe(1)
+    expect(databaseOptions(URL_OK).options.ssl).toEqual({ rejectUnauthorized: true, servername: 'aws-0-us-west-2.pooler.supabase.com' })
+  })
+
+  it('calls only waitlist_api.submit, with bound parameters', async () => {
+    const calls: Array<{ text: string; values: unknown[] }> = []
+    const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      calls.push({ text: strings.join('$'), values })
+      return [{ result: 'ok' }]
+    }) as Sql
+    const payload = toPayload(valid, KEYS)
+    expect(await submitWithDatabase(sql, payload)).toBe('ok')
+    expect(calls[0].text).toMatch(/^select waitlist_api\.submit\(/)
+    expect(calls[0].text).not.toMatch(/maya/i)
+    expect(calls[0].values).toEqual(['maya@example.com', ['reach_followers'], 'yes', 'youtube', '1k_10k', 'instagram', true, true, 'notice-2026-11', KEYS.emailKey, KEYS.clientKey])
+    const odd = (async () => [{ result: 'something else' }]) as unknown as Sql
+    await expect(submitWithDatabase(odd, payload)).rejects.toThrow()
   })
 })

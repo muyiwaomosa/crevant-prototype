@@ -1,52 +1,62 @@
 // The join-waitlist server function's logic, kept free of Deno APIs so it can
-// be unit tested (handler.test.ts). index.ts wires it to Deno.serve.
+// be unit tested (handler.test.ts). index.ts wires it to Deno.serve and the
+// database.
 //
 // Order of checks for a submission:
 //   1. Allowed origin, POST, JSON, at most 4 KB.
 //   2. Function switch (WAITLIST_FUNCTION_ENABLED). Off: 'closed', nothing else.
 //   3. Honeypot: a hidden field real people never fill. If filled, reply 'ok'
 //      and store nothing, so bots learn nothing.
-//   4. Cloudflare Turnstile, verified server side, including the hostname.
-//   5. Basic shape checks, then the database function, which repeats every
-//      check, applies the database switch, checks the privacy notice version
-//      against the approved one, applies the rate limits, and stores.
+//   4. Cloudflare Turnstile, verified server side: success, an allowed
+//      hostname and the expected action ('join').
+//   5. Basic shape checks, then waitlist_api.submit as the restricted
+//      waitlist_writer login, which repeats every check, applies the database
+//      switch, the approved notice version and the rate limits, and stores
+//      new addresses only.
 //
-// Marketing consent is never forwarded: it stays off until email addresses
-// can be verified. Responses never include the email address, and nothing
-// here logs it.
+// Responses never include the email address, and nothing here logs it.
 
 export type SubmitResult = 'ok' | 'closed' | 'invalid' | 'notice_changed' | 'rate_limited'
 
+/** The Turnstile action the form renders with and the server requires. */
+export const TURNSTILE_ACTION = 'join'
+
 export interface SubmitPayload {
-  p_email: string
-  p_interests: string[]
-  p_shares_content: string | null
-  p_platform: string | null
-  p_audience_band: string | null
-  p_public_link: string | null
-  p_source: string | null
-  p_campaign: string | null
-  p_age_confirmed: boolean
-  p_waitlist_consent: boolean
-  p_notice_version: string
-  p_client_key: string
+  email: string
+  interests: string[]
+  sharesContent: string | null
+  platform: string | null
+  audienceBand: string | null
+  source: string | null
+  ageConfirmed: boolean
+  waitlistConsent: boolean
+  noticeVersion: string
+  /** HMAC of the normalised email with the secret salt. */
+  emailKey: string
+  /** HMAC of the client address (or a shared bucket) with the secret salt. */
+  clientKey: string
 }
 
 export interface TurnstileResult {
   success: boolean
   hostname?: string
+  action?: string
+}
+
+export interface RateKeys {
+  emailKey: string
+  clientKey: string
 }
 
 export interface JoinDeps {
-  /** WAITLIST_FUNCTION_ENABLED === 'true'. Off by default. */
+  /** WAITLIST_FUNCTION_ENABLED === 'true' and every secret present. Off by default. */
   enabled: boolean
   /** Exact origins allowed to call the function, e.g. https://crevant.example. */
   allowedOrigins: string[]
   /** Hostnames Turnstile must report the challenge was solved on. */
   allowedHostnames: string[]
   verifyTurnstile(token: string, ip: string | null): Promise<TurnstileResult>
-  /** Salted hash of the client address (or of a shared "unknown" bucket). */
-  clientKey(ip: string | null): Promise<string>
+  rateKeys(email: string, ip: string | null): Promise<RateKeys>
   submit(payload: SubmitPayload): Promise<SubmitResult>
 }
 
@@ -71,7 +81,8 @@ function corsHeaders(origin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
+    // The form sends JSON only. No keys or tokens are needed or accepted.
+    'Access-Control-Allow-Headers': 'content-type',
     'Access-Control-Max-Age': '600',
     Vary: 'Origin',
   }
@@ -96,8 +107,15 @@ const bool = (v: unknown): boolean => {
   return v
 }
 
-/** Turns the browser's JSON into the database function's arguments. Throws on a wrong shape. */
-export function toPayload(input: Record<string, unknown>, clientKey: string): SubmitPayload {
+/** Normalises an email the same way the database does. */
+export const normaliseEmail = (email: string) => email.trim().toLowerCase()
+
+/**
+ * Turns the browser's JSON into the submission. Throws on a wrong shape.
+ * Only the expected fields are read; anything else (a link, a campaign,
+ * marketing consent) is ignored and never stored.
+ */
+export function toPayload(input: Record<string, unknown>, keys: RateKeys): SubmitPayload {
   const email = str(input.email, 254)
   if (!email) throw new Error('shape')
   const interests = input.interests ?? []
@@ -107,18 +125,17 @@ export function toPayload(input: Record<string, unknown>, clientKey: string): Su
   const noticeVersion = str(input.noticeVersion, 40)
   if (!noticeVersion) throw new Error('shape')
   return {
-    p_email: email.toLowerCase(),
-    p_interests: interests as string[],
-    p_shares_content: str(input.sharesContent, 20),
-    p_platform: str(input.platform, 20),
-    p_audience_band: str(input.audienceBand, 20),
-    p_public_link: str(input.publicLink, 200),
-    p_source: str(input.source, 40),
-    p_campaign: str(input.campaign, 60),
-    p_age_confirmed: bool(input.ageConfirmed),
-    p_waitlist_consent: bool(input.waitlistConsent),
-    p_notice_version: noticeVersion,
-    p_client_key: clientKey,
+    email: normaliseEmail(email),
+    interests: interests as string[],
+    sharesContent: str(input.sharesContent, 20),
+    platform: str(input.platform, 20),
+    audienceBand: str(input.audienceBand, 20),
+    source: str(input.source, 40),
+    ageConfirmed: bool(input.ageConfirmed),
+    waitlistConsent: bool(input.waitlistConsent),
+    noticeVersion,
+    emailKey: keys.emailKey,
+    clientKey: keys.clientKey,
   }
 }
 
@@ -155,19 +172,25 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
   } catch {
     return reply(502, 'error', origin)
   }
-  if (!verified.success || !verified.hostname || !deps.allowedHostnames.includes(verified.hostname)) {
+  if (
+    !verified.success ||
+    !verified.hostname ||
+    !deps.allowedHostnames.includes(verified.hostname) ||
+    verified.action !== TURNSTILE_ACTION
+  ) {
     return reply(400, 'verification_failed', origin)
   }
 
-  let clientKey: string
+  const email = typeof body.email === 'string' ? normaliseEmail(body.email) : ''
+  let keys: RateKeys
   try {
-    clientKey = await deps.clientKey(req.ip)
+    keys = await deps.rateKeys(email, req.ip)
   } catch {
     return reply(500, 'error', origin)
   }
   let payload: SubmitPayload
   try {
-    payload = toPayload(body, clientKey)
+    payload = toPayload(body, keys)
   } catch {
     return reply(400, 'invalid', origin)
   }
@@ -228,16 +251,24 @@ export function clientIpFrom(forwardedFor: string | null, trustedHops = 1): stri
   return v6 ? `${v6}::/64` : null
 }
 
+async function hmacHex(salt: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(salt), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message))
+  return [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 /**
- * A salted SHA-256 of the client address: the only form it is ever kept in.
- * Without an address everyone shares one "unknown" bucket, so a missing or
- * malformed header can't be used to skip the per-client limit.
+ * Salted rate limit keys: HMAC-SHA256 with the secret salt, separately for
+ * the email and the client address, so neither can be reversed or matched
+ * without the salt. Without an address everyone shares one "unknown" bucket,
+ * so a missing or malformed header can't be used to skip the per-client limit.
  */
-export async function hashClientKey(ip: string | null, salt: string): Promise<string> {
-  if (!salt) throw new Error('WAITLIST_RATE_SALT is not set')
-  const data = new TextEncoder().encode(`${salt}:${ip ?? 'unknown'}`)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+export async function rateKeysFor(email: string, ip: string | null, salt: string): Promise<RateKeys> {
+  if (salt.length < 32) throw new Error('WAITLIST_RATE_SALT is missing or too short')
+  return {
+    emailKey: await hmacHex(salt, `email:${normaliseEmail(email)}`),
+    clientKey: await hmacHex(salt, `client:${ip ?? 'unknown'}`),
+  }
 }
 
 /** Cloudflare Turnstile server-side verification. */
@@ -252,24 +283,10 @@ export async function verifyWithCloudflare(
   if (ip) form.set('remoteip', ip)
   const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form })
   if (!res.ok) return { success: false }
-  const data = (await res.json()) as { success?: unknown; hostname?: unknown }
-  return { success: data.success === true, hostname: typeof data.hostname === 'string' ? data.hostname : undefined }
-}
-
-/** Calls public.waitlist_submit through the Data API with the server key. */
-export async function submitThroughDataApi(
-  payload: SubmitPayload,
-  supabaseUrl: string,
-  serviceKey: string,
-  fetchImpl: typeof fetch,
-): Promise<SubmitResult> {
-  const res = await fetchImpl(`${supabaseUrl}/rest/v1/rpc/waitlist_submit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) throw new Error(`waitlist_submit failed with ${res.status}`)
-  const out = await res.json()
-  if (out === 'ok' || out === 'closed' || out === 'invalid' || out === 'notice_changed' || out === 'rate_limited') return out
-  throw new Error('unexpected result')
+  const data = (await res.json()) as { success?: unknown; hostname?: unknown; action?: unknown }
+  return {
+    success: data.success === true,
+    hostname: typeof data.hostname === 'string' ? data.hostname : undefined,
+    action: typeof data.action === 'string' ? data.action : undefined,
+  }
 }

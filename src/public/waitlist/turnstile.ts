@@ -23,6 +23,9 @@ export type MountTurnstile = (
 ) => Promise<TurnstileWidget>
 
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+
+/** The action the server function requires Cloudflare to report ('join'). */
+export const TURNSTILE_ACTION = 'join'
 let loading: Promise<TurnstileApi> | null = null
 
 function loadScript(): Promise<TurnstileApi> {
@@ -47,6 +50,7 @@ export const mountTurnstile: MountTurnstile = async (el, siteKey, onToken) => {
   const api = await loadScript()
   const id = api.render(el, {
     sitekey: siteKey,
+    action: TURNSTILE_ACTION,
     callback: (token: string) => onToken(token),
     'expired-callback': () => onToken(null),
     'error-callback': () => onToken(null),

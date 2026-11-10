@@ -16,6 +16,8 @@ name: Waitlist admin (staging)
 # Reuses the staging deploy workflow's safety: the only credential is the
 # staging environment's STAGING_DATABASE_URL, and scripts/db/verify-staging-target.sh
 # must confirm the target before anything runs. Output is counts only.
+# The script uses only the waitlist_api.admin_* entry points; B3 moves this
+# workflow to the restricted waitlist_admin login.
 
 on:
   workflow_dispatch:

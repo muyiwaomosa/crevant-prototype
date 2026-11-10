@@ -22,9 +22,13 @@ test('the admin workflow takes no email address and uses only the staging databa
   assert.deepEqual([...new Set(secrets)], ['STAGING_DATABASE_URL'])
 })
 
-test('the admin script never selects or prints an email address', () => {
-  assert.ok(sqlLines.length >= 5)
-  for (const line of sqlLines) assert.doesNotMatch(line, /email/i, line)
+test('the admin script never selects or prints an email address, and uses only the admin entry points', () => {
+  assert.equal(sqlLines.length, 3)
+  for (const line of sqlLines) {
+    assert.doesNotMatch(line, /email/i, line)
+    assert.match(line, /waitlist_api\.admin_(summary|delete|purge)\(/, line)
+    assert.doesNotMatch(line, /\bops\./, line)
+  }
   assert.match(script, /WAITLIST_ID must be a waitlist id \(a UUID\)/)
   assert.match(script, /RETENTION_MONTHS must be a whole number from 1 to 120/)
 })

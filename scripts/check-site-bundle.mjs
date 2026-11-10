@@ -24,7 +24,9 @@ export const FORBIDDEN = [
   ['the members area route', /["'`]\/app["'`]/],
   ['member page text', /Your profile is ready|Sign out of all devices|Set your password/],
   // Project addresses and keys
-  ['a Supabase project address', /[a-z0-9]{20}\.supabase\.(co|com)/],
+  // The one Supabase address allowed is the waitlist function itself: the
+  // form posts to it with no key. Anything else on a project is refused.
+  ['a Supabase project address', /[a-z0-9]{20}\.supabase\.(co|com)(?!\/functions\/v1\/join-waitlist(?![\w/-]))/],
   ['a Supabase key', /sb_(publishable|secret)_[A-Za-z0-9_-]{8,}/],
   ['a JSON Web Token', /eyJhbGciOi[A-Za-z0-9_-]{10,}\./],
   ['a secret', /service_role|sk_(live|test)_[A-Za-z0-9]|whsec_[A-Za-z0-9]|-----BEGIN [A-Z ]*PRIVATE KEY-----/],

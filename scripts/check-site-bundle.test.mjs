@@ -49,6 +49,17 @@ test('every kind of member code, route, address, key or secret is caught', () =>
   }
 })
 
+test('the waitlist function address is the only Supabase address allowed', () => {
+  assert.deepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};fetch("https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist")` })), [])
+  for (const js of [
+    'fetch("https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist-admin")',
+    'fetch("https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/other")',
+    'x="https://kpudeppgokpjhvaqrprn.supabase.co"',
+  ]) {
+    assert.match(checkSiteBundle(bundle({ js: `${CLEAN_JS};${js}` })).join('\n'), /a Supabase project address/, js)
+  }
+})
+
 test('member content is caught in any text file, and source maps are refused', () => {
   assert.match(checkSiteBundle(bundle({ extra: { 'extra.html': '<a href="/forgot-password">' } })).join('\n'), /extra\.html: a member route/)
   assert.match(checkSiteBundle(bundle({ extra: { 'index-abc.js.map': '{}' } })).join('\n'), /source maps/)

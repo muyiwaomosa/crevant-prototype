@@ -25,8 +25,22 @@ function isPrivilegedKey(key) {
   return false
 }
 
+/** The staging project's waitlist function: the only hosted address the form may post to. */
+export const STAGING_WAITLIST_ENDPOINT = `${STAGING_SUPABASE_URL}/functions/v1/join-waitlist`
+
+/** Checks VITE_WAITLIST_ENDPOINT on its own; null means it is fine. */
+function waitlistEndpointProblem(target, endpoint) {
+  if (!endpoint) return null
+  if (target === 'production') return 'Production must not have VITE_WAITLIST_ENDPOINT until a reviewed change moves Production to the public site build.'
+  if (endpoint === STAGING_WAITLIST_ENDPOINT) return null
+  if (target !== 'preview' && /^http:\/\/(127\.0\.0\.1|localhost):\d+\/functions\/v1\/join-waitlist$/.test(endpoint)) return null
+  return `VITE_WAITLIST_ENDPOINT must be the staging waitlist function (${STAGING_WAITLIST_ENDPOINT}).`
+}
+
 export function checkSupabaseTarget(env) {
   const target = (env.VERCEL_ENV || '').trim().toLowerCase()
+  const endpointProblem = waitlistEndpointProblem(target, (env.VITE_WAITLIST_ENDPOINT || '').trim())
+  if (endpointProblem) return { ok: false, message: endpointProblem }
   const url = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '')
   const key = (env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim()
   const fail = (message) => ({ ok: false, message })

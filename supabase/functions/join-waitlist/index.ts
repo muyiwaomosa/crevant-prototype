@@ -3,20 +3,31 @@
 //
 // Environment (set as Supabase function secrets, never in the repository):
 //   WAITLIST_FUNCTION_ENABLED   'true' to accept submissions; anything else = closed
+//   WAITLIST_DB_URL             postgres:// URL logging in as waitlist_writer
+//                               (through the Supabase pooler: user
+//                               waitlist_writer.<project ref>). Any other login
+//                               is refused. Missing = closed.
+//   WAITLIST_DB_CA_CERT         optional PEM certificate to verify the database
+//                               against, if its certificate isn't publicly trusted.
 //   WAITLIST_ALLOWED_ORIGINS    comma-separated exact origins allowed to call it
 //   WAITLIST_ALLOWED_HOSTNAMES  comma-separated hostnames Turnstile must report
 //   TURNSTILE_SECRET_KEY        Cloudflare Turnstile secret. Missing = closed.
 //   WAITLIST_RATE_SALT          random string (at least 32 characters) used to
-//                               hash client addresses. Missing or short = closed.
+//                               make the salted rate limit keys. Missing = closed.
 //   WAITLIST_TRUSTED_PROXY_HOPS how many X-Forwarded-For entries, counted from
 //                               the right, Supabase's own proxies add (default 1).
 //                               Confirm before activation (docs/WAITLIST.md).
-//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  provided by Supabase
+//
+// This function does not read SUPABASE_SERVICE_ROLE_KEY or SUPABASE_DB_URL,
+// which Supabase provides to every function. It uses only the restricted login.
 //
 // Deploy with JWT verification off (the function checks the origin and
-// Turnstile itself): supabase functions deploy join-waitlist --no-verify-jwt
+// Turnstile itself, and the public site sends no key):
+//   supabase functions deploy join-waitlist --no-verify-jwt
 
-import { clientIpFrom, handleJoin, hashClientKey, submitThroughDataApi, verifyWithCloudflare } from './handler.ts'
+import postgres from 'npm:postgres@3.4.9'
+import { clientIpFrom, handleJoin, rateKeysFor, verifyWithCloudflare } from './handler.ts'
+import { databaseOptions, submitWithDatabase, type Sql } from './db.ts'
 
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
 const list = (k: string) =>
@@ -24,6 +35,21 @@ const list = (k: string) =>
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
+
+// Build the database client once per instance. Any problem with the URL
+// (wrong login, no password) leaves the function closed.
+let sql: Sql | null = null
+try {
+  if (env('WAITLIST_DB_URL')) {
+    const db = databaseOptions(env('WAITLIST_DB_URL'), env('WAITLIST_DB_CA_CERT') || undefined)
+    sql = postgres(db.url, db.options) as unknown as Sql
+  }
+} catch (e) {
+  console.error(JSON.stringify({ event: 'config', problem: (e as Error).message }))
+}
+
+const enabled =
+  env('WAITLIST_FUNCTION_ENABLED') === 'true' && sql !== null && env('WAITLIST_RATE_SALT').length >= 32 && env('TURNSTILE_SECRET_KEY') !== ''
 
 Deno.serve(async (req: Request) => {
   // Only the trusted hop of X-Forwarded-For; client-supplied headers are ignored.
@@ -37,15 +63,15 @@ Deno.serve(async (req: Request) => {
       ip,
     },
     {
-      // Fails closed if a secret the checks depend on is missing.
-      enabled:
-        env('WAITLIST_FUNCTION_ENABLED') === 'true' && env('WAITLIST_RATE_SALT').length >= 32 && env('TURNSTILE_SECRET_KEY') !== '',
+      enabled,
       allowedOrigins: list('WAITLIST_ALLOWED_ORIGINS'),
       allowedHostnames: list('WAITLIST_ALLOWED_HOSTNAMES'),
       verifyTurnstile: (token, clientIp) => verifyWithCloudflare(token, clientIp, env('TURNSTILE_SECRET_KEY'), fetch),
-      clientKey: (clientIp) => hashClientKey(clientIp, env('WAITLIST_RATE_SALT')),
-      submit: (payload) => submitThroughDataApi(payload, env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), fetch),
+      rateKeys: (email, clientIp) => rateKeysFor(email, clientIp, env('WAITLIST_RATE_SALT')),
+      submit: (payload) => submitWithDatabase(sql!, payload),
     },
   )
+  // Status only: never the email, address or request body.
+  console.log(JSON.stringify({ event: 'join', status: out.status, result: JSON.parse(out.body || '{}').status ?? null }))
   return new Response(out.body || null, { status: out.status, headers: out.headers })
 })
