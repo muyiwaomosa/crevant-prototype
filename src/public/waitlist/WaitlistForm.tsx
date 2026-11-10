@@ -47,7 +47,7 @@ const MESSAGES: Partial<Record<Outcome, string>> = {
   error: 'Something went wrong. Please try again.',
 }
 
-type Errors = Partial<Record<'email' | 'age' | 'consent' | 'link' | 'check', string>>
+type Errors = Partial<Record<'email' | 'age' | 'consent' | 'check', string>>
 
 export function WaitlistForm({
   config,
@@ -65,7 +65,6 @@ export function WaitlistForm({
   const [shares, setShares] = useState<'' | 'yes' | 'not_yet'>('')
   const [platform, setPlatform] = useState('')
   const [audience, setAudience] = useState('')
-  const [link, setLink] = useState('')
   const [website, setWebsite] = useState('')
   const [age, setAge] = useState(false)
   const [consent, setConsent] = useState(false)
@@ -95,7 +94,6 @@ export function WaitlistForm({
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) e.email = 'Please enter a valid email address.'
     if (!age) e.age = "Please confirm you're 18 or older."
     if (!consent) e.consent = 'Please agree so we can contact you about the pilot.'
-    if (shares === 'yes' && link.trim() && !/^https:\/\/\S+$/.test(link.trim())) e.link = 'Please enter a link that starts with https://'
     if (!token) e.check = 'Please complete the check below.'
     return e
   }
@@ -106,7 +104,7 @@ export function WaitlistForm({
     setErrors(e)
     if (Object.keys(e).length) return
     setOutcome('sending')
-    const { source, campaign } = readAcquisition(search)
+    const { source } = readAcquisition(search)
     const yes = shares === 'yes'
     const body = {
       email: email.trim(),
@@ -114,9 +112,7 @@ export function WaitlistForm({
       sharesContent: shares || null,
       platform: yes && platform ? platform : null,
       audienceBand: yes && audience ? audience : null,
-      publicLink: yes && link.trim() ? link.trim() : null,
       source,
-      campaign,
       ageConfirmed: age,
       waitlistConsent: consent,
       noticeVersion: config.noticeVersion,
@@ -127,7 +123,9 @@ export function WaitlistForm({
     try {
       const res = await fetchImpl(config.endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: config.publishableKey, Authorization: `Bearer ${config.publishableKey}` },
+        // JSON only: no key or token. The server function checks the origin,
+        // Turnstile and its own switches.
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
       const data = (await res.json().catch(() => ({}))) as { status?: string }
@@ -252,25 +250,6 @@ export function WaitlistForm({
                   </option>
                 ))}
               </select>
-            </div>
-            <div className="sm:col-span-2">
-              <label htmlFor="wl-link" className="text-sm font-semibold text-ink-800">
-                Link to your main channel or profile <span className="font-normal text-ink-500">Optional</span>
-              </label>
-              <input
-                id="wl-link"
-                type="url"
-                inputMode="url"
-                value={link}
-                onChange={(e) => setLink(e.target.value)}
-                aria-invalid={!!errors.link}
-                aria-describedby={errors.link ? 'wl-link-error' : 'wl-link-help'}
-                className={field}
-              />
-              <p id="wl-link-help" className="mt-1.5 text-sm text-ink-500">
-                Public profile links only.
-              </p>
-              {err('link')}
             </div>
           </div>
         )}

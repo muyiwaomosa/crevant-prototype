@@ -14,8 +14,7 @@ const ENV = {
   VITE_TURNSTILE_SITE_KEY: '0x4AAAAAAAtest',
   VITE_PRIVACY_NOTICE_URL: '/privacy',
   VITE_PRIVACY_NOTICE_VERSION: 'notice-2026-11',
-  VITE_SUPABASE_URL: 'https://kpudeppgokpjhvaqrprn.supabase.co',
-  VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+  VITE_WAITLIST_ENDPOINT: 'https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist',
 }
 
 describe('waitlist switch (browser)', () => {
@@ -23,15 +22,23 @@ describe('waitlist switch (browser)', () => {
     expect(readWaitlistConfig({})).toBeNull()
     expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_FORM_ENABLED: 'TRUE' })).toBeNull()
     expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_FORM_ENABLED: '1' })).toBeNull()
-    for (const k of ['VITE_TURNSTILE_SITE_KEY', 'VITE_PRIVACY_NOTICE_URL', 'VITE_PRIVACY_NOTICE_VERSION', 'VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY']) {
+    for (const k of ['VITE_TURNSTILE_SITE_KEY', 'VITE_PRIVACY_NOTICE_URL', 'VITE_PRIVACY_NOTICE_VERSION', 'VITE_WAITLIST_ENDPOINT']) {
       expect(readWaitlistConfig({ ...ENV, [k]: '' }), k).toBeNull()
     }
     expect(readWaitlistConfig({ ...ENV, VITE_PRIVACY_NOTICE_VERSION: 'Draft 1' })).toBeNull()
     expect(readWaitlistConfig({ ...ENV, VITE_PRIVACY_NOTICE_URL: 'javascript:alert(1)' })).toBeNull()
-    expect(readWaitlistConfig({ ...ENV, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_abc' })).toBeNull()
+    for (const bad of [
+      'http://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist',
+      'https://kpudeppgokpjhvaqrprn.supabase.co/rest/v1/rpc/anything',
+      'https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/other',
+      'https://evil.example/functions/v1/join-waitlist',
+      'https://kpudeppgokpjhvaqrprn.supabase.co.evil.example/functions/v1/join-waitlist',
+    ]) {
+      expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_ENDPOINT: bad }), bad).toBeNull()
+    }
+    expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_ENDPOINT: 'http://127.0.0.1:54321/functions/v1/join-waitlist' })).not.toBeNull()
     expect(readWaitlistConfig(ENV)).toEqual({
       endpoint: 'https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist',
-      publishableKey: 'sb_publishable_test',
       turnstileSiteKey: '0x4AAAAAAAtest',
       noticeUrl: '/privacy',
       noticeVersion: 'notice-2026-11',
@@ -53,9 +60,9 @@ describe('waitlist switch (browser)', () => {
     expect(document.querySelector('script[src*="challenges.cloudflare.com"]')).toBeNull()
   })
 
-  it('reads the acquisition source and campaign only when well formed', () => {
-    expect(readAcquisition('?src=Instagram&c=launch_1')).toEqual({ source: 'instagram', campaign: 'launch_1' })
-    expect(readAcquisition('?src=<script>&c=')).toEqual({ source: null, campaign: null })
+  it('reads only the acquisition source, and only when well formed', () => {
+    expect(readAcquisition('?src=Instagram&c=launch_1')).toEqual({ source: 'instagram' })
+    expect(readAcquisition('?src=<script>')).toEqual({ source: null })
   })
 })
 
@@ -102,11 +109,13 @@ describe('waitlist form', () => {
     expect(screen.getByRole('link', { name: 'privacy notice' }).getAttribute('href')).toBe('/privacy')
   })
 
-  it('asks for platform, audience and link only after "Yes"', () => {
+  it('asks for platform and audience only after "Yes", and never for a link', () => {
     setup()
     expect(screen.queryByTestId('waitlist-sharing-details')).toBeNull()
     fireEvent.click(screen.getByLabelText('Yes'))
     expect(screen.getByTestId('waitlist-sharing-details')).toBeTruthy()
+    expect(screen.queryByLabelText(/link/i)).toBeNull()
+    expect(document.querySelector('input[type="url"]')).toBeNull()
     fireEvent.click(screen.getByLabelText('Not yet'))
     expect(screen.queryByTestId('waitlist-sharing-details')).toBeNull()
   })
@@ -118,7 +127,7 @@ describe('waitlist form', () => {
     expect(hp.closest('[aria-hidden="true"]')).not.toBeNull()
   })
 
-  it('sends exactly the expected fields to the server function, with the publishable key', async () => {
+  it('sends exactly the expected fields to the server function, with no key or token', async () => {
     const f = setup()
     fillRequired()
     fireEvent.click(screen.getByLabelText('Discovering new creators'))
@@ -129,16 +138,14 @@ describe('waitlist form', () => {
     await waitFor(() => expect(screen.getByTestId('waitlist-success')).toBeTruthy())
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist')
-    expect((init.headers as Record<string, string>).apikey).toBe('sb_publishable_test')
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
     expect(JSON.parse(init.body as string)).toEqual({
       email: 'maya@example.com',
       interests: ['discover_creators'],
       sharesContent: 'yes',
       platform: 'youtube',
       audienceBand: null,
-      publicLink: null,
       source: 'newsletter',
-      campaign: null,
       ageConfirmed: true,
       waitlistConsent: true,
       noticeVersion: 'notice-2026-11',
@@ -171,5 +178,13 @@ describe('waitlist form', () => {
     await tokenReady()
     submit()
     await waitFor(() => expect(screen.getByTestId('waitlist-message').textContent).toBe('Something went wrong. Please try again.'))
+  })
+})
+
+describe('waitlist and server function agree', () => {
+  it('render Turnstile with the action the server requires', async () => {
+    const { TURNSTILE_ACTION } = await import('./turnstile')
+    const server = await import('../../../supabase/functions/join-waitlist/handler')
+    expect(TURNSTILE_ACTION).toBe(server.TURNSTILE_ACTION)
   })
 })

@@ -60,7 +60,7 @@ Moving Production to this build would need:
 * the Production block changed to allow site mode only
 * the production demo address removed from `PRODUCTION_DEMO_HOSTS`
 * `scripts/check-production-demo.sh` changed to check for this build
-* branch protection on `main`
+* branch protection on `main`, with the **Public site** CI job as a required check (alongside App, Database, Integration and Browser)
 * a decision on search engine indexing (`X-Robots-Tag` is `noindex` today)
 
-Turning on the waitlist form in this build is part of B2.
+The waitlist form works in this build without any Supabase key: it posts to the function address in `VITE_WAITLIST_ENDPOINT`. That address is the one Supabase address the bundle check allows. `scripts/e2e/public-site.sh` also builds the site with the form configured, and checks the bundle holds the function address and no key.

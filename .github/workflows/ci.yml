@@ -81,7 +81,9 @@ jobs:
     # Real local Supabase in Docker, isolated to this runner: standard local
     # development keys only, no secrets, never contacts staging. Applies the
     # migrations, then runs scripts/db/integration-test.mjs through real
-    # Supabase Auth and the Data API.
+    # Supabase Auth and the Data API, and the join-waitlist function in
+    # Supabase's Edge runtime as the restricted waitlist_writer login
+    # (scripts/e2e/waitlist-edge.sh; Turnstile is a stand-in there).
     name: Integration (real local Supabase)
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -108,7 +110,13 @@ jobs:
       - name: Start local Supabase (ports reserved, one start-up retry; tests are never retried)
         run: scripts/ci/start-local-supabase.sh
       - name: Run the integration test
-        run: STOP_AFTER=1 scripts/db/integration.sh
+        run: scripts/db/integration.sh
+      - run: npm ci
+      - name: Run the waitlist function in the Edge runtime as the restricted login
+        run: scripts/e2e/waitlist-edge.sh
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup || true
 
   browser:
     # The full sign-in journey in a real browser (Chromium) against a real
