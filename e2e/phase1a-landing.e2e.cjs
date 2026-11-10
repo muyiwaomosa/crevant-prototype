@@ -13,10 +13,10 @@ const BASE = (process.argv[2] || 'http://localhost:4175').replace(/\/$/, '')
 const SHOTS = process.argv[3] || null
 const PRODUCTION = 'https://crevant-prototype.vercel.app'
 const ALLOWED_THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com']
-const PUBLIC_PAGES = ['/', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
+const PUBLIC_PAGES = ['/', '/join', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
 // Must never collect anything until the privacy notice is approved. Sign-in
 // and password reset are for invited members (e2e/auth-journey.e2e.cjs).
-const FORM_FREE_PAGES = ['/', '/request-invite', '/no-such-page']
+const FORM_FREE_PAGES = ['/', '/join', '/join/creator', '/join/supporter', '/request-invite', '/no-such-page']
 
 let failures = 0
 const check = (name, ok, detail = '') => {
@@ -74,9 +74,102 @@ async function shows(locator, timeout = 5000) {
     {
       const page = await browser.newPage()
       await page.goto(BASE + '/')
-      check('landing headline', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ') === "You don't need a million followers. You need the right 1,000.")
+      check('landing headline', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ') === 'You earned the follow. You deserve the reach.')
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check('all sections in the approved order', ids === 'hero,why,who,what,how,cta', ids)
+      check('all nine sections in the approved order', ids === 'hero,story,problem,why,who,difference,fans,how,founding', ids)
+      // The full founder story and the pilot details open and close with the keyboard.
+      for (const [summaryName, expected] of [['Read the full story', 'My audience had grown by 200%. My income had fallen by 60%.'], ['Pilot details', 'An intended 60-day testing period.']]) {
+        const summary = page.locator('summary', { hasText: summaryName })
+        await summary.focus()
+        await page.keyboard.press('Enter')
+        check(`"${summaryName}" opens with the keyboard`, await shows(page.getByText(expected, { exact: false })))
+        await page.keyboard.press('Enter')
+      }
+      // Join the Waitlist scrolls to section 9.
+      await page.getByRole('main').getByRole('link', { name: 'Join the Waitlist', exact: true }).first().click()
+      await page.waitForTimeout(400)
+      check('Join the Waitlist moves to section 9', (await page.evaluate(() => location.hash)) === '#founding' && (await page.locator('#founding').evaluate((el) => el.getBoundingClientRect().top < window.innerHeight)))
+      // Section 9's one waitlist button opens /join, and Back returns to section 9.
+      await page.locator('#founding').getByRole('link', { name: 'Join the Waitlist' }).click()
+      await page.waitForURL(BASE + '/join')
+      check('Join the Waitlist opens /join', (await shows(page.getByRole('heading', { level: 1, name: 'Join the Waitlist' }))) && (await shows(page.getByText('This page collects nothing.'))))
+      await page.getByRole('main').getByRole('link', { name: 'Back to Crevant' }).first().click()
+      await page.waitForURL(BASE + '/#founding')
+      await page.waitForTimeout(300)
+      check('Back to Crevant from /join returns to section 9', await page.locator('#founding').evaluate((el) => { const r = el.getBoundingClientRect(); return r.top < window.innerHeight && r.bottom > 0 }))
+      for (const old of ['/join/creator', '/join/supporter']) {
+        await page.goto(BASE + old)
+        await page.waitForURL(BASE + '/join')
+        check(`${old} redirects to the one waitlist page`, await shows(page.getByRole('heading', { level: 1, name: 'Join the Waitlist' })))
+      }
+      // The right 1,000: animates once in view, and stays still with reduced motion.
+      {
+        const still = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+        await still.goto(BASE + '/')
+        const fig = still.locator('[data-testid="right-thousand"]')
+        await fig.scrollIntoViewIfNeeded()
+        await still.waitForTimeout(400)
+        check('right 1,000 has no animation with reduced motion', (await fig.locator('.rt-link').first().evaluate((el) => getComputedStyle(el).animationName)) === 'none')
+        await still.close()
+        const moving = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'no-preference' })
+        await moving.goto(BASE + '/')
+        const fig2 = moving.locator('[data-testid="right-thousand"]')
+        await fig2.scrollIntoViewIfNeeded()
+        await moving.waitForTimeout(400)
+        check('right 1,000 animates once when it scrolls into view', (await fig2.getAttribute('data-live')) === 'true' && (await fig2.locator('.rt-link').first().evaluate((el) => getComputedStyle(el).animationName)) === 'rt-draw')
+        await moving.close()
+      }
+      // The fan journey crops load.
+      for (const img of await page.goto(BASE + '/').then(() => page.locator('[data-testid="fan-journey"] img').all())) {
+        await img.scrollIntoViewIfNeeded()
+        await img.evaluate((el) => (el.complete ? null : new Promise((r) => el.addEventListener('load', r, { once: true }))))
+        check(`fan journey ${await img.getAttribute('src')} loads`, (await img.evaluate((el) => el.naturalWidth)) === 600)
+      }
+      // Hero: the same order on every screen. Phones: headline, product line,
+      // preview, actions. Desktop: headline, product line, actions on the left,
+      // the phone on the right, with the actions in the first screen.
+      {
+        const phone = await browser.newPage({ viewport: { width: 390, height: 844 } })
+        await phone.goto(BASE + '/')
+        const top = (sel) => phone.locator(sel).first().evaluate((el) => el.getBoundingClientRect().top + window.scrollY)
+        const [h1, product, preview, actions] = await Promise.all(['#hero h1', '[data-hero="product"]', '[data-hero="preview"]', '[data-hero="actions"]'].map(top))
+        check('mobile hero order: headline, product, preview, actions', h1 < product && product < preview && preview < actions, [h1, product, preview, actions].map(Math.round).join(' < '))
+        check('mobile hero shows the product preview within the first two screens', preview < 2 * 844, String(Math.round(preview)))
+        // The hero screenshot shows the budgeting post with its illustration.
+        check('hero shows the budgeting post screenshot', (await phone.locator('#hero figure[data-screenshot="hero"] img').getAttribute('src')) === '/media/landing/tour-hero.jpg')
+        // Sticky waitlist bar: hidden in the hero, shown mid-page, hidden at section 9.
+        const bar = phone.locator('[data-testid="mobile-waitlist-bar"]')
+        const barShown = async () => (await bar.getAttribute('aria-hidden')) === 'false' && (await bar.evaluate((el) => el.getBoundingClientRect().top < window.innerHeight - 10))
+        check('mobile waitlist bar is hidden over the hero', !(await barShown()))
+        await phone.locator('#problem').scrollIntoViewIfNeeded()
+        await phone.waitForTimeout(500)
+        check('mobile waitlist bar appears once the hero has scrolled away', await barShown())
+        await phone.locator('#founding').evaluate((el) => el.scrollIntoView())
+        await phone.waitForTimeout(500)
+        check('mobile waitlist bar hides at section 9', !(await barShown()))
+        await phone.close()
+        const desk = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+        await desk.goto(BASE + '/')
+        const box = (sel) => desk.locator(sel).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top + window.scrollY, bottom: r.bottom + window.scrollY } })
+        const [dh1, dprod, dact, dprev] = await Promise.all(['#hero h1', '[data-hero="product"]', '[data-hero="actions"]', '[data-hero="preview"]'].map(box))
+        check('desktop hero: headline, product, actions on the left, phone on the right', dh1.y < dprod.y && dprod.y < dact.y && dprev.x > dprod.x + 300, JSON.stringify({ dh1, dprod, dact, dprev }))
+        check('desktop hero shows the waitlist button in the first screen', (await desk.locator('#hero').getByRole('link', { name: 'Join the Waitlist' }).evaluate((el) => el.getBoundingClientRect().bottom)) < 900)
+        check('desktop has no sticky waitlist bar', !(await desk.locator('[data-testid="mobile-waitlist-bar"]').isVisible()))
+        await desk.close()
+        // The header always offers Join the Waitlist, down to 320px.
+        for (const width of [320, 360, 390, 768]) {
+          const p = await browser.newPage({ viewport: { width, height: 700 } })
+          await p.goto(BASE + '/')
+          const join = p.locator('header').getByRole('link', { name: 'Join the Waitlist' })
+          check(`header shows Join the Waitlist at ${width}px`, (await join.isVisible()) && (await join.evaluate((el) => el.getBoundingClientRect().right <= window.innerWidth)))
+          await p.close()
+        }
+      }
+      await page.goto(BASE + '/')
+      const founderImg = page.locator('#story img')
+      await founderImg.scrollIntoViewIfNeeded()
+      await founderImg.evaluate((el) => (el.complete ? null : new Promise((r) => el.addEventListener('load', r, { once: true }))))
+      check('founder photo loads', (await founderImg.evaluate((el) => el.naturalWidth)) === 640)
       // Every tour screenshot loads (lazy images included) and is labelled as sample data.
       for (const fig of await page.locator('figure[data-screenshot]').all()) {
         await fig.scrollIntoViewIfNeeded()
@@ -85,8 +178,9 @@ async function shows(locator, timeout = 5000) {
         const w = await img.evaluate((el) => el.naturalWidth)
         const name = await fig.getAttribute('data-screenshot')
         check(`screenshot ${name} loads`, w === 600, String(w))
-        check(`screenshot ${name} is labelled as sample data`, (await fig.innerText()).includes('From the Crevant tour, with sample data.'))
       }
+      check('hero phone carries the sample data note', await shows(page.locator('#hero [data-testid="demo-note"]')))
+      check('footer discloses that product images are the demo with fictional people', await shows(page.locator('footer [data-testid="product-images-note"]')))
       await page.evaluate(() => window.scrollTo(0, 0))
       await page.getByRole('main').getByRole('link', { name: 'Explore Crevant' }).first().click()
       await page.waitForURL(/\/tour\//)
@@ -94,7 +188,7 @@ async function shows(locator, timeout = 5000) {
       check('tour shows the sample data banner', await shows(page.getByRole('note', { name: 'Sample tour' })))
       await page.getByRole('note', { name: 'Sample tour' }).getByRole('link', { name: 'Back to Crevant' }).click()
       await page.waitForURL(BASE + '/')
-      check('banner link returns to the public site', (await page.getByRole('heading', { level: 1 }).innerText()).startsWith("You don't need a million followers."))
+      check('banner link returns to the public site', (await page.getByRole('heading', { level: 1 }).innerText()).startsWith('You earned the follow.'))
 
       for (const [from, to] of [['/discover', '/tour/discover'], ['/rewards?tab=cp', '/tour/rewards?tab=cp'], ['/creator/amara', '/tour/creator/amara']]) {
         await page.goto(BASE + from)
@@ -103,7 +197,7 @@ async function shows(locator, timeout = 5000) {
         check(`old link ${from} lands on ${to}`, u.pathname + u.search === to, u.pathname + u.search)
       }
       await page.goto(BASE + '/request-invite')
-      check('request page explains requests are closed', await shows(page.getByText('Invitation requests open soon.')))
+      check('request page explains the waitlist is not open yet', await shows(page.getByText('The waitlist opens soon.')))
       await page.close()
     }
 

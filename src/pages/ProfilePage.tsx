@@ -12,7 +12,7 @@ import { SELF_ID } from '../data/seed'
 import type { Category } from '../types'
 
 type Tab = 'posts' | 'saved' | 'following'
-const CATEGORIES: Category[] = ['Art', 'Books', 'Fitness', 'Food', 'Music', 'Tech', 'Travel', 'Wellness']
+const CATEGORIES: Category[] = ['Art', 'Books', 'Fitness', 'Food', 'Money', 'Music', 'Tech', 'Travel', 'Wellness']
 
 function EditProfile({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, updateProfile, pushToast } = useStore()

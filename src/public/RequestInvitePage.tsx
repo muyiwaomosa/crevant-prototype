@@ -11,7 +11,7 @@ import { TOUR_BASE } from '../entry'
 export function RequestInvitePage() {
   return (
     <PlaceholderPage
-      title="Invitation requests open soon."
+      title="The waitlist opens soon."
       body={
         <>
           <p>

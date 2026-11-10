@@ -349,7 +349,7 @@ async function shows(locator, timeout = 5000) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await page.goto(`${APP}/`)
-      check('landing page loads', (await page.getByRole('heading', { level: 1 }).innerText()).includes('You need the right 1,000'))
+      check('landing page loads', (await page.getByRole('heading', { level: 1 }).innerText()).includes('You deserve the reach.'))
       await page.goto(`${APP}/tour/discover`)
       check('sample tour loads', await shows(page.getByRole('note', { name: 'Sample tour' })))
       await collectCsp(page)

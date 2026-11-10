@@ -1,12 +1,13 @@
 import clsx from 'clsx'
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { BadgeCheck, Info, X } from 'lucide-react'
 import type { Creator } from '../types'
 
 // ---------------------------------------------------------------------------
-// Avatar: an uploaded picture when there is one, otherwise initials on a
-// colour generated from a hue, so no image hosting is needed.
+// Avatar: a picture when there is one (a fictional tour portrait or the
+// visitor's own upload), otherwise initials on a colour generated from a hue.
+// If the picture fails to load, the initials show instead.
 
 export function Avatar({
   name,
@@ -27,10 +28,14 @@ export function Avatar({
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase())
     .join('')
-  if (src) {
+  const [failed, setFailed] = useState<string | null>(null)
+  if (src && failed !== src) {
     return (
       <img
         src={src}
+        onError={() => setFailed(src)}
+        loading="lazy"
+        decoding="async"
         alt=""
         aria-hidden="true"
         width={size}
@@ -43,6 +48,7 @@ export function Avatar({
   return (
     <span
       aria-hidden="true"
+      data-avatar="initials"
       className={clsx('inline-grid shrink-0 place-items-center rounded-full font-display font-bold text-white', className)}
       style={{
         width: size,

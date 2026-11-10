@@ -3,13 +3,14 @@ import type { ReactNode } from 'react'
 
 // Shared building blocks for the landing page.
 
-export type Status = 'pilot' | 'testing' | 'development' | 'vision'
+// Approved labels. The real app does not have these features yet: the sample
+// tour demonstrates them. "Being built for the pilot" is under development;
+// "Planned" is not implemented anywhere yet.
+export type Status = 'building' | 'planned'
 
 const STATUS_LABEL: Record<Status, string> = {
-  pilot: 'In the pilot',
-  testing: 'Testing in the pilot',
-  development: 'In development',
-  vision: "Where we're headed",
+  building: 'Being built for the pilot',
+  planned: 'Planned',
 }
 
 /** Every feature claim on the page carries one of these. */
@@ -19,9 +20,8 @@ export function StatusBadge({ status, className }: { status: Status; className?:
       data-status={status}
       className={clsx(
         'inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
-        (status === 'pilot' || status === 'testing') && 'bg-brand-50 text-brand-700 ring-1 ring-brand-100',
-        status === 'development' && 'bg-spark-50 text-spark-700 ring-1 ring-spark-200',
-        status === 'vision' && 'border border-dashed border-ink-300 bg-white/60 text-ink-500',
+        status === 'building' && 'bg-brand-50 text-brand-700 ring-1 ring-brand-100',
+        status === 'planned' && 'border border-dashed border-ink-300 bg-white/60 text-ink-500',
         className,
       )}
     >
@@ -67,6 +67,12 @@ export const cardShadow = 'shadow-[0_1px_2px_rgb(19_25_27/0.06),0_0_0_1px_rgb(19
 // scripts/landing/capture-tour-screens.cjs. statusBg matches the top of each
 // screen, so the status bar reads as part of the app.
 export const TOUR_SCREENS = {
+  // The hero: Amara's budgeting post, framed so its illustration is in view.
+  hero: {
+    src: '/media/landing/tour-hero.jpg',
+    statusBg: '#f5f2e9',
+    alt: "Amara Okafor's 50/30/20 budgeting post in the Following feed of the Crevant sample tour, with an illustration of three labelled jars for needs, wants and savings.",
+  },
   feed: {
     src: '/media/landing/tour-following-feed.jpg',
     statusBg: '#fff7ea',
@@ -82,7 +88,37 @@ export const TOUR_SCREENS = {
     statusBg: '#f7f4ef',
     alt: 'The rewards page in the Crevant sample tour: a reward from one creator, unlocked with points earned with that creator, marked as a simulated reward.',
   },
+  feedPosts: {
+    src: '/media/landing/tour-feed-posts.jpg',
+    statusBg: '#f5f2e9',
+    alt: 'Posts from followed creators in the Following feed of the Crevant sample tour, newest first, each showing how long ago it was posted.',
+  },
+  discover: {
+    src: '/media/landing/tour-discover.jpg',
+    statusBg: '#fff7ea',
+    alt: 'The Discover page in the Crevant sample tour: search and topic filters, with creator cards to follow.',
+  },
+  myPoints: {
+    src: '/media/landing/tour-my-cp.jpg',
+    statusBg: '#f5f2ed',
+    alt: "A fan's Connection Points in the Crevant sample tour, kept separately with each creator, with progress toward each creator's next reward.",
+  },
+  profile: {
+    src: '/media/landing/tour-profile.jpg',
+    statusBg: '#fff7ea',
+    alt: 'A member profile in the Crevant sample tour, with a short bio and an Edit profile button. The follower count is marked as demo data.',
+  },
+  post: {
+    src: '/media/landing/tour-post.jpg',
+    statusBg: '#f7f4ef',
+    alt: 'A post with its comments in the Crevant sample tour, and a box to add a thoughtful comment.',
+  },
 } as const
+
+/** The one short disclosure shown under the hero phone. */
+export const DEMO_DISCLOSURE = 'Demo with sample data and fictional people.'
+/** The page-level disclosure in the footer, covering every product image. */
+export const PRODUCT_IMAGES_DISCLOSURE = 'Product images on this site show the Crevant demo, with sample data and fictional people.'
 
 /** Status bar icons, sized relative to the phone's width. */
 function StatusIcons() {
@@ -117,11 +153,17 @@ export function TourScreenshot({
   caption,
   priority = false,
   className,
+  callout,
+  disclose = false,
 }: {
   screen: keyof typeof TOUR_SCREENS
   caption: string
   priority?: boolean
   className?: string
+  /** A short label pointing at part of the screen. Use only words the tour itself shows. */
+  callout?: { text: string; top: string }
+  /** Show the sample-data note right under this screenshot (the hero). The footer covers the rest. */
+  disclose?: boolean
 }) {
   const s = TOUR_SCREENS[screen]
   return (
@@ -163,11 +205,25 @@ export function TourScreenshot({
             </div>
           </div>
         </div>
+        {callout && (
+          <span
+            data-callout
+            className="absolute right-[3%] z-10 hidden max-w-[78%] @[200px]:flex items-center gap-1.5 rounded-full bg-ink-900 px-2.5 py-1 text-[11px] font-semibold leading-tight text-white shadow-[0_6px_16px_-6px_rgb(19_25_27/0.6)] ring-2 ring-white"
+            style={{ top: callout.top }}
+          >
+            <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-spark-400" />
+            {callout.text}
+          </span>
+        )}
       </div>
       <figcaption className="mt-3 text-center text-[13px] leading-snug text-ink-500">
         <span className="font-semibold text-ink-700">{caption}</span>
-        <br />
-        From the Crevant tour, with sample data.
+        {disclose && (
+          <>
+            <br />
+            <span data-testid="demo-note">{DEMO_DISCLOSURE}</span>
+          </>
+        )}
       </figcaption>
     </figure>
   )

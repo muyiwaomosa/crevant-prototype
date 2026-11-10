@@ -5,6 +5,11 @@
 import type { Comment, Creator, Post, PostMedia, Profile, Reward } from '../types'
 import { minutesAgo } from '../lib/time'
 
+// Fictional people: every portrait was generated with Canva's AI image
+// generator and shows nobody real. See scripts/tour/tour-images.json.
+const tourPerson = (id: string) => `/media/tour/people/${id}.jpg`
+const tourPostImage = (id: string) => `/media/tour/posts/${id}.jpg`
+
 export const SELF_ID = 'me'
 
 export const DEFAULT_PROFILE: Profile = {
@@ -12,6 +17,7 @@ export const DEFAULT_PROFILE: Profile = {
   handle: 'jamierivera',
   bio: 'Sketchbook diaries, slow travel, and the stories behind each drawing.',
   category: 'Art',
+  avatar: tourPerson('jamie'),
 }
 
 export const SELF_BASE_FOLLOWERS = 1284
@@ -20,13 +26,14 @@ export const CREATORS: Creator[] = [
   {
     id: 'amara',
     name: 'Amara Okafor',
-    handle: 'amaracooks',
-    category: 'Food',
-    bio: 'Weeknight West African cooking from a tiny London kitchen. Big flavour, short shopping lists.',
+    handle: 'amaramoney',
+    category: 'Money',
+    bio: 'Money skills for real life. Budgeting, saving and paying off debt, one small habit at a time.',
     location: 'London, UK',
     baseFollowers: 48210,
     hue: 18,
-    cover: 'bowl',
+    avatar: tourPerson('amara'),
+    cover: 'budget',
   },
   {
     id: 'theo',
@@ -37,6 +44,7 @@ export const CREATORS: Creator[] = [
     location: 'Abisko, Sweden',
     baseFollowers: 22940,
     hue: 205,
+    avatar: tourPerson('theo'),
     cover: 'ridge',
   },
   {
@@ -48,6 +56,7 @@ export const CREATORS: Creator[] = [
     location: 'Bengaluru, India',
     baseFollowers: 15730,
     hue: 262,
+    avatar: tourPerson('priya'),
     cover: 'terminal',
   },
   {
@@ -59,6 +68,7 @@ export const CREATORS: Creator[] = [
     location: 'Valencia, Spain',
     baseFollowers: 31420,
     hue: 330,
+    avatar: tourPerson('sofia'),
     cover: 'shapes',
   },
   {
@@ -70,6 +80,7 @@ export const CREATORS: Creator[] = [
     location: 'Atlanta, USA',
     baseFollowers: 67100,
     hue: 45,
+    avatar: tourPerson('marcus'),
     cover: 'vinyl',
   },
   {
@@ -81,6 +92,7 @@ export const CREATORS: Creator[] = [
     location: 'Toronto, Canada',
     baseFollowers: 19880,
     hue: 140,
+    avatar: tourPerson('jordan'),
     cover: 'track',
   },
   {
@@ -92,6 +104,7 @@ export const CREATORS: Creator[] = [
     location: 'Osaka, Japan',
     baseFollowers: 12460,
     hue: 0,
+    avatar: tourPerson('hana'),
     cover: 'books',
   },
   {
@@ -103,6 +116,7 @@ export const CREATORS: Creator[] = [
     location: 'Accra, Ghana',
     baseFollowers: 9340,
     hue: 100,
+    avatar: tourPerson('kofi'),
     cover: 'leaves',
   },
 ]
@@ -126,8 +140,8 @@ const SEED_POSTS: SeedPost[] = [
     id: 'p_amara_1',
     creatorId: 'amara',
     minutesAgo: 14,
-    text: 'Pepper soup weather in London today. Goat, uziza, utazi, and a very generous hand with the scent leaf. Full recipe is going up tonight for anyone who asked last week.',
-    media: { type: 'art', art: 'bowl', alt: 'Illustration of a steaming bowl of soup seen from above' },
+    text: 'The 50/30/20 budget in plain English: half your take-home pay for needs, 30% for wants, 20% for savings and paying off debt. It\'s a starting point, not a rule. When my rent went up I ran 60/25/15 for six months, then crept back. Save this for payday.',
+    media: { type: 'image', src: tourPostImage('amara-budget'), alt: 'Illustration of three jars labelled Needs 50%, Wants 30% and Save 20%, with coins dropping in' },
     likes: 1284,
     saves: 412,
   },
@@ -153,7 +167,7 @@ const SEED_POSTS: SeedPost[] = [
     creatorId: 'theo',
     minutesAgo: 180,
     text: 'Day 4 on the Kungsleden. 21 km, one river crossing that was deeper than the map promised, and a sunset at 10:40pm that made every blister worth it.',
-    media: { type: 'art', art: 'ridge', alt: 'Illustration of mountain ridges at dawn' },
+    media: { type: 'image', src: tourPostImage('theo-trail'), alt: 'A trail through low birch scrub leading into a wide mountain valley at sunset' },
     likes: 2033,
     saves: 655,
   },
@@ -179,7 +193,7 @@ const SEED_POSTS: SeedPost[] = [
     creatorId: 'hana',
     minutesAgo: 470,
     text: 'This week: "The Memory Police" by Yōko Ogawa. A quiet island where things disappear and then the memory of them goes too. Calm, unsettling, and I have not stopped thinking about it. 4.5 out of 5.',
-    media: { type: 'art', art: 'books', alt: 'Illustration of a stack of books' },
+    media: { type: 'image', src: tourPostImage('hana-book'), alt: 'A paperback with a plain cover, a cup of green tea and a pencil on a cafe table' },
     likes: 611,
     saves: 198,
   },
@@ -188,7 +202,7 @@ const SEED_POSTS: SeedPost[] = [
     creatorId: 'kofi',
     minutesAgo: 610,
     text: 'First proper harvest from the balcony: three garden eggs, a fistful of okra, and more basil than one person should own. Four square metres, ten weeks.',
-    media: { type: 'art', art: 'leaves', alt: 'Illustration of leafy plants' },
+    media: { type: 'image', src: tourPostImage('kofi-harvest'), alt: 'Garden eggs, okra and a basket of greens on a balcony floor among potted plants' },
     likes: 457,
     saves: 120,
   },
@@ -196,7 +210,7 @@ const SEED_POSTS: SeedPost[] = [
     id: 'p_amara_2',
     creatorId: 'amara',
     minutesAgo: 1420,
-    text: 'Small tip that changed my jollof: fry the tomato and pepper base until the oil separates and it turns brick red. That is the flavour. Rushing this step is why it tastes "raw".',
+    text: 'Small habit that changed my money: every Sunday morning I check my balance with a coffee. Five minutes, no judgement, just looking. You can\'t fix what you don\'t see.',
     likes: 3120,
     saves: 1902,
   },
@@ -264,8 +278,7 @@ const SEED_POSTS: SeedPost[] = [
     id: 'p_amara_3',
     creatorId: 'amara',
     minutesAgo: 4300,
-    text: 'Suya spice, my ratio: 4 parts ground kuli kuli, 1 part each of ginger, garlic, and paprika, a pinch of cayenne, half a stock cube crushed in. Keeps for a month in a jar.',
-    media: { type: 'art', art: 'citrus', alt: 'Illustration of sliced citrus and spices' },
+    text: 'Your emergency fund doesn\'t have to start at three months of expenses. Start with £500. That one buffer turns a broken boiler from a crisis into an inconvenience.',
     likes: 2788,
     saves: 2201,
   },
@@ -362,18 +375,18 @@ export function buildSeedPosts(seededAt: number): Post[] {
 }
 
 const FANS = [
-  { name: 'Lena Brooks', handle: 'lenab', hue: 190 },
-  { name: 'Dami Adeyemi', handle: 'damicooks', hue: 25 },
-  { name: 'Chris Ortega', handle: 'chriso', hue: 280 },
-  { name: 'Yuki Tan', handle: 'yukitan', hue: 330 },
-  { name: 'Sam Patel', handle: 'sampatel', hue: 120 },
-  { name: 'Noor Haddad', handle: 'noorh', hue: 50 },
-  { name: 'Eli Novak', handle: 'elinovak', hue: 210 },
+  { name: 'Lena Brooks', handle: 'lenab', hue: 190, avatar: tourPerson('lena') },
+  { name: 'Dami Adeyemi', handle: 'damiadeyemi', hue: 25, avatar: tourPerson('dami') },
+  { name: 'Chris Ortega', handle: 'chriso', hue: 280, avatar: tourPerson('chris') },
+  { name: 'Yuki Tan', handle: 'yukitan', hue: 330, avatar: tourPerson('yuki') },
+  { name: 'Sam Patel', handle: 'sampatel', hue: 120, avatar: tourPerson('sam') },
+  { name: 'Noor Haddad', handle: 'noorh', hue: 50, avatar: tourPerson('noor') },
+  { name: 'Eli Novak', handle: 'elinovak', hue: 210, avatar: tourPerson('eli') },
 ]
 
 const SEED_COMMENTS: Array<{ postId: string; fan: number; minutesAgo: number; text: string }> = [
-  { postId: 'p_amara_1', fan: 1, minutesAgo: 9, text: 'Finally! My mum makes it with catfish, going to try goat this time.' },
-  { postId: 'p_amara_1', fan: 0, minutesAgo: 6, text: 'Where do you find utazi in London? Asking for a very hungry friend.' },
+  { postId: 'p_amara_1', fan: 1, minutesAgo: 9, text: 'Tried this last month. 20% felt impossible, so I started at 10% and moved it on payday automatically. Still counts!' },
+  { postId: 'p_amara_1', fan: 0, minutesAgo: 6, text: 'How do you split it when your income changes every month? I freelance, so some months are tiny.' },
   { postId: 'p_priya_1', fan: 2, minutesAgo: 30, text: 'Love that you share the broken streaks too. Makes the wins feel real.' },
   { postId: 'p_marcus_1', fan: 3, minutesAgo: 70, text: 'The cricket is the best feature on the track honestly.' },
   { postId: 'p_marcus_1', fan: 6, minutesAgo: 52, text: 'Rhodes at 2am hits different. Friday cannot come soon enough.' },
@@ -381,7 +394,7 @@ const SEED_COMMENTS: Array<{ postId: string; fan: number; minutesAgo: number; te
   { postId: 'p_sofia_1', fan: 5, minutesAgo: 200, text: 'Watched it six times. The last second really is the best.' },
   { postId: 'p_jordan_1', fan: 0, minutesAgo: 300, text: 'Needed this. I have been "easy running" at race pace for a month.' },
   { postId: 'p_hana_1', fan: 3, minutesAgo: 420, text: 'Adding it to my list. Have you read Hotel Iris?' },
-  { postId: 'p_amara_2', fan: 2, minutesAgo: 1300, text: 'This is exactly why mine never tasted like my aunt’s. Thank you.' },
+  { postId: 'p_amara_2', fan: 2, minutesAgo: 1300, text: 'Sunday money check is now a thing in our house. My partner and I do it together.' },
   { postId: 'p_sofia_2', fan: 6, minutesAgo: 1500, text: 'Weather as a seed is such a beautiful idea.' },
   { postId: 'p_me_1', fan: 4, minutesAgo: 2200, text: 'The second one is perfect. Would buy a print of this.' },
   { postId: 'p_me_1', fan: 0, minutesAgo: 2100, text: 'Porto light is unreal. Lovely page.' },
@@ -397,6 +410,7 @@ export function buildSeedComments(seededAt: number): Comment[] {
       authorName: fan.name,
       authorHandle: fan.handle,
       authorHue: fan.hue,
+      authorAvatar: fan.avatar,
       text: c.text,
       createdAt: minutesAgo(seededAt, c.minutesAgo),
     }
@@ -412,7 +426,7 @@ type SeedReward = Omit<Reward, 'createdAt'> & { daysAgo: number }
 
 const SEED_REWARDS: SeedReward[] = [
   { id: 'r_theo_wall', creatorId: 'theo', title: 'Arctic wallpaper pack', description: 'Twelve phone and desktop wallpapers from the Kungsleden trip.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 318, daysAgo: 20 },
-  { id: 'r_amara_card', creatorId: 'amara', title: 'Family recipe card: slow jollof', description: 'The printable recipe card my aunt wrote out for me, with my notes in the margins.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 902, daysAgo: 30 },
+  { id: 'r_amara_card', creatorId: 'amara', title: 'Payday budget template', description: 'The spreadsheet I fill in every payday, with my notes on how to adjust the split.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 902, daysAgo: 30 },
   { id: 'r_hana_list', creatorId: 'hana', title: 'Annotated reading list', description: 'Twenty translated novels with a short note on why each one stayed with me.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 144, daysAgo: 12 },
   { id: 'r_kofi_guide', creatorId: 'kofi', title: 'Balcony seed starting guide', description: 'My step by step guide for starting seeds in small spaces, with a planting calendar.', cost: 15, kind: 'digital', stock: null, claimedByOthers: 87, daysAgo: 9 },
   { id: 'r_sofia_sketch', creatorId: 'sofia', title: 'Behind the algorithm sketchbook', description: 'A digital flip through of the notebook where each generative series starts.', cost: 20, kind: 'access', stock: null, claimedByOthers: 210, daysAgo: 15 },
@@ -423,7 +437,7 @@ const SEED_REWARDS: SeedReward[] = [
   { id: 'r_marcus_stems', creatorId: 'marcus', title: 'Unreleased stems pack', description: 'Stems from three unreleased beats for you to remix for personal use.', cost: 20, kind: 'digital', stock: null, claimedByOthers: 1204, daysAgo: 25 },
   { id: 'r_sofia_print', creatorId: 'sofia', title: 'Signed digital edition', description: 'A numbered, high resolution file from the Grid Weather series with a signed certificate.', cost: 100, kind: 'digital', stock: 20, claimedByOthers: 14, daysAgo: 3 },
   { id: 'r_jordan_form', creatorId: 'jordan', title: 'Running form check', description: 'Send a 20 second clip and get a short written review of your form.', cost: 90, kind: 'experience', stock: 10, claimedByOthers: 7, daysAgo: 4 },
-  { id: 'r_amara_live', creatorId: 'amara', title: 'Seat at a live cook along', description: 'One seat at a small online cook along. Ingredients list sent a week ahead.', cost: 120, kind: 'experience', stock: 12, claimedByOthers: 10, daysAgo: 2 },
+  { id: 'r_amara_live', creatorId: 'amara', title: 'Seat at a live budgeting Q&A', description: 'One seat at a small online Q&A where I answer your budgeting questions. Send yours a week ahead.', cost: 120, kind: 'experience', stock: 12, claimedByOthers: 10, daysAgo: 2 },
   { id: 'r_priya_call', creatorId: 'priya', title: '30 minute product chat', description: 'A short video call to talk through your side project or launch plan.', cost: 150, kind: 'experience', stock: 5, claimedByOthers: 4, daysAgo: 7 },
   { id: 'r_marcus_name', creatorId: 'marcus', title: 'Name a track on the next EP', description: 'Pick the title of one track on the next EP, credited in the liner notes.', cost: 150, kind: 'recognition', stock: 1, claimedByOthers: 0, daysAgo: 1 },
 ]

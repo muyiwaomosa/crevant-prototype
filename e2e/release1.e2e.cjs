@@ -96,11 +96,36 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   check('no daily check in card any more', (await page.getByText('Daily check in').count()) === 0)
   await shot(page, 'home')
 
+  // ---- Fictional portraits and post images load everywhere --------------
+  // Scroll each page fully so lazy images load, then require every image to
+  // have decoded and no avatar to have fallen back to initials.
+  async function imagesLoaded(path) {
+    await page.goto(BASE + path)
+    await page.waitForLoadState('networkidle')
+    await page.evaluate(async () => {
+      for (let y = 0; y < document.body.scrollHeight; y += 400) {
+        window.scrollTo(0, y)
+        await new Promise((r) => setTimeout(r, 60))
+      }
+      await Promise.all([...document.images].map((i) => (i.complete ? null : new Promise((r) => (i.onload = i.onerror = r)))))
+    })
+    return page.evaluate(() => ({
+      tour: [...document.images].filter((i) => i.src.includes('/media/tour/')).length,
+      broken: [...document.images].filter((i) => !i.complete || i.naturalWidth === 0).map((i) => i.src),
+      initials: document.querySelectorAll('[data-avatar="initials"]').length,
+    }))
+  }
+  for (const [path, min] of [['/', 8], ['/post/p_amara_1', 4], ['/creator/amara', 2], ['/rewards', 1], ['/discover', 8], ['/profile', 1]]) {
+    const r = await imagesLoaded(path)
+    check(`${path}: tour images load, none broken`, r.tour >= min && r.broken.length === 0, `${r.tour} tour images, broken: ${r.broken.join(', ')}`)
+    check(`${path}: no avatar fell back to initials`, r.initials === 0, `${r.initials} initials`)
+  }
+
   // ---- Creator specific earning -----------------------------------------
   await page.goto(BASE + '/post/p_amara_1')
   await page.getByRole('button', { name: 'Like', exact: true }).first().click()
   await page.getByRole('button', { name: 'Save post' }).first().click()
-  await comment(page, 'p_amara_1', 'Pepper soup in this weather sounds perfect, saving the recipe.')
+  await comment(page, 'p_amara_1', 'Saving this for payday, the 60/25/15 tweak is really helpful.')
   await page.goto(BASE + '/post/p_amara_2')
   await page.getByRole('button', { name: 'Like', exact: true }).first().click()
   const a1 = await bal(page, 'amara')
@@ -118,7 +143,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.waitForTimeout(150)
   check('repeated character comment earns nothing', (await bal(page, 'priya')) === before)
   check('the comment itself is still posted', (await page.getByText('aaaaaaaaaaaa').count()) === 1)
-  await comment(page, 'p_priya_2', 'Pepper soup in this weather sounds perfect, saving the recipe.')
+  await comment(page, 'p_priya_2', 'Saving this for payday, the 60/25/15 tweak is really helpful.')
   check('duplicate comment on another post earns nothing', (await bal(page, 'priya')) === before)
   await comment(page, 'p_priya_3', 'great great great great')
   check('repeated word comment earns nothing', (await bal(page, 'priya')) === before)
@@ -199,7 +224,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   const theoBefore = await bal(page, 'theo')
   await page.goto(BASE + '/rewards?creator=amara')
   await shot(page, 'rewards-amara')
-  const card = page.locator('article', { hasText: 'Family recipe card' })
+  const card = page.locator('article', { hasText: 'Payday budget template' })
   await card.getByRole('button', { name: 'Redeem' }).click()
   await shot(page, 'redeem-confirm')
   await page.evaluate(() => {
@@ -221,7 +246,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.getByRole('button', { name: 'Done' }).click()
   check('a redeemed reward cannot be redeemed again', (await card.getByRole('button', { name: 'Redeem' }).count()) === 0)
 
-  const high = page.locator('article', { hasText: 'Seat at a live cook along' })
+  const high = page.locator('article', { hasText: 'Seat at a live budgeting Q&A' })
   check('higher value Amara reward is visible and locked', (await high.getByText(/CP to go/).count()) === 1)
 
   // ---- Persistence (journey 6) -------------------------------------------
@@ -229,7 +254,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.reload()
   check('balances survive a refresh', JSON.stringify(await balances(page)) === snapshot)
   await page.goto(BASE + '/rewards?tab=history')
-  check('reward history survives a refresh', (await countWhenReady(page.getByText('Family recipe card: slow jollof'))) >= 1)
+  check('reward history survives a refresh', (await countWhenReady(page.getByText('Payday budget template'))) >= 1)
 
   await page.goto(BASE + '/points')
   await page.getByText('This total cannot be spent.').waitFor()
@@ -249,8 +274,11 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   check('published post is first in the chronological feed', (await page.locator('article').first().innerText()).includes('Release 1 test post'))
 
   // ---- Profile pictures ---------------------------------------------------
+  // The demo visitor starts with Jamie's fictional sample portrait.
+  const SAMPLE = '/media/tour/people/jamie.jpg'
   await page.goto(BASE + '/profile')
-  await page.getByRole('button', { name: 'Add photo' }).click()
+  check('demo visitor starts with the sample portrait', (await stored(page)).profile.avatar === SAMPLE)
+  await page.getByRole('button', { name: 'Change photo' }).click()
   const input = page.locator('[role=dialog] input[type=file]')
   await input.setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') })
   check('wrong file type shows a helpful error', /not supported/.test(await page.getByRole('alert').innerText()))
@@ -260,7 +288,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   check('corrupt image shows a helpful error', /could not be opened/.test(await page.getByRole('alert').innerText()))
   await input.setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: await makeImage(page, 900, 600) })
   await page.getByText('Preview. Save to use this picture.').waitFor()
-  check('preview appears before saving', (await stored(page)).profile.avatar === undefined)
+  check('preview appears before saving', (await stored(page)).profile.avatar === SAMPLE)
   await shot(page, 'avatar-preview')
   await page.getByRole('button', { name: 'Save picture' }).click()
   const av = (await stored(page)).profile.avatar
@@ -321,7 +349,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.getByRole('button', { name: 'Reset', exact: true }).click()
   await page.getByRole('button', { name: 'Reset demo' }).click()
   const r = await stored(page)
-  check('reset clears CP, redemptions, and the picture', r.ledger.length === 0 && r.redemptions.length === 0 && !r.profile.avatar)
+  check('reset clears CP, redemptions, and the uploaded picture', r.ledger.length === 0 && r.redemptions.length === 0 && r.profile.avatar === SAMPLE)
 
   // ---- Migration from version 1 ------------------------------------------
   await page.evaluate((k) => {

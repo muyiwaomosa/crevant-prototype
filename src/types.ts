@@ -4,6 +4,7 @@
 
 export type Category =
   | 'Food'
+  | 'Money'
   | 'Travel'
   | 'Tech'
   | 'Music'
@@ -16,6 +17,7 @@ export type ArtworkKind =
   | 'ridge'
   | 'coast'
   | 'bowl'
+  | 'budget'
   | 'citrus'
   | 'vinyl'
   | 'keys'
@@ -38,7 +40,7 @@ export interface Creator {
   /** Hue (0 to 360) used to colour the generated avatar. */
   hue: number
   cover: ArtworkKind
-  /** Uploaded profile picture (data URL). Falls back to initials. */
+  /** Profile picture: a fictional tour portrait, or the visitor's own upload (data URL). Falls back to initials. */
   avatar?: string
   isSelf?: boolean
 }
@@ -65,6 +67,8 @@ export interface Comment {
   authorName: string
   authorHandle: string
   authorHue: number
+  /** Fictional portrait for seeded comments. Falls back to initials. */
+  authorAvatar?: string
   isYou?: boolean
   text: string
   createdAt: number
@@ -134,7 +138,7 @@ export interface Profile {
   handle: string
   bio: string
   category: Category
-  /** Small square JPEG data URL. Stored only in this browser. */
+  /** The demo visitor's fictional tour portrait, or their own small square JPEG data URL stored only in this browser. */
   avatar?: string
 }
 

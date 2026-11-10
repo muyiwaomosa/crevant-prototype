@@ -25,7 +25,7 @@ export function PostMedia({ media, postId, rounded = true }: { media: PostMediaT
   if (media.type === 'image') {
     return (
       <div className={frame}>
-        <img src={media.src} alt={media.alt} className="max-h-[560px] w-full object-cover" loading="lazy" />
+        <img src={media.src} alt={media.alt} width={1200} height={900} className="aspect-[4/3] max-h-[560px] w-full object-cover" loading="lazy" decoding="async" />
       </div>
     )
   }

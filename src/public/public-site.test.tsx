@@ -4,10 +4,10 @@ import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PublicRoutes } from './PublicApp'
 
-const PUBLIC_PATHS = ['/', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
+const PUBLIC_PATHS = ['/', '/join', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
 // Pages that must never collect anything until the privacy notice is approved.
 // (Sign-in and password reset are for invited members and are tested in src/public/auth.)
-const FORM_FREE_PATHS = ['/', '/request-invite', '/no-such-page']
+const FORM_FREE_PATHS = ['/', '/join', '/join/creator', '/join/supporter', '/request-invite', '/no-such-page']
 
 function renderAt(path: string) {
   return render(
@@ -31,219 +31,371 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const HEADLINE = "You don't need a million followers. You need the right 1,000."
-const MISSION = 'Our mission is to help content creators who have something valuable to say build sustainable income.'
-const MISSION_NOTE = 'This is our long-term mission, not a promise of earnings during the pilot.'
-const SECTION_ORDER = ['hero', 'why', 'who', 'what', 'how', 'cta']
 const norm = (el: Element | null) => (el?.textContent || '').replace(/\s+/g, ' ')
+const SECTION_ORDER = ['hero', 'story', 'problem', 'why', 'who', 'difference', 'fans', 'how', 'founding']
+// The founder-approved headings, in order.
+const HEADINGS = [
+  'You earned the follow. You deserve the reach.',
+  'My audience tripled. My income dropped by 60%.',
+  'You can have a million followers and still struggle to make a living.',
+  'What if social media worked for the people creating the value?',
+  'For creators who want more than views.',
+  "You don't need a million followers. You need the right 1,000.",
+  "You're more than a follower. You're part of their success.",
+  'Start building something that lasts.',
+  'The future of content creation should be built by creators.',
+]
+// Approved disclaimers that contain the word "guarantee". They are the only
+// allowed uses of it (approved narrow exception).
+const APPROVED_GUARANTEE_SENTENCES = [
+  'Connection Points are not cash and have no guaranteed monetary value.',
+  'Participation does not guarantee earnings or rewards.',
+  'No guaranteed income, views or engagement.',
+  // The founder-approved waitlist introduction on /join.
+  "Joining the waitlist doesn't guarantee an invitation to the pilot.",
+]
+const POINTS_DISCLAIMER = 'Connection Points are not cash and have no guaranteed monetary value. Rewards depend on what each creator offers.'
+const landing = () => renderAt('/').container
+const section = (id: string) => landing().querySelector(`#${id}`)!
 
-describe('positioning', () => {
-  it('leads with the right 1,000 and offers the ways in', () => {
-    const { getByRole, getAllByRole } = renderAt('/')
-    expect(getByRole('heading', { level: 1 }).textContent).toBe(HEADLINE)
-    expect(getAllByRole('link', { name: /explore crevant/i }).every((a) => a.getAttribute('href') === '/tour')).toBe(true)
-    expect(getAllByRole('link', { name: /explore crevant/i }).length).toBeGreaterThanOrEqual(2)
-    expect(getAllByRole('link', { name: /join the invitation list|request an invitation/i }).every((a) => a.getAttribute('href') === '/request-invite')).toBe(true)
-    expect(getAllByRole('link', { name: /sign in/i }).some((a) => a.getAttribute('href') === '/sign-in')).toBe(true)
+describe('structure and approved copy', () => {
+  it('has the nine approved sections, in order', () => {
+    expect([...landing().querySelectorAll('section[id]')].map((s) => s.id)).toEqual(SECTION_ORDER)
   })
-
-  it('puts the mission directly under the headline, then the note that it is not a pilot promise', () => {
-    const { container } = renderAt('/')
-    const hero = container.querySelector('#hero')!
-    const mission = hero.querySelector('[data-testid="mission"]')!
-    const note = hero.querySelector('[data-testid="hypothesis-note"]')!
-    expect(norm(mission)).toBe(MISSION)
-    expect(hero.querySelector('h1')!.nextElementSibling).toBe(mission)
-    expect(mission.nextElementSibling).toBe(note)
-    expect(note.textContent).toContain(MISSION_NOTE)
-    expect(note.textContent).toContain('No money changes hands on Crevant yet.')
-    const faq = norm(container.querySelector('#faq'))
-    expect(faq).toContain('Is 1,000 a magic number?')
-    expect(faq).toContain("we can't promise what any community will earn")
+  it('uses the approved headings, with exactly one main heading', () => {
+    const c = landing()
+    expect(c.querySelectorAll('h1')).toHaveLength(1)
+    expect(norm(c.querySelector('h1'))).toBe(HEADINGS[0])
+    SECTION_ORDER.slice(1).forEach((id, i) => expect(norm(c.querySelector(`#${id} h2`))).toBe(HEADINGS[i + 1]))
   })
-
-  it('uses the headline once', () => {
-    expect(textOf('/').split('You need the right 1,000').length - 1).toBe(1)
+  it('keeps key approved passages word for word', () => {
+    const t = norm(landing())
+    for (const passage of [
+      'Meet Crevant. A creator-first social network built for predictability. When someone follows you, your new posts appear in their Following feed, newest first, so you can plan, build trust and grow, instead of guessing what an algorithm will do.',
+      'An invitation-only platform being built for creators and their supporters.',
+      "What's the point of building an audience if you can't reliably reach the people who chose to follow you?",
+      'How do you build trust when you can\'t consistently connect with your audience?',
+      'When someone chooses to follow you, your content should have a reliable place in their feed.',
+      "If any of these sound familiar, we're building Crevant with people like you in mind.",
+      'When someone follows you on Crevant, your new posts appear in their chronological Following feed.',
+      'Crevant is developing Connection Points, a way to recognize supporters for participating with creators they care about.',
+      "It's to help you build something valuable enough to last.",
+      "It's built by the people who believe in them.",
+      'Your content starts the conversation.',
+      'Your relationships build the future.',
+      "Joining the waitlist doesn't secure a place in the pilot. We invite people in small groups and improve the experience together. Participation does not guarantee earnings or rewards.",
+      'Think about that.',
+      "You worked hard to build your audience. But what good is having thousands of followers if you can't consistently reach them?",
+    ]) expect(t, passage).toContain(passage)
   })
-
-  it('has exactly six sections, in the approved order', () => {
-    const { container } = renderAt('/')
-    const ids = [...container.querySelectorAll('section[id]')].map((s) => s.id)
-    expect(ids).toEqual(SECTION_ORDER)
-  })
-
-  it('never suggests supporters share financially in a creator\'s success', () => {
-    const t = textOf('/')
-    expect(t).not.toMatch(/participate in their success/i)
-    expect(t).toContain("they don't receive ownership, profits or financial returns")
-  })
-
-  it('never suggests creators own their followers', () => {
-    expect(textOf('/')).not.toMatch(/own (your|their) (followers|audience|fans|supporters)/i)
+  it('trims the problem section without losing its message', () => {
+    const t = norm(section('problem'))
+    expect(t).not.toContain('And I noticed something else.')
+    expect(t).not.toContain('You spend years building an audience.')
+    expect(t).not.toContain('how can content creation become a respected profession')
+    expect(section('problem').querySelectorAll('[data-testid="problem-questions"] p')).toHaveLength(2)
+    expect(t).toContain('We believe creators deserve a better opportunity.')
   })
 })
 
-describe('why: distribution', () => {
-  const why = () => {
-    const { container } = renderAt('/')
-    return container.querySelector('#why')!
-  }
-  it('names the problem: you build the audience, the platform controls distribution', () => {
-    const w = why()
-    expect(norm(w.querySelector('h2'))).toBe('You build the audience. The platform controls the distribution.')
-    expect(norm(w)).toContain('still struggle to reach the people who explicitly chose to follow them')
-    expect(norm(w)).toContain('Recommendation algorithms often prioritize predicted engagement rather than the relationships people have deliberately chosen.')
+describe('hero', () => {
+  it('offers Join the Waitlist (to section 9) first and Explore Crevant (the sample tour) second', () => {
+    const hero = section('hero')
+    const links = [...hero.querySelectorAll('a')].map((a) => norm(a).trim())
+    expect(links.indexOf('Join the Waitlist')).toBeLessThan(links.indexOf('Explore Crevant'))
+    const join = [...hero.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Waitlist')!
+    expect(join.getAttribute('href')).toBe('#founding')
+    const tour = [...hero.querySelectorAll('a')].find((a) => norm(a).trim() === 'Explore Crevant')!
+    expect(tour.getAttribute('href')).toBe('/tour')
+    expect(norm(hero)).toContain('A demonstration with sample data')
+    expect([...hero.querySelectorAll('a')].some((a) => a.getAttribute('href') === '/sign-in')).toBe(true)
   })
-  it('describes the Following feed by its order only, and never promises every follower sees every post', () => {
-    const w = norm(why())
-    expect(w).toContain('the Following feed is chronological: newest first, not ranked by predicted engagement')
-    expect(w).toContain("It isn't a promise that each post reaches each follower.")
-    expect(textOf('/')).not.toMatch(/(every|all) (of your |your )?followers? (will )?(see|sees)|see every post you|never miss a post/i)
+  it('says what Crevant is, then the actions, in the same order on every screen', () => {
+    const hero = section('hero')
+    const parts = [...hero.querySelectorAll('[data-hero]')].map((el) => el.getAttribute('data-hero'))
+    expect(parts).toEqual(['product', 'preview', 'actions'])
+    expect(norm(hero)).not.toContain('You worked hard to build your audience.')
+    expect(norm(hero)).not.toContain('more than a side hustle')
+    for (const el of hero.querySelectorAll('h1, [data-hero]')) expect(el.className).not.toMatch(/\border-\d/)
+  })
+  it('shows the budgeting post with its illustration', () => {
+    const fig = section('hero').querySelector('figure[data-screenshot]')!
+    expect(fig.getAttribute('data-screenshot')).toBe('hero')
+    expect(fig.querySelector('img')!.getAttribute('src')).toBe('/media/landing/tour-hero.jpg')
+    expect(norm(fig)).toContain('A post in your Following feed')
+  })
+  it('qualifies the reach claim right beside it', () => {
+    expect(norm(section('hero').querySelector('[data-testid="hero-note"]'))).toContain("It isn't a promise that each post reaches each follower.")
   })
 })
 
-describe('who: creators and fans, with equal prominence', () => {
-  const groups = () => {
-    const { container } = renderAt('/')
-    return [...container.querySelectorAll('#who [data-group]')]
-  }
-  it('shows exactly two groups, creators and fans, side by side', () => {
-    const g = groups()
-    expect(g.map((el) => el.getAttribute('data-group'))).toEqual(['creators', 'fans'])
-    // Equal structure: each has one heading, one title line and one description.
-    for (const el of g) {
-      expect(el.querySelectorAll('h3')).toHaveLength(1)
-      expect(el.querySelectorAll('p')).toHaveLength(2)
+describe('founder story', () => {
+  it('shows a short version, with the rest behind "Read the full story"', () => {
+    const story = section('story')
+    const details = story.querySelector('details[data-testid="full-story"]')!
+    const summary = details.querySelector('summary')!.cloneNode(true) as Element
+    summary.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove())
+    expect(norm(summary).trim()).toBe('Read the full story')
+    expect(details.hasAttribute('open')).toBe(false)
+    const outside = norm(story).replace(norm(details), '')
+    expect(outside).toContain('Two years ago, I made my wife a promise. I told her she\'d be able to retire by her 40th birthday.')
+    expect(norm(details)).toContain('I reached 12,000 subscribers and finally got monetized. My first earnings were about $500.')
+    expect(norm(details)).toContain('But instead of earning more, I earned about $200.')
+    expect(norm(details)).toContain('My audience had grown by 200%. My income had fallen by 60%.')
+    expect(norm(details)).toContain("And I wasn't the only one experiencing this.")
+  })
+  it('shows the confirmed earnings contrast', () => {
+    const c = norm(section('story').querySelector('[data-testid="earnings-contrast"]'))
+    for (const v of ['12,000', '~$500', '36,000', '(+200%)', '~$200', '(−60%)']) expect(c).toContain(v)
+  })
+  it("uses the founder's own photograph, nothing generated or stock", () => {
+    const img = section('story').querySelector('img')!
+    expect(img.getAttribute('src')).toBe('/media/landing/founder.jpg')
+    expect(img.getAttribute('alt')).toBe("Portrait of Crevant's founder")
+  })
+})
+
+describe('the Crevant difference', () => {
+  const block = (n: number) => section('difference').querySelector(`[data-block="${n}"]`)!
+  it('qualifies "the right 1,000" right under the heading', () => {
+    expect(norm(section('difference').querySelector('[data-testid="thousand-note"]'))).toContain(
+      "Every creator's right number is different, and we can't promise what any community will earn.",
+    )
+  })
+  it('tells one story: reach, then loyalty, then income opportunities', () => {
+    expect(norm(section('difference').querySelector('ol[aria-label]'))).toContain('Reach')
+    expect([1, 2, 3].map((n) => norm(block(n).querySelector('h3')))).toEqual([
+      '1. Reach the people who follow you.',
+      '2. Give your supporters a reason to keep coming back.',
+      '3. Build relationships that can support your livelihood.',
+    ])
+  })
+  it('6.1 shows the genuine feed, being built, without promising views', () => {
+    const b = block(1)
+    expect(b.querySelector('[data-status]')!.getAttribute('data-status')).toBe('building')
+    expect(b.querySelector('figure[data-screenshot="feedPosts"]')).not.toBeNull()
+    expect(norm(b.querySelector('[data-testid="feed-note"]'))).toContain("It isn't a promise that each follower will open, view or engage with every post.")
+  })
+  it('6.2 shows Connection Points and rewards with the not-money disclaimer beside them', () => {
+    const b = block(2)
+    expect(b.querySelector('[data-status]')!.getAttribute('data-status')).toBe('building')
+    expect(b.querySelector('figure[data-screenshot="creator"]')).not.toBeNull()
+    expect(b.querySelector('figure[data-screenshot="rewards"]')).not.toBeNull()
+    expect(norm(b.querySelector('[data-testid="points-note"]'))).toContain(POINTS_DISCLAIMER)
+  })
+  it('6.3 is Planned, shows no screenshot, and says income is an ambition', () => {
+    const b = block(3)
+    expect(b.querySelector('[data-status]')!.getAttribute('data-status')).toBe('planned')
+    expect(b.querySelectorAll('figure[data-screenshot], img')).toHaveLength(0)
+    expect(norm(b.querySelector('[data-testid="planned-panel"]'))).toContain('No payments are enabled')
+    expect(norm(b.querySelector('[data-testid="income-note"]'))).toContain('Sustainable income is our ambition for creators, not a promise.')
+  })
+})
+
+describe('for the fans', () => {
+  it('shows Discover and the fan journey, with the disclaimer and status beside the claim', () => {
+    const f = section('fans')
+    expect(f.querySelector('figure[data-screenshot="discover"]')).not.toBeNull()
+    expect(f.querySelector('[data-testid="fan-journey"]')).not.toBeNull()
+    expect(norm(f.querySelector('[data-testid="fans-points-note"]'))).toContain(POINTS_DISCLAIMER)
+    expect(norm(f.querySelector('[data-testid="fans-status"]'))).toContain('Not yet available to real members.')
+    expect(f.querySelector('[data-status="building"]')).not.toBeNull()
+  })
+})
+
+describe('how it works', () => {
+  it('labels each step with its real status', () => {
+    const steps = [...section('how').querySelectorAll('[data-step]')]
+    expect(steps.map((s) => s.querySelector('[data-status]')!.getAttribute('data-status'))).toEqual(['building', 'planned', 'building'])
+    expect(norm(steps[1])).toContain('Creator invite links are planned and not built yet.')
+    expect(norm(steps[1].querySelector('[data-testid="step2-concept"]'))).toContain('Concept · Planned')
+    expect(steps[1].querySelectorAll('figure[data-screenshot]')).toHaveLength(0)
+  })
+  it('ends with Join the Waitlist', () => {
+    expect([...section('how').querySelectorAll('a')].some((a) => a.getAttribute('href') === '#founding')).toBe(true)
+  })
+})
+
+describe('founding community', () => {
+  it('offers one waitlist, not applications or roles', () => {
+    const f = section('founding')
+    const links = [...f.querySelectorAll('a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
+    expect(links).toEqual([['Join the Waitlist', '/join']])
+    expect(norm(f)).toContain("Joining the waitlist doesn't secure a place in the pilot.")
+    expect(norm(f)).not.toMatch(/apply to join|join as a supporter/i)
+  })
+  it('offers the two approved opportunities, word for word', () => {
+    const tiles = [...section('founding').querySelectorAll('[data-testid="founding-opportunities"] li')].map((li) => norm(li).trim())
+    expect(tiles).toEqual([
+      "Experience Crevant early.Be among the first to use Crevant while it's being built, and see what a creator-first social network feels like.",
+      "Help shape its future.Test new ideas, tell us what works and what doesn't, and help decide what Crevant becomes.",
+    ])
+  })
+  it('is signed by the founder, with the founder photo', () => {
+    const sign = section('founding').querySelector('[data-testid="founder-signoff"]')!
+    expect(norm(sign).trim()).toBe('Muyiwa Omosa, Founder of Crevant.')
+    expect(sign.querySelector('img')!.getAttribute('src')).toBe('/media/landing/founder.jpg')
+  })
+  it('keeps the pilot details compact and complete', () => {
+    const d = section('founding').querySelector('details#pilot-details')!
+    expect(d.hasAttribute('open')).toBe(false)
+    const t = norm(d)
+    for (const s of [
+      'Invitation-only pilot for adults 18 and older.',
+      'An intended 60-day testing period.',
+      'No real payments yet.',
+      'No guaranteed income, views or engagement.',
+      'Features are still being developed and tested.',
+    ]) expect(t).toContain(s)
+  })
+})
+
+describe('waitlist calls to action', () => {
+  it('uses "Join the Waitlist" consistently and never the old labels', () => {
+    for (const path of PUBLIC_PATHS) expect(textOf(path)).not.toMatch(/Join the Founding Community|Join the Pilot|Learn About the Creator Pilot|Learn About Joining as a Supporter/)
+  })
+  it('places the one waitlist link after the Crevant difference and after For the fans, with no roles', () => {
+    for (const id of ['difference', 'fans']) {
+      const a = section(id).querySelector('[data-cta="waitlist"] a')!
+      expect(norm(a).trim()).toBe('Join the Waitlist')
+      expect(a.getAttribute('href')).toBe('/join')
+    }
+    expect(textOf('/')).not.toMatch(/as a Creator|as a Supporter/)
+    for (const id of ['difference', 'fans']) expect(norm(section(id))).toContain("Joining the waitlist doesn't secure a place in the pilot.")
+  })
+  it('has a phone-only waitlist bar that starts hidden', () => {
+    const bar = landing().querySelector('[data-testid="mobile-waitlist-bar"]')!
+    expect(bar.getAttribute('aria-hidden')).toBe('true')
+    expect(bar.className).toContain('md:hidden')
+    expect(bar.querySelector('a')!.getAttribute('href')).toBe('#founding')
+  })
+})
+
+describe('product honesty', () => {
+  it('discloses sample data and fictional people discreetly: under the hero phone and in the footer', () => {
+    const c = landing()
+    expect(norm(c.querySelector('#hero figure[data-screenshot="hero"] [data-testid="demo-note"]'))).toBe('Demo with sample data and fictional people.')
+    expect(c.querySelectorAll('[data-testid="demo-note"]')).toHaveLength(1)
+    for (const path of PUBLIC_PATHS) {
+      const { container } = renderAt(path)
+      expect(norm(container.querySelector('footer [data-testid="product-images-note"]')), path).toBe(
+        'Product images on this site show the Crevant demo, with sample data and fictional people.',
+      )
+      cleanup()
+    }
+    expect(norm(c)).not.toMatch(/\bIllustration\b|From the Crevant tour/)
+  })
+  it('uses genuine, described tour screenshots', () => {
+    const figures = [...landing().querySelectorAll('figure[data-screenshot]')]
+    expect(figures.length).toBe(8)
+    expect(new Set(figures.map((f) => f.getAttribute('data-screenshot'))).size).toBe(8)
+    for (const f of figures) {
+      expect(f.querySelector('img')!.getAttribute('src')).toMatch(/^\/media\/landing\/tour-[a-z-]+\.jpg$/)
+      expect(f.querySelector('img')!.getAttribute('alt')!.length).toBeGreaterThan(40)
     }
   })
-  it('uses the approved copy for each group', () => {
-    const [creators, fans] = groups().map((g) => [norm(g.querySelector('h3')), ...[...g.querySelectorAll('p')].map(norm)])
-    expect(creators).toEqual([
-      'For creators',
-      'You have something valuable to share.',
-      'Build relationships with people who genuinely appreciate your work, recognize loyal supporters and work toward sustainable income.',
-    ])
-    expect(fans).toEqual([
-      'For fans',
-      'You believe in creators whose work matters to you.',
-      'Discover them, support their journey, earn recognition for meaningful participation and explore rewards they choose to offer.',
-    ])
+  it('only uses the approved status labels', () => {
+    const labels = new Set([...landing().querySelectorAll('[data-status]')].map((el) => norm(el)))
+    expect([...labels].sort()).toEqual(['Being built for the pilot', 'Planned'])
   })
-  it('keeps one account for everyone, with no separate account types', () => {
-    const { container } = renderAt('/')
-    expect(norm(container.querySelector('[data-testid="one-account"]'))).toContain('One account for everyone.')
-    expect(norm(container)).not.toMatch(/fan account|creator account|switch (to|between) (fan|creator)|fan mode|creator mode/i)
+  it('never describes anything as live or available now', () => {
+    for (const path of PUBLIC_PATHS) expect(textOf(path)).not.toMatch(/\b(now live|live now|available now|is live)\b/i)
   })
-})
-
-describe('how: fans', () => {
-  const panel = () => {
-    const { container } = renderAt('/')
-    return container.querySelector('#how [data-testid="fan-panel"]')!
-  }
-  it('puts the fan message next to the rewards screenshot', () => {
-    const p = panel()
-    expect(norm(p.querySelector('h3'))).toBe('Your support should count for something.')
-    expect(norm(p)).toContain("You don't have to create content to be part of Crevant. We're testing ways to recognize meaningful participation through Connection Points.")
-    expect(norm(p)).toContain('Because creators build communities. But fans help make those communities possible.')
-    expect(p.querySelector('figure[data-screenshot="rewards"]')).not.toBeNull()
-  })
-  it('states what Connection Points and rewards are not', () => {
-    const a = norm(panel().querySelector('[data-testid="points-accuracy"]'))
-    expect(a).toContain('Connection Points are noncash participation points.')
-    expect(a).toContain("They aren't money, investments, ownership or wages, and they can't be cashed out.")
-    expect(a).toContain('Not every interaction earns points.')
-    expect(a).toContain('Rewards are chosen by each creator and subject to availability, so not every fan will receive one.')
-  })
-  it('never implies every interaction earns points or every fan gets a reward', () => {
+  it('never suggests supporters share financially, or that creators own their followers', () => {
     const t = textOf('/')
-    // Negated statements ("Not every interaction earns points") are the
-    // disclosure itself, so only un-negated claims are rejected.
-    expect(t).not.toMatch(/(?<!not )\b(every|each|any) (interaction|like|comment|share|post) (automatically )?earns|guaranteed (reward|points)|(?<!not )\bevery fan (will )?(get|receive)s?\b|earn points for everything/i)
-    expect(t).toContain('Not every interaction earns points.')
+    expect(t).not.toMatch(/participate in their success|financial returns? for (fans|supporters)/i)
+    expect(t).not.toMatch(/own (your|their) (followers|audience|fans|supporters)/i)
   })
 })
 
-describe('what: the pyramid', () => {
-  const what = () => {
-    const { container } = renderAt('/')
-    return container.querySelector('#what')!
-  }
-  it('uses the approved headline and message', () => {
-    const w = what()
-    expect(norm(w.querySelector('h2'))).toBe('The creator economy looks a lot like a pyramid scheme. We\'re building Crevant to flip it.')
-    expect(norm(w)).toContain('sustainable earning opportunities are concentrated among relatively few')
-    expect(norm(w)).toContain("Our goal isn't to create a few more millionaires at the top. It's to help more creators earn enough to keep creating.")
-  })
-  it('says the pyramid is a metaphor, not an allegation', () => {
-    expect(norm(what().querySelector('[data-testid="metaphor-note"]'))).toContain("We're not saying any company runs an illegal scheme.")
-  })
-  it('shows today upright and the vision inverted, labelled as a conceptual vision, not data or a promise', () => {
-    const fig = what().querySelector('[data-testid="pyramid-comparison"]')!
-    const today = fig.querySelector('[data-pyramid="today"] polygon')!.getAttribute('points')!
-    const vision = fig.querySelector('[data-pyramid="vision"] polygon')!.getAttribute('points')!
-    // Today: the first shape is the narrow tip at the top (apex y < base y).
-    const ys = (pts: string) => pts.split(' ').map((p) => Number(p.split(',')[1]))
-    expect(Math.min(...ys(today))).toBeLessThan(10)
-    expect(new Set(ys(today).filter((y) => y < 10)).size).toBe(1)
-    // Vision: the first shape is the wide band at the top (two corners at the top edge).
-    expect(ys(vision).filter((y) => y < 10)).toHaveLength(2)
-    expect(norm(fig)).toContain("Today's creator economy")
-    expect(norm(fig)).toContain("Crevant's vision")
-    expect(norm(fig)).toContain('Conceptual vision')
-    expect(norm(fig)).toContain('Not measured income data, and not a promise of any outcome.')
-    expect(fig.querySelectorAll('svg[role="img"] title')).toHaveLength(2)
+describe('the waitlist page', () => {
+  const INTRO = [
+    'Be among the first to experience a social network designed to help creators build meaningful relationships with their communities.',
+    "Whether you create content or support the people who do, there's a place for you on Crevant.",
+    "We're inviting people in small groups as we build and test the platform. Joining the waitlist doesn't guarantee an invitation to the pilot.",
+  ]
+  it.each(['/join', '/join/creator', '/join/supporter'])('%s shows the one waitlist, says it is not open, and links back and to the tour', (path) => {
+    const { container } = renderAt(path)
+    expect(norm(container.querySelector('h1'))).toBe('Join the Waitlist')
+    expect([...container.querySelectorAll('[data-testid="join-intro"] p')].map((p) => norm(p))).toEqual(INTRO)
+    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('The waitlist opens once our privacy notice is published.')
+    expect(norm(container)).not.toMatch(/as a creator|as a supporter/i)
+    expect(container.querySelector('form, input, textarea, select')).toBeNull()
+    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('This page collects nothing.')
+    const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+    expect(hrefs).toContain('/tour')
+    expect(hrefs).toContain('/#founding')
+    expect(norm(container)).toContain('demonstration with sample data')
   })
 })
 
-describe('how: status of every feature claim', () => {
-  const point = (title: string) => {
-    const { container } = renderAt('/')
-    const li = [...container.querySelectorAll('#how ol > li')].find((el) => (el.textContent || '').includes(title))
-    return norm(li || null)
-  }
-  it('shows the four points, each with its real status', () => {
-    const { container } = renderAt('/')
-    expect(container.querySelectorAll('#how ol > li')).toHaveLength(4)
-    expect(point('Follow means follow.')).toContain('In the pilot')
-    expect(point('Build meaningful connections.')).toContain('In the pilot')
-    expect(point('Recognize loyal supporters.')).toContain('Testing in the pilot')
-    expect(point('Build toward sustainable income.')).toContain("Where we're headed")
+describe('explanatory visuals', () => {
+  it("draws the founder's year and keeps his figures inside the founder story", () => {
+    const story = section('story')
+    expect(norm(story.querySelector('[data-testid="year-grid"]'))).toContain('One video a day for 365 days')
+    expect(story.querySelectorAll('[data-testid="year-grid"] rect')).toHaveLength(365)
+    expect(norm(story.querySelector('[data-testid="earnings-contrast"]'))).toContain('Each line uses its own scale, starting from zero.')
   })
-  it('says Connection Points are not money where they are introduced', () => {
-    expect(point('Recognize loyal supporters.')).toContain('They are not money.')
+  it('shows the ranked feed as a drawing and the Following feed as the real product', () => {
+    const c = section('problem').querySelector('[data-testid="feed-comparison"]')!
+    expect(c.querySelector('figure[data-screenshot="feed"]')).not.toBeNull()
   })
-  it('keeps earning and advertising as future plans, with advertising as a supplement', () => {
-    const p = point('Build toward sustainable income.')
-    expect(p).toContain('planned, not currently live')
-    expect(p).toContain('Advertising should supplement creator opportunities rather than dominate the model.')
-    // Advertising is only ever mentioned in that future-status point.
-    const { container } = renderAt('/')
-    const mentions = [...container.querySelectorAll('main p, main li, main h3')].filter((el) => /advertis/i.test(el.textContent || '') && !el.querySelector('p, li'))
-    for (const el of mentions) expect(norm(el.closest('li'))).toContain("Where we're headed")
+  it('keeps "the right 1,000" about relationships, never money', () => {
+    const t = norm(section('difference').querySelector('[data-testid="right-thousand"]'))
+    expect(t).toContain('The lines are relationships')
+    expect(t).not.toMatch(/earn|income|money|pay|support|[$£€]|\bCP\b/i)
+    expect(section('difference').querySelectorAll('[data-testid="right-thousand"] circle').length).toBeGreaterThan(950)
   })
-  it('gives pilot numbers as planning targets only, with the clock rule', () => {
-    const { container } = renderAt('/')
-    const targets = norm(container.querySelector('[data-testid="pilot-targets"]'))
-    expect(targets).toContain('approximately 10–20 creators and 200–300 supporters')
-    expect(targets).toContain('These are planning targets, not promises about how many people will take part.')
+  it('draws planned features only as labelled concepts', () => {
+    expect(norm(section('difference').querySelector('[data-testid="planned-panel"]'))).toContain('Concept sketch.')
+    expect(norm(section('how').querySelector('[data-testid="step2-concept"]'))).toContain('Concept · Planned')
+  })
+  it('adds no inline <style> blocks, which the Content Security Policy would block', () => {
+    for (const path of PUBLIC_PATHS) {
+      const { container } = renderAt(path)
+      expect(container.querySelectorAll('style'), path).toHaveLength(0)
+      cleanup()
+    }
+  })
+  it('only calls out words the tour itself shows', () => {
+    const callouts = [...landing().querySelectorAll('[data-callout]')].map((el) => norm(el).trim())
+    expect(callouts).toEqual(['Newest first. No ranking.', '10 CP with Amara', 'Only CP earned with Amara counts here.'])
+  })
+  it("shows a fan's journey in four real tour crops", () => {
+    const j = section('fans').querySelector('[data-testid="fan-journey"]')!
+    const imgs = [...j.querySelectorAll('img')]
+    expect(imgs.map((i) => i.getAttribute('src'))).toEqual(['follow', 'comment', 'points', 'reward'].map((n) => `/media/landing/tour-journey-${n}.jpg`))
+    for (const i of imgs) expect(i.getAttribute('alt')!.length).toBeGreaterThan(40)
   })
 })
 
-describe('layout', () => {
-  it('keeps the final call to action short and focused on exploring', () => {
+describe('header and footer', () => {
+  it('keeps Explore Crevant in the header and links Join the Waitlist to section 9', () => {
     const { container } = renderAt('/')
-    const cta = container.querySelector('#cta')!
-    expect(norm(cta.querySelector('h2'))).toBe("You have something valuable to say. We're building a better way for people to hear it.")
-    expect(norm(cta)).toContain("You shouldn't need a million followers to have a meaningful opportunity to build a career from what you create.")
-    expect(cta.querySelector('a[href="/tour"]')!.textContent).toContain('Explore Crevant')
-    expect(norm(cta).length).toBeLessThan(500)
+    const header = container.querySelector('header')!
+    expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Explore Crevant' && a.getAttribute('href') === '/tour')).toBe(true)
+    const join = [...header.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Waitlist')!
+    expect(join.getAttribute('href')).toBe('/#founding')
+    // Visible at every width: not inside a wrapper that hides it.
+    expect(join.closest('.hidden')).toBeNull()
   })
-  it('keeps the FAQ compact', () => {
+  it('uses the approved footer, with no Privacy or Terms links', () => {
     const { container } = renderAt('/')
-    expect(container.querySelectorAll('#faq details').length).toBeLessThanOrEqual(6)
+    const footer = container.querySelector('footer')!
+    expect(norm(footer)).toContain('Create value. Build connections. Grow together.')
+    expect(norm(footer)).toContain('A creator-first social network.')
+    expect(norm(footer)).toContain('© 2026 Crevant. All rights reserved.')
+    const links = [...footer.querySelectorAll('a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
+    expect(links).toEqual([
+      ['Our Story', '/#story'],
+      ['How It Works', '/#how'],
+      ['Join the Waitlist', '/#founding'],
+      ['Explore Crevant', '/tour'],
+      ['Sign in', '/sign-in'],
+    ])
+    expect(norm(footer)).not.toMatch(/privacy|terms/i)
   })
-  it('uses "Explore Crevant" for every link to the tour', () => {
+  it('uses "Explore Crevant" for every link to the tour, on every page', () => {
     for (const path of PUBLIC_PATHS) {
       const { container } = renderAt(path)
       for (const a of container.querySelectorAll('a[href="/tour"]')) expect(norm(a).trim()).toBe('Explore Crevant')
@@ -258,10 +410,10 @@ describe('required disclosures', () => {
   it('says Connection Points are not money and cannot be traded', () => {
     expect(text()).toMatch(/They're not money\. They can't be bought, sold, cashed out or moved to another creator/)
   })
-  it('says earning is not live and earnings are not promised', () => {
+  it('says no money changes hands and earnings are not promised', () => {
     const t = text()
     expect(t).toContain('No money changes hands on Crevant')
-    expect(t).toMatch(/can't promise anyone earnings/)
+    expect(t).toContain("we can't promise what any community will earn")
   })
   it('describes the feed by its order only, and does not promise reach', () => {
     const t = text()
@@ -269,12 +421,9 @@ describe('required disclosures', () => {
     expect(t).toMatch(/isn't ranked by likes, comments or any engagement score/)
     expect(t).toContain("we don't promise any particular reach")
   })
-  it('keeps follower counts and says so', () => {
-    expect(text()).toContain("Follower counts aren't going away.")
-  })
   it('states the age limit, the invitation, and when the pilot clock starts', () => {
     const t = text()
-    expect(t).toContain('18+')
+    expect(t).toContain('adults 18 and older')
     expect(t).toContain('Invitation-only pilot')
     expect(t).toContain('The 60 days begin when invited participants can actually use Crevant')
   })
@@ -302,31 +451,58 @@ describe('copy rules', () => {
     /reach all (of )?your/i,
     /every(one|body) (will )?sees?/i,
     /all your followers (will )?see/i,
+    /(every|all) (of your |your )?followers? (will )?(see|sees)/i,
     /organic reach/i,
     /go viral/i,
     // A money figure anywhere near an audience number, in either order.
-    /[$£€]\s?\d[\d,.]*\s?k?[^.]{0,60}\b\d[\d,.]*\s?k?\s*(fans|supporters|followers|people)\b/i,
-    /\b\d[\d,.]*\s?k?\s*(fans|supporters|followers|people)\b[^.]{0,60}[$£€]\s?\d/i,
+    /[$£€]\s?\d[\d,.]*\s?k?[^.]{0,60}\b\d[\d,.]*\s?k?\s*(fans|supporters|followers|people|subscribers)\b/i,
+    /\b\d[\d,.]*\s?k?\s*(fans|supporters|followers|people|subscribers)\b[^.]{0,60}[$£€]\s?\d/i,
     /\b\d[\d,.]*\s*(dollars|usd|cad)\b/i,
     /\b\d[\d,.]*\s*(k\+?|\+)?\s*(creators|users|members|fans) (already|have joined|trust)/i,
     /join (thousands|millions)/i,
     /#1|number one|best platform/i,
   ]
-  it.each(PUBLIC_PATHS)('%s contains no banned phrases', (path) => {
-    const t = textOf(path)
+  // Narrow exceptions approved by the founder: the exact disclaimers above
+  // (the only allowed "guarantee"), and the founder's confirmed earnings figures,
+  // which may appear in the founder story section only.
+  const checkedText = (path: string) => {
+    const { container } = renderAt(path)
+    container.querySelector('#story')?.remove()
+    let text = norm(container)
+    for (const s of APPROVED_GUARANTEE_SENTENCES) text = text.split(s).join(' ')
+    cleanup()
+    return text
+  }
+  it.each(PUBLIC_PATHS)('%s contains no banned phrases (outside the approved exceptions)', (path) => {
+    const t = checkedText(path)
     for (const re of BANNED) expect(t, `matched ${re}`).not.toMatch(re)
   })
-
-
-  it('every mention of "1,000" sits on the landing page next to its hypothesis label or in the FAQ that explains it', () => {
-    const { container } = renderAt('/')
-    const hits = [...container.querySelectorAll('h1, h2, h3, p, li, summary, span')].filter(
-      (el) => /1,000/.test(el.textContent || '') && ![...el.children].some((c) => /1,000/.test(c.textContent || '')),
+  it('money figures appear only in the founder story', () => {
+    const c = landing()
+    const hits = [...c.querySelectorAll('p, li, span, h2, h3')].filter((el) => /[$£€]\s?\d/.test(el.textContent || '') && ![...el.children].some((ch) => /[$£€]\s?\d/.test(ch.textContent || '')))
+    expect(hits.length).toBeGreaterThan(0)
+    for (const el of hits) expect(el.closest('#story'), `"${el.textContent}" is outside the founder story`).not.toBeNull()
+    for (const path of PUBLIC_PATHS.filter((p) => p !== '/')) expect(textOf(path)).not.toMatch(/[$£€]\s?\d/)
+  })
+  it('the founder story itself still avoids every other banned phrase', () => {
+    let t = norm(section('story'))
+    for (const s of APPROVED_GUARANTEE_SENTENCES) t = t.split(s).join(' ')
+    for (const re of BANNED.filter((r) => !String(r).includes('[$£€]'))) expect(t, `matched ${re}`).not.toMatch(re)
+  })
+  it('"guarantee" appears only in the approved disclaimers', () => {
+    const t = norm(landing())
+    const count = (t.match(/guarantee/gi) || []).length
+    const approved = APPROVED_GUARANTEE_SENTENCES.reduce((n, s) => n + t.split(s).length - 1, 0)
+    expect(count).toBe(approved)
+  })
+  it('every mention of "1,000" sits in the Crevant difference section, next to its qualification', () => {
+    const c = landing()
+    const hits = [...c.querySelectorAll('h1, h2, h3, p, li, summary, span')].filter(
+      (el) => /1,000/.test(el.textContent || '') && ![...el.children].some((ch) => /1,000/.test(ch.textContent || '')),
     )
     expect(hits.length).toBeGreaterThan(0)
     for (const el of hits) {
-      const ok = el.closest('#hero')?.querySelector('[data-testid="hypothesis-note"]') || el.closest('#faq')
-      expect(ok, `"${el.textContent}" appears without its hypothesis label`).toBeTruthy()
+      expect(el.closest('#difference')?.querySelector('[data-testid="thousand-note"]'), `"${el.textContent}" appears without its qualification`).toBeTruthy()
     }
   })
 })
@@ -351,9 +527,9 @@ describe('no personal data collection', () => {
     vi.unstubAllGlobals()
   })
 
-  it('the request page says requests are closed until the privacy notice is ready', () => {
+  it('the request page says the waitlist opens once the privacy notice is ready', () => {
     const t = textOf('/request-invite')
-    expect(t).toContain('Invitation requests open soon.')
+    expect(t).toContain('The waitlist opens soon.')
     expect(t).toContain('this page collects nothing')
   })
 

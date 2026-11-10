@@ -147,7 +147,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.getByLabel('Display name').fill('Robin Park')
   await page.getByLabel('Bio').fill('Painter and slow traveller.')
   await page.getByRole('button', { name: 'Save' }).click()
-  await page.getByRole('button', { name: 'Add photo' }).click()
+  await page.getByRole('button', { name: 'Change photo' }).click()
   const input = page.locator('[role=dialog] input[type=file]')
   await input.setInputFiles({ name: 'x.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF') })
   check('invalid picture type shows an error', /not supported/.test(await page.getByRole('alert').innerText()))
@@ -339,7 +339,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.getByRole('button', { name: 'Reset demo' }).click()
   await page.waitForURL(/\/welcome/)
   const r = await stored(page)
-  check('reset clears data and returns to the welcome', r.ledger.length === 0 && r.myPosts.length === 0 && !r.profile.avatar && r.following.length === 0 && r.onboarding.status === 'pending')
+  check('reset clears data, restores the sample portrait and returns to the welcome', r.ledger.length === 0 && r.myPosts.length === 0 && r.profile.avatar === '/media/tour/people/jamie.jpg' && r.following.length === 0 && r.onboarding.status === 'pending')
 
   // ---- 10. Narrow mobile viewport ------------------------------------------
   const narrow = await browser.newPage({ viewport: { width: 320, height: 640 } })

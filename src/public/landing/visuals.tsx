@@ -1,54 +1,8 @@
 import clsx from 'clsx'
-import { ArrowRight, Clock3, Shuffle } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 // Illustrations drawn in code. They explain ideas; none of them shows real
 // data, and none of them promises reach or income.
-
-function FeedRow({ title, meta, muted }: { title: string; meta: string; muted?: boolean }) {
-  return (
-    <li className={clsx('flex items-center gap-3 rounded-2xl px-3 py-2.5', muted ? 'bg-ink-50 text-ink-500' : 'bg-white text-ink-800 ring-1 ring-ink-100')}>
-      <span aria-hidden="true" className={clsx('h-8 w-8 shrink-0 rounded-full', muted ? 'bg-ink-200' : 'bg-gradient-to-br from-brand-400 to-brand-700')} />
-      <span className="min-w-0">
-        <span className="block truncate text-[14px] font-semibold">{title}</span>
-        <span className="block truncate text-[12px] text-ink-500">{meta}</span>
-      </span>
-    </li>
-  )
-}
-
-/** Why: a feed ranked by predicted engagement next to a newest-first Following feed. */
-export function FeedComparison() {
-  return (
-    <figure data-testid="feed-comparison" className="overflow-hidden rounded-[28px] bg-paper ring-1 ring-ink-100">
-      <div className="grid sm:grid-cols-2">
-        <div className="p-5 sm:border-r sm:border-ink-100">
-          <p className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-ink-500">
-            <Shuffle className="h-4 w-4" aria-hidden="true" /> A ranked feed
-          </p>
-          <ul aria-label="Example of a ranked feed" className="mt-3 space-y-2">
-            <FeedRow title="Suggested for you" meta="Picked for predicted engagement" muted />
-            <FeedRow title="Trending now" meta="From someone you don't follow" muted />
-            <FeedRow title="A creator you chose to follow" meta="Further down, if it appears" />
-          </ul>
-        </div>
-        <div className="border-t border-ink-100 bg-brand-50/60 p-5 sm:border-t-0">
-          <p className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-brand-700">
-            <Clock3 className="h-4 w-4" aria-hidden="true" /> Crevant's Following feed
-          </p>
-          <ul aria-label="Example of the Crevant Following feed" className="mt-3 space-y-2">
-            <FeedRow title="A creator you follow" meta="2 minutes ago" />
-            <FeedRow title="Another creator you follow" meta="1 hour ago" />
-            <FeedRow title="A creator you follow" meta="3 hours ago" />
-          </ul>
-        </div>
-      </div>
-      <figcaption className="border-t border-ink-100 px-5 py-3.5 text-[13px] leading-relaxed text-ink-500">
-        <span className="mr-2 rounded-full border border-dashed border-ink-300 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Illustration</span>
-        Ranked feeds differ from platform to platform. Crevant's Following feed is newest first. It isn't a promise that each post reaches each follower.
-      </figcaption>
-    </figure>
-  )
-}
 
 function Legend({ swatch, children }: { swatch: string; children: string }) {
   return (
@@ -106,5 +60,23 @@ export function PyramidComparison() {
         Not measured income data, and not a promise of any outcome.
       </figcaption>
     </figure>
+  )
+}
+
+/** Section 6: the one connected story the three demonstrations tell. */
+export function DifferenceRail() {
+  const steps = ['Reach', 'Loyalty', 'Income opportunities']
+  return (
+    <ol aria-label="Reach, then loyalty, then income opportunities" className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+      {steps.map((s, i) => (
+        <li key={s} className="flex items-center gap-2">
+          <a href={`#difference-${i + 1}`} className="rounded-full bg-white px-3.5 py-1.5 text-ink-800 ring-1 ring-ink-100 hover:ring-brand-300">
+            <span className="mr-1.5 text-brand-600">{i + 1}</span>
+            {s}
+          </a>
+          {i < steps.length - 1 && <ArrowRight aria-hidden="true" className="h-4 w-4 text-ink-400" />}
+        </li>
+      ))}
+    </ol>
   )
 }
