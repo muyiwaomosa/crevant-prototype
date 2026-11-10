@@ -1,0 +1,76 @@
+# Staging test accounts: creates, lists or removes the four approved test
+# accounts on the Crevant STAGING Supabase project. Never Production.
+#
+# Run it by hand from the Actions tab, on the main branch:
+#   plan    (default) Read-only. Checks every guard and reports which test
+#           accounts exist. Changes nothing.
+#   create  Creates any missing test accounts (email confirmed, tagged as test
+#           accounts). Never touches an existing real account.
+#   delete  Removes accounts that carry the test tag AND exactly match one of
+#           the four approved addresses, with their profiles. Never touches an
+#           untagged account or a tagged account with any other address.
+#
+# Safeguards:
+#   - Runs only from main, in the "staging" GitHub environment, which waits for
+#     the founder's approval before it can read any secret.
+#   - The one project it may touch is hard-coded below; the staging variable
+#     and the typed confirmation must both match it.
+#   - Addresses, the password and the key come from staging secrets and are
+#     masked; the log only ever says "test account 1" to "test account 4".
+#   - Refuses to run if public sign-up is enabled, and checks again afterwards.
+#     It never changes Auth settings: the invitation-only model stays as is.
+# Setup and use: docs/STAGING-TEST-ACCOUNTS.md
+
+name: Staging test accounts
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan = read-only check. create = create missing test accounts. delete = remove tagged test accounts."
+        type: choice
+        options:
+          - plan
+          - create
+          - delete
+        default: plan
+        required: true
+      confirm_project_ref:
+        description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-test-accounts
+  cancel-in-progress: false
+
+env:
+  # The one project this workflow may ever touch. Changing it requires a reviewed PR.
+  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
+
+jobs:
+  test-accounts:
+    name: ${{ inputs.mode == 'create' && 'Create staging test accounts' || inputs.mode == 'delete' && 'Delete staging test accounts' || 'Plan staging test accounts (no changes)' }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Guard self tests
+        run: node --test scripts/staging-test-accounts.test.mjs
+      - name: Run (${{ inputs.mode }})
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          STAGING_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SERVICE_ROLE_KEY }}
+          STAGING_TEST_ACCOUNT_EMAILS: ${{ secrets.STAGING_TEST_ACCOUNT_EMAILS }}
+          STAGING_TEST_ACCOUNT_PASSWORD: ${{ secrets.STAGING_TEST_ACCOUNT_PASSWORD }}
+        run: node scripts/staging-test-accounts.mjs

@@ -111,6 +111,8 @@ jobs:
           fi
       - name: Start local Supabase (ports reserved, one start-up retry; tests are never retried)
         run: scripts/ci/start-local-supabase.sh
+      - name: Staging test-account script against the local stack (create, refuse, clean up)
+        run: node scripts/db/test-accounts-local.mjs
       - name: Run the integration test
         run: scripts/db/integration.sh
       - run: npm ci
