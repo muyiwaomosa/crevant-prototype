@@ -1,0 +1,47 @@
+name: A3 proxy diagnostic (temporary branch only)
+
+# Tests for the temporary A3 proxy diagnostic (diagnostics/proxy-diagnostic).
+# This file exists only on the branch claude/a3-proxy-diagnostic, which is
+# never merged into main. It deploys nothing, needs no secrets and contacts
+# no hosted service: the Edge runtime test runs the diagnostic on the runner.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    name: A3 diagnostic (scope, unit, isolation and Edge runtime checks)
+    if: github.head_ref == 'claude/a3-proxy-diagnostic'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The branch may touch nothing but the diagnostic and this workflow:
+      # no waitlist code, no guard, no migration, no other workflow.
+      - name: This branch changes nothing outside diagnostics/ and this workflow
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          changed="$(git diff --name-only origin/main...HEAD)"
+          echo "$changed"
+          outside="$(grep -vE '^(diagnostics/|\.github/workflows/a3-proxy-diagnostic\.yml$)' <<<"$changed" || true)"
+          if [ -n "$outside" ]; then
+            echo "::error::This branch changes files outside diagnostics/: $outside"
+            exit 1
+          fi
+      - name: Unit tests
+        run: npx vitest run --config diagnostics/vitest.config.ts
+      - name: Isolation guards
+        run: node --test diagnostics/proxy-diagnostic/guard.test.mjs
+      - name: The diagnostic in Supabase's Edge runtime (local, throwaway settings)
+        run: diagnostics/proxy-diagnostic/e2e.sh
