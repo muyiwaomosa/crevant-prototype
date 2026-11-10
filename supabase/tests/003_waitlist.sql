@@ -229,8 +229,11 @@ begin
   if exists (select 1 from pg_attribute where attrelid = 'ops.waitlist_selections'::regclass and attname = 'note' and not attisdropped) then
     raise exception 'FAIL: selections have a free text note';
   end if;
-  if not exists (select 1 from pg_constraint where conrelid = 'ops.waitlist_selections'::regclass and conname = 'waitlist_selections_label_allowed') then
-    raise exception 'FAIL: selection labels are not a fixed list';
+  if not exists (select 1 from pg_constraint where conrelid = 'ops.waitlist_selections'::regclass and conname = 'waitlist_selections_reasons_allowed') then
+    raise exception 'FAIL: selection reasons are not a fixed list';
+  end if;
+  if not exists (select 1 from pg_attribute where attrelid = 'ops.waitlist'::regclass and attname = 'participant_groups' and attgenerated = 's') then
+    raise exception 'FAIL: participant groups are not worked out from the person''s own answers';
   end if;
   if not (select attnotnull from pg_attribute where attrelid = 'ops.waitlist_consents'::regclass and attname = 'notice_version') then
     raise exception 'FAIL: consent records may lack a notice version';

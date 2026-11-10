@@ -27,7 +27,8 @@ One unified waitlist, no roles. People give an email, confirm they are 18 or old
 | Platform, audience band (only after "yes") | Optional research, rough bands |
 | Source label from `?src=` | Which channel worked. First party, never shared |
 | Joined at, verified at, last verified confirmation | Retention and verification |
-| Status, invitation link, selection label per wave (fixed list) | Internal, for invitations later |
+| Participant groups (worked out from the answers above, not asked) | Analysis: who joined |
+| Status, invitation link, selection reasons per wave (fixed list) | Internal, for invitations later |
 
 **Not stored:**
 * public links
@@ -40,7 +41,28 @@ One unified waitlist, no roles. People give an email, confirm they are 18 or old
 
 Rate limit counters hold only salted HMAC keys and are kept for two days.
 
-The selection labels are a draft for approval: `active_creator`, `new_creator`, `supporter`, `platform_balance`, `feedback_focus`.
+## Participant groups and selection reasons
+
+Two different things, kept apart:
+
+**Who someone is: participant groups.** These are worked out by the database from the person's own optional answers. Nobody is asked anything extra, and staff never type labels about a person. A person can be in more than one group, or in none.
+
+| Group | When |
+|---|---|
+| `active_creator` | They share content today ("Yes") |
+| `aspiring_creator` | "Not yet", but they chose a creator goal: reaching followers, a closer community, or earning sustainably |
+| `supporter` | They chose supporting or discovering creators |
+
+The groups are a generated column (`participant_groups`), so they can't be edited by hand. They're for analysis only: never a role, never copied to an account, and they never decide what anyone can do. The admin summary counts each group (overlapping) and those who answered none.
+
+**Why someone was picked: selection reasons.** These are recorded per invitation wave, with one or both reasons from a fixed list and never free text:
+
+| Reason | Meaning |
+|---|---|
+| `group_balance` | To balance the pilot's participant groups |
+| `targeted_feedback` | To get feedback on something specific |
+
+The group definitions and the reasons need approval (see the checklist).
 
 ## Duplicates, verification and invitations
 
@@ -70,7 +92,7 @@ alter role waitlist_admin password '<random 32+ characters>';
 
 **Function connection.** `WAITLIST_DB_URL` goes through the Supabase pooler, with the user `waitlist_writer.kpudeppgokpjhvaqrprn` in transaction mode (port 6543). It uses TLS with full certificate verification. If the pooler's certificate isn't publicly trusted, add Supabase's CA certificate (public, not a secret) as `WAITLIST_DB_CA_CERT`. Prepared statements are off, as the transaction pooler needs.
 
-**Verified locally:** the real function code was run in Supabase's Edge runtime (`supabase/edge-runtime:v1.78.1`) against Supabase's own Postgres 17 image, logged in as `waitlist_writer` (`scripts/e2e/waitlist-edge.sh`, also in CI). Three things still have to be confirmed on staging (Phase E):
+**Verified locally:** the real function code was run in Supabase's Edge runtime (`supabase/edge-runtime:v1.78.1`) against Supabase's own Postgres 17 image, logged in as `waitlist_writer` (`scripts/e2e/waitlist-edge.sh`, also in CI). Three things still have to be confirmed on staging (Phase E). They are hosted staging checks 1 to 3 in the activation checklist:
 * that the hosted pooler accepts the custom login
 * which certificate it presents
 * the proxy hop count
@@ -117,7 +139,7 @@ The database holds the one notice version people must have been shown. It's set 
 
 Both run through the **Waitlist admin (staging)** workflow, using only the admin entry points. It keeps the staging deploy safety: `main` only, the `staging` environment approval, and `scripts/db/verify-staging-target.sh`. It prints counts only. In B3 it moves to the restricted `waitlist_admin` login.
 
-* **Delete on request:** find the person's waitlist ID in the Supabase dashboard, then run the workflow with `delete` and that ID. Never type an email address into GitHub. This removes the entry, its consent record, its selection labels and any unaccepted invitation. Rate limit counters are salted and can't be linked to the address. They expire within two days.
+* **Delete on request:** find the person's waitlist ID in the Supabase dashboard, then run the workflow with `delete` and that ID. Never type an email address into GitHub. This removes the entry, its consent record, its selection reasons and any unaccepted invitation. Rate limit counters are salted and can't be linked to the address. They expire within two days.
 * **Retention purge:** run with `purge`. It removes entries whose last verified confirmation, or failing that their signup, is older than the given number of months. Their pending invitations go too. **Proposed period: 12 months, subject to legal review.** An unverified repeat submission never extends it.
 * **Summary:** counts by source and answers, verified and unverified apart, plus the switch and notice version. The summary view reads with the caller's rights (`security_invoker`).
 
@@ -129,11 +151,14 @@ Decisions:
 - [ ] Legal operator confirmed (intended: 1000859123 Ontario Inc., subject to legal confirmation)
 - [ ] Contact address for privacy requests
 - [ ] Retention period approved (proposed 12 months)
-- [ ] Selection labels approved (draft above)
+- [ ] Participant group definitions and selection reasons approved (see "Participant groups and selection reasons")
 - [ ] Email verification designed and approved before any waitlist invitation (see above)
 - [x] Supabase project region confirmed: **us-west-2 (West US, Oregon)**, staging project `kpudeppgokpjhvaqrprn` (confirmed 2026-11-10). The privacy notice should say where data is stored.
 - [x] GitHub `staging` environment limited to `main` with a required reviewer, and the Supabase GitHub integration disconnected (confirmed 2026-11-10)
 - [ ] **Branch protection on `main`** requiring pull requests and these CI checks: App, Database, Integration, Browser, and **Public site**. The Public site job must be a required check before Production moves to the public site build.
+- [ ] **Hosted staging check 1: pooler login.** The Supabase pooler accepts the custom `waitlist_writer.kpudeppgokpjhvaqrprn` login. If it doesn't, stop and decide; never fall back to a broader credential.
+- [ ] **Hosted staging check 2: TLS certificate.** The function connects with full certificate verification, adding Supabase's public CA as `WAITLIST_DB_CA_CERT` if needed. Never turn verification off.
+- [ ] **Hosted staging check 3: proxy hop count.** `WAITLIST_TRUSTED_PROXY_HOPS` is confirmed, so a made up `X-Forwarded-For` value can't change the client bucket.
 - [ ] Activation itself approved
 
 Setup, once approved (each step needs approval):
@@ -150,7 +175,10 @@ Setup, once approved (each step needs approval):
    * `WAITLIST_ALLOWED_HOSTNAMES`
    * optionally `WAITLIST_DB_CA_CERT`
    * `WAITLIST_TRUSTED_PROXY_HOPS`, once confirmed
-6. **Smoke test on staging:** confirm the pooler accepts `waitlist_writer.<ref>` with a verified certificate. Confirm the hop count by sending test requests with a made up `X-Forwarded-For` value and checking, by rate limit behaviour and without logging addresses, that the made up value doesn't change the client bucket.
+6. **Smoke test on staging,** covering hosted staging checks 1 to 3 in the checklist above. All three must pass before activation:
+   * The pooler accepts `waitlist_writer.<ref>`.
+   * The certificate verifies.
+   * The hop count is confirmed: send test requests with a made up `X-Forwarded-For` value and check, by rate limit behaviour and without logging addresses, that the made up value doesn't change the client bucket.
 7. **Security policy:** the Content Security Policy in `vercel.json` already allows `https://challenges.cloudflare.com` in `script-src` and `frame-src` (added with the public site build). The function address is covered by `connect-src`.
 8. **Vercel env:** `VITE_WAITLIST_ENDPOINT` (`https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist`), `VITE_TURNSTILE_SITE_KEY`, `VITE_PRIVACY_NOTICE_URL` and `VITE_PRIVACY_NOTICE_VERSION`, then `VITE_WAITLIST_FORM_ENABLED=true`.
 9. **Notice version:** record the approved version with `waitlist_api.admin_set_notice_version('<version>')`.
@@ -175,7 +203,7 @@ To close fast, run `waitlist_api.admin_close()`, or in an emergency set `ops.set
 * **`npm run test:db`:** applies the migrations to an empty Postgres, then:
   * runs the staging-safe checks in `supabase/tests/003_waitlist.sql`: locked tables, both roles' exact privileges, the entry points, minimal fields, verification rules
   * runs the behaviour tests in `supabase/tests-local/040_waitlist.sql`, as the real login roles
-  * replays 37 deliberate violations, all of which must be caught
+  * replays 39 deliberate violations, all of which must be caught
 * **`scripts/e2e/waitlist-edge.sh`** (in the CI Integration job): the function in Supabase's Edge runtime against a local Supabase, as `waitlist_writer`. It checks:
   * the switches
   * the origin and preflight

@@ -11,7 +11,7 @@
 --   ops.waitlist               one row per email address
 --   ops.waitlist_consents      the waitlist consent, with the privacy notice
 --                              version shown at the time
---   ops.waitlist_selections    fixed selection labels per invitation wave
+--   ops.waitlist_selections    internal selection reasons per invitation wave
 --   ops.waitlist_rate_limits   rate limit counters (salted hashes only)
 --   waitlist_api.*             the only entry points, each callable by one
 --                              dedicated login role (see the end of this file)
@@ -77,6 +77,21 @@ create table ops.waitlist (
   -- from here once it exists, otherwise from joined_at.
   interest_confirmed_at     timestamptz,
   verified                  boolean generated always as (email_verified_at is not null) stored,
+  -- Who someone is, worked out from their OWN optional answers (never a
+  -- staff judgement, never an extra question). Not mutually exclusive:
+  --   active_creator    shares content today
+  --   aspiring_creator  not yet, but chose a creator goal (reaching
+  --                     followers, a closer community, earning sustainably)
+  --   supporter         chose supporting or discovering creators
+  -- Empty when they answered none of these. Analysis only: never a role,
+  -- never copied to an account, never decides what anyone can do.
+  participant_groups        text[] generated always as (array_remove(array[
+                              case when shares_content = 'yes' then 'active_creator' end,
+                              case when shares_content = 'not_yet'
+                                    and interests && array['reach_followers', 'closer_community', 'sustainable_income']::text[]
+                                   then 'aspiring_creator' end,
+                              case when interests && array['support_creators', 'discover_creators']::text[] then 'supporter' end
+                            ]::text[], null)) stored,
   status                    text not null default 'new',
   invitation_id             uuid references ops.invitations (id) on delete set null,
   constraint waitlist_email_normalized check (email = lower(btrim(email)) and email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' and length(email) <= 254),
@@ -120,19 +135,25 @@ comment on table ops.waitlist_consents is 'Consent records: what was agreed, und
 
 create index waitlist_consents_person_idx on ops.waitlist_consents (waitlist_id);
 
--- Selection per invitation wave, with a fixed label instead of free text, so
--- no opinion about a person is ever written down. Never shown to the person
--- or copied to an account.
+-- Why someone was picked for an invitation wave: one or both internal pilot
+-- reasons from a fixed list, never free text, so no opinion about a person is
+-- ever written down. (Who they are comes from their own answers, in
+-- ops.waitlist.participant_groups.) Never shown to the person or copied to
+-- an account.
+--   group_balance      to balance the pilot's participant groups
+--   targeted_feedback  to get feedback on something specific
 create table ops.waitlist_selections (
   waitlist_id uuid not null references ops.waitlist (id) on delete cascade,
   wave        text not null,
-  label       text not null,
+  reasons     text[] not null,
   created_at  timestamptz not null default now(),
   primary key (waitlist_id, wave),
   constraint waitlist_selections_wave_format check (wave ~ '^[a-z0-9_-]{1,40}$'),
-  constraint waitlist_selections_label_allowed check (label in ('active_creator', 'new_creator', 'supporter', 'platform_balance', 'feedback_focus'))
+  constraint waitlist_selections_reasons_allowed check (
+    cardinality(reasons) between 1 and 2 and reasons <@ array['group_balance', 'targeted_feedback']::text[]
+  )
 );
-comment on table ops.waitlist_selections is 'Fixed selection labels per invitation wave. Not a role; never shown to the person or copied to an account.';
+comment on table ops.waitlist_selections is 'Internal selection reasons per invitation wave, from a fixed list. Not a role; never shown to the person or copied to an account.';
 
 -- Rate limit counters. Keys are salted hashes made by the server function
 -- (an HMAC of the email or client address with a secret salt), never the raw
@@ -487,6 +508,13 @@ as $$
                      select source, sum(people) as people from ops.waitlist_summary group by source) s), '{}'::jsonb),
     'shares_content', coalesce((select jsonb_object_agg(shares_content, people) from (
                      select shares_content, sum(people) as people from ops.waitlist_summary group by shares_content) s), '{}'::jsonb),
+    -- Overlapping groups, so these can add up to more than the total.
+    'participant_groups', jsonb_build_object(
+      'active_creator',   (select count(*) from ops.waitlist where 'active_creator' = any (participant_groups)),
+      'aspiring_creator', (select count(*) from ops.waitlist where 'aspiring_creator' = any (participant_groups)),
+      'supporter',        (select count(*) from ops.waitlist where 'supporter' = any (participant_groups)),
+      'none_answered',    (select count(*) from ops.waitlist where cardinality(participant_groups) = 0)
+    ),
     'submissions', case when (select enabled from ops.settings where key = 'waitlist_submissions') then 'ON' else 'OFF' end,
     'notice_version', (select value from ops.settings where key = 'waitlist_notice_version')
   );

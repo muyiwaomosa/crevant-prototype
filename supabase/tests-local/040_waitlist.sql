@@ -205,6 +205,37 @@ begin
   raise notice 'PASS: a valid submission is stored once, unverified, with its consent record';
 end $$;
 
+-- 5b. Participant groups come from the person's own answers and can overlap.
+do $$
+declare
+  g text[];
+begin
+  if (select participant_groups from ops.waitlist where email = 'maya@example.com') <> array['active_creator'] then
+    raise exception 'FAIL: a person who shares content is not an active creator';
+  end if;
+  perform pg_temp.submit('both@example.com', p_shares => 'yes', p_interests => array['support_creators'], p_client => 'client-g');
+  perform pg_temp.submit('aspiring@example.com', p_shares => 'not_yet', p_interests => array['sustainable_income', 'discover_creators'], p_client => 'client-g');
+  perform pg_temp.submit('fan@example.com', p_interests => array['discover_creators'], p_client => 'client-g');
+  perform pg_temp.submit('notyet@example.com', p_shares => 'not_yet', p_interests => array['shape_platform'], p_client => 'client-g');
+  perform pg_temp.submit('quiet@example.com', p_client => 'client-g');
+  for g in select participant_groups from ops.waitlist where email = 'both@example.com' loop
+    if g <> array['active_creator', 'supporter'] then raise exception 'FAIL: groups did not overlap: %', g; end if;
+  end loop;
+  if (select participant_groups from ops.waitlist where email = 'aspiring@example.com') <> array['aspiring_creator', 'supporter']
+     or (select participant_groups from ops.waitlist where email = 'fan@example.com') <> array['supporter']
+     or (select participant_groups from ops.waitlist where email = 'notyet@example.com') <> '{}'::text[]
+     or (select participant_groups from ops.waitlist where email = 'quiet@example.com') <> '{}'::text[] then
+    raise exception 'FAIL: participant groups were not worked out as expected';
+  end if;
+  begin
+    update ops.waitlist set participant_groups = array['supporter'] where email = 'quiet@example.com';
+    raise exception 'FAIL: participant groups could be set by hand';
+  exception when generated_always then null;
+  end;
+  delete from ops.waitlist where email in ('both@example.com', 'aspiring@example.com', 'fan@example.com', 'notyet@example.com', 'quiet@example.com');
+  raise notice 'PASS: participant groups come from the person''s own answers and can overlap';
+end $$;
+
 -- 6. A repeat submission for the same address changes NOTHING, and still
 --    just says 'ok' so nobody learns the address is on the list.
 do $$
@@ -294,6 +325,9 @@ begin
   if (s->>'total')::int <> 11 or (s->>'verified')::int <> 1 or (s->>'unverified')::int <> 10 or s->>'submissions' <> 'ON' then
     raise exception 'FAIL: the admin summary counts are wrong: %', s;
   end if;
+  if s->'participant_groups' <> '{"active_creator": 1, "aspiring_creator": 0, "supporter": 0, "none_answered": 10}'::jsonb then
+    raise exception 'FAIL: the admin summary participant group counts are wrong: %', s->'participant_groups';
+  end if;
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'ops' and table_name = 'waitlist_summary' and column_name ~* 'email|link'
@@ -304,19 +338,23 @@ begin
 end $$;
 
 -- 10. Deletion on request (admin role, by id) removes the person, their
---     consent record, selection labels and unaccepted invitation, and nothing else.
+--     consent record, selection reasons and unaccepted invitation, and nothing else.
 do $$
 declare
   v_id uuid;
   res jsonb;
+  r text;
 begin
   select id into v_id from ops.waitlist where email = 'maya@example.com';
-  insert into ops.waitlist_selections (waitlist_id, wave, label) values (v_id, 'wave_1', 'active_creator');
-  begin
-    insert into ops.waitlist_selections (waitlist_id, wave, label) values (v_id, 'wave_2', 'great vibes');
-    raise exception 'FAIL: a free text selection label was accepted';
-  exception when check_violation then null;
-  end;
+  insert into ops.waitlist_selections (waitlist_id, wave, reasons) values (v_id, 'wave_1', array['group_balance', 'targeted_feedback']);
+  insert into ops.waitlist_selections (waitlist_id, wave, reasons) values (v_id, 'wave_2', array['targeted_feedback']);
+  foreach r in array array['{"great vibes"}', '{active_creator}', '{}', '{group_balance,group_balance,targeted_feedback}'] loop
+    begin
+      insert into ops.waitlist_selections (waitlist_id, wave, reasons) values (v_id, 'wave_3', r::text[]);
+      raise exception 'FAIL: selection reasons % were accepted', r;
+    exception when check_violation then null;
+    end;
+  end loop;
   res := pg_temp.admin(format('waitlist_api.admin_delete(%L)', v_id));
   if res <> '{"waitlist": 1, "open_invitations": 1}'::jsonb then
     raise exception 'FAIL: deletion reported %', res;
