@@ -129,12 +129,14 @@ guard() { # guard <description> <test command>
 }
 guard "rollback workflow: started by hand only (workflow_dispatch, no other trigger)" \
   "grep -A1 '^on:' $rb | grep -q '^  workflow_dispatch:' && ! grep -qE '^  (push|pull_request|pull_request_target|schedule|workflow_run|repository_dispatch|workflow_call):' $rb"
-guard "rollback workflow: main only, repository owner only, staging environment" \
-  "grep -q \"if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner\" $rb && grep -q '^    environment: staging$' $rb"
+guard "rollback workflow: main only, started and re-run by the repository owner only (both jobs), staging environment" \
+  "[ \"\$(grep -c \"^    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner\$\" $rb)\" = 2 ] && [ \"\$(grep -c '^    if:' $rb)\" = 2 ] && grep -q '^    environment: staging$' $rb"
+guard "rollback workflow: the switch is refused at repository level by a job with no environment, before the rollback job" \
+  "[ \"\$(grep -c '^    environment:' $rb)\" = 1 ] && grep -q '^    needs: switch-scope$' $rb && grep -q 'OUTSIDE_ENVIRONMENT: \${{ vars.WAITLIST_ROLLBACK_ENABLED }}' $rb && grep -q '\[ -n \"\$OUTSIDE_ENVIRONMENT\" \]' $rb"
 guard "rollback workflow: defaults to the dry run" \
   "grep -A6 '      mode:' $rb | grep -q 'default: check'"
-guard "rollback workflow: off unless WAITLIST_ROLLBACK_ENABLED is exactly true, checked first" \
-  "awk '/- name:/{n++} /WAITLIST_ROLLBACK_ENABLED/ && !f{f=n} END{exit !(f==1)}' $rb && grep -q '\"\$ENABLED\" != \"true\"' $rb"
+guard "rollback workflow: off unless WAITLIST_ROLLBACK_ENABLED is exactly true, checked first in the rollback job" \
+  "awk '/^  rollback:\$/{r=1} r && /- name:/{n++} r && /ENABLED: \\\$\{\{ vars.WAITLIST_ROLLBACK_ENABLED/ && !f{f=n} END{exit !(f==1)}' $rb && grep -q '\"\$ENABLED\" != \"true\"' $rb"
 guard "rollback workflow: verifies the staging target, with verify-full, before connecting" \
   "awk '/^        run: scripts\/db\/verify-staging-target.sh$/{v=NR} /psql \"\\\$STAGING_DATABASE_URL\"/{p=NR} END{exit !(v && p && v<p)}' $rb && grep -q \"REQUIRE_VERIFY_FULL: '1'\" $rb && grep -q 'PGSSLMODE: verify-full' $rb"
 guard "rollback workflow: uses only the STAGING_DATABASE_URL secret" \

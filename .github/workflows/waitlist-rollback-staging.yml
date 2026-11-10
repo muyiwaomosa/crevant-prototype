@@ -13,9 +13,23 @@ name: Waitlist rollback (staging)
 # list is at the top of the SQL file).
 #
 # Safeguards, none of which depend on the others:
-#   * Off until the founder approves using it: the staging environment
+#   * Off until the founder approves using it: the staging ENVIRONMENT
 #     variable WAITLIST_ROLLBACK_ENABLED must be exactly "true". It is not set.
-#   * Started by hand only, from main, by the repository owner.
+#     GitHub merges organization, repository and environment variables into
+#     one `vars` value, so the rollback job alone can't tell where a value
+#     came from. Instead, a first job with NO environment (which GitHub never
+#     gives environment variables) refuses if the name is visible to it at
+#     all, that is if it exists at repository or organization level. Only a
+#     value set in the staging environment, and nowhere else, can enable it.
+#     If GitHub ever showed environment variables to that job, every run
+#     would be refused: it fails closed either way. (Only the owner can
+#     create variables on this repository; one created at repository level
+#     while a run waits for approval would not be seen by that run's first
+#     job. Approve only runs you started just now.)
+#   * Started by hand only, from main, by the repository owner, and only
+#     re-run by the repository owner: github.actor (who started the
+#     original run) and github.triggering_actor (who started this attempt,
+#     which differs on a re-run) must both be the owner.
 #   * The typed project reference must match the staging project, as must
 #     the environment variable and the project inside the connection string
 #     (scripts/db/verify-staging-target.sh). A Production project can never match.
@@ -59,9 +73,27 @@ env:
   EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
 
 jobs:
+  # No environment on purpose: this job sees only repository and organization
+  # variables, never the staging environment's.
+  switch-scope:
+    name: Refuse a repository-level rollback switch
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Refuse if WAITLIST_ROLLBACK_ENABLED exists outside the staging environment
+        env:
+          OUTSIDE_ENVIRONMENT: ${{ vars.WAITLIST_ROLLBACK_ENABLED }}
+        run: |
+          if [ -n "$OUTSIDE_ENVIRONMENT" ]; then
+            echo "::error::WAITLIST_ROLLBACK_ENABLED is set at repository or organization level. Only the staging environment may hold it. Delete that variable. Nothing was done."
+            exit 1
+          fi
+
   rollback:
     name: ${{ inputs.mode == 'apply' && 'Roll back the waitlist on staging' || 'Rollback check on staging (no changes)' }}
-    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner
+    needs: switch-scope
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: staging

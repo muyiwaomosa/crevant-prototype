@@ -51,7 +51,7 @@ The staging workflows (database deploy, waitlist admin, staging rollback) each h
 2. **Required reviewers** lists you. **Prevent self-review** is off: with one reviewer, turning it on would lock you out.
 3. **Deployment branches and tags** is **Selected branches and tags**, with only `main`.
 4. **Environment secrets** shows only `STAGING_DATABASE_URL` and `WAITLIST_ADMIN_DATABASE_URL` (names only; values are never shown). **Environment variables** shows `SUPABASE_PROJECT_REF`, and **not** `WAITLIST_ROLLBACK_ENABLED` (the staging rollback stays off).
-5. Open **Settings**, then **Secrets and variables**, then **Actions**. **Repository secrets** must hold no database address: a repository secret would skip the environment's approval.
+5. Open **Settings**, then **Secrets and variables**, then **Actions**. **Repository secrets** must hold no database address: a repository secret would skip the environment's approval. **Repository variables** must not include `WAITLIST_ROLLBACK_ENABLED` (if it did, the rollback workflow refuses every run until it's deleted).
 6. Open **Settings**, then **Actions**, then **General**. **Workflow permissions** is **Read repository contents**, and workflows from fork pull requests need approval.
 
 ## Steps to the public waitlist (each ⚠️ needs approval at the time)
