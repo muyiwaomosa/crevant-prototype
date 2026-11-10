@@ -7,12 +7,16 @@
 #   SUPABASE_PROJECT_REF   GitHub "staging" environment variable
 #   CONFIRM_PROJECT_REF    typed by the person running the workflow
 #   STAGING_DATABASE_URL   GitHub "staging" environment secret (never printed)
+#   EXPECTED_DB_USER       optional: the login the URL must use (default:
+#                          postgres). The waitlist admin workflow sets
+#                          waitlist_admin, so only the restricted login passes.
 #
 # The connection string must:
 #   - be a postgres:// or postgresql:// URL with a password
 #   - point at Supabase (host ending .supabase.com or .supabase.co)
-#   - name the expected project, either as the pooler user "postgres.<ref>"
-#     or as the direct host "db.<ref>.supabase.co"
+#   - name the expected project, either as the pooler user "<login>.<ref>"
+#     or as the direct host "db.<ref>.supabase.co" with the user "<login>"
+#     (<login> is EXPECTED_DB_USER, default postgres)
 #   - use port 5432 (session pooler or direct), not the 6543 transaction pooler
 #   - not disable or weaken TLS
 set -euo pipefail
@@ -59,14 +63,17 @@ if not (host.endswith(".supabase.com") or host.endswith(".supabase.co")):
     fail("STAGING_DATABASE_URL does not point at a Supabase host.")
 
 user = unquote(u.username or "")
-if user.startswith("postgres."):
+login = os.environ.get("EXPECTED_DB_USER") or "postgres"
+if user.startswith(login + "."):
     ref = user.split(".", 1)[1]
     kind = "session pooler"
 elif host.startswith("db.") and host.endswith(".supabase.co"):
     ref = host[len("db."):-len(".supabase.co")]
     kind = "direct connection"
+    if login != "postgres" and user != login:
+        fail(f"STAGING_DATABASE_URL must log in as {login}.")
 else:
-    fail("Could not find a Supabase project reference in STAGING_DATABASE_URL.")
+    fail(f"STAGING_DATABASE_URL must log in as {login} on the approved project (pooler user {login}.<project ref>).")
 
 if ref != expected:
     fail("STAGING_DATABASE_URL belongs to a different Supabase project than the approved staging project.")

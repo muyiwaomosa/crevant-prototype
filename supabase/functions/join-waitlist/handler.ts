@@ -14,6 +14,10 @@
 //      switch, the approved notice version and the rate limits, and stores
 //      new addresses only.
 //
+// A GET request is the health check: it answers {"status":"ok"} if the
+// restricted database login can connect, or {"status":"error"} if not. It
+// reads no data, needs no origin and says nothing about the switches.
+//
 // Responses never include the email address, and nothing here logs it.
 
 export type SubmitResult = 'ok' | 'closed' | 'invalid' | 'notice_changed' | 'rate_limited'
@@ -58,6 +62,8 @@ export interface JoinDeps {
   verifyTurnstile(token: string, ip: string | null): Promise<TurnstileResult>
   rateKeys(email: string, ip: string | null): Promise<RateKeys>
   submit(payload: SubmitPayload): Promise<SubmitResult>
+  /** True if the database login works (a bare `select 1`). */
+  databaseReachable(): Promise<boolean>
 }
 
 export interface IncomingRequest {
@@ -144,6 +150,15 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
 
   if (req.method === 'OPTIONS') {
     return origin ? { status: 204, headers: corsHeaders(origin), body: '' } : reply(403, 'forbidden', null)
+  }
+  if (req.method === 'GET') {
+    let ok = false
+    try {
+      ok = await deps.databaseReachable()
+    } catch {
+      ok = false
+    }
+    return reply(ok ? 200 : 503, ok ? 'ok' : 'error', null)
   }
   if (req.method !== 'POST') return reply(405, 'method_not_allowed', origin)
   if (!origin) return reply(403, 'forbidden', null)

@@ -111,7 +111,9 @@ begin
     allowed := case r
       when 'waitlist_writer' then array['waitlist_api.submit']
       else array['waitlist_api.admin_summary', 'waitlist_api.admin_status', 'waitlist_api.admin_delete', 'waitlist_api.admin_purge',
-                 'waitlist_api.admin_set_notice_version', 'waitlist_api.admin_open', 'waitlist_api.admin_close']
+                 'waitlist_api.admin_set_notice_version', 'waitlist_api.admin_open', 'waitlist_api.admin_close',
+                 'waitlist_api.admin_wave_preview', 'waitlist_api.admin_wave_select', 'waitlist_api.admin_wave_summary',
+                 'waitlist_api.admin_wave_clear']
     end;
 
     select string_agg(n.nspname || '.' || c.relname, ', ') into bad

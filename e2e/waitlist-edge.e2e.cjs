@@ -138,6 +138,33 @@ async function post(payload, { origin = ORIGIN, xff = '198.51.100.7', url = EDGE
     // 12. Closing is immediate.
     await admin`select waitlist_api.admin_close()`
     check('closing stops submissions at once', (await post(body({ email: 'late@e2e.test' }), { xff: '203.0.113.52' })).state === 'closed')
+
+    // 13. Health check: a GET proves the restricted login connects, and says nothing else.
+    const h = await fetch(EDGE_URL)
+    check('the health check answers ok when the database login connects', h.status === 200 && (await h.text()) === '{"status":"ok"}')
+    const hb = await fetch(EDGE_BAD_URL)
+    check('the health check answers error when the function has no usable login', hb.status === 503 && (await hb.text()) === '{"status":"error"}')
+
+    // 14. The daily health script against the real runtime (its address rewritten to this test).
+    const { runHealthCheck } = await import('../scripts/waitlist-health.mjs')
+    const official = 'https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist'
+    const viaTest = (target) => (url, init) => fetch(url === official ? target : url, init)
+    const before = (await owner`select count(*)::int as n from ops.waitlist`)[0].n
+    const healthy = await runHealthCheck({ url: official, origin: ORIGIN, expected: 'open' }, viaTest(EDGE_URL))
+    check('the health script passes against a healthy function', healthy.ok, healthy.lines.join(' | '))
+    const unhealthy = await runHealthCheck({ url: official, origin: ORIGIN, expected: 'open' }, viaTest(EDGE_BAD_URL))
+    check('the health script fails, clearly, when the database login is broken', !unhealthy.ok && /could not connect/.test(unhealthy.lines.join(' ')), unhealthy.lines[0])
+    check('the health script stores nothing', (await owner`select count(*)::int as n from ops.waitlist`)[0].n === before)
+    check('the health script output holds nothing personal', !/@|e2e\.test/.test([...healthy.lines, ...unhealthy.lines].join(' ')))
+
+    // 15. The emergency close script, run as the database owner (as in the Supabase SQL editor).
+    await admin`select waitlist_api.admin_open()`
+    check('reopened for the emergency test', (await post(body({ email: 'pre@e2e.test' }), { xff: '203.0.113.60' })).state === 'ok')
+    const closeSql = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'scripts', 'db', 'emergency-close.sql'), 'utf8')
+    const closed = await owner.unsafe(closeSql)
+    check('the emergency close script reports submissions OFF', JSON.stringify(closed).includes('"submissions":"OFF"'))
+    check('after the emergency close script, submissions are refused at once', (await post(body({ email: 'after@e2e.test' }), { xff: '203.0.113.61' })).state === 'closed')
+    check('the emergency close script left the notice version alone', (await admin`select waitlist_api.admin_status() as s`)[0].s.notice_version === NOTICE)
   } finally {
     await owner`update ops.settings set enabled = false, value = null, updated_at = now() where key in ('waitlist_submissions', 'waitlist_notice_version')`
     await owner`delete from ops.waitlist where email like '%@e2e.test'`

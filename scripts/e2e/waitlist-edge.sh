@@ -82,8 +82,27 @@ else
   exit 1
 fi
 
+real_health="$(curl -s -m 30 "http://127.0.0.1:${EDGE_REAL_PORT}/" || true)"
+if [ "$real_health" = '{"status":"ok"}' ]; then
+  echo "PASS  the real entry point's health check connects as waitlist_writer, while closed"
+else
+  echo "FAIL  the real entry point's health check answered: $real_health" >&2
+  exit 1
+fi
+
+# The admin script, as the restricted admin login, against Supabase's own image.
+ADMIN_DB_URL="postgresql://waitlist_admin:${ADMIN_PW}@127.0.0.1:${DB_PORT}/postgres"
+if out="$(DATABASE_URL="$ADMIN_DB_URL" REQUIRE_ADMIN_ROLE=1 ACTION=wave-preview GROUP=supporter scripts/db/waitlist-admin.sh)" \
+   && grep -q '"eligible"' <<<"$out" \
+   && ! DATABASE_URL="$DB_URL" REQUIRE_ADMIN_ROLE=1 ACTION=summary scripts/db/waitlist-admin.sh >/dev/null 2>&1; then
+  echo "PASS  the admin script works as waitlist_admin and refuses the database owner's login"
+else
+  echo "FAIL  the admin script did not behave as expected: $out" >&2
+  exit 1
+fi
+
 # The function's logs must never contain an email address.
-if docker logs crevant-waitlist-edge 2>&1 | grep -qi "@e2e.test"; then
+if docker logs crevant-waitlist-edge 2>&1 | grep -qi "@e2e.test" || docker logs crevant-waitlist-edge-real 2>&1 | grep -qi "@e2e.test"; then
   echo "FAIL  the function logged an email address" >&2
   exit 1
 fi

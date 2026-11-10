@@ -8,7 +8,7 @@
 
 import postgres from 'npm:postgres@3.4.9'
 import { clientIpFrom, handleJoin, rateKeysFor } from '../join-waitlist/handler.ts'
-import { databaseOptions, submitWithDatabase, type Sql } from '../join-waitlist/db.ts'
+import { databaseOptions, databaseReachable, submitWithDatabase, type Sql } from '../join-waitlist/db.ts'
 
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
 
@@ -42,6 +42,7 @@ Deno.serve(async (req: Request) => {
       },
       rateKeys: (email, clientIp) => rateKeysFor(email, clientIp, env('WAITLIST_RATE_SALT')),
       submit: (payload) => submitWithDatabase(sql!, payload),
+      databaseReachable: () => databaseReachable(sql),
     },
   )
   console.log(JSON.stringify({ event: 'join', status: out.status }))

@@ -1,34 +1,55 @@
 name: Waitlist admin (staging)
 
-# Deletion on request, the retention purge and a counts-only summary for the
-# waitlist on the Crevant STAGING Supabase project. It never runs
-# automatically: someone starts it by hand from the Actions tab on main, types
-# the staging project reference, and approves the "staging" environment.
+# Waitlist management for the Crevant STAGING Supabase project, through the
+# restricted waitlist_admin login only. Someone starts it by hand from the
+# Actions tab on main, types the staging project reference, and approves the
+# "staging" environment. Every action prints counts only.
 #
-#   summary   counts by source and answers, and whether submissions are on
-#   delete    delete one person by waitlist id (from the Supabase dashboard),
-#             with their consent history, notes, rate counter and any
-#             unaccepted invitation. No email address is typed into GitHub.
-#   purge     delete entries with no confirmed interest for N months, with
-#             their pending invitations
-#             (proposed policy: 12, subject to legal review)
+#   summary             totals, verified and unverified, participant groups,
+#                       recent signups, status, waves, the switch
+#   status              the switch and the approved notice version
+#   delete              delete one person by waitlist id (from the Supabase
+#                       dashboard), with their consent record, selections and
+#                       any unaccepted invitation. No email is typed into GitHub.
+#   purge               retention: delete entries older than N months (12)
+#   set-notice-version  record the approved privacy notice version
+#   open                open submissions (refused without a notice version)
+#   close               close submissions at once (emergency: see
+#                       docs/WAITLIST-OPERATIONS.md for the direct fallback)
+#   wave-preview        how many could be picked, by group
+#   wave-select         pick up to N for a wave, by group, with reasons.
+#                       Shortlists only: sends nothing, invites no one.
+#   wave-summary        counts for one wave
+#   wave-clear          undo a wave
 #
-# Reuses the staging deploy workflow's safety: the only credential is the
-# staging environment's STAGING_DATABASE_URL, and scripts/db/verify-staging-target.sh
-# must confirm the target before anything runs. Output is counts only.
-# The script uses only the waitlist_api.admin_* entry points; B3 moves this
-# workflow to the restricted waitlist_admin login.
+# Monthly retention: on the 3rd of each month a scheduled run applies the
+# 12 month purge, but only once the repository variable
+# WAITLIST_SCHEDULE_ENABLED is 'true' (set at activation), and it still waits
+# for the staging approval like every other run.
+#
+# Safety: the only credential is the staging environment's
+# WAITLIST_ADMIN_DATABASE_URL (the restricted waitlist_admin login), and
+# scripts/db/verify-staging-target.sh must confirm the target and the login
+# before anything runs.
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: "summary = counts only. delete = remove one person by waitlist id. purge = apply the retention period."
+        description: "What to do. Everything prints counts only."
         type: choice
         options:
           - summary
+          - status
           - delete
           - purge
+          - set-notice-version
+          - open
+          - close
+          - wave-preview
+          - wave-select
+          - wave-summary
+          - wave-clear
         default: summary
         required: true
       waitlist_id:
@@ -36,14 +57,51 @@ on:
         type: string
         required: false
       retention_months:
-        description: "For purge: months since last confirmed interest (proposed: 12)."
+        description: "For purge: months since signup or last verified confirmation (approved proposal: 12)."
         type: string
         default: '12'
         required: false
+      notice_version:
+        description: "For set-notice-version: the approved privacy notice version, e.g. notice-2026-11."
+        type: string
+        required: false
+      wave:
+        description: "For wave actions: the wave name, e.g. wave_1."
+        type: string
+        required: false
+      group:
+        description: "For wave-preview and wave-select: which participant group."
+        type: choice
+        options:
+          - any
+          - active_creator
+          - aspiring_creator
+          - supporter
+        default: any
+      reasons:
+        description: "For wave-select: the approved selection reasons."
+        type: choice
+        options:
+          - group_balance
+          - targeted_feedback
+          - both
+        default: group_balance
+      count:
+        description: "For wave-select: how many to pick (1 to 100)."
+        type: string
+        default: '10'
+        required: false
+      verified_only:
+        description: "For wave actions: only verified entries."
+        type: boolean
+        default: false
       confirm_project_ref:
         description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
         type: string
         required: true
+  schedule:
+    # Monthly retention purge (12 months). Off until WAITLIST_SCHEDULE_ENABLED.
+    - cron: '41 15 3 * *'
 
 permissions:
   contents: read
@@ -57,27 +115,39 @@ env:
 
 jobs:
   admin:
-    name: Waitlist ${{ inputs.action }} (staging)
-    if: github.ref == 'refs/heads/main'
+    name: Waitlist ${{ github.event_name == 'schedule' && 'monthly purge' || inputs.action }} (staging)
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'schedule' && vars.WAITLIST_SCHEDULE_ENABLED == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: staging
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify the target is the approved staging project
+      - name: Verify the target is the approved staging project and the restricted admin login
         env:
-          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_DATABASE_URL: ${{ secrets.WAITLIST_ADMIN_DATABASE_URL }}
+          EXPECTED_DB_USER: waitlist_admin
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+          # A scheduled run has no one to type it; it still waits for approval.
+          CONFIRM_PROJECT_REF: ${{ github.event_name == 'schedule' && env.EXPECTED_PROJECT_REF || inputs.confirm_project_ref }}
         run: scripts/db/verify-staging-target.sh
 
-      - name: Run ${{ inputs.action }}
+      - name: Run the action
         env:
-          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
-          ACTION: ${{ inputs.action }}
+          DATABASE_URL: ${{ secrets.WAITLIST_ADMIN_DATABASE_URL }}
+          REQUIRE_ADMIN_ROLE: '1'
+          ACTION: ${{ github.event_name == 'schedule' && 'purge' || inputs.action }}
+          RETENTION_MONTHS: ${{ github.event_name == 'schedule' && '12' || inputs.retention_months }}
           WAITLIST_ID: ${{ inputs.waitlist_id }}
-          RETENTION_MONTHS: ${{ inputs.retention_months }}
+          NOTICE_VERSION: ${{ inputs.notice_version }}
+          WAVE: ${{ inputs.wave }}
+          GROUP: ${{ inputs.group }}
+          REASONS: ${{ inputs.reasons }}
+          COUNT: ${{ inputs.count }}
+          VERIFIED_ONLY: ${{ inputs.verified_only }}
           PGSSLMODE: require
           PGCONNECT_TIMEOUT: '15'
         run: scripts/db/waitlist-admin.sh

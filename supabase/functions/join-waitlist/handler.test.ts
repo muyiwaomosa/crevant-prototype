@@ -27,6 +27,7 @@ function deps(over: Partial<JoinDeps> = {}): JoinDeps {
     verifyTurnstile: vi.fn(async () => ({ success: true, hostname: 'crevant.example', action: 'join' })),
     rateKeys: vi.fn(async () => KEYS),
     submit: vi.fn(async () => 'ok' as const),
+    databaseReachable: vi.fn(async () => true),
     ...over,
   }
 }
@@ -74,7 +75,7 @@ describe('join-waitlist handler', () => {
     expect((await handleJoin(post(valid, { origin: 'https://evil.example' }), d)).status).toBe(403)
     expect((await handleJoin(post(valid, { origin: null }), d)).status).toBe(403)
     expect((await handleJoin({ ...post(valid), method: 'OPTIONS', origin: 'https://evil.example' }, d)).status).toBe(403)
-    expect((await handleJoin({ ...post(valid), method: 'GET' }, d)).status).toBe(405)
+    expect((await handleJoin({ ...post(valid), method: 'PUT' }, d)).status).toBe(405)
     expect((await handleJoin(post(valid, { contentType: 'text/plain' }), d)).status).toBe(415)
     expect((await handleJoin(post({ ...valid, padding: 'x'.repeat(5000) }), d)).status).toBe(413)
     expect(d.submit).not.toHaveBeenCalled()
@@ -98,6 +99,19 @@ describe('join-waitlist handler', () => {
     const d = deps()
     expect(state(await handleJoin(post({ ...valid, turnstileToken: '' }), d))).toBe('verification_failed')
     expect(d.verifyTurnstile).not.toHaveBeenCalled()
+  })
+
+  it('answers a GET health check with ok or error only, without touching submissions', async () => {
+    const d = deps({ enabled: false })
+    const ok = await handleJoin({ method: 'GET', origin: null, contentType: null, body: '', ip: null }, d)
+    expect([ok.status, ok.body]).toEqual([200, '{"status":"ok"}'])
+    expect(ok.headers['Access-Control-Allow-Origin']).toBeUndefined()
+    expect(d.submit).not.toHaveBeenCalled()
+    expect(d.verifyTurnstile).not.toHaveBeenCalled()
+    for (const reachable of [vi.fn(async () => false), vi.fn(async () => Promise.reject(new Error('password authentication failed for user waitlist_writer')))]) {
+      const bad = await handleJoin({ method: 'GET', origin: null, contentType: null, body: '', ip: null }, deps({ databaseReachable: reachable }))
+      expect([bad.status, bad.body]).toEqual([503, '{"status":"error"}'])
+    }
   })
 
   it('treats a filled honeypot as success but stores nothing and calls nothing', async () => {
