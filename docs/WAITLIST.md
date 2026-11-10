@@ -159,7 +159,7 @@ Decisions:
 - [ ] **Hosted staging check 1: pooler login.** The Supabase pooler accepts the custom `waitlist_writer.kpudeppgokpjhvaqrprn` login. If it doesn't, stop and decide; never fall back to a broader credential.
 - [ ] **Hosted staging check 2: TLS certificate.** The function connects with full certificate verification, adding Supabase's public CA as `WAITLIST_DB_CA_CERT` if needed. Never turn verification off.
 - [ ] **Hosted staging check 3: proxy hop count.** `WAITLIST_TRUSTED_PROXY_HOPS` is confirmed, so a made up `X-Forwarded-For` value can't change the client bucket.
-- [ ] Operations set up (`docs/WAITLIST-OPERATIONS.md`): `WAITLIST_ADMIN_DATABASE_URL`, the health check variables, and the monthly retention switch
+- [ ] Operations set up (`docs/WAITLIST-OPERATIONS.md`): `WAITLIST_ADMIN_DATABASE_URL`, the health check variables, and a monthly reminder to run the purge (no scheduled deletion)
 - [ ] Activation itself approved
 
 Setup, once approved (each step needs approval):

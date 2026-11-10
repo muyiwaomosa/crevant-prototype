@@ -11,9 +11,11 @@
 --   admin_wave_clear     undo a wave's selections
 --
 -- Every function returns counts only, never an address, name or id list.
--- Picking someone for a wave is NOT inviting them: invitations still need a
--- verified address (enforced since B2), and nothing here sends anything or
--- creates an account.
+-- Only VERIFIED entries can enter a wave: the wave functions pick verified
+-- entries only, and the selections table itself refuses an unverified entry
+-- (trigger below), whoever writes it. Unverified entries still appear in the
+-- summary counts. Picking someone for a wave is NOT inviting them: nothing
+-- here sends anything or creates an account.
 
 -- ---------------------------------------------------------------------------
 -- Overview: B2's summary plus signups in the last day and week, and how many
@@ -54,13 +56,33 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Invitation-wave preparation.
 --
--- An entry is eligible for a new wave when its status is 'new' (not already
--- shortlisted, invited or not selected). p_group is one of the approved
--- participant groups, or 'any'. Unverified entries may be picked, because
--- picking is not inviting; p_verified_only limits a wave to verified entries
--- once verification exists.
+-- An entry is eligible for a new wave when it is VERIFIED and its status is
+-- 'new' (not already shortlisted, invited or not selected). p_group is one of
+-- the approved participant groups, or 'any'.
 
-create function waitlist_api.admin_wave_preview(p_group text default 'any', p_verified_only boolean default false)
+-- Defence in depth: the selections table refuses unverified entries, so no
+-- path (these functions, server code, the dashboard) can put one in a wave.
+create function ops.waitlist_selections_require_verified()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not exists (select 1 from ops.waitlist w where w.id = new.waitlist_id and w.verified) then
+    raise exception 'only verified waitlist entries can be selected for an invitation wave'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger waitlist_selections_require_verified
+  before insert or update of waitlist_id on ops.waitlist_selections
+  for each row execute function ops.waitlist_selections_require_verified();
+
+revoke all on function ops.waitlist_selections_require_verified() from public, anon, authenticated;
+
+create function waitlist_api.admin_wave_preview(p_group text default 'any')
 returns jsonb
 language plpgsql
 security definer
@@ -73,27 +95,26 @@ begin
   return (
     select jsonb_build_object(
       'group', p_group,
-      'verified_only', coalesce(p_verified_only, false),
-      'eligible', count(*),
-      'eligible_verified', count(*) filter (where w.verified),
-      'eligible_unverified', count(*) filter (where not w.verified)
+      -- Verified and new: can be picked.
+      'eligible', count(*) filter (where w.verified),
+      -- Shown for information only: unverified entries are never picked.
+      'not_eligible_unverified', count(*) filter (where not w.verified)
     )
     from ops.waitlist w
     where w.status = 'new'
       and (p_group = 'any' or p_group = any (w.participant_groups))
-      and (not coalesce(p_verified_only, false) or w.verified)
   );
 end;
 $$;
 
--- Picks up to p_count eligible entries, earliest signups first, records the
--- approved reasons for this wave and marks them shortlisted. Returns counts.
+-- Picks up to p_count eligible (verified, new) entries, earliest signups
+-- first, records the approved reasons for this wave and marks them
+-- shortlisted. Returns counts.
 create function waitlist_api.admin_wave_select(
   p_wave          text,
   p_group         text,
   p_reasons       text[],
-  p_count         integer,
-  p_verified_only boolean default false
+  p_count         integer
 )
 returns jsonb
 language plpgsql
@@ -102,7 +123,6 @@ set search_path = ''
 as $$
 declare
   v_selected   integer;
-  v_verified   integer;
 begin
   if p_group is null or p_group not in ('any', 'active_creator', 'aspiring_creator', 'supporter') then
     raise exception 'group must be any, active_creator, aspiring_creator or supporter';
@@ -124,8 +144,8 @@ begin
     select w.id, w.verified
     from ops.waitlist w
     where w.status = 'new'
+      and w.verified
       and (p_group = 'any' or p_group = any (w.participant_groups))
-      and (not coalesce(p_verified_only, false) or w.verified)
     order by w.joined_at, w.id
     limit p_count
     for update
@@ -136,14 +156,11 @@ begin
   ), marked as (
     update ops.waitlist w set status = 'shortlisted'
     from recorded r where w.id = r.waitlist_id
-    returning w.verified
+    returning w.id
   )
-  select count(*), count(*) filter (where verified) into v_selected, v_verified from marked;
+  select count(*) into v_selected from marked;
 
-  return jsonb_build_object(
-    'wave', p_wave, 'group', p_group, 'reasons', to_jsonb(p_reasons),
-    'selected', v_selected, 'verified', v_verified, 'unverified', v_selected - v_verified
-  );
+  return jsonb_build_object('wave', p_wave, 'group', p_group, 'reasons', to_jsonb(p_reasons), 'selected', v_selected);
 end;
 $$;
 
@@ -156,8 +173,6 @@ as $$
   select jsonb_build_object(
     'wave', p_wave,
     'selected',   count(*),
-    'verified',   count(*) filter (where w.verified),
-    'unverified', count(*) filter (where not w.verified),
     'participant_groups', jsonb_build_object(
       'active_creator',   count(*) filter (where 'active_creator' = any (w.participant_groups)),
       'aspiring_creator', count(*) filter (where 'aspiring_creator' = any (w.participant_groups)),
@@ -203,12 +218,12 @@ begin
 end;
 $$;
 
-revoke all on function waitlist_api.admin_wave_preview(text, boolean) from public, anon, authenticated, service_role;
-revoke all on function waitlist_api.admin_wave_select(text, text, text[], integer, boolean) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.admin_wave_preview(text) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.admin_wave_select(text, text, text[], integer) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.admin_wave_summary(text) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.admin_wave_clear(text) from public, anon, authenticated, service_role;
 
-grant execute on function waitlist_api.admin_wave_preview(text, boolean) to waitlist_admin;
-grant execute on function waitlist_api.admin_wave_select(text, text, text[], integer, boolean) to waitlist_admin;
+grant execute on function waitlist_api.admin_wave_preview(text) to waitlist_admin;
+grant execute on function waitlist_api.admin_wave_select(text, text, text[], integer) to waitlist_admin;
 grant execute on function waitlist_api.admin_wave_summary(text) to waitlist_admin;
 grant execute on function waitlist_api.admin_wave_clear(text) to waitlist_admin;

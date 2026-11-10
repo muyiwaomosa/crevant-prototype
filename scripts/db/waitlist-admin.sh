@@ -16,8 +16,9 @@
 #   ACTION=set-notice-version NOTICE_VERSION=<version>
 #   ACTION=open                        refused until a notice version is set
 #   ACTION=close                       always allowed, immediate
-#   ACTION=wave-preview  GROUP=<group> [VERIFIED_ONLY=true]
-#   ACTION=wave-select   WAVE=<name> GROUP=<group> REASONS=<reasons> COUNT=<1-100> [VERIFIED_ONLY=true]
+#   ACTION=wave-preview  GROUP=<group>
+#   ACTION=wave-select   WAVE=<name> GROUP=<group> REASONS=<reasons> COUNT=<1-100>
+#                        Waves take verified entries only (enforced by the database).
 #   ACTION=wave-summary  WAVE=<name>
 #   ACTION=wave-clear    WAVE=<name>
 #
@@ -49,9 +50,6 @@ group() {
 wave() {
   [[ "${WAVE:-}" =~ ^[a-z0-9_-]{1,40}$ ]] || fail "WAVE must be 1 to 40 lowercase letters, digits, _ or -."
   echo "$WAVE"
-}
-verified_only() {
-  case "${VERIFIED_ONLY:-false}" in true|false) echo "${VERIFIED_ONLY:-false}" ;; *) fail "VERIFIED_ONLY must be true or false." ;; esac
 }
 
 case "$ACTION" in
@@ -85,11 +83,11 @@ case "$ACTION" in
     say "Closed" run -c "select waitlist_api.admin_close()"
     ;;
   wave-preview)
-    g="$(group)"; v="$(verified_only)"
-    say "Wave preview" run -v g="$g" -v v="$v" <<<"select waitlist_api.admin_wave_preview(:'g', :'v'::boolean);"
+    g="$(group)"
+    say "Wave preview (verified entries only can be picked)" run -v g="$g" <<<"select waitlist_api.admin_wave_preview(:'g');"
     ;;
   wave-select)
-    w="$(wave)"; g="$(group)"; v="$(verified_only)"
+    w="$(wave)"; g="$(group)"
     case "${REASONS:-}" in
       group_balance) r='{group_balance}' ;;
       targeted_feedback) r='{targeted_feedback}' ;;
@@ -100,7 +98,7 @@ case "$ACTION" in
     if ! [[ "$count" =~ ^[0-9]{1,3}$ ]] || [ "$count" -lt 1 ] || [ "$count" -gt 100 ]; then
       fail "COUNT must be a whole number from 1 to 100."
     fi
-    say "Wave selection (no invitations sent)" run -v w="$w" -v g="$g" -v r="$r" -v c="$count" -v v="$v" <<<"select waitlist_api.admin_wave_select(:'w', :'g', :'r'::text[], :'c'::integer, :'v'::boolean);"
+    say "Wave selection (verified only; no invitations sent)" run -v w="$w" -v g="$g" -v r="$r" -v c="$count" <<<"select waitlist_api.admin_wave_select(:'w', :'g', :'r'::text[], :'c'::integer);"
     ;;
   wave-summary)
     w="$(wave)"

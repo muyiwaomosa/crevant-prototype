@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { clientIpFrom, handleJoin, rateKeysFor, toPayload, verifyWithCloudflare, type JoinDeps } from './handler'
+import { cachedHealthCheck, clientIpFrom, handleJoin, rateKeysFor, toPayload, verifyWithCloudflare, type JoinDeps } from './handler'
 import { databaseOptions, submitWithDatabase, type Sql } from './db'
 
 const ORIGIN = 'https://crevant.example'
@@ -264,5 +264,58 @@ describe('database connection', () => {
     expect(calls[0].values).toEqual(['maya@example.com', ['reach_followers'], 'yes', 'youtube', '1k_10k', 'instagram', true, true, 'notice-2026-11', KEYS.emailKey, KEYS.clientKey])
     const odd = (async () => [{ result: 'something else' }]) as unknown as Sql
     await expect(submitWithDatabase(odd, payload)).rejects.toThrow()
+  })
+})
+
+describe('health check load limit', () => {
+  it('reuses a result for 30 seconds and shares simultaneous checks', async () => {
+    let t = 0
+    let release: (ok: boolean) => void = () => {}
+    const check = vi.fn(() => new Promise<boolean>((r) => (release = r)))
+    const health = cachedHealthCheck(check, 30_000, () => t)
+    const many = Promise.all(Array.from({ length: 50 }, () => health()))
+    release(true)
+    expect(await many).toEqual(Array(50).fill(true))
+    expect(check).toHaveBeenCalledTimes(1)
+    t = 29_999
+    expect(await health()).toBe(true)
+    expect(check).toHaveBeenCalledTimes(1)
+    t = 30_000
+    const again = health()
+    release(true)
+    await again
+    expect(check).toHaveBeenCalledTimes(2)
+  })
+
+  it('caches failures for a shorter time, and treats a thrown error as a failure', async () => {
+    let t = 0
+    const check = vi.fn(async () => {
+      throw new Error('connection refused to waitlist_writer@db')
+    })
+    const health = cachedHealthCheck(check, 30_000, () => t)
+    expect(await health()).toBe(false)
+    t = 9_999
+    expect(await health()).toBe(false)
+    expect(check).toHaveBeenCalledTimes(1)
+    t = 10_000
+    expect(await health()).toBe(false)
+    expect(check).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('health check reveals nothing', () => {
+  it('answers with a bare status, no CORS, no configuration and no error detail, whatever is asked', async () => {
+    const leaky = vi.fn(async () => Promise.reject(new Error('password authentication failed for user "waitlist_writer.kpudeppgokpjhvaqrprn" at aws-0-us-west-2.pooler.supabase.com')))
+    for (const reachable of [vi.fn(async () => true), leaky]) {
+      for (const req of [
+        { method: 'GET', origin: null, contentType: null, body: '', ip: null },
+        { method: 'GET', origin: 'https://evil.example', contentType: 'application/json', body: '{"email":"x@y.z"}', ip: '203.0.113.7' },
+      ]) {
+        const out = await handleJoin(req, deps({ databaseReachable: reachable }))
+        expect(out.body === '{"status":"ok"}' || out.body === '{"status":"error"}').toBe(true)
+        expect(Object.keys(out.headers).sort()).toEqual(['Cache-Control', 'Content-Type'])
+        expect(JSON.stringify(out)).not.toMatch(/waitlist_writer|pooler|kpudeppgokpjhvaqrprn|password|203\.0|x@y/)
+      }
+    }
   })
 })

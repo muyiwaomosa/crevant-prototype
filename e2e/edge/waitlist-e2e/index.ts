@@ -7,7 +7,7 @@
 // hostname and action; anything else fails. Used by scripts/e2e/waitlist-edge.sh.
 
 import postgres from 'npm:postgres@3.4.9'
-import { clientIpFrom, handleJoin, rateKeysFor } from '../join-waitlist/handler.ts'
+import { cachedHealthCheck, clientIpFrom, handleJoin, rateKeysFor } from '../join-waitlist/handler.ts'
 import { databaseOptions, databaseReachable, submitWithDatabase, type Sql } from '../join-waitlist/db.ts'
 
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
@@ -20,6 +20,9 @@ try {
 } catch (e) {
   configProblem = (e as Error).message
 }
+
+// At most one database health check per 30 seconds per instance.
+const health = cachedHealthCheck(() => databaseReachable(sql))
 
 Deno.serve(async (req: Request) => {
   if (new URL(req.url).pathname.endsWith('/__config')) return Response.json({ ok: sql !== null, problem: configProblem })
@@ -42,7 +45,7 @@ Deno.serve(async (req: Request) => {
       },
       rateKeys: (email, clientIp) => rateKeysFor(email, clientIp, env('WAITLIST_RATE_SALT')),
       submit: (payload) => submitWithDatabase(sql!, payload),
-      databaseReachable: () => databaseReachable(sql),
+      databaseReachable: health,
     },
   )
   console.log(JSON.stringify({ event: 'join', status: out.status }))

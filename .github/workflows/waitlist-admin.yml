@@ -16,16 +16,16 @@ name: Waitlist admin (staging)
 #   open                open submissions (refused without a notice version)
 #   close               close submissions at once (emergency: see
 #                       docs/WAITLIST-OPERATIONS.md for the direct fallback)
-#   wave-preview        how many could be picked, by group
-#   wave-select         pick up to N for a wave, by group, with reasons.
+#   wave-preview        how many verified entries could be picked, by group
+#   wave-select         pick up to N verified entries for a wave, by group,
+#                       with reasons. Unverified entries are never picked.
 #                       Shortlists only: sends nothing, invites no one.
 #   wave-summary        counts for one wave
 #   wave-clear          undo a wave
 #
-# Monthly retention: on the 3rd of each month a scheduled run applies the
-# 12 month purge, but only once the repository variable
-# WAITLIST_SCHEDULE_ENABLED is 'true' (set at activation), and it still waits
-# for the staging approval like every other run.
+# Retention runs only when someone starts "purge" by hand. There is no
+# scheduled deletion (docs/WAITLIST-OPERATIONS.md explains the options for
+# automating it after launch, which need a separate decision).
 #
 # Safety: the only credential is the staging environment's
 # WAITLIST_ADMIN_DATABASE_URL (the restricted waitlist_admin login), and
@@ -91,17 +91,10 @@ on:
         type: string
         default: '10'
         required: false
-      verified_only:
-        description: "For wave actions: only verified entries."
-        type: boolean
-        default: false
       confirm_project_ref:
         description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
         type: string
         required: true
-  schedule:
-    # Monthly retention purge (12 months). Off until WAITLIST_SCHEDULE_ENABLED.
-    - cron: '41 15 3 * *'
 
 permissions:
   contents: read
@@ -115,11 +108,8 @@ env:
 
 jobs:
   admin:
-    name: Waitlist ${{ github.event_name == 'schedule' && 'monthly purge' || inputs.action }} (staging)
-    if: >-
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'workflow_dispatch' ||
-       (github.event_name == 'schedule' && vars.WAITLIST_SCHEDULE_ENABLED == 'true'))
+    name: Waitlist ${{ inputs.action }} (staging)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: staging
@@ -131,23 +121,21 @@ jobs:
           STAGING_DATABASE_URL: ${{ secrets.WAITLIST_ADMIN_DATABASE_URL }}
           EXPECTED_DB_USER: waitlist_admin
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          # A scheduled run has no one to type it; it still waits for approval.
-          CONFIRM_PROJECT_REF: ${{ github.event_name == 'schedule' && env.EXPECTED_PROJECT_REF || inputs.confirm_project_ref }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
         run: scripts/db/verify-staging-target.sh
 
       - name: Run the action
         env:
           DATABASE_URL: ${{ secrets.WAITLIST_ADMIN_DATABASE_URL }}
           REQUIRE_ADMIN_ROLE: '1'
-          ACTION: ${{ github.event_name == 'schedule' && 'purge' || inputs.action }}
-          RETENTION_MONTHS: ${{ github.event_name == 'schedule' && '12' || inputs.retention_months }}
+          ACTION: ${{ inputs.action }}
+          RETENTION_MONTHS: ${{ inputs.retention_months }}
           WAITLIST_ID: ${{ inputs.waitlist_id }}
           NOTICE_VERSION: ${{ inputs.notice_version }}
           WAVE: ${{ inputs.wave }}
           GROUP: ${{ inputs.group }}
           REASONS: ${{ inputs.reasons }}
           COUNT: ${{ inputs.count }}
-          VERIFIED_ONLY: ${{ inputs.verified_only }}
           PGSSLMODE: require
           PGCONNECT_TIMEOUT: '15'
         run: scripts/db/waitlist-admin.sh

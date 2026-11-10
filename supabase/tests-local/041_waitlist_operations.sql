@@ -46,8 +46,8 @@ begin
     end if;
     update ops.waitlist set joined_at = now() - make_interval(days => 10 - i) where email = e;
   end loop;
-  -- c2 stands in for a verified entry (the future verification flow).
-  update ops.waitlist set email_verified_at = now() where email = 'c2@ops.test';
+  -- Stands in for the future verification flow: four verified, a1 and q1 not.
+  update ops.waitlist set email_verified_at = now() where email in ('c1@ops.test', 'c2@ops.test', 'cs@ops.test', 's1@ops.test');
 end $$;
 
 -- 1. The overview: counts only, verified apart, groups, recent signups, status.
@@ -58,7 +58,7 @@ begin
   if s::text ~* '@|ops\.test|[0-9a-f]{8}-[0-9a-f]{4}-' then
     raise exception 'FAIL: the overview contains an address or id: %', s;
   end if;
-  if (s->>'total')::int <> 6 or (s->>'verified')::int <> 1 or (s->>'unverified')::int <> 5
+  if (s->>'total')::int <> 6 or (s->>'verified')::int <> 4 or (s->>'unverified')::int <> 2
      or (s->>'joined_last_7_days')::int <> 3 or (s->>'joined_last_24_hours')::int <> 0
      or s->'participant_groups' <> '{"active_creator": 3, "aspiring_creator": 1, "supporter": 2, "none_answered": 1}'::jsonb
      or s->'status' <> '{"new": 6}'::jsonb or s->'waves' <> '{}'::jsonb or s->>'submissions' <> 'ON' then
@@ -67,22 +67,22 @@ begin
   raise notice 'PASS: the overview gives counts only, with verified, groups and recent signups';
 end $$;
 
--- 2. Wave preview and selection: approved groups and reasons only, earliest
---    signups first, counts only, never re-picking someone.
+-- 2. Wave preview and selection: VERIFIED entries only, approved groups and
+--    reasons, earliest signups first, counts only, never re-picking someone.
 do $$
 declare
   r jsonb;
 begin
-  r := pg_temp.admin($q$waitlist_api.admin_wave_preview('active_creator')$q$);
-  if (r->>'eligible')::int <> 3 or (r->>'eligible_verified')::int <> 1 then
+  r := pg_temp.admin($q$waitlist_api.admin_wave_preview('any')$q$);
+  if (r->>'eligible')::int <> 4 or (r->>'not_eligible_unverified')::int <> 2 then
     raise exception 'FAIL: wave preview is wrong: %', r;
   end if;
-  if (pg_temp.admin($q$waitlist_api.admin_wave_preview('active_creator', true)$q$)->>'eligible')::int <> 1 then
-    raise exception 'FAIL: the verified-only preview is wrong';
+  if (pg_temp.admin($q$waitlist_api.admin_wave_preview('aspiring_creator')$q$)->>'eligible')::int <> 0 then
+    raise exception 'FAIL: an unverified aspiring creator was counted as eligible';
   end if;
 
   r := pg_temp.admin($q$waitlist_api.admin_wave_select('wave_1', 'active_creator', array['group_balance'], 2)$q$);
-  if r::text ~* '@|[0-9a-f]{8}-[0-9a-f]{4}-' or (r->>'selected')::int <> 2 or (r->>'verified')::int <> 1 then
+  if r::text ~* '@|[0-9a-f]{8}-[0-9a-f]{4}-' or (r->>'selected')::int <> 2 then
     raise exception 'FAIL: wave selection is wrong or exposes people: %', r;
   end if;
   -- Earliest signups first: c1 and c2, not cs.
@@ -91,18 +91,29 @@ begin
      or (select status from ops.waitlist where email = 'c1@ops.test') <> 'shortlisted' then
     raise exception 'FAIL: wave selection did not pick the earliest signups, or did not shortlist them';
   end if;
-  -- Nobody already shortlisted is picked again, and 'any' fills from the rest.
+  -- 'any' takes the remaining VERIFIED entries only: cs and s1, never a1 or q1.
   r := pg_temp.admin($q$waitlist_api.admin_wave_select('wave_2', 'any', array['targeted_feedback', 'group_balance'], 10)$q$);
-  if (r->>'selected')::int <> 4 then
-    raise exception 'FAIL: a second wave re-picked someone or missed someone: %', r;
+  if (r->>'selected')::int <> 2 then
+    raise exception 'FAIL: a second wave re-picked someone, missed someone or took an unverified entry: %', r;
+  end if;
+  if exists (select 1 from ops.waitlist_selections s join ops.waitlist w on w.id = s.waitlist_id where not w.verified) then
+    raise exception 'FAIL: an unverified entry entered a wave';
   end if;
 
   r := pg_temp.admin($q$waitlist_api.admin_wave_summary('wave_2')$q$);
-  if (r->>'selected')::int <> 4 or r->'reasons' <> '{"group_balance": 4, "targeted_feedback": 4}'::jsonb
+  if (r->>'selected')::int <> 2 or r->'reasons' <> '{"group_balance": 2, "targeted_feedback": 2}'::jsonb
      or (r->'participant_groups'->>'supporter')::int <> 2 or r::text ~ '@' then
     raise exception 'FAIL: the wave summary is wrong: %', r;
   end if;
-  raise notice 'PASS: waves pick approved groups, earliest first, with approved reasons, counts only';
+
+  -- The table itself refuses an unverified entry, whoever writes it.
+  begin
+    insert into ops.waitlist_selections (waitlist_id, wave, reasons)
+    select id, 'wave_9', array['group_balance'] from ops.waitlist where email = 'q1@ops.test';
+    raise exception 'FAIL: an unverified entry was written into a wave directly';
+  exception when check_violation then null;
+  end;
+  raise notice 'PASS: waves take verified entries only, by approved group and reason, earliest first, counts only';
 end $$;
 
 -- 3. Waves refuse anything outside the approved lists, and never invite.
@@ -117,19 +128,20 @@ begin
     $q$waitlist_api.admin_wave_select('wave_3', 'any', array['group_balance'], 0)$q$,
     $q$waitlist_api.admin_wave_select('wave_3', 'any', array['group_balance'], 101)$q$,
     $q$waitlist_api.admin_wave_select('Wave 3!', 'any', array['group_balance'], 1)$q$,
+    $q$waitlist_api.admin_wave_select('wave_3', 'any', array['group_balance'], 1, true)$q$,
     $q$waitlist_api.admin_wave_preview('vip')$q$
   ] loop
     begin
       perform pg_temp.admin(bad);
       raise exception 'FAIL: accepted %', bad;
-    exception when check_violation or raise_exception then
+    exception when check_violation or raise_exception or undefined_function then
       if sqlerrm like 'FAIL:%' then raise; end if;
     end;
   end loop;
-  -- Shortlisted is not invited: an unverified shortlisted entry still can't be invited.
+  -- Unverified entries still can't be marked invited.
   begin
-    update ops.waitlist set status = 'invited' where email = 'c1@ops.test';
-    raise exception 'FAIL: an unverified shortlisted entry was marked invited';
+    update ops.waitlist set status = 'invited' where email = 'q1@ops.test';
+    raise exception 'FAIL: an unverified entry was marked invited';
   exception when check_violation then null;
   end;
   if exists (select 1 from ops.invitations where email like '%@ops.test') then

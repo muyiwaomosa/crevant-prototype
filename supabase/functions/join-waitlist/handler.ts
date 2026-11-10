@@ -305,3 +305,28 @@ export async function verifyWithCloudflare(
     action: typeof data.action === 'string' ? data.action : undefined,
   }
 }
+
+/**
+ * Limits how often the health check can reach the database: a result is
+ * reused for `ttlMs` (failures for a third of that, so recovery shows
+ * sooner), and simultaneous checks share one database call. However often
+ * someone requests GET, each function instance runs at most one `select 1`
+ * per period, over its single connection.
+ */
+export function cachedHealthCheck(check: () => Promise<boolean>, ttlMs = 30_000, now: () => number = () => Date.now()) {
+  let last: { ok: boolean; at: number } | null = null
+  let inFlight: Promise<boolean> | null = null
+  return async (): Promise<boolean> => {
+    if (last && now() - last.at < (last.ok ? ttlMs : ttlMs / 3)) return last.ok
+    if (!inFlight) {
+      inFlight = check()
+        .catch(() => false)
+        .then((ok) => {
+          last = { ok, at: now() }
+          inFlight = null
+          return ok
+        })
+    }
+    return inFlight
+  }
+}
