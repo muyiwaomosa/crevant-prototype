@@ -1,3 +1,5 @@
+import { APPROVED_NOTICE, type ApprovedNotice } from '../privacy/notice'
+
 /**
  * The waitlist form's browser switch. The form appears only when ALL of these
  * are set for the build, so a half-configured build can never show it:
@@ -5,8 +7,12 @@
  *   VITE_WAITLIST_FORM_ENABLED    exactly 'true' (OFF by default, including Preview)
  *   VITE_WAITLIST_ENDPOINT        the join-waitlist server function's address
  *   VITE_TURNSTILE_SITE_KEY       Cloudflare Turnstile site key (public)
- *   VITE_PRIVACY_NOTICE_URL       the APPROVED, published privacy notice
+ *   VITE_PRIVACY_NOTICE_URL       exactly '/privacy', where the approved notice is published
  *   VITE_PRIVACY_NOTICE_VERSION   its version, stored with every consent
+ *
+ * and there must be an APPROVED privacy notice (src/public/privacy/notice.ts)
+ * whose version is exactly VITE_PRIVACY_NOTICE_VERSION. Until a notice is
+ * approved, the form cannot turn on, whatever the settings say.
  *
  * No Supabase key is needed or used: the form posts JSON straight to the
  * server function, which checks the origin, Turnstile and its own switches.
@@ -29,7 +35,7 @@ const NOTICE_VERSION = /^[a-z0-9._-]{1,40}$/
  */
 export const WAITLIST_ENDPOINT = /^(https:\/\/[a-z0-9]{20}\.supabase\.co|http:\/\/(127\.0\.0\.1|localhost):\d{2,5})\/functions\/v1\/join-waitlist$/
 
-export function readWaitlistConfig(env: Record<string, unknown>): WaitlistConfig | null {
+export function readWaitlistConfig(env: Record<string, unknown>, notice: ApprovedNotice | null = APPROVED_NOTICE): WaitlistConfig | null {
   const get = (k: string) => (typeof env[k] === 'string' ? (env[k] as string).trim() : '')
   if (get('VITE_WAITLIST_FORM_ENABLED') !== 'true') return null
   const endpoint = get('VITE_WAITLIST_ENDPOINT')
@@ -37,7 +43,9 @@ export function readWaitlistConfig(env: Record<string, unknown>): WaitlistConfig
   const noticeUrl = get('VITE_PRIVACY_NOTICE_URL')
   const noticeVersion = get('VITE_PRIVACY_NOTICE_VERSION')
   if (!WAITLIST_ENDPOINT.test(endpoint) || !turnstileSiteKey || !NOTICE_VERSION.test(noticeVersion)) return null
-  if (!/^(https:\/\/[^\s]+|\/[a-z0-9/_-]*)$/i.test(noticeUrl)) return null
+  if (noticeUrl !== '/privacy') return null
+  // No approved notice, or a different version: no form.
+  if (!notice || notice.version !== noticeVersion) return null
   return { endpoint, turnstileSiteKey, noticeUrl, noticeVersion }
 }
 

@@ -1,0 +1,5 @@
+{
+  "_comment": "The approved privacy notice's version and effective date. Both stay null until the notice is approved by the founder after legal review; they are filled in, with the approved text, in a reviewed pull request. While null, the waitlist form cannot be turned on anywhere, and a Production build with the form on fails.",
+  "version": null,
+  "effectiveDate": null
+}

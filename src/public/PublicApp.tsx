@@ -7,6 +7,7 @@ import { LandingPage } from './LandingPage'
 import { RequestInvitePage } from './RequestInvitePage'
 import { JoinPage } from './JoinPage'
 import { PublicNotFound } from './PublicNotFound'
+import { PrivacyPage } from './PrivacyPage'
 import { SignInPage } from './auth/SignInPage'
 import { ForgotPasswordPage } from './auth/ForgotPasswordPage'
 import { ConfirmPage } from './auth/ConfirmPage'
@@ -39,6 +40,7 @@ export function PublicRoutes() {
         <Route index element={<LandingPage />} />
         <Route path="request-invite" element={<RequestInvitePage />} />
         <Route path="join" element={<JoinPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
         {/* The earlier creator and supporter pages now point to the one waitlist. */}
         <Route path="join/creator" element={<Navigate to="/join" replace />} />
         <Route path="join/supporter" element={<Navigate to="/join" replace />} />

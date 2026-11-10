@@ -52,15 +52,35 @@ It has no member pages. Sign in, password reset, invitation confirmation, `/app`
 
 `vercel.json` allows scripts and frames from `https://challenges.cloudflare.com` only, for the waitlist's bot check (Cloudflare Turnstile). The only other outside sources are Google Fonts styles and fonts. `connect-src` still allows the staging Supabase project, for the full app on Preview and for the waitlist function later.
 
+## Production safeguards (launch preparation)
+
+Production still serves the frozen `demo` branch. These safeguards are in `main` so the later, approved switch is safe, and none of them can affect the demo, which has its own `package.json` and never runs them.
+
+* **One build entry point.** `npm run build` (`scripts/build.mjs`) builds:
+  * the full app everywhere, as before
+  * the public site build for Vercel Production always, or for a Preview branch with `CREVANT_BUILD=site`
+* **Two locks on Production.** A Production build of `main` fails unless it's the public site build **and** `CREVANT_PRODUCTION_SITE_APPROVED=true` is set in Vercel's Production environment variables. That variable is set only at the approved switch, together with moving Production Branch Tracking to `main`.
+* **The demo stays protected.** Every build except an approved Production build still shows the demo at `crevant-prototype.vercel.app`, so promoting a Preview can't replace it.
+* **Separate waitlist addresses.** Project references live in `config/supabase-projects.json`, where staging is set and **Production is `null`**.
+  * A Preview or local build may only use the staging function.
+  * A Production build may only use the Production function, and while it's `null`, any waitlist address fails the build (fail closed).
+  * The Production bundle check refuses the staging project; other builds refuse the Production project once it's set.
+* **Privacy gate.** `/privacy` says plainly that no notice is published and registrations aren't open. The form can't turn on unless an **approved** notice exists (`src/public/privacy/approved-notice.json` plus its text, added in a reviewed PR) whose version matches `VITE_PRIVACY_NOTICE_VERSION`, with the notice URL `/privacy`. A Production build with the form on and no approved notice (or a test notice) fails.
+* **Search indexing.** Indexing is off everywhere unless an approved Production build also has `CREVANT_ALLOW_INDEXING=true`. Then only `/` and `/join` on `crevant-prototype.vercel.app` may be indexed.
+  * `vercel.json` sends `noindex` on every other address (Previews, deployment addresses) and on `/tour`, `/privacy`, member paths and deeper paths of the production address.
+  * The robots meta tag and `robots.txt` default to `noindex` and "disallow all".
+  * The sitemap exists only once indexing is allowed.
+* **Tests.** These run in the Public site CI job: an unapproved build at the production address still shows the demo, and an approved build shows the public site with only `/` and `/join` indexable. Unit and script tests cover the guards, endpoints, indexing and privacy gate.
+
+To verify on a Preview once deployed: the response has `X-Robots-Tag: noindex` (the header rules use Vercel `has`/`missing` host conditions, which can only be confirmed on Vercel itself).
+
 ## Not done yet (each needs approval)
 
 Moving Production to this build would need:
 
-* a Vercel Production build command of `npm run build:site`
-* the Production block changed to allow site mode only
-* the production demo address removed from `PRODUCTION_DEMO_HOSTS`
+* Vercel Production Branch Tracking set to `main`, and `CREVANT_PRODUCTION_SITE_APPROVED=true` in Production variables (no build command change: `npm run build` chooses the site build itself)
 * `scripts/check-production-demo.sh` changed to check for this build
 * branch protection on `main`, with the **Public site** CI job as a required check (alongside App, Database, Integration and Browser)
-* a decision on search engine indexing (`X-Robots-Tag` is `noindex` today)
+* `CREVANT_ALLOW_INDEXING=true` in Production variables, at the separate indexing approval
 
 The waitlist form works in this build without any Supabase key: it posts to the function address in `VITE_WAITLIST_ENDPOINT`. That address is the one Supabase address the bundle check allows. `scripts/e2e/public-site.sh` also builds the site with the form configured, and checks the bundle holds the function address and no key.

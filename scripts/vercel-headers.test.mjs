@@ -30,5 +30,28 @@ test('the earlier security headers are still present', () => {
   assert.equal(headers['X-Content-Type-Options'], 'nosniff')
   assert.equal(headers['X-Frame-Options'], 'DENY')
   assert.equal(headers['Referrer-Policy'], 'strict-origin-when-cross-origin')
-  assert.match(headers['X-Robots-Tag'], /noindex/)
+})
+
+const PRODUCTION_HOST = 'crevant-prototype.vercel.app'
+const robotsRules = config.headers.filter((h) => h.headers.some((x) => x.key === 'X-Robots-Tag'))
+
+test('every address except the production one is noindex (Previews, deployment addresses, anything else)', () => {
+  const everywhereElse = robotsRules.find((h) => h.source === '/(.*)')
+  assert.ok(everywhereElse, 'missing the catch-all noindex rule')
+  assert.deepEqual(everywhereElse.missing, [{ type: 'host', value: PRODUCTION_HOST }])
+  assert.equal(everywhereElse.has, undefined)
+  assert.deepEqual(everywhereElse.headers, [{ key: 'X-Robots-Tag', value: 'noindex' }])
+  // The security headers no longer carry X-Robots-Tag; robots is handled above.
+  assert.equal(headers['X-Robots-Tag'], undefined)
+})
+
+test('on the production address, the tour, /privacy, member paths and any deeper path are noindex', () => {
+  const onProduction = robotsRules.filter((h) => JSON.stringify(h.has) === JSON.stringify([{ type: 'host', value: PRODUCTION_HOST }]))
+  assert.deepEqual(onProduction.map((h) => h.source).sort(), [
+    '/:first/:rest+', '/app', '/app/:path*', '/auth/:path*', '/forgot-password', '/privacy', '/request-invite', '/sign-in', '/tour', '/tour/:path*',
+  ].sort())
+  for (const h of onProduction) assert.deepEqual(h.headers, [{ key: 'X-Robots-Tag', value: 'noindex' }])
+  // Nothing ever sets an "index" robots header: indexing of / and /join is
+  // decided at build time (robots meta and robots.txt), only once approved.
+  assert.equal(config.headers.some((h) => h.headers.some((x) => x.key === 'X-Robots-Tag' && x.value !== 'noindex')), false)
 })

@@ -22,6 +22,10 @@ for _ in $(seq 1 60); do
 done
 
 node e2e/public-site.e2e.cjs "http://127.0.0.1:$APP_PORT"
+# At the production address, a build without Production approval must still
+# show the demo, and be noindex with robots.txt disallowing everything.
+node e2e/public-site-launch.e2e.cjs "$APP_PORT" unapproved
+kill "$preview_pid" 2>/dev/null || true
 
 # The site build with the waitlist form fully configured (test values only):
 # the bundle check must still pass, the function address must be the only
@@ -41,4 +45,28 @@ else
   exit 1
 fi
 # Leave dist/ as the default (form off) build.
+npm run build:site >/dev/null
+
+# An APPROVED Production build with indexing approved (simulated: nothing is
+# deployed). It must build only the public site, pass the bundle check with
+# the staging project forbidden, show the public site at the production
+# address, and index only / and /join. Without approval it must not build.
+if env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY VERCEL_ENV=production npm run build >/dev/null 2>&1; then
+  echo "FAIL  a Production build ran without approval" >&2
+  exit 1
+fi
+echo "PASS  a Production build without approval is refused"
+env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY \
+  VERCEL_ENV=production CREVANT_PRODUCTION_SITE_APPROVED=true CREVANT_ALLOW_INDEXING=true \
+  npm run build >/dev/null
+node_modules/.bin/vite preview --host 127.0.0.1 --port "$APP_PORT" --strictPort >/dev/null 2>&1 &
+preview_pid=$!
+for _ in $(seq 1 60); do
+  curl -fs "http://127.0.0.1:$APP_PORT/" >/dev/null 2>&1 && break
+  sleep 0.5
+done
+node e2e/public-site-launch.e2e.cjs "$APP_PORT" approved
+kill "$preview_pid" 2>/dev/null || true
+
+# Leave dist/ as the default (form off, not approved) public site build.
 npm run build:site >/dev/null

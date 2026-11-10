@@ -43,8 +43,17 @@ export function isTourPath(pathname: string): boolean {
   return pathname === TOUR_BASE || pathname.startsWith(`${TOUR_BASE}/`)
 }
 
-export function resolveEntry(loc: { hostname: string; pathname: string; search: string; hash: string }): Entry {
-  if (isProductionDemoHost(loc.hostname)) return { kind: 'demo-fallback' }
+/**
+ * `demoFallback: false` is used only by an APPROVED Vercel Production build of
+ * the public site (src/site/main.tsx), so the public site can replace the
+ * demo at the production address. Every other build keeps the fallback, so a
+ * promoted Preview still can't replace the demo.
+ */
+export function resolveEntry(
+  loc: { hostname: string; pathname: string; search: string; hash: string },
+  { demoFallback = true }: { demoFallback?: boolean } = {},
+): Entry {
+  if (demoFallback && isProductionDemoHost(loc.hostname)) return { kind: 'demo-fallback' }
   if (isTourPath(loc.pathname)) return { kind: 'tour' }
   if (LEGACY_PROTOTYPE_PATHS.some((re) => re.test(loc.pathname))) {
     return { kind: 'tour', redirectTo: `${TOUR_BASE}${loc.pathname}${loc.search}${loc.hash}` }
