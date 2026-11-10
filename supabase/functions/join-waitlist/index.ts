@@ -5,18 +5,27 @@
 //   WAITLIST_FUNCTION_ENABLED   'true' to accept submissions; anything else = closed
 //   WAITLIST_DB_URL             postgres:// URL logging in as waitlist_writer
 //                               (through the Supabase pooler: user
-//                               waitlist_writer.<project ref>). Any other login
-//                               is refused. Missing = closed.
+//                               waitlist_writer.<project ref>, port 6543). Any
+//                               other login, another project's database, or
+//                               any connection setting after "?" is refused.
+//                               Missing = closed.
 //   WAITLIST_DB_CA_CERT         optional PEM certificate to verify the database
-//                               against, if its certificate isn't publicly trusted.
+//                               against, if its certificate isn't publicly
+//                               trusted. TLS verification can't be turned off.
 //   WAITLIST_ALLOWED_ORIGINS    comma-separated exact origins allowed to call it
 //   WAITLIST_ALLOWED_HOSTNAMES  comma-separated hostnames Turnstile must report
 //   TURNSTILE_SECRET_KEY        Cloudflare Turnstile secret. Missing = closed.
 //   WAITLIST_RATE_SALT          random string (at least 32 characters) used to
 //                               make the salted rate limit keys. Missing = closed.
 //   WAITLIST_TRUSTED_PROXY_HOPS how many X-Forwarded-For entries, counted from
-//                               the right, Supabase's own proxies add (default 1).
-//                               Confirm before activation (docs/WAITLIST.md).
+//                               the right, Supabase's own proxies add (1 to 5).
+//                               No default: it must be confirmed on the hosted
+//                               platform first (docs/WAITLIST.md, hosted
+//                               staging check 3). Missing = closed.
+//
+// Supabase also provides SUPABASE_URL (https://<project ref>.supabase.co),
+// which secrets can't override. The database URL must belong to that same
+// project, so a function can never be pointed at another project's database.
 //
 // This function does not read SUPABASE_SERVICE_ROLE_KEY or SUPABASE_DB_URL,
 // which Supabase provides to every function. It uses only the restricted login.
@@ -26,8 +35,8 @@
 //   supabase functions deploy join-waitlist --no-verify-jwt
 
 import postgres from 'npm:postgres@3.4.9'
-import { cachedHealthCheck, clientIpFrom, handleJoin, rateKeysFor, verifyWithCloudflare } from './handler.ts'
-import { databaseOptions, databaseReachable, submitWithDatabase, type Sql } from './db.ts'
+import { cachedHealthCheck, clientIpFrom, handleJoin, parseTrustedHops, rateKeysFor, verifyWithCloudflare } from './handler.ts'
+import { checkDatabaseTarget, databaseOptions, databaseReachable, submitWithDatabase, type Sql } from './db.ts'
 
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
 const list = (k: string) =>
@@ -36,27 +45,40 @@ const list = (k: string) =>
     .map((s) => s.trim())
     .filter(Boolean)
 
+const configProblem = (problem: string) => console.error(JSON.stringify({ event: 'config', problem }))
+
 // Build the database client once per instance. Any problem with the URL
-// (wrong login, no password) leaves the function closed.
+// (wrong login, another project, connection settings, no password, a bad
+// certificate) leaves the function closed. There is no fallback.
 let sql: Sql | null = null
 try {
   if (env('WAITLIST_DB_URL')) {
-    const db = databaseOptions(env('WAITLIST_DB_URL'), env('WAITLIST_DB_CA_CERT') || undefined)
+    const target = checkDatabaseTarget(env('WAITLIST_DB_URL'), env('SUPABASE_URL'))
+    const db = databaseOptions(env('WAITLIST_DB_URL'), { caCert: env('WAITLIST_DB_CA_CERT') || undefined, localPlaintext: target.local })
     sql = postgres(db.url, db.options) as unknown as Sql
   }
 } catch (e) {
-  console.error(JSON.stringify({ event: 'config', problem: (e as Error).message }))
+  configProblem((e as Error).message)
 }
 
+// Not guessed: without a confirmed hop count the visitor's address can't be
+// established, so the function stays closed.
+const trustedHops = parseTrustedHops(env('WAITLIST_TRUSTED_PROXY_HOPS'))
+if (trustedHops === null) configProblem('WAITLIST_TRUSTED_PROXY_HOPS is not set to a confirmed value (1 to 5)')
+
 const enabled =
-  env('WAITLIST_FUNCTION_ENABLED') === 'true' && sql !== null && env('WAITLIST_RATE_SALT').length >= 32 && env('TURNSTILE_SECRET_KEY') !== ''
+  env('WAITLIST_FUNCTION_ENABLED') === 'true' &&
+  sql !== null &&
+  trustedHops !== null &&
+  env('WAITLIST_RATE_SALT').length >= 32 &&
+  env('TURNSTILE_SECRET_KEY') !== ''
 
 // At most one database health check per 30 seconds per instance.
 const health = cachedHealthCheck(() => databaseReachable(sql))
 
 Deno.serve(async (req: Request) => {
   // Only the trusted hop of X-Forwarded-For; client-supplied headers are ignored.
-  const ip = clientIpFrom(req.headers.get('x-forwarded-for'), Number(env('WAITLIST_TRUSTED_PROXY_HOPS') || '1'))
+  const ip = clientIpFrom(req.headers.get('x-forwarded-for'), trustedHops)
   const out = await handleJoin(
     {
       method: req.method,

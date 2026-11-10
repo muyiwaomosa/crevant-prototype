@@ -19,6 +19,9 @@
 #     (<login> is EXPECTED_DB_USER, default postgres)
 #   - use port 5432 (session pooler or direct), not the 6543 transaction pooler
 #   - not disable or weaken TLS
+#   - with REQUIRE_VERIFY_FULL=1 (the rollback workflow): carry no connection
+#     settings at all except sslmode=verify-full, so full certificate and
+#     hostname verification can't be overridden from the URL
 set -euo pipefail
 
 fail() { echo "::error::$1"; exit 1; }
@@ -82,6 +85,10 @@ if port != 5432:
 sslmode = parse_qs(u.query).get("sslmode", [""])[0].lower()
 if sslmode in ("disable", "allow", "prefer"):
     fail("STAGING_DATABASE_URL must not disable or weaken TLS (remove the sslmode setting).")
+if os.environ.get("REQUIRE_VERIFY_FULL") == "1":
+    params = parse_qs(u.query, keep_blank_values=True)
+    if any(k != "sslmode" for k in params) or params.get("sslmode", ["verify-full"]) != ["verify-full"]:
+        fail("STAGING_DATABASE_URL must not carry connection settings here, except sslmode=verify-full (full certificate verification).")
 
 print(f"Target verified: Supabase project {ref} via {kind} on port 5432.")
 PY

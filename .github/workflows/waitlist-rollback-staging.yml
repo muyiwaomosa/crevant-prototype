@@ -1,0 +1,114 @@
+name: Waitlist rollback (staging)
+
+# Removes the two waitlist migrations' objects from the Crevant STAGING
+# Supabase project (scripts/db/staging-rollback-waitlist.sql), so they can be
+# applied again cleanly. Staging only. It never runs on its own.
+#
+#   check  (default) every check, and the drops themselves, inside one
+#          transaction that is then rolled back. Changes nothing.
+#   apply  the same, committed. Needs the typed confirmation phrase.
+#
+# It refuses, changing nothing, if any registration, consent record,
+# selection, rate limit record or privacy notice version exists (the full
+# list is at the top of the SQL file).
+#
+# Safeguards, none of which depend on the others:
+#   * Off until the founder approves using it: the staging environment
+#     variable WAITLIST_ROLLBACK_ENABLED must be exactly "true". It is not set.
+#   * Started by hand only, from main, by the repository owner.
+#   * The typed project reference must match the staging project, as must
+#     the environment variable and the project inside the connection string
+#     (scripts/db/verify-staging-target.sh). A Production project can never match.
+#   * Full TLS certificate and hostname verification (sslmode=verify-full);
+#     the connection string may not weaken it.
+#   * The staging environment's approval rule applies too, but this workflow
+#     does not assume it is configured (docs/LAUNCH-RUNBOOK.md lists how to
+#     check it).
+#   * Shares the database deploy workflow's queue, so it can never run while
+#     migrations are being applied.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = dry run, changes nothing. apply = remove the waitlist objects (needs the phrase below)."
+        type: choice
+        options:
+          - check
+          - apply
+        default: check
+        required: true
+      confirm_project_ref:
+        description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
+        type: string
+        required: true
+      confirm_phrase:
+        description: "For apply only, type exactly: DELETE THE STAGING WAITLIST"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-staging
+  cancel-in-progress: false
+
+env:
+  # The one project this workflow may ever touch. Changing it requires a reviewed PR.
+  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
+
+jobs:
+  rollback:
+    name: ${{ inputs.mode == 'apply' && 'Roll back the waitlist on staging' || 'Rollback check on staging (no changes)' }}
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - name: Refuse unless the founder has enabled this workflow
+        env:
+          ENABLED: ${{ vars.WAITLIST_ROLLBACK_ENABLED }}
+        run: |
+          if [ "$ENABLED" != "true" ]; then
+            echo "::error::The staging rollback is not enabled (the staging environment variable WAITLIST_ROLLBACK_ENABLED is not \"true\"). Nothing was done."
+            exit 1
+          fi
+
+      - name: Refuse apply without the confirmation phrase
+        env:
+          MODE: ${{ inputs.mode }}
+          PHRASE: ${{ inputs.confirm_phrase }}
+        run: |
+          if [ "$MODE" = apply ] && [ "$PHRASE" != "DELETE THE STAGING WAITLIST" ]; then
+            echo "::error::apply needs the exact confirmation phrase. Nothing was done."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved staging project, with full TLS verification
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+          REQUIRE_VERIFY_FULL: '1'
+        run: scripts/db/verify-staging-target.sh
+
+      - name: Run the rollback
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          MODE: ${{ inputs.mode }}
+          PHRASE: ${{ inputs.confirm_phrase }}
+          PGSSLMODE: verify-full
+          PGSSLROOTCERT: system
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          major="$(psql --version | grep -oE '[0-9]+' | head -1)"
+          if [ "$major" -lt 16 ]; then
+            echo "::error::psql $major cannot verify against the system certificates (needs 16 or later). Nothing was done."
+            exit 1
+          fi
+          psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v mode="$MODE" -v confirm="$PHRASE" \
+            -f scripts/db/staging-rollback-waitlist.sql

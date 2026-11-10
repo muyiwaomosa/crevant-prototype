@@ -111,5 +111,46 @@ else
   echo "FAIL  start-up script no longer reserves ports or starts Supabase in more than one place"; failed=$((failed+1))
 fi
 
+# The rollback workflow requires full TLS verification in the connection string.
+expect_vf() { REQUIRE_VERIFY_FULL=1 expect "$@"; }
+expect_vf ok   "rollback: a plain session pooler URL (verify-full comes from the workflow)" "postgresql://postgres.$REF:$PW@$POOL:5432/postgres"
+expect_vf ok   "rollback: sslmode=verify-full in the URL"                 "postgresql://postgres.$REF:$PW@$POOL:5432/postgres?sslmode=verify-full"
+expect_vf fail "rollback: sslmode=require (no verification) is refused"   "postgresql://postgres.$REF:$PW@$POOL:5432/postgres?sslmode=require"
+expect_vf fail "rollback: sslmode=verify-ca (no hostname check) is refused" "postgresql://postgres.$REF:$PW@$POOL:5432/postgres?sslmode=verify-ca"
+expect_vf fail "rollback: another root certificate in the URL is refused" "postgresql://postgres.$REF:$PW@$POOL:5432/postgres?sslmode=verify-full&sslrootcert=/tmp/x"
+expect_vf fail "rollback: other connection options are refused"           "postgresql://postgres.$REF:$PW@$POOL:5432/postgres?options=-c%20role%3Dx"
+expect_vf fail "rollback: the restricted admin login is not the rollback login" "postgresql://waitlist_admin.$REF:$PW@$POOL:5432/postgres"
+
+# The staging rollback workflow and its SQL.
+rb=.github/workflows/waitlist-rollback-staging.yml
+rbsql=scripts/db/staging-rollback-waitlist.sql
+guard() { # guard <description> <test command>
+  if eval "$2"; then echo "PASS  $1"; pass=$((pass+1)); else echo "FAIL  $1"; failed=$((failed+1)); fi
+}
+guard "rollback workflow: started by hand only (workflow_dispatch, no other trigger)" \
+  "grep -A1 '^on:' $rb | grep -q '^  workflow_dispatch:' && ! grep -qE '^  (push|pull_request|pull_request_target|schedule|workflow_run|repository_dispatch|workflow_call):' $rb"
+guard "rollback workflow: main only, repository owner only, staging environment" \
+  "grep -q \"if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner\" $rb && grep -q '^    environment: staging$' $rb"
+guard "rollback workflow: defaults to the dry run" \
+  "grep -A6 '      mode:' $rb | grep -q 'default: check'"
+guard "rollback workflow: off unless WAITLIST_ROLLBACK_ENABLED is exactly true, checked first" \
+  "awk '/- name:/{n++} /WAITLIST_ROLLBACK_ENABLED/ && !f{f=n} END{exit !(f==1)}' $rb && grep -q '\"\$ENABLED\" != \"true\"' $rb"
+guard "rollback workflow: verifies the staging target, with verify-full, before connecting" \
+  "awk '/^        run: scripts\/db\/verify-staging-target.sh$/{v=NR} /psql \"\\\$STAGING_DATABASE_URL\"/{p=NR} END{exit !(v && p && v<p)}' $rb && grep -q \"REQUIRE_VERIFY_FULL: '1'\" $rb && grep -q 'PGSSLMODE: verify-full' $rb"
+guard "rollback workflow: uses only the STAGING_DATABASE_URL secret" \
+  "[ \"\$(grep -oE 'secrets\.[A-Z_]+' $rb | sort -u)\" = 'secrets.STAGING_DATABASE_URL' ]"
+guard "rollback workflow: inputs and secrets reach commands only through env (no injection)" \
+  "! grep -E '\\\$\{\{ *(inputs|secrets|vars)\.' $rb | grep -vqE '^ +([A-Z_]+|name): '"
+guard "rollback workflow: shares the database deploy queue" \
+  "grep -A1 '^concurrency:' $rb | grep -q 'group: deploy-database-staging'"
+guard "rollback SQL: never cascades, never drops owned objects in bulk" \
+  "! grep -viE '^ *--' $rbsql | grep -qiE 'cascade|drop owned|reassign owned'"
+guard "rollback SQL: refuses without the confirmation phrase for apply, and rolls back in check mode" \
+  "grep -q \"'DELETE THE STAGING WAITLIST'\" $rbsql && grep -qE '^  rollback;' $rbsql"
+
+# No other workflow or script may run the rollback SQL.
+guard "only the rollback workflow and its local test run the rollback SQL" \
+  "[ \"\$(grep -rlF 'staging-rollback-waitlist.sql' .github scripts | grep -v -e '^scripts/db/staging-rollback-waitlist.sql$' | sort | paste -sd,)\" = '.github/workflows/waitlist-rollback-staging.yml,scripts/db/rollback-test.sh,scripts/db/test-guards.sh,scripts/waitlist-isolation.test.mjs' ]"
+
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]

@@ -26,15 +26,18 @@ export interface DatabaseOptions {
 }
 
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '::1']
-
 /**
- * Checks the connection URL and builds the client options, or explains why
- * it refuses. Refuses any login but waitlist_writer (plain, or
- * waitlist_writer.<project ref> as the Supabase pooler expects), so a broader
- * credential can never be used by mistake. Anything but a local test database
- * must use TLS with full certificate verification.
+ * The addresses Supabase gives a function as SUPABASE_URL. Hosted:
+ * https://<project ref>.supabase.co. Local (supabase start / functions
+ * serve): http://kong:8000, or this machine for the isolated tests. Secrets
+ * can't override it (Supabase refuses secret names starting with SUPABASE_).
  */
-export function databaseOptions(rawUrl: string, caCert?: string): DatabaseOptions {
+const HOSTED_SUPABASE_URL = /^https:\/\/([a-z0-9]{20})\.supabase\.co$/
+const LOCAL_SUPABASE_URL = /^http:\/\/(kong:8000|127\.0\.0\.1:\d{2,5}|localhost:\d{2,5})$/
+/** Supabase's connection pooler, e.g. aws-0-us-west-2.pooler.supabase.com. */
+const POOLER_HOST = /^[a-z0-9-]+\.pooler\.supabase\.com$/
+
+function parseDatabaseUrl(rawUrl: string): URL {
   let u: URL
   try {
     u = new URL(rawUrl)
@@ -42,17 +45,101 @@ export function databaseOptions(rawUrl: string, caCert?: string): DatabaseOption
     throw new Error('WAITLIST_DB_URL is not a valid URL')
   }
   if (u.protocol !== 'postgres:' && u.protocol !== 'postgresql:') throw new Error('WAITLIST_DB_URL must be a postgres:// URL')
+  // Connection settings in the URL (sslmode, ssl, options, ...) could weaken
+  // TLS or change the login, so none are accepted. TLS is set in code only.
+  if (u.search || u.hash || /[?#]/.test(rawUrl.slice(rawUrl.lastIndexOf('@') + 1))) throw new Error('WAITLIST_DB_URL must not contain connection settings (nothing after ?)')
+  return u
+}
+
+function hostOf(u: URL): string {
+  return u.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+}
+
+export interface DatabaseTarget {
+  /** The project the function belongs to, or null when running locally. */
+  ref: string | null
+  /** True only for a local Supabase, where the database may be on this machine without TLS. */
+  local: boolean
+}
+
+/**
+ * Checks that WAITLIST_DB_URL points at the database of the project this
+ * function runs in, as Supabase itself reports it in SUPABASE_URL, so a
+ * staging function can never be given another project's database (or the
+ * reverse). Fails closed: anything it doesn't recognise is refused.
+ *
+ * Hosted, the URL must be either
+ *   the pooler:  waitlist_writer.<ref> @ <region>.pooler.supabase.com:6543
+ *   direct:      waitlist_writer       @ db.<ref>.supabase.co:5432
+ * with <ref> equal to the project in SUPABASE_URL. A local database is only
+ * accepted when SUPABASE_URL is itself local.
+ */
+export function checkDatabaseTarget(rawUrl: string, supabaseUrl: string): DatabaseTarget {
+  const u = parseDatabaseUrl(rawUrl)
+  const user = decodeURIComponent(u.username)
+  const host = hostOf(u)
+  const port = u.port || '5432'
+  const hosted = HOSTED_SUPABASE_URL.exec(supabaseUrl.trim())
+  if (hosted) {
+    const ref = hosted[1]
+    if (POOLER_HOST.test(host)) {
+      if (port !== '6543') throw new Error('WAITLIST_DB_URL must use the transaction pooler port, 6543')
+      if (user !== `${WRITER_ROLE}.${ref}`) throw new Error("WAITLIST_DB_URL must log in as waitlist_writer on this function's own project")
+      return { ref, local: false }
+    }
+    if (host === `db.${ref}.supabase.co`) {
+      if (port !== '5432') throw new Error('WAITLIST_DB_URL must use port 5432 for a direct connection')
+      if (user !== WRITER_ROLE) throw new Error('WAITLIST_DB_URL must log in as waitlist_writer')
+      return { ref, local: false }
+    }
+    throw new Error("WAITLIST_DB_URL must point at this function's own Supabase project (pooler or direct host)")
+  }
+  if (LOCAL_SUPABASE_URL.test(supabaseUrl.trim())) {
+    if (!LOCAL_HOSTS.includes(host)) {
+      throw new Error('a local function may only use a local database')
+    }
+    if (user !== WRITER_ROLE) throw new Error('WAITLIST_DB_URL must log in as waitlist_writer')
+    return { ref: null, local: true }
+  }
+  throw new Error('SUPABASE_URL is missing or not a recognised Supabase address, so the project cannot be confirmed')
+}
+
+/** A PEM certificate (public), never a private key or anything else. */
+function checkCaCertificate(ca: string): string {
+  const pem = ca.trim()
+  const block = /^-----BEGIN CERTIFICATE-----\r?\n[A-Za-z0-9+/=\r\n]+-----END CERTIFICATE-----$/
+  const blocks = pem.split(/(?<=-----END CERTIFICATE-----)\s*/).filter(Boolean)
+  if (!blocks.length || !blocks.every((b) => block.test(b.trim())) || /PRIVATE KEY/.test(pem)) {
+    throw new Error('WAITLIST_DB_CA_CERT must be one or more PEM certificates')
+  }
+  return pem
+}
+
+/**
+ * Checks the connection URL and builds the client options, or explains why
+ * it refuses. Refuses any login but waitlist_writer (plain, or
+ * waitlist_writer.<project ref> as the Supabase pooler expects), so a broader
+ * credential can never be used by mistake. TLS with full certificate and
+ * hostname verification is always on, except for a database on this machine
+ * when the caller has established it is running locally
+ * (checkDatabaseTarget). There is no setting, here or in the URL, that turns
+ * verification off, and a failed connection is never retried with weaker
+ * settings.
+ */
+export function databaseOptions(rawUrl: string, opts: { caCert?: string; localPlaintext?: boolean } = {}): DatabaseOptions {
+  const u = parseDatabaseUrl(rawUrl)
   const user = decodeURIComponent(u.username)
   if (!(user === WRITER_ROLE || /^waitlist_writer\.[a-z0-9]{20}$/.test(user))) {
     throw new Error('WAITLIST_DB_URL must log in as waitlist_writer, the restricted waitlist role')
   }
   if (!u.password) throw new Error('WAITLIST_DB_URL has no password')
-  const host = u.hostname.replace(/^\[|\]$/g, '')
-  const local = LOCAL_HOSTS.includes(host)
+  const host = hostOf(u)
+  const plaintext = opts.localPlaintext === true && LOCAL_HOSTS.includes(host)
+  const ca = opts.caCert ? checkCaCertificate(opts.caCert) : undefined
   return {
     url: rawUrl,
     options: {
-      ssl: local ? false : { rejectUnauthorized: true, servername: host, ...(caCert ? { ca: caCert } : {}) },
+      ssl: plaintext ? false : { rejectUnauthorized: true, servername: host, ...(ca ? { ca } : {}) },
       prepare: false,
       max: 1,
       idle_timeout: 20,

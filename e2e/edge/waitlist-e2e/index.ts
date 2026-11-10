@@ -5,28 +5,33 @@
 // difference: Turnstile is replaced by a stand-in, so the test needs no
 // Cloudflare account. A token "pass:<hostname>:<action>" verifies with that
 // hostname and action; anything else fails. Used by scripts/e2e/waitlist-edge.sh.
+// Everything else (the database target and TLS checks, the trusted proxy hop
+// count from WAITLIST_TRUSTED_PROXY_HOPS, the rate limits) is the real code.
 
 import postgres from 'npm:postgres@3.4.9'
-import { cachedHealthCheck, clientIpFrom, handleJoin, rateKeysFor } from '../join-waitlist/handler.ts'
-import { databaseOptions, databaseReachable, submitWithDatabase, type Sql } from '../join-waitlist/db.ts'
+import { cachedHealthCheck, clientIpFrom, handleJoin, parseTrustedHops, rateKeysFor } from '../join-waitlist/handler.ts'
+import { checkDatabaseTarget, databaseOptions, databaseReachable, submitWithDatabase, type Sql } from '../join-waitlist/db.ts'
 
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
 
 let sql: Sql | null = null
 let configProblem = ''
 try {
-  const db = databaseOptions(env('WAITLIST_DB_URL'))
+  const target = checkDatabaseTarget(env('WAITLIST_DB_URL'), env('SUPABASE_URL'))
+  const db = databaseOptions(env('WAITLIST_DB_URL'), { localPlaintext: target.local })
   sql = postgres(db.url, db.options) as unknown as Sql
 } catch (e) {
   configProblem = (e as Error).message
 }
 
+const trustedHops = parseTrustedHops(env('WAITLIST_TRUSTED_PROXY_HOPS'))
+
 // At most one database health check per 30 seconds per instance.
 const health = cachedHealthCheck(() => databaseReachable(sql))
 
 Deno.serve(async (req: Request) => {
-  if (new URL(req.url).pathname.endsWith('/__config')) return Response.json({ ok: sql !== null, problem: configProblem })
-  const ip = clientIpFrom(req.headers.get('x-forwarded-for'), 1)
+  if (new URL(req.url).pathname.endsWith('/__config')) return Response.json({ ok: sql !== null, problem: configProblem, trustedHops })
+  const ip = clientIpFrom(req.headers.get('x-forwarded-for'), trustedHops)
   const out = await handleJoin(
     {
       method: req.method,
@@ -36,7 +41,7 @@ Deno.serve(async (req: Request) => {
       ip,
     },
     {
-      enabled: sql !== null,
+      enabled: sql !== null && trustedHops !== null,
       allowedOrigins: [env('TEST_ORIGIN')],
       allowedHostnames: [env('TEST_HOSTNAME')],
       verifyTurnstile: async (token) => {

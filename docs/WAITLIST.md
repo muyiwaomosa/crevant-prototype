@@ -83,16 +83,16 @@ Nothing yet proves a visitor owns the address they type, so:
 
 Both roles have no special powers: no superuser, no creating roles or databases, no replication, no bypassing row level security, and no membership of other roles. The `waitlist_api` functions run as the table owner, with a fixed empty search path and fully qualified names, so each can do exactly its one job. The schema isn't exposed through the Data API, and no API role (`anon`, `authenticated`, `service_role`) can use it.
 
-**No passwords are in the repository.** The migration creates both roles without a password, and a role without a password can't log in. When activation is approved, the founder sets each password in the Supabase SQL editor, from a password manager:
+**No passwords are in the repository.** The migration creates both roles without a password, and a role without a password can't log in. When activation is approved, the founder sets each password with psql's `\password` command, from a password manager (`docs/STAGING-CHECKS-WINDOWS.md`). psql turns the password into a SCRAM verifier on the founder's computer, so the password itself never reaches the server, its logs or the SQL editor's history. Don't type `alter role ... password '...'` with the plain password into the SQL editor.
 
-```sql
-alter role waitlist_writer password '<random 32+ characters>';
-alter role waitlist_admin password '<random 32+ characters>';
-```
+**Function connection.** `WAITLIST_DB_URL` goes through the Supabase pooler, with the user `waitlist_writer.kpudeppgokpjhvaqrprn` in transaction mode (port 6543). It uses TLS with full certificate and hostname verification, which nothing can turn off. If the pooler's certificate isn't publicly trusted, add Supabase's CA certificate (public, not a secret) as `WAITLIST_DB_CA_CERT`. Prepared statements are off, as the transaction pooler needs.
 
-**Function connection.** `WAITLIST_DB_URL` goes through the Supabase pooler, with the user `waitlist_writer.kpudeppgokpjhvaqrprn` in transaction mode (port 6543). It uses TLS with full certificate verification. If the pooler's certificate isn't publicly trusted, add Supabase's CA certificate (public, not a secret) as `WAITLIST_DB_CA_CERT`. Prepared statements are off, as the transaction pooler needs.
+The function refuses the URL, and stays closed, if:
+* it logs in as anything but `waitlist_writer`;
+* it carries any connection setting after `?` (such as `sslmode`), so TLS can't be weakened from there;
+* it belongs to another project. The project comes from `SUPABASE_URL`, which Supabase gives every function (`https://<ref>.supabase.co`) and which secrets can't override. The URL must be the pooler (`<region>.pooler.supabase.com:6543`, user `waitlist_writer.<ref>`) or the direct host (`db.<ref>.supabase.co:5432`, user `waitlist_writer`) for that same project. A database on the function's own machine, without TLS, is only accepted when `SUPABASE_URL` is a local Supabase.
 
-**Verified locally:** the real function code was run in Supabase's Edge runtime (`supabase/edge-runtime:v1.78.1`) against Supabase's own Postgres 17 image, logged in as `waitlist_writer` (`scripts/e2e/waitlist-edge.sh`, also in CI). Three things still have to be confirmed on staging (Phase E). They are hosted staging checks 1 to 3 in the activation checklist:
+**Verified locally:** the real function code was run in Supabase's Edge runtime (`supabase/edge-runtime:v1.78.1`) against Supabase's own Postgres 17 image, logged in as `waitlist_writer` (`scripts/e2e/waitlist-edge.sh`, also in CI). `scripts/e2e/waitlist-tls.sh` (also in CI) proves, against throwaway local servers, that the connection is refused with no CA, the wrong CA, the wrong hostname, a server without TLS, or any weakening setting. Three things still have to be confirmed on staging (Phase E). They are hosted staging checks 1 to 3 in the activation checklist:
 * that the hosted pooler accepts the custom login
 * which certificate it presents
 * the proxy hop count
@@ -111,9 +111,10 @@ If the pooler refuses the custom login, the plan stops there and comes back for 
 | `ops.settings` `waitlist_notice_version` | staging database | empty: every submission is `closed` |
 
 The form also stays off unless the function address, Turnstile site key, privacy notice URL and notice version are all set. The function also stays closed without:
-* a valid `waitlist_writer` database URL
+* a valid `waitlist_writer` database URL for its own project
 * `TURNSTILE_SECRET_KEY`
 * a `WAITLIST_RATE_SALT` of at least 32 characters
+* a confirmed `WAITLIST_TRUSTED_PROXY_HOPS` (1 to 5; there is no default)
 
 Any one switch being off stops submissions.
 
@@ -132,7 +133,12 @@ The database holds the one notice version people must have been shown. It's set 
   * 3 a day per email
 
   The keys are HMAC-SHA256 with the secret `WAITLIST_RATE_SALT`, separately for the email and the client address, so they can't be reversed or matched without the salt. The database refuses a submission without both keys.
-* **Client address:** taken only from the `X-Forwarded-For` entry added by Supabase's own proxy (`WAITLIST_TRUSTED_PROXY_HOPS` from the right, default 1). Entries a client writes itself, and headers like `CF-Connecting-IP`, are ignored. IPv6 addresses are grouped by /64. A missing or malformed address falls into one shared bucket rather than skipping the limit.
+* **Client address:** taken only from the `X-Forwarded-For` entry added by Supabase's own proxy, `WAITLIST_TRUSTED_PROXY_HOPS` from the right.
+  * There's no default. The number must be confirmed on the hosted platform (hosted staging check 3), and the function stays closed until it's set.
+  * Entries a client writes itself, and headers like `X-Real-IP`, `CF-Connecting-IP`, `True-Client-IP` and `Forwarded`, are ignored. Separate header lines are read as one list.
+  * IPv6 addresses are grouped by /64.
+  * Anything that can't be trusted falls into one shared bucket rather than skipping the limit: a missing, malformed, oversized or too short header, and a private or internal address in the trusted position (which would mean the hop count points at one of the platform's own proxies).
+  * `scripts/e2e/waitlist-edge.sh` tests all of this in the Edge runtime, with one and with two trusted hops, plus every limit's boundary and reset.
 * **Request limits:** requests over 4 KB and non JSON requests are refused.
 
 ## Deletion and retention
@@ -158,7 +164,11 @@ Decisions:
 - [ ] **Branch protection on `main`** requiring pull requests and these CI checks: App, Database, Integration, Browser, and **Public site**. The Public site job must be a required check before Production moves to the public site build.
 - [ ] **Hosted staging check 1: pooler login.** The Supabase pooler accepts the custom `waitlist_writer.kpudeppgokpjhvaqrprn` login. If it doesn't, stop and decide; never fall back to a broader credential.
 - [ ] **Hosted staging check 2: TLS certificate.** The function connects with full certificate verification, adding Supabase's public CA as `WAITLIST_DB_CA_CERT` if needed. Never turn verification off.
-- [ ] **Hosted staging check 3: proxy hop count.** `WAITLIST_TRUSTED_PROXY_HOPS` is confirmed, so a made up `X-Forwarded-For` value can't change the client bucket.
+- [ ] **Hosted staging check 3: proxy hop count.** `WAITLIST_TRUSTED_PROXY_HOPS` is confirmed, so a made up `X-Forwarded-For` value can't change the client bucket. This needs the temporary proxy diagnostic (A3, separately approved; design in `docs/PROXY-DIAGNOSTIC-THREAT-MODEL.md`).
+- [ ] **Hosted prerequisites from A2,** each of which fails closed if wrong:
+  * the hosted function's `SUPABASE_URL` is exactly `https://kpudeppgokpjhvaqrprn.supabase.co`;
+  * the pooler host has the form `<region>.pooler.supabase.com` and the transaction pooler is on port 6543;
+  * for the rollback workflow only: the staging session pooler's certificate verifies against the runner's system certificates with `sslmode=verify-full`. If it doesn't, add Supabase's public CA file in a reviewed PR; never weaken the mode.
 - [ ] Operations set up (`docs/WAITLIST-OPERATIONS.md`): `WAITLIST_ADMIN_DATABASE_URL`, the health check variables, and a monthly reminder to run the purge (no scheduled deletion)
 - [ ] Activation itself approved
 
@@ -175,8 +185,8 @@ Setup, once approved (each step needs approval):
    * `WAITLIST_ALLOWED_ORIGINS`
    * `WAITLIST_ALLOWED_HOSTNAMES`
    * optionally `WAITLIST_DB_CA_CERT`
-   * `WAITLIST_TRUSTED_PROXY_HOPS`, once confirmed
-6. **Smoke test on staging,** covering hosted staging checks 1 to 3 in the checklist above. All three must pass before activation:
+   * `WAITLIST_TRUSTED_PROXY_HOPS`, once confirmed (required: without it the function stays closed)
+6. **Smoke test on staging,** covering hosted staging checks 1 to 3 in the checklist above (Windows steps: `docs/STAGING-CHECKS-WINDOWS.md`). All three must pass before activation:
    * The pooler accepts `waitlist_writer.<ref>`.
    * The certificate verifies.
    * The hop count is confirmed: send test requests with a made up `X-Forwarded-For` value and check, by rate limit behaviour and without logging addresses, that the made up value doesn't change the client bucket.
@@ -212,9 +222,13 @@ To close fast, run the admin workflow's **close** action. If GitHub is unavailab
   * the honeypot
   * the notice version
   * a repeat submission changing nothing
-  * spoofed address rotation
+  * forged addresses in depth: many and malformed forged entries, duplicate header lines, `X-Real-IP` and similar headers, IPv6 /64 grouping, missing and private addresses, and two trusted hops
+  * every rate limit's boundary and reset (per client, per email, overall)
   * salted keys
   * what each login can't do
   * closing
   * that the function refuses a broader login
-  * that the logs hold no email address
+  * that the real entry point stays closed without a confirmed hop count, and refuses a database from another project
+  * that the logs hold no email address and no visitor address
+* **`scripts/e2e/waitlist-tls.sh`** (in the CI Integration job): throwaway CA and Postgres servers on the runner. The real `db.ts` in the Edge runtime connects only with the right CA and hostname, and is refused with no CA, the wrong CA, the wrong hostname, a server without TLS, or any weakening setting. psql with `sslmode=verify-full` is checked the same way.
+* **`scripts/db/rollback-test.sh`** (in the CI Integration job): the staging rollback against local Supabase. Every refusal, a dry run, the removal, and the migrations applying again cleanly (`docs/WAITLIST-OPERATIONS.md`, "Staging rollback").

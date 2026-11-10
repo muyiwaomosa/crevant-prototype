@@ -147,6 +147,31 @@ On GitHub, go to Settings, then Branches, and add a rule for `main`:
 
 The **Public site** check must be required before Production moves to the public site build, because it's what proves the public build holds no member code, keys or secrets.
 
+## Staging rollback (staging only, not enabled)
+
+If the waitlist migrations ever need to be applied to staging again from scratch, the **Waitlist rollback (staging)** workflow removes exactly what they created (`scripts/db/staging-rollback-waitlist.sql`). It is meant for staging before any real registration, never for Production, and it is **off**: it refuses to run until the founder approves using it and sets the staging environment variable `WAITLIST_ROLLBACK_ENABLED` to `true`. Remove that variable again afterwards.
+
+**It refuses, changing nothing, if any of these exist:**
+* registrations, consent records, selections or rate limit records
+* a recorded privacy notice version, or submissions switched on
+* anything in `ops.settings` besides the two waitlist switches
+* a migration later than the waitlist ones, or a missing waitlist migration record
+* anything extra in `waitlist_api`, or any object or function outside the list that depends on or mentions the waitlist
+* anything the two login roles own, any privilege they hold outside `waitlist_api`, any role they belong to, or an open session as either of them
+
+**How it works:**
+* One transaction, with the waitlist tables locked, so nothing can be written between the checks and the drops.
+* Every object is named in an inventory and dropped by its exact name. Nothing uses `CASCADE` or `DROP OWNED`, so if anything unexpected depends on an object, Postgres itself refuses and the whole transaction is undone.
+* `check` (the default) runs every check *and every drop*, prints the inventory, then rolls it all back: a dry run that proves the real run would work.
+* `apply` does the same and commits. It needs the typed phrase `DELETE THE STAGING WAITLIST`.
+* Afterwards, the earlier migrations' objects (`ops.invitations`, `ops.admins`, profiles) are checked to be untouched, and the two waitlist migration records are removed, so the normal database workflow (`plan`, `apply`, `check`) can apply them again.
+
+**Safeguards that don't depend on each other:** the enable variable; `main` only; the repository owner only; the typed project reference matching the staging project, the environment variable and the connection string (`scripts/db/verify-staging-target.sh`); full TLS certificate and hostname verification (`sslmode=verify-full`, which the connection string can't override); the shared queue with the database deploy workflow; and the staging environment's approval rule. The workflow does not assume that last one is configured (`docs/LAUNCH-RUNBOOK.md` explains how to check it).
+
+**Tested** in CI against a local Supabase (`scripts/db/rollback-test.sh`): every refusal in both modes leaves everything unchanged, a clean dry run changes nothing, the removal leaves the earlier migrations intact, and the migrations then apply again cleanly and pass the staging checks.
+
+**Before it could ever be used on staging (prerequisites, each needing approval):** confirm the staging session pooler's certificate verifies with `sslmode=verify-full` against the runner's system certificates (if not, the workflow fails closed; the fix is adding Supabase's public CA file in a reviewed PR), and confirm the GitHub environment settings.
+
 ## Still required before activation
 
 The three hosted staging checks in `docs/WAITLIST.md` (pooler login, TLS certificate, proxy hop count) must pass on staging before any real signups.

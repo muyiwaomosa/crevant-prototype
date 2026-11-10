@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { cachedHealthCheck, clientIpFrom, handleJoin, rateKeysFor, toPayload, verifyWithCloudflare, type JoinDeps } from './handler'
-import { databaseOptions, submitWithDatabase, type Sql } from './db'
+import { cachedHealthCheck, clientIpFrom, handleJoin, parseTrustedHops, rateKeysFor, toPayload, verifyWithCloudflare, type JoinDeps } from './handler'
+import { checkDatabaseTarget, databaseOptions, submitWithDatabase, type Sql } from './db'
 
 const ORIGIN = 'https://crevant.example'
 const SALT = 's'.repeat(32)
@@ -195,19 +195,57 @@ describe('salted rate limit keys', () => {
 })
 
 describe('client address', () => {
-  it('comes only from the trusted proxy hop, so spoofed entries are ignored', () => {
-    expect(clientIpFrom('1.2.3.4, 9.9.9.9, 203.0.113.7')).toBe('203.0.113.7')
+  it('comes only from the trusted proxy hop, so forged entries are ignored', () => {
+    expect(clientIpFrom('1.2.3.4, 9.9.9.9, 203.0.113.7', 1)).toBe('203.0.113.7')
     expect(clientIpFrom('1.2.3.4, 203.0.113.7, 10.0.0.1', 2)).toBe('203.0.113.7')
-    expect(clientIpFrom('5.5.5.5, 203.0.113.7')).toBe(clientIpFrom('6.6.6.6, 203.0.113.7'))
-    for (const bad of [null, '', 'not-an-ip', '999.1.1.1', '1.2.3.4, <script>', '1.2.3.4,']) expect(clientIpFrom(bad), String(bad)).toBeNull()
-    expect(clientIpFrom('203.0.113.7', 0)).toBeNull()
+    expect(clientIpFrom('5.5.5.5, 203.0.113.7', 1)).toBe(clientIpFrom('6.6.6.6, 203.0.113.7', 1))
+    // Many forged entries, and junk among them, change nothing.
+    const forged = Array.from({ length: 40 }, (_, i) => `198.18.${i}.1`).join(', ')
+    expect(clientIpFrom(`${forged}, <script>, , unknown, 999.1.1.1, 203.0.113.7`, 1)).toBe('203.0.113.7')
+    // Two header lines arrive joined with ", "; the trusted entry is still the last.
+    expect(clientIpFrom(['8.8.8.8, 1.1.1.1', '203.0.113.7'].join(', '), 1)).toBe('203.0.113.7')
+  })
+
+  it('fails safe into the shared bucket when the address cannot be trusted', () => {
+    for (const bad of [null, '', 'not-an-ip', '999.1.1.1', '1.2.3.4, <script>', '1.2.3.4,', ' , ', '1.2.3.4 5.6.7.8']) {
+      expect(clientIpFrom(bad, 1), String(bad)).toBeNull()
+    }
+    // Fewer entries than trusted hops: the only entries are the visitor's own.
     expect(clientIpFrom('203.0.113.7', 2)).toBeNull()
+    // No confirmed hop count: nothing is trusted.
+    for (const hops of [null, 0, 6, 1.5, -1, Number.NaN]) expect(clientIpFrom('203.0.113.7', hops), String(hops)).toBeNull()
+    // An oversized header is not parsed at all.
+    expect(clientIpFrom(`${'1.1.1.1, '.repeat(600)}203.0.113.7`, 1)).toBeNull()
+  })
+
+  it('treats a private or internal address in the trusted position as untrusted', () => {
+    for (const internal of [
+      '10.1.2.3', '172.16.0.1', '172.31.255.255', '192.168.1.1', '127.0.0.1', '169.254.1.1', '100.64.0.1', '100.127.255.255', '0.0.0.0',
+      '::1', '::', 'fc00::1', 'fd12:3456:789a:1::1', 'fe80::1',
+    ]) {
+      expect(clientIpFrom(`203.0.113.7, ${internal}`, 1), internal).toBeNull()
+    }
+    for (const external of ['172.15.0.1', '172.32.0.1', '100.63.0.1', '100.128.0.1', '11.0.0.1', '192.169.0.1']) {
+      expect(clientIpFrom(external, 1), external).toBe(external)
+    }
+    expect(clientIpFrom('2001:db8:1:2::1', 1)).toBe('2001:db8:1:2::/64')
   })
 
   it('groups IPv6 addresses by /64', () => {
-    expect(clientIpFrom('2001:db8:1:2::1')).toBe('2001:db8:1:2::/64')
-    expect(clientIpFrom('2001:0db8:0001:0002:ffff:eeee:dddd:cccc')).toBe('2001:db8:1:2::/64')
-    for (const bad of ['2001:db8::1::2', '2001:db8:1:2:3:4:5:6:7', 'g::1', ':::']) expect(clientIpFrom(bad), bad).toBeNull()
+    expect(clientIpFrom('2001:db8:1:2::1', 1)).toBe('2001:db8:1:2::/64')
+    expect(clientIpFrom('2001:0db8:0001:0002:ffff:eeee:dddd:cccc', 1)).toBe('2001:db8:1:2::/64')
+    expect(clientIpFrom('2001:DB8:1:2::abcd', 1)).toBe('2001:db8:1:2::/64')
+    expect(clientIpFrom('2001:db8:1:3::1', 1)).not.toBe(clientIpFrom('2001:db8:1:2::1', 1))
+    for (const bad of ['2001:db8::1::2', '2001:db8:1:2:3:4:5:6:7', 'g::1', ':::', '::ffff:203.0.113.7', '[2001:db8::1]']) {
+      expect(clientIpFrom(bad, 1), bad).toBeNull()
+    }
+  })
+
+  it('needs a confirmed hop count: 1 to 5, no default', () => {
+    expect(parseTrustedHops('1')).toBe(1)
+    expect(parseTrustedHops(' 2 ')).toBe(2)
+    expect(parseTrustedHops('5')).toBe(5)
+    for (const bad of [undefined, null, '', '0', '6', '1.0', '01', 'one', '-1', '1,2']) expect(parseTrustedHops(bad), String(bad)).toBeNull()
   })
 })
 
@@ -224,14 +262,19 @@ describe('Turnstile verification', () => {
 })
 
 describe('database connection', () => {
-  const URL_OK = 'postgresql://waitlist_writer.kpudeppgokpjhvaqrprn:pw@aws-0-us-west-2.pooler.supabase.com:6543/postgres'
+  const REF = 'kpudeppgokpjhvaqrprn'
+  const OTHER = 'abcdefghijabcdefghij'
+  const SUPABASE_URL = `https://${REF}.supabase.co`
+  const POOL = 'aws-0-us-west-2.pooler.supabase.com'
+  const URL_OK = `postgresql://waitlist_writer.${REF}:pw@${POOL}:6543/postgres`
+  const DIRECT_OK = `postgresql://waitlist_writer:pw@db.${REF}.supabase.co:5432/postgres`
+  const PEM = '-----BEGIN CERTIFICATE-----\nTUlJQ2FrZQ==\n-----END CERTIFICATE-----'
 
   it('accepts only the restricted waitlist_writer login', () => {
     expect(databaseOptions(URL_OK).url).toBe(URL_OK)
-    expect(databaseOptions('postgres://waitlist_writer:pw@127.0.0.1:54322/postgres').options.ssl).toBe(false)
     for (const bad of [
-      'postgresql://postgres.kpudeppgokpjhvaqrprn:pw@aws-0-us-west-2.pooler.supabase.com:6543/postgres',
-      'postgresql://postgres:pw@db.kpudeppgokpjhvaqrprn.supabase.co:5432/postgres',
+      `postgresql://postgres.${REF}:pw@${POOL}:6543/postgres`,
+      `postgresql://postgres:pw@db.${REF}.supabase.co:5432/postgres`,
       'postgresql://service_role:pw@host:5432/postgres',
       'postgresql://waitlist_admin:pw@host:5432/postgres',
       'postgresql://waitlist_writer_evil:pw@host:5432/postgres',
@@ -243,12 +286,68 @@ describe('database connection', () => {
     }
   })
 
-  it('verifies the server certificate for any non-local database, without prepared statements', () => {
-    const o = databaseOptions(URL_OK, '-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----').options
-    expect(o.ssl).toEqual({ rejectUnauthorized: true, servername: 'aws-0-us-west-2.pooler.supabase.com', ca: '-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----' })
+  it('always verifies the certificate and hostname, without prepared statements', () => {
+    const o = databaseOptions(URL_OK, { caCert: PEM }).options
+    expect(o.ssl).toEqual({ rejectUnauthorized: true, servername: POOL, ca: PEM })
     expect(o.prepare).toBe(false)
     expect(o.max).toBe(1)
-    expect(databaseOptions(URL_OK).options.ssl).toEqual({ rejectUnauthorized: true, servername: 'aws-0-us-west-2.pooler.supabase.com' })
+    expect(databaseOptions(URL_OK).options.ssl).toEqual({ rejectUnauthorized: true, servername: POOL })
+    // A local database is verified too, unless the caller has established a local run.
+    expect(databaseOptions('postgres://waitlist_writer:pw@127.0.0.1:54322/postgres').options.ssl).toEqual({ rejectUnauthorized: true, servername: '127.0.0.1' })
+    expect(databaseOptions('postgres://waitlist_writer:pw@127.0.0.1:54322/postgres', { localPlaintext: true }).options.ssl).toBe(false)
+    // The local exception never applies to a database elsewhere.
+    expect(databaseOptions(URL_OK, { localPlaintext: true }).options.ssl).toEqual({ rejectUnauthorized: true, servername: POOL })
+    expect(databaseOptions('postgres://waitlist_writer:pw@db.tls.test:5432/postgres', { localPlaintext: true }).options.ssl).toMatchObject({ rejectUnauthorized: true })
+  })
+
+  it('refuses any connection setting in the URL, so TLS cannot be weakened there', () => {
+    for (const q of ['?sslmode=disable', '?sslmode=prefer', '?sslmode=require', '?ssl=false', '?ssl=0', '?options=-c%20role%3Dpostgres', '?sslrootcert=x', '?', '#x']) {
+      expect(() => databaseOptions(`${URL_OK}${q}`), q).toThrow(/connection settings/)
+      expect(() => checkDatabaseTarget(`${URL_OK}${q}`, SUPABASE_URL), q).toThrow(/connection settings/)
+    }
+  })
+
+  it('accepts only PEM certificates as the CA, never a key or junk', () => {
+    expect(databaseOptions(URL_OK, { caCert: `${PEM}\n${PEM}\n` }).options.ssl).toMatchObject({ ca: `${PEM}\n${PEM}` })
+    for (const bad of ['x', 'true', '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----', `${PEM}\n-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----`, '-----BEGIN CERTIFICATE-----\n!!\n-----END CERTIFICATE-----']) {
+      expect(() => databaseOptions(URL_OK, { caCert: bad }), bad).toThrow(/PEM/)
+    }
+  })
+
+  it("only accepts the database of the function's own project, from SUPABASE_URL", () => {
+    expect(checkDatabaseTarget(URL_OK, SUPABASE_URL)).toEqual({ ref: REF, local: false })
+    expect(checkDatabaseTarget(DIRECT_OK, SUPABASE_URL)).toEqual({ ref: REF, local: false })
+    expect(checkDatabaseTarget(`postgresql://waitlist_writer.${REF}:pw@aws-1-ca-central-1.pooler.supabase.com:6543/postgres`, SUPABASE_URL).ref).toBe(REF)
+    const refused: Array<[string, string]> = [
+      [`postgresql://waitlist_writer.${OTHER}:pw@${POOL}:6543/postgres`, 'another project on the pooler'],
+      [`postgresql://waitlist_writer:pw@db.${OTHER}.supabase.co:5432/postgres`, 'another project, direct'],
+      [`postgresql://waitlist_writer.${REF}:pw@${POOL}:5432/postgres`, 'the session pooler port'],
+      [`postgresql://waitlist_writer.${REF}:pw@${POOL}/postgres`, 'the pooler without its port'],
+      [`postgresql://waitlist_writer:pw@db.${REF}.supabase.co:6543/postgres`, 'direct host on the pooler port'],
+      [`postgresql://waitlist_writer.${REF}:pw@db.${REF}.supabase.co:5432/postgres`, 'pooler login on the direct host'],
+      [`postgresql://waitlist_writer:pw@${POOL}:6543/postgres`, 'pooler without the project in the login'],
+      [`postgresql://waitlist_writer.${REF}:pw@${POOL}.evil.example:6543/postgres`, 'a lookalike pooler host'],
+      [`postgresql://waitlist_writer.${REF}:pw@evil-pooler.supabase.com.example.net:6543/postgres`, 'another lookalike'],
+      [`postgresql://waitlist_writer:pw@db.${REF}.supabase.co.evil.example:5432/postgres`, 'a lookalike direct host'],
+      ['postgresql://waitlist_writer:pw@127.0.0.1:54322/postgres', 'a local database from a hosted function'],
+      [`postgresql://postgres.${REF}:pw@${POOL}:6543/postgres`, 'the broad login'],
+    ]
+    for (const [url, why] of refused) expect(() => checkDatabaseTarget(url, SUPABASE_URL), why).toThrow()
+  })
+
+  it('fails closed when SUPABASE_URL is missing or unrecognised', () => {
+    for (const bad of ['', 'https://kpudeppgokpjhvaqrprn.supabase.co/', 'http://kpudeppgokpjhvaqrprn.supabase.co', 'https://kpudeppgokpjhvaqrprn.supabase.co.evil.example',
+      'https://evil.example', 'https://KPUDEPPGOKPJHVAQRPRN.supabase.co', 'https://short.supabase.co', 'https://kpudeppgokpjhvaqrprn.supabase.com', 'http://kong:8001', 'http://10.0.0.1:8000']) {
+      expect(() => checkDatabaseTarget(URL_OK, bad), bad).toThrow(/SUPABASE_URL/)
+    }
+  })
+
+  it('treats a local Supabase as local only with a database on this machine', () => {
+    for (const local of ['http://kong:8000', 'http://127.0.0.1:54321', 'http://localhost:54321']) {
+      expect(checkDatabaseTarget('postgresql://waitlist_writer:pw@127.0.0.1:54322/postgres', local)).toEqual({ ref: null, local: true })
+      expect(() => checkDatabaseTarget(URL_OK, local), local).toThrow(/local database/)
+      expect(() => checkDatabaseTarget('postgresql://postgres:pw@127.0.0.1:54322/postgres', local), local).toThrow(/waitlist_writer/)
+    }
   })
 
   it('calls only waitlist_api.submit, with bound parameters', async () => {
