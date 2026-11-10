@@ -2,17 +2,21 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
+import { readWaitlistConfig } from './waitlist/config'
+import { WaitlistForm } from './waitlist/WaitlistForm'
 
 /**
  * /join: the one Crevant waitlist. Everyone can create, discover, follow,
  * engage and support, so nobody picks a side when they join.
  *
- * Informational only until the privacy notice is published: deliberately no
- * form and no personal data yet. The form arrives in a separate change with
- * its own privacy and security review. Joining the waitlist never secures a
- * place in the pilot; invitations go out in small groups.
+ * The form appears only when readWaitlistConfig() finds every required
+ * setting, including the approved privacy notice (docs/WAITLIST.md). Until
+ * then the page is informational only and collects nothing. Joining the
+ * waitlist never secures a place in the pilot; invitations go out in small
+ * groups.
  */
-export function JoinPage() {
+export function JoinPage({ env = import.meta.env }: { env?: Record<string, unknown> }) {
+  const waitlist = readWaitlistConfig(env)
   return (
     <section aria-labelledby="join-title" className="px-4 py-12 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-2xl">
@@ -29,13 +33,17 @@ export function JoinPage() {
           <p>We're inviting people in small groups as we build and test the platform. Joining the waitlist doesn't guarantee an invitation to the pilot.</p>
         </div>
 
-        <div data-testid="not-open" className="mt-8 flex gap-3 rounded-3xl bg-spark-50 p-5 text-ink-700 ring-1 ring-spark-200">
-          <Info className="mt-0.5 h-5 w-5 shrink-0 text-spark-700" aria-hidden="true" />
-          <div className="space-y-1.5 leading-relaxed">
-            <p className="font-semibold text-ink-900">The waitlist opens once our privacy notice is published.</p>
-            <p>This page collects nothing.</p>
+        {waitlist ? (
+          <WaitlistForm config={waitlist} />
+        ) : (
+          <div data-testid="not-open" className="mt-8 flex gap-3 rounded-3xl bg-spark-50 p-5 text-ink-700 ring-1 ring-spark-200">
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-spark-700" aria-hidden="true" />
+            <div className="space-y-1.5 leading-relaxed">
+              <p className="font-semibold text-ink-900">The waitlist opens once our privacy notice is published.</p>
+              <p>This page collects nothing.</p>
+            </div>
           </div>
-        </div>
+        )}
 
         <h2 className="mt-10 font-display text-xl font-bold text-ink-900">The pilot</h2>
         <ul className="mt-3 space-y-1.5 leading-relaxed text-ink-600">

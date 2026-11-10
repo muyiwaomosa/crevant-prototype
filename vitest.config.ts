@@ -6,7 +6,7 @@ export default mergeConfig(
   defineConfig({
     test: {
       // Script tests (scripts/*.test.mjs) use Node's own runner: see `npm test`.
-      include: ['src/**/*.test.{ts,tsx}'],
+      include: ['src/**/*.test.{ts,tsx}', 'supabase/functions/**/*.test.ts'],
     },
   }),
 )

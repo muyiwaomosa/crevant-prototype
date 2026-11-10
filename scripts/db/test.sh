@@ -58,18 +58,18 @@ for f in supabase/tests-local/[0-9]*.sql; do
 done
 
 # Negative checks: each file applies one deliberate violation inside a
-# transaction that is always rolled back. The profile and ops checks must then
-# fail with a "FAIL:" message, proving they would catch it. (Only that checks
-# file is replayed here: the Phase 0 file manages its own transactions, which
-# would end the wrapper's transaction early.)
-CHECKS=supabase/tests/002_profiles_and_ops.sql
+# transaction that is always rolled back. The profile, ops and waitlist checks
+# must then fail with a "FAIL:" message, proving they would catch it. (Only
+# those checks files are replayed here: the Phase 0 file manages its own
+# transactions, which would end the wrapper's transaction early.)
+CHECKS=(supabase/tests/002_profiles_and_ops.sql supabase/tests/003_waitlist.sql)
 for v in supabase/tests-local/violations/*.sql; do
   [ -e "$v" ] || continue
   wrapper="$(mktemp)"
   {
     echo "begin;"
     echo "\\i $v"
-    echo "\\i $CHECKS"
+    for c in "${CHECKS[@]}"; do echo "\\i $c"; done
     echo "rollback;"
   } > "$wrapper"
   if out="$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -X -f "$wrapper" 2>&1)"; then

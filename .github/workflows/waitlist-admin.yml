@@ -1,0 +1,80 @@
+name: Waitlist admin (staging)
+
+# Deletion on request, the retention purge and a counts-only summary for the
+# waitlist on the Crevant STAGING Supabase project. It never runs
+# automatically: someone starts it by hand from the Actions tab on main, types
+# the staging project reference, and approves the "staging" environment.
+#
+#   summary   counts by source and answers, and whether submissions are on
+#   delete    delete one person by waitlist id (from the Supabase dashboard),
+#             with their consent history, notes, rate counter and any
+#             unaccepted invitation. No email address is typed into GitHub.
+#   purge     delete entries with no confirmed interest for N months
+#             (proposed policy: 12, subject to legal review)
+#
+# Reuses the staging deploy workflow's safety: the only credential is the
+# staging environment's STAGING_DATABASE_URL, and scripts/db/verify-staging-target.sh
+# must confirm the target before anything runs. Output is counts only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "summary = counts only. delete = remove one person by waitlist id. purge = apply the retention period."
+        type: choice
+        options:
+          - summary
+          - delete
+          - purge
+        default: summary
+        required: true
+      waitlist_id:
+        description: "For delete: the waitlist id (UUID) from the Supabase dashboard. Never an email address."
+        type: string
+        required: false
+      retention_months:
+        description: "For purge: months since last confirmed interest (proposed: 12)."
+        type: string
+        default: '12'
+        required: false
+      confirm_project_ref:
+        description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waitlist-admin-staging
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
+
+jobs:
+  admin:
+    name: Waitlist ${{ inputs.action }} (staging)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved staging project
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-staging-target.sh
+
+      - name: Run ${{ inputs.action }}
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          ACTION: ${{ inputs.action }}
+          WAITLIST_ID: ${{ inputs.waitlist_id }}
+          RETENTION_MONTHS: ${{ inputs.retention_months }}
+          PGSSLMODE: require
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/waitlist-admin.sh
