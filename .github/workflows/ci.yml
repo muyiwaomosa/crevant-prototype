@@ -19,6 +19,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Fetch the demo branch (a test proves the demo never runs main's build guard)
+        run: git fetch --no-tags --depth=1 origin demo:refs/remotes/origin/demo
       - run: npm run typecheck
       - run: npm test
       - run: npm run build

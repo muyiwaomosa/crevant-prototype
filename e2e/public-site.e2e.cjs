@@ -95,6 +95,16 @@ async function newContext(browser, options = {}) {
         check(`${label}: ${p} is not found, with nothing to type into`, notFound && inputs === 0, `inputs=${inputs}`)
       }
 
+      // 4b. /privacy says plainly that no notice is published; nothing is indexable.
+      await page.goto(`${BASE}/privacy`)
+      check(
+        `${label}: /privacy shows the approved wording`,
+        (await shows(page.getByTestId('privacy-not-published'))) &&
+          (await page.getByTestId('privacy-not-published').textContent()).includes("We're not collecting waitlist registrations yet."),
+      )
+      check(`${label}: /privacy has nothing to type into`, (await page.locator('form, input, select, textarea').count()) === 0)
+      check(`${label}: /privacy is noindex`, (await page.locator('meta[name="robots"]').getAttribute('content')) === 'noindex')
+
       // 5. The sample tour still works, and old prototype links still redirect.
       await page.goto(`${BASE}/tour`)
       check(`${label}: /tour shows the sample tour`, await shows(page.getByText(/sample/i)))

@@ -30,7 +30,20 @@ export const FORBIDDEN = [
   ['a Supabase key', /sb_(publishable|secret)_[A-Za-z0-9_-]{8,}/],
   ['a JSON Web Token', /eyJhbGciOi[A-Za-z0-9_-]{10,}\./],
   ['a secret', /service_role|sk_(live|test)_[A-Za-z0-9]|whsec_[A-Za-z0-9]|-----BEGIN [A-Z ]*PRIVATE KEY-----/],
+  // Test-only code that must never ship (the isolated test harness)
+  ['test-only code', /waitlist-e2e|e2e\/edge|TEST ONLY\. Never deployed/],
 ]
+
+/**
+ * Project references a build must never contain, from
+ * config/supabase-projects.json: a Production build may never contain the
+ * staging project, and no other build may contain the Production project.
+ */
+export function forbiddenProjectRefs(env, projects = JSON.parse(readFileSync(new URL('../config/supabase-projects.json', import.meta.url), 'utf8'))) {
+  const production = (env.VERCEL_ENV || '').trim().toLowerCase() === 'production'
+  const ref = production ? projects.staging?.ref : projects.production?.ref
+  return ref ? [ref] : []
+}
 
 const TEXT = /\.(js|mjs|css|html|json|map|txt|svg)$/
 
@@ -42,7 +55,7 @@ function files(dir) {
 }
 
 /** Returns a list of problems; empty means the build is a clean public site. */
-export function checkSiteBundle(dir) {
+export function checkSiteBundle(dir, { forbiddenRefs = [] } = {}) {
   const problems = []
   let all
   try {
@@ -63,6 +76,9 @@ export function checkSiteBundle(dir) {
       const m = text.match(re)
       if (m) problems.push(`${relative(dir, f)}: ${label} (${JSON.stringify(m[0].slice(0, 40))})`)
     }
+    for (const ref of forbiddenRefs) {
+      if (text.includes(ref)) problems.push(`${relative(dir, f)}: a Supabase project this build must never use (${ref})`)
+    }
   }
   return problems
 }
@@ -70,7 +86,7 @@ export function checkSiteBundle(dir) {
 const isMain = import.meta.url === `file://${process.argv[1]}`
 if (isMain) {
   const dir = process.argv[2] || 'dist'
-  const problems = checkSiteBundle(dir)
+  const problems = checkSiteBundle(dir, { forbiddenRefs: forbiddenProjectRefs(process.env) })
   if (problems.length) {
     console.error(`\n✖ ${dir} is not a clean public site build:`)
     for (const p of problems) console.error(`  ${p}`)

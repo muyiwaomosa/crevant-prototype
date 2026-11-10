@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/guard-build-target.mjs && node scripts/check-supabase-target.mjs && tsc -b && vite build",
-    "build:site": "node scripts/guard-build-target.mjs && tsc -b && vite build --mode site && node scripts/check-site-bundle.mjs dist && scripts/check-bundle-secrets.sh",
+    "build": "node scripts/build.mjs",
+    "build:site": "node scripts/build.mjs --site",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run && node --test scripts/*.test.mjs",

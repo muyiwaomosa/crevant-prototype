@@ -1,0 +1,5 @@
+{
+  "_comment": "Supabase project references (not credentials). staging is kpudeppgokpjhvaqrprn. production stays null until the Production project exists and its reference is added in a reviewed PR; while null, a Production build cannot enable the waitlist form (it fails closed).",
+  "staging": { "ref": "kpudeppgokpjhvaqrprn" },
+  "production": { "ref": null }
+}

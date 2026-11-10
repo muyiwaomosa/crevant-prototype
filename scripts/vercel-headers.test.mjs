@@ -30,5 +30,42 @@ test('the earlier security headers are still present', () => {
   assert.equal(headers['X-Content-Type-Options'], 'nosniff')
   assert.equal(headers['X-Frame-Options'], 'DENY')
   assert.equal(headers['Referrer-Policy'], 'strict-origin-when-cross-origin')
-  assert.match(headers['X-Robots-Tag'], /noindex/)
+})
+
+const PRODUCTION_HOST = 'crevant-prototype.vercel.app'
+const robotsRules = config.headers.filter((h) => h.headers.some((x) => x.key === 'X-Robots-Tag'))
+
+test('every address except the production one is noindex (Previews, deployment addresses, anything else)', () => {
+  const everywhereElse = robotsRules.find((h) => h.source === '/(.*)')
+  assert.ok(everywhereElse, 'missing the catch-all noindex rule')
+  assert.deepEqual(everywhereElse.missing, [{ type: 'host', value: PRODUCTION_HOST }])
+  assert.equal(everywhereElse.has, undefined)
+  assert.deepEqual(everywhereElse.headers, [{ key: 'X-Robots-Tag', value: 'noindex' }])
+  // The security headers no longer carry X-Robots-Tag; robots is handled above.
+  assert.equal(headers['X-Robots-Tag'], undefined)
+})
+
+test('on the production address, every path except exactly / and /join is noindex by header', async () => {
+  const { headerNoindex } = await import('./vercel-robots.mjs')
+  for (const p of ['/', '/join']) assert.equal(headerNoindex(PRODUCTION_HOST, p), false, p)
+  for (const p of [
+    '/tour', '/tour/discover', '/privacy', '/sign-in', '/forgot-password', '/auth/confirm', '/app', '/app/account',
+    '/request-invite', '/xyz', '/join/', '/join/creator', '/JOIN', '/index.html', '/robots.txt', '/a/b/c',
+  ]) {
+    assert.equal(headerNoindex(PRODUCTION_HOST, p), true, p)
+  }
+  // Every other address (Previews, deployment URLs) is noindex on every path, / and /join included.
+  for (const host of ['crevant-prototype-git-claude-public-launch-prep-crevant.vercel.app', 'crevant-prototype-abc123-crevant.vercel.app', 'localhost']) {
+    for (const p of ['/', '/join', '/tour', '/privacy', '/xyz']) assert.equal(headerNoindex(host, p), true, `${host}${p}`)
+  }
+})
+
+test('the robots header rules are exactly two, and nothing ever sends an "index" header', () => {
+  assert.deepEqual(robotsRules.map((h) => [h.source, h.has ?? null, h.missing ?? null]), [
+    ['/(.*)', null, [{ type: 'host', value: PRODUCTION_HOST }]],
+    ['/((?!join$).+)', [{ type: 'host', value: PRODUCTION_HOST }], null],
+  ])
+  assert.equal(config.headers.some((h) => h.headers.some((x) => x.key === 'X-Robots-Tag' && x.value !== 'noindex')), false)
+  // The same source style as the existing rewrite, which Vercel already serves.
+  assert.equal(config.rewrites[0].source, '/((?!media/|assets/|favicon).*)')
 })

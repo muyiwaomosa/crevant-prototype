@@ -1,0 +1,5 @@
+{
+  "_comment": "The public website's Production address, already verified: Vercel Production serves the frozen demo there today. Search indexing is only ever allowed on this host, and only once CREVANT_ALLOW_INDEXING is approved.",
+  "productionHost": "crevant-prototype.vercel.app",
+  "indexablePaths": ["/", "/join"]
+}

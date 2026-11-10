@@ -4,6 +4,7 @@ import { Wordmark } from '../components/Wordmark'
 import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
 import { useMemberLinks } from './member-links'
+import { useRobotsMeta } from './robots'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 
 function ScrollToTop() {
@@ -21,6 +22,8 @@ function ScrollToTop() {
  */
 export function PublicLayout({ account }: { account?: ReactNode }) {
   const memberLinks = useMemberLinks()
+  // noindex everywhere, except the approved pages once indexing is approved.
+  useRobotsMeta()
   return (
     <div className="flex min-h-dvh flex-col">
       <ScrollToTop />

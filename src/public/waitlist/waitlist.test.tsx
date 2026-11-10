@@ -6,6 +6,10 @@ import { readAcquisition, readWaitlistConfig } from './config'
 import { WaitlistForm } from './WaitlistForm'
 import { JoinPage } from '../JoinPage'
 import type { MountTurnstile } from './turnstile'
+import type { ApprovedNotice } from '../privacy/notice'
+
+// A stand-in approved notice for these tests only. The repository has none.
+const NOTICE: ApprovedNotice = { version: 'notice-2026-11', effectiveDate: '2026-11-15', Body: () => null }
 
 afterEach(cleanup)
 
@@ -20,12 +24,12 @@ const ENV = {
 describe('waitlist switch (browser)', () => {
   it('is off unless every setting is present and the flag is exactly "true"', () => {
     expect(readWaitlistConfig({})).toBeNull()
-    expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_FORM_ENABLED: 'TRUE' })).toBeNull()
-    expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_FORM_ENABLED: '1' })).toBeNull()
+    expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_FORM_ENABLED: 'TRUE' }, NOTICE)).toBeNull()
+    expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_FORM_ENABLED: '1' }, NOTICE)).toBeNull()
     for (const k of ['VITE_TURNSTILE_SITE_KEY', 'VITE_PRIVACY_NOTICE_URL', 'VITE_PRIVACY_NOTICE_VERSION', 'VITE_WAITLIST_ENDPOINT']) {
-      expect(readWaitlistConfig({ ...ENV, [k]: '' }), k).toBeNull()
+      expect(readWaitlistConfig({ ...ENV, [k]: '' }, NOTICE), k).toBeNull()
     }
-    expect(readWaitlistConfig({ ...ENV, VITE_PRIVACY_NOTICE_VERSION: 'Draft 1' })).toBeNull()
+    expect(readWaitlistConfig({ ...ENV, VITE_PRIVACY_NOTICE_VERSION: 'Draft 1' }, NOTICE)).toBeNull()
     expect(readWaitlistConfig({ ...ENV, VITE_PRIVACY_NOTICE_URL: 'javascript:alert(1)' })).toBeNull()
     for (const bad of [
       'http://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist',
@@ -34,15 +38,24 @@ describe('waitlist switch (browser)', () => {
       'https://evil.example/functions/v1/join-waitlist',
       'https://kpudeppgokpjhvaqrprn.supabase.co.evil.example/functions/v1/join-waitlist',
     ]) {
-      expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_ENDPOINT: bad }), bad).toBeNull()
+      expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_ENDPOINT: bad }, NOTICE), bad).toBeNull()
     }
-    expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_ENDPOINT: 'http://127.0.0.1:54321/functions/v1/join-waitlist' })).not.toBeNull()
-    expect(readWaitlistConfig(ENV)).toEqual({
+    expect(readWaitlistConfig({ ...ENV, VITE_WAITLIST_ENDPOINT: 'http://127.0.0.1:54321/functions/v1/join-waitlist' }, NOTICE)).not.toBeNull()
+    expect(readWaitlistConfig(ENV, NOTICE)).toEqual({
       endpoint: 'https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist',
       turnstileSiteKey: '0x4AAAAAAAtest',
       noticeUrl: '/privacy',
       noticeVersion: 'notice-2026-11',
     })
+  })
+
+  it('stays off without an approved privacy notice, with a different version, or anywhere but /privacy', () => {
+    expect(readWaitlistConfig(ENV, null)).toBeNull()
+    expect(readWaitlistConfig(ENV)).toBeNull()
+    expect(readWaitlistConfig(ENV, { ...NOTICE, version: 'notice-2026-12' })).toBeNull()
+    expect(readWaitlistConfig({ ...ENV, VITE_PRIVACY_NOTICE_URL: 'https://example.com/privacy' }, NOTICE)).toBeNull()
+    expect(readWaitlistConfig({ ...ENV, VITE_PRIVACY_NOTICE_URL: '/privacy-test' }, NOTICE)).toBeNull()
+    expect(readWaitlistConfig(ENV, NOTICE)).not.toBeNull()
   })
 
   it('this build has the form switched off', () => {
@@ -67,7 +80,7 @@ describe('waitlist switch (browser)', () => {
 })
 
 describe('waitlist form', () => {
-  const config = readWaitlistConfig(ENV)!
+  const config = readWaitlistConfig(ENV, NOTICE)!
   let widgetReset = vi.fn()
   const mount: MountTurnstile = async (_el, _key, onToken) => {
     widgetReset = vi.fn()

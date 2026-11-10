@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { checkSiteBundle } from './check-site-bundle.mjs'
+import { checkSiteBundle, forbiddenProjectRefs } from './check-site-bundle.mjs'
 
 const INDEX = '<!doctype html><html><head><meta charset="UTF-8" />\n<meta name="crevant-build" content="public-site" /></head><body><script type="module" src="/assets/index-abc.js"></script></body></html>'
 const CLEAN_JS = 'const a=`/join`,b=`/tour`;function ul(e){if(/^sb_secret_/i.test(e))return!0}'
@@ -65,16 +65,33 @@ test('member content is caught in any text file, and source maps are refused', (
   assert.match(checkSiteBundle(bundle({ extra: { 'index-abc.js.map': '{}' } })).join('\n'), /source maps/)
 })
 
-test('build:site keeps the Production block, then checks the bundle and scans for secrets', async () => {
+test('build:site goes through the build entry point, which keeps the Production block', async () => {
   const { readFileSync } = await import('node:fs')
   const { checkBuildTarget } = await import('./guard-build-target.mjs')
   const scripts = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).scripts
   assert.equal(
     scripts['build:site'],
-    'node scripts/guard-build-target.mjs && tsc -b && vite build --mode site && node scripts/check-site-bundle.mjs dist && scripts/check-bundle-secrets.sh',
+    'node scripts/build.mjs --site',
   )
   // Production stays on the demo: the site build is refused for Production
-  // until a reviewed, approved change moves Production to it.
+  // until the switch is approved (CREVANT_PRODUCTION_SITE_APPROVED).
   assert.equal(checkBuildTarget({ VERCEL_ENV: 'production' }).ok, false)
+  assert.equal(checkBuildTarget({ VERCEL_ENV: 'production', CREVANT_BUILD_MODE: 'site' }).ok, false)
   assert.equal(checkBuildTarget({ VERCEL_ENV: 'preview' }).ok, true)
+})
+
+test('a Production build may not contain the staging project, and no other build the Production project', () => {
+  const projects = { staging: { ref: 'kpudeppgokpjhvaqrprn' }, production: { ref: 'abcdefghijabcdefghij' } }
+  assert.deepEqual(forbiddenProjectRefs({ VERCEL_ENV: 'production' }, projects), ['kpudeppgokpjhvaqrprn'])
+  assert.deepEqual(forbiddenProjectRefs({ VERCEL_ENV: 'preview' }, projects), ['abcdefghijabcdefghij'])
+  assert.deepEqual(forbiddenProjectRefs({ VERCEL_ENV: 'preview' }, { ...projects, production: { ref: null } }), [])
+  const stagingFn = 'fetch("https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist")'
+  assert.deepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};${stagingFn}` })), [])
+  assert.match(checkSiteBundle(bundle({ js: `${CLEAN_JS};${stagingFn}` }), { forbiddenRefs: ['kpudeppgokpjhvaqrprn'] }).join('\n'), /must never use/)
+})
+
+test('test-only code is refused', () => {
+  for (const js of ['import("../e2e/edge/waitlist-e2e/index.ts")', 'x="waitlist-e2e"']) {
+    assert.match(checkSiteBundle(bundle({ js: `${CLEAN_JS};${js}` })).join('\n'), /test-only code/, js)
+  }
 })

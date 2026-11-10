@@ -3,9 +3,10 @@ import { PublicLayout } from '../public/PublicLayout'
 import { LandingPage } from '../public/LandingPage'
 import { JoinPage } from '../public/JoinPage'
 import { PublicNotFound } from '../public/PublicNotFound'
+import { PrivacyPage } from '../public/PrivacyPage'
 
 /**
- * The public site build: the landing page and /join only (the sample tour is
+ * The public site build: the landing page, /join and /privacy only (the sample tour is
  * served separately under /tour). There are no member pages here at all:
  * sign in, password, confirmation and account paths fall through to the
  * public "not found" page, and no auth or Supabase client code is imported.
@@ -29,6 +30,7 @@ export function SiteRoutes() {
         <Route path="join/creator" element={<Navigate to="/join" replace />} />
         <Route path="join/supporter" element={<Navigate to="/join" replace />} />
         <Route path="request-invite" element={<Navigate to="/join" replace />} />
+        <Route path="privacy" element={<PrivacyPage />} />
         <Route path="*" element={<PublicNotFound />} />
       </Route>
     </Routes>
