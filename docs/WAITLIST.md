@@ -8,7 +8,7 @@ One unified waitlist, no roles. People give an email, confirm they are 18 or old
 
 1. **Form** (`src/public/waitlist/`). Rendered on `/join` only when the frontend switch is on. Loads Cloudflare Turnstile only then. Has a hidden honeypot field.
 2. **Server function** (`supabase/functions/join-waitlist/`). A Supabase Edge Function that checks the origin, size and shape of the request, the honeypot and the Turnstile token (including the hostname), then hashes the client IP with a salt and calls the database. It holds the only key that can write. Not deployed.
-3. **Database** (`supabase/migrations/20261110000000_waitlist.sql`). Private `ops` schema with row level security on and no policies, so visitors and signed in members can't read or write anything. Only `service_role` can call `public.waitlist_submit`. Not applied to staging yet.
+3. **Database** (`supabase/migrations/20261110000000_waitlist.sql`), in the staging Supabase project in **us-west-2 (West US, Oregon)**. Private `ops` schema with row level security on and no policies, so visitors and signed in members can't read or write anything. Only `service_role` can call `public.waitlist_submit`. Not applied to staging yet.
 
 What is stored: email, optional answers (interests, whether they share content, platform, audience band, public link), first source and campaign from the link, the 18+ confirmation, waitlist consent with the approved privacy notice version and time, a consent history, first joined and last confirmed dates, and a selection status. No IP address, name, password or role is stored. Rate limits keep only hashed keys.
 
@@ -59,7 +59,8 @@ Decisions:
 - [ ] Contact address for privacy requests
 - [ ] Retention period approved (proposed 12 months)
 - [ ] Email verification designed and approved before any marketing option or waitlist invitation (see above)
-- [ ] Supabase project region confirmed in the dashboard
+- [x] Supabase project region confirmed: **us-west-2 (West US, Oregon)**, staging project `kpudeppgokpjhvaqrprn` (confirmed 2026-11-10). The privacy notice should say where data is stored.
+- [x] GitHub `staging` environment limited to `main` with a required reviewer, and the Supabase GitHub integration disconnected (confirmed 2026-11-10)
 - [ ] Activation itself approved
 
 Setup, once approved:
