@@ -6,7 +6,8 @@
 -- audience size, a public link) help choose pilot participants internally;
 -- private selection notes per invitation wave never become account roles.
 --
---   ops.settings               server-side switches; waitlist submissions OFF
+--   ops.settings               server-side switches; waitlist submissions OFF,
+--                              and the approved privacy notice version (none yet)
 --   ops.waitlist               one row per email address
 --   ops.waitlist_consents      every consent given or withdrawn, with the
 --                              privacy notice version shown at the time
@@ -26,6 +27,10 @@
 -- privacy notice, legal operator, contact address, retention policy and
 -- activation (docs/WAITLIST.md).
 --
+-- Marketing consent and pilot invitations need a verified email address.
+-- Nothing verifies addresses yet, so no one can opt in to marketing and no
+-- waitlist entry can be invited. A later, reviewed migration adds verification.
+--
 -- This migration changes no Supabase Auth configuration and sends no email.
 
 -- ---------------------------------------------------------------------------
@@ -36,13 +41,22 @@ create table ops.settings (
   key        text primary key,
   enabled    boolean not null default false,
   updated_at timestamptz not null default now(),
+  value      text,
   note       text,
-  constraint settings_key_format check (key ~ '^[a-z0-9_]{1,60}$')
+  constraint settings_key_format check (key ~ '^[a-z0-9_]{1,60}$'),
+  constraint settings_value_format check (value is null or value ~ '^[a-z0-9._-]{1,40}$')
 );
 comment on table ops.settings is 'Server-side switches. waitlist_submissions stays false until the founder approves activation.';
 
 insert into ops.settings (key, enabled, note)
 values ('waitlist_submissions', false, 'Off until the privacy notice, legal operator, contact address, retention policy and activation are approved.');
+
+-- The privacy notice version people must have been shown. Set by the founder
+-- when the notice is approved and published; until then every submission is
+-- refused. Submissions quoting any other version are refused too, so consent
+-- records can only ever name the approved notice.
+insert into ops.settings (key, enabled, value, note)
+values ('waitlist_notice_version', false, null, 'The approved privacy notice version. Empty until the notice is approved.');
 
 -- ---------------------------------------------------------------------------
 -- The waitlist.
@@ -66,6 +80,7 @@ create table ops.waitlist (
   first_joined_at           timestamptz not null default now(),
   last_confirmed_at         timestamptz not null default now(),
   status                    text not null default 'new',
+  email_verified_at         timestamptz,
   invitation_id             uuid references ops.invitations (id) on delete set null,
   constraint waitlist_email_normalized check (email = lower(btrim(email)) and email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' and length(email) <= 254),
   constraint waitlist_email_unique unique (email),
@@ -89,10 +104,13 @@ create table ops.waitlist (
     (marketing_consent and marketing_consent_version ~ '^[a-z0-9._-]{1,40}$' and marketing_consented_at is not null)
     or (not marketing_consent and marketing_consent_version is null and marketing_consented_at is null)
   ),
-  constraint waitlist_status_allowed check (status in ('new', 'shortlisted', 'invited', 'not_selected'))
+  constraint waitlist_status_allowed check (status in ('new', 'shortlisted', 'invited', 'not_selected')),
+  constraint waitlist_marketing_needs_verified_email check (not marketing_consent or email_verified_at is not null),
+  constraint waitlist_invite_needs_verified_email check ((status <> 'invited' and invitation_id is null) or email_verified_at is not null)
 );
 comment on table ops.waitlist is 'One row per email address. Optional answers are for internal pilot selection only and never decide account capabilities. Server code only.';
 comment on column ops.waitlist.last_confirmed_at is 'Last time this person confirmed interest (by joining again). Retention is measured from here (proposed: 12 months).';
+comment on column ops.waitlist.email_verified_at is 'When the person proved they own the address. Nothing sets it yet; until it is set they cannot opt in to marketing or be invited.';
 comment on column ops.waitlist.status is 'Internal recruitment status. Not a role and never copied to an account.';
 
 create index waitlist_last_confirmed_idx on ops.waitlist (last_confirmed_at);
@@ -166,7 +184,8 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- One submission. Returns only 'ok', 'closed', 'invalid' or 'rate_limited',
+-- One submission. Returns only 'ok', 'closed', 'invalid', 'notice_changed' or
+-- 'rate_limited',
 -- and the same 'ok' whether the address is new or already on the list, so
 -- nobody can find out who has joined.
 
@@ -182,7 +201,6 @@ create function ops.join_waitlist(
   p_age_confirmed       boolean,
   p_waitlist_consent    boolean,
   p_notice_version      text,
-  p_marketing_consent   boolean,
   p_client_key          text
 )
 returns text
@@ -198,8 +216,7 @@ declare
   v_link      text := nullif(btrim(coalesce(p_public_link, '')), '');
   v_source    text := nullif(lower(btrim(coalesce(p_source, ''))), '');
   v_campaign  text := nullif(lower(btrim(coalesce(p_campaign, ''))), '');
-  v_marketing boolean := coalesce(p_marketing_consent, false);
-  v_previous  ops.waitlist%rowtype;
+  v_notice    text;
   v_id        uuid;
 begin
   -- Server-side switch: closed means nothing is stored or counted.
@@ -207,12 +224,22 @@ begin
     return 'closed';
   end if;
 
-  -- Required: a valid email, 18+ and waitlist consent under a known notice version.
+  -- No approved privacy notice yet: closed, whatever the switch says.
+  v_notice := (select value from ops.settings where key = 'waitlist_notice_version');
+  if v_notice is null then
+    return 'closed';
+  end if;
+
+  -- Required: a valid email, 18+ and waitlist consent.
   if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or length(v_email) > 254
      or coalesce(p_age_confirmed, false) is false
-     or coalesce(p_waitlist_consent, false) is false
-     or coalesce(p_notice_version, '') !~ '^[a-z0-9._-]{1,40}$' then
+     or coalesce(p_waitlist_consent, false) is false then
     return 'invalid';
+  end if;
+  -- Consent only counts under the approved notice. A page showing an older
+  -- (or made up) version is refused, and the person is asked to reload.
+  if p_notice_version is distinct from v_notice then
+    return 'notice_changed';
   end if;
 
   -- Optional answers must use known values; unknown or unused ones are rejected.
@@ -228,7 +255,9 @@ begin
   -- Unknown labels are dropped rather than refused, so a bad link still works.
   if v_source is not null and v_source !~ '^[a-z0-9_-]{1,40}$' then v_source := null; end if;
   if v_campaign is not null and v_campaign !~ '^[a-z0-9_-]{1,60}$' then v_campaign := null; end if;
-  if p_client_key is not null and p_client_key !~ '^[0-9a-f]{64}$' then
+  -- The server function always sends a salted client hash; without one the
+  -- per-client limit could be skipped, so refuse.
+  if coalesce(p_client_key, '') !~ '^[0-9a-f]{64}$' then
     return 'invalid';
   end if;
 
@@ -238,24 +267,20 @@ begin
   if ops.waitlist_rate_hit('global', interval '1 minute', 60) then
     return 'rate_limited';
   end if;
-  if p_client_key is not null and ops.waitlist_rate_hit('client:' || p_client_key, interval '1 hour', 10) then
+  if ops.waitlist_rate_hit('client:' || p_client_key, interval '1 hour', 10) then
     return 'rate_limited';
   end if;
   if ops.waitlist_rate_hit('email:' || md5(v_email), interval '1 day', 3) then
     return 'rate_limited';
   end if;
 
-  select * into v_previous from ops.waitlist where email = v_email;
-
   insert into ops.waitlist as w (
     email, interests, shares_content, platform, audience_band, public_link, source, campaign,
-    age_confirmed, waitlist_consent_version, waitlist_consented_at,
-    marketing_consent, marketing_consent_version, marketing_consented_at
+    age_confirmed, waitlist_consent_version, waitlist_consented_at
   )
   values (
     v_email, v_interests, v_shares, v_platform, v_audience, v_link, v_source, v_campaign,
-    true, p_notice_version, now(),
-    v_marketing, case when v_marketing then p_notice_version end, case when v_marketing then now() end
+    true, v_notice, now()
   )
   on conflict (email) do update set
     interests                 = excluded.interests,
@@ -269,20 +294,13 @@ begin
     age_confirmed             = true,
     waitlist_consent_version  = excluded.waitlist_consent_version,
     waitlist_consented_at     = excluded.waitlist_consented_at,
-    marketing_consent         = excluded.marketing_consent,
-    marketing_consent_version = excluded.marketing_consent_version,
-    marketing_consented_at    = excluded.marketing_consented_at,
     last_confirmed_at         = now()
   returning w.id into v_id;
 
-  -- Consent history: waitlist consent every time; marketing when given, or
-  -- when someone who had given it now leaves it unticked (withdrawal).
+  -- Consent history: the waitlist consent, under the approved notice. No
+  -- marketing consent is accepted until addresses can be verified.
   insert into ops.waitlist_consents (waitlist_id, kind, granted, notice_version)
-  values (v_id, 'waitlist', true, p_notice_version);
-  if v_marketing or coalesce(v_previous.marketing_consent, false) then
-    insert into ops.waitlist_consents (waitlist_id, kind, granted, notice_version)
-    values (v_id, 'marketing', v_marketing, p_notice_version);
-  end if;
+  values (v_id, 'waitlist', true, v_notice);
 
   return 'ok';
 end;
@@ -302,7 +320,6 @@ create function public.waitlist_submit(
   p_age_confirmed       boolean,
   p_waitlist_consent    boolean,
   p_notice_version      text,
-  p_marketing_consent   boolean,
   p_client_key          text
 )
 returns text
@@ -311,7 +328,7 @@ set search_path = ''
 as $$
   select ops.join_waitlist(
     p_email, p_interests, p_shares_content, p_platform, p_audience_band, p_public_link, p_source, p_campaign,
-    p_age_confirmed, p_waitlist_consent, p_notice_version, p_marketing_consent, p_client_key
+    p_age_confirmed, p_waitlist_consent, p_notice_version, p_client_key
   );
 $$;
 comment on function public.waitlist_submit is 'Waitlist entry point for the join-waitlist server function. service_role only; members and visitors cannot call it.';
@@ -347,27 +364,64 @@ end;
 $$;
 
 -- Retention: delete everyone whose last confirmed interest is older than the
--- given number of months (proposed policy: 12, subject to legal review).
+-- given number of months (proposed policy: 12, subject to legal review),
+-- together with any invitation for their address that hasn't been accepted,
+-- exactly as deletion on request does.
 create function ops.waitlist_purge_expired(p_months integer default 12)
-returns integer
+returns jsonb
 language plpgsql
 set search_path = ''
 as $$
 declare
-  n integer;
+  n_waitlist    integer;
+  n_invitations integer;
 begin
   if p_months is null or p_months < 1 then
     raise exception 'retention must be at least one month';
   end if;
-  delete from ops.waitlist where last_confirmed_at < now() - make_interval(months => p_months);
-  get diagnostics n = row_count;
+  with expired as (
+    delete from ops.waitlist where last_confirmed_at < now() - make_interval(months => p_months)
+    returning email
+  ), open_invitations as (
+    delete from ops.invitations i using expired e where i.email = e.email and i.accepted_at is null
+    returning i.id
+  ), buckets as (
+    delete from ops.waitlist_rate_limits r using expired e where r.bucket = 'email:' || md5(e.email)
+    returning 1
+  )
+  select (select count(*) from expired), (select count(*) from open_invitations) into n_waitlist, n_invitations;
   delete from ops.waitlist_rate_limits where window_start < now() - interval '2 days';
-  return n;
+  return jsonb_build_object('waitlist', n_waitlist, 'open_invitations', n_invitations);
 end;
 $$;
 
+-- Pilot invitations need a verified address. If an address is on the
+-- waitlist but not verified, no invitation can be created for it (or moved
+-- to it, or resent). Invitations for addresses not on the waitlist are unaffected.
+create function ops.invitations_require_verified_waitlist_email()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.accepted_at is null and new.revoked_at is null and exists (
+    select 1 from ops.waitlist w where w.email = new.email and w.email_verified_at is null
+  ) then
+    raise exception 'this address is on the waitlist but not verified, so it cannot be invited yet'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger invitations_require_verified_waitlist_email
+  before insert or update of email, last_sent_at, accepted_at, revoked_at on ops.invitations
+  for each row execute function ops.invitations_require_verified_waitlist_email();
+
 -- Demand measurement without email addresses: counts only.
-create view ops.waitlist_summary as
+-- security_invoker: the view reads with the caller's rights, not its owner's,
+-- so it can never become a way around the table's row level security.
+create view ops.waitlist_summary with (security_invoker = true) as
 select
   date_trunc('day', first_joined_at)::date as joined_on,
   coalesce(source, 'unknown')              as source,
@@ -390,13 +444,14 @@ grant all on ops.settings, ops.waitlist, ops.waitlist_consents, ops.waitlist_sel
   to service_role;
 
 revoke all on function ops.waitlist_rate_hit(text, interval, integer) from public, anon, authenticated;
-revoke all on function ops.join_waitlist(text, text[], text, text, text, text, text, text, boolean, boolean, text, boolean, text) from public, anon, authenticated;
+revoke all on function ops.join_waitlist(text, text[], text, text, text, text, text, text, boolean, boolean, text, text) from public, anon, authenticated;
 revoke all on function ops.waitlist_delete(uuid) from public, anon, authenticated;
 revoke all on function ops.waitlist_purge_expired(integer) from public, anon, authenticated;
-revoke all on function public.waitlist_submit(text, text[], text, text, text, text, text, text, boolean, boolean, text, boolean, text) from public, anon, authenticated;
+revoke all on function ops.invitations_require_verified_waitlist_email() from public, anon, authenticated;
+revoke all on function public.waitlist_submit(text, text[], text, text, text, text, text, text, boolean, boolean, text, text) from public, anon, authenticated;
 
 grant execute on function ops.waitlist_rate_hit(text, interval, integer) to service_role;
-grant execute on function ops.join_waitlist(text, text[], text, text, text, text, text, text, boolean, boolean, text, boolean, text) to service_role;
+grant execute on function ops.join_waitlist(text, text[], text, text, text, text, text, text, boolean, boolean, text, text) to service_role;
 grant execute on function ops.waitlist_delete(uuid) to service_role;
 grant execute on function ops.waitlist_purge_expired(integer) to service_role;
-grant execute on function public.waitlist_submit(text, text[], text, text, text, text, text, text, boolean, boolean, text, boolean, text) to service_role;
+grant execute on function public.waitlist_submit(text, text[], text, text, text, text, text, text, boolean, boolean, text, text) to service_role;

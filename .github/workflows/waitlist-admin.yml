@@ -9,7 +9,8 @@ name: Waitlist admin (staging)
 #   delete    delete one person by waitlist id (from the Supabase dashboard),
 #             with their consent history, notes, rate counter and any
 #             unaccepted invitation. No email address is typed into GitHub.
-#   purge     delete entries with no confirmed interest for N months
+#   purge     delete entries with no confirmed interest for N months, with
+#             their pending invitations
 #             (proposed policy: 12, subject to legal review)
 #
 # Reuses the staging deploy workflow's safety: the only credential is the

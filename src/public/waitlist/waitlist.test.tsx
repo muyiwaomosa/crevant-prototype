@@ -95,10 +95,10 @@ describe('waitlist form', () => {
     expect(f).not.toHaveBeenCalled()
   })
 
-  it('keeps marketing consent separate, optional and unticked', () => {
+  it('offers no marketing consent until email addresses can be verified', () => {
     setup()
-    const marketing = screen.getByLabelText(/Also email me occasional updates about Crevant/) as HTMLInputElement
-    expect(marketing.checked).toBe(false)
+    expect(screen.queryByLabelText(/updates about Crevant/)).toBeNull()
+    expect(screen.getAllByRole('checkbox').map((c) => c.closest('label')?.textContent)).not.toContainEqual(expect.stringMatching(/market|updates|news/i))
     expect(screen.getByRole('link', { name: 'privacy notice' }).getAttribute('href')).toBe('/privacy')
   })
 
@@ -141,7 +141,6 @@ describe('waitlist form', () => {
       campaign: null,
       ageConfirmed: true,
       waitlistConsent: true,
-      marketingConsent: false,
       noticeVersion: 'notice-2026-11',
       turnstileToken: 'turnstile-token',
       website: '',
@@ -154,6 +153,7 @@ describe('waitlist form', () => {
       ['closed', "The waitlist isn't open right now. Please try again later."],
       ['rate_limited', 'Too many attempts. Please try again later.'],
       ['verification_failed', 'Please complete the check above and try again.'],
+      ['notice_changed', 'Our privacy notice has been updated. Please reload the page and try again.'],
     ] as const) {
       setup(respond(status, 400))
       fillRequired()

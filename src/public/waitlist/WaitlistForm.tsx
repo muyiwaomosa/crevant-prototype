@@ -6,8 +6,9 @@ import { mountTurnstile, type MountTurnstile, type TurnstileWidget } from './tur
 
 // The unified waitlist form. Rendered only when readWaitlistConfig() returns a
 // configuration, which needs the approved privacy notice (docs/WAITLIST.md).
-// Required: email, 18+ and waitlist consent. Everything else is optional, and
-// marketing consent is separate, optional and unticked.
+// Required: email, 18+ and waitlist consent. Everything else is optional.
+// There is no marketing consent option until email addresses can be verified
+// (docs/WAITLIST.md); the server refuses to store one either way.
 
 export const INTERESTS: Array<[string, string]> = [
   ['reach_followers', 'Reaching the people who follow me'],
@@ -35,12 +36,13 @@ export const AUDIENCE: Array<[string, string]> = [
   ['over_100k', 'Over 100,000'],
 ]
 
-type Outcome = 'idle' | 'sending' | 'ok' | 'closed' | 'rate_limited' | 'verification_failed' | 'invalid' | 'error'
+type Outcome = 'idle' | 'sending' | 'ok' | 'closed' | 'rate_limited' | 'verification_failed' | 'notice_changed' | 'invalid' | 'error'
 
 const MESSAGES: Partial<Record<Outcome, string>> = {
   closed: "The waitlist isn't open right now. Please try again later.",
   rate_limited: 'Too many attempts. Please try again later.',
   verification_failed: 'Please complete the check above and try again.',
+  notice_changed: 'Our privacy notice has been updated. Please reload the page and try again.',
   invalid: 'Some details look wrong. Please check them and try again.',
   error: 'Something went wrong. Please try again.',
 }
@@ -67,7 +69,6 @@ export function WaitlistForm({
   const [website, setWebsite] = useState('')
   const [age, setAge] = useState(false)
   const [consent, setConsent] = useState(false)
-  const [marketing, setMarketing] = useState(false)
   const [token, setToken] = useState<string | null>(null)
   const [errors, setErrors] = useState<Errors>({})
   const [outcome, setOutcome] = useState<Outcome>('idle')
@@ -118,7 +119,6 @@ export function WaitlistForm({
       campaign,
       ageConfirmed: age,
       waitlistConsent: consent,
-      marketingConsent: marketing,
       noticeVersion: config.noticeVersion,
       turnstileToken: token,
       website,
@@ -132,7 +132,7 @@ export function WaitlistForm({
       })
       const data = (await res.json().catch(() => ({}))) as { status?: string }
       const s = data.status
-      next = s === 'ok' || s === 'closed' || s === 'rate_limited' || s === 'verification_failed' || s === 'invalid' ? s : 'error'
+      next = s === 'ok' || s === 'closed' || s === 'rate_limited' || s === 'verification_failed' || s === 'notice_changed' || s === 'invalid' ? s : 'error'
     } catch {
       next = 'error'
     }
@@ -299,12 +299,6 @@ export function WaitlistForm({
           </span>
         </label>
         {err('consent')}
-        <label className="flex gap-3 text-ink-700">
-          <input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-brand-600" />
-          <span>
-            Also email me occasional updates about Crevant. <span className="text-ink-500">Optional</span>
-          </span>
-        </label>
       </div>
 
       <div>

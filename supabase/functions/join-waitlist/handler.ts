@@ -8,11 +8,14 @@
 //      and store nothing, so bots learn nothing.
 //   4. Cloudflare Turnstile, verified server side, including the hostname.
 //   5. Basic shape checks, then the database function, which repeats every
-//      check, applies the database switch and the rate limits, and stores.
+//      check, applies the database switch, checks the privacy notice version
+//      against the approved one, applies the rate limits, and stores.
 //
-// Responses never include the email address, and nothing here logs it.
+// Marketing consent is never forwarded: it stays off until email addresses
+// can be verified. Responses never include the email address, and nothing
+// here logs it.
 
-export type SubmitResult = 'ok' | 'closed' | 'invalid' | 'rate_limited'
+export type SubmitResult = 'ok' | 'closed' | 'invalid' | 'notice_changed' | 'rate_limited'
 
 export interface SubmitPayload {
   p_email: string
@@ -26,8 +29,7 @@ export interface SubmitPayload {
   p_age_confirmed: boolean
   p_waitlist_consent: boolean
   p_notice_version: string
-  p_marketing_consent: boolean
-  p_client_key: string | null
+  p_client_key: string
 }
 
 export interface TurnstileResult {
@@ -43,7 +45,8 @@ export interface JoinDeps {
   /** Hostnames Turnstile must report the challenge was solved on. */
   allowedHostnames: string[]
   verifyTurnstile(token: string, ip: string | null): Promise<TurnstileResult>
-  clientKey(ip: string | null): Promise<string | null>
+  /** Salted hash of the client address (or of a shared "unknown" bucket). */
+  clientKey(ip: string | null): Promise<string>
   submit(payload: SubmitPayload): Promise<SubmitResult>
 }
 
@@ -52,6 +55,7 @@ export interface IncomingRequest {
   origin: string | null
   contentType: string | null
   body: string
+  /** The client address from the trusted proxy hop (clientIpFrom), or null. */
   ip: string | null
 }
 
@@ -93,7 +97,7 @@ const bool = (v: unknown): boolean => {
 }
 
 /** Turns the browser's JSON into the database function's arguments. Throws on a wrong shape. */
-export function toPayload(input: Record<string, unknown>, clientKey: string | null): SubmitPayload {
+export function toPayload(input: Record<string, unknown>, clientKey: string): SubmitPayload {
   const email = str(input.email, 254)
   if (!email) throw new Error('shape')
   const interests = input.interests ?? []
@@ -114,7 +118,6 @@ export function toPayload(input: Record<string, unknown>, clientKey: string | nu
     p_age_confirmed: bool(input.ageConfirmed),
     p_waitlist_consent: bool(input.waitlistConsent),
     p_notice_version: noticeVersion,
-    p_marketing_consent: bool(input.marketingConsent),
     p_client_key: clientKey,
   }
 }
@@ -147,7 +150,8 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
   if (!token || token.length > 2048) return reply(400, 'verification_failed', origin)
   let verified: TurnstileResult
   try {
-    verified = await deps.verifyTurnstile(token, req.ip)
+    // Cloudflare's optional remoteip takes a full address, not a /64 network.
+    verified = await deps.verifyTurnstile(token, req.ip && !req.ip.includes('/') ? req.ip : null)
   } catch {
     return reply(502, 'error', origin)
   }
@@ -155,9 +159,15 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
     return reply(400, 'verification_failed', origin)
   }
 
+  let clientKey: string
+  try {
+    clientKey = await deps.clientKey(req.ip)
+  } catch {
+    return reply(500, 'error', origin)
+  }
   let payload: SubmitPayload
   try {
-    payload = toPayload(body, await deps.clientKey(req.ip))
+    payload = toPayload(body, clientKey)
   } catch {
     return reply(400, 'invalid', origin)
   }
@@ -175,15 +185,57 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
       return reply(503, 'closed', origin)
     case 'rate_limited':
       return reply(429, 'rate_limited', origin)
+    case 'notice_changed':
+      return reply(409, 'notice_changed', origin)
     default:
       return reply(400, 'invalid', origin)
   }
 }
 
-/** A salted SHA-256 of the client address: the only form it is ever kept in. */
-export async function hashClientKey(ip: string | null, salt: string): Promise<string | null> {
-  if (!ip || !salt) return null
-  const data = new TextEncoder().encode(`${salt}:${ip}`)
+const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
+
+/** The first four groups (the /64 network) of an IPv6 address, or null. */
+function ipv6Network(ip: string): string | null {
+  if (!/^[0-9a-f:]{2,39}$/i.test(ip) || (ip.match(/::/g) ?? []).length > 1) return null
+  const [head, tail] = ip.includes('::') ? ip.split('::') : [ip, null]
+  const left = head ? head.split(':') : []
+  const right = tail ? tail.split(':') : []
+  const missing = 8 - left.length - right.length
+  if (tail === null ? missing !== 0 : missing < 1) return null
+  const groups = [...left, ...Array(tail === null ? 0 : missing).fill('0'), ...right]
+  if (groups.some((g) => !/^[0-9a-f]{1,4}$/i.test(g))) return null
+  return groups
+    .slice(0, 4)
+    .map((g) => parseInt(g, 16).toString(16))
+    .join(':')
+}
+
+/**
+ * The client address, read only from X-Forwarded-For at the hop our own
+ * proxies added (`trustedHops` from the right; 1 = the rightmost entry).
+ * Entries further left can be written by the client, and so can headers
+ * such as CF-Connecting-IP here, so they are ignored. IPv6 addresses are
+ * reduced to their /64 network, since one connection can rotate through a
+ * whole /64. Anything malformed gives null, which shares one bucket.
+ */
+export function clientIpFrom(forwardedFor: string | null, trustedHops = 1): string | null {
+  if (!forwardedFor || !Number.isInteger(trustedHops) || trustedHops < 1 || trustedHops > 5) return null
+  const hops = forwardedFor.split(',').map((h) => h.trim())
+  const ip = hops[hops.length - trustedHops]
+  if (!ip) return null
+  if (IPV4.test(ip)) return ip
+  const v6 = ipv6Network(ip.toLowerCase())
+  return v6 ? `${v6}::/64` : null
+}
+
+/**
+ * A salted SHA-256 of the client address: the only form it is ever kept in.
+ * Without an address everyone shares one "unknown" bucket, so a missing or
+ * malformed header can't be used to skip the per-client limit.
+ */
+export async function hashClientKey(ip: string | null, salt: string): Promise<string> {
+  if (!salt) throw new Error('WAITLIST_RATE_SALT is not set')
+  const data = new TextEncoder().encode(`${salt}:${ip ?? 'unknown'}`)
   const digest = await crypto.subtle.digest('SHA-256', data)
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
@@ -218,6 +270,6 @@ export async function submitThroughDataApi(
   })
   if (!res.ok) throw new Error(`waitlist_submit failed with ${res.status}`)
   const out = await res.json()
-  if (out === 'ok' || out === 'closed' || out === 'invalid' || out === 'rate_limited') return out
+  if (out === 'ok' || out === 'closed' || out === 'invalid' || out === 'notice_changed' || out === 'rate_limited') return out
   throw new Error('unexpected result')
 }

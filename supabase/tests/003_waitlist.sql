@@ -45,10 +45,11 @@ declare
 begin
   foreach f in array array[
     'ops.waitlist_rate_hit(text, interval, integer)'::regprocedure,
-    'ops.join_waitlist(text, text[], text, text, text, text, text, text, boolean, boolean, text, boolean, text)'::regprocedure,
+    'ops.join_waitlist(text, text[], text, text, text, text, text, text, boolean, boolean, text, text)'::regprocedure,
     'ops.waitlist_delete(uuid)'::regprocedure,
     'ops.waitlist_purge_expired(integer)'::regprocedure,
-    'public.waitlist_submit(text, text[], text, text, text, text, text, text, boolean, boolean, text, boolean, text)'::regprocedure
+    'ops.invitations_require_verified_waitlist_email()'::regprocedure,
+    'public.waitlist_submit(text, text[], text, text, text, text, text, text, boolean, boolean, text, text)'::regprocedure
   ] loop
     foreach r in array array['anon', 'authenticated', 'public'] loop
       if (r = 'public' and exists (select 1 from aclexplode((select proacl from pg_proc where oid = f)) a where a.grantee = 0))
@@ -76,7 +77,10 @@ begin
   if not exists (select 1 from ops.settings where key = 'waitlist_submissions') then
     raise exception 'FAIL: the waitlist_submissions switch is missing';
   end if;
-  raise notice 'PASS: the waitlist submission switch exists';
+  if not exists (select 1 from ops.settings where key = 'waitlist_notice_version') then
+    raise exception 'FAIL: the approved notice version setting is missing';
+  end if;
+  raise notice 'PASS: the waitlist switch and approved notice version setting exist';
 end $$;
 
 -- 4. Required data and consent records are enforced by the table itself.
@@ -89,7 +93,7 @@ begin
       raise exception 'FAIL: ops.waitlist.% may be empty', c;
     end if;
   end loop;
-  foreach c in array array['waitlist_email_normalized', 'waitlist_email_unique', 'waitlist_adults_only', 'waitlist_consent_version_format', 'waitlist_marketing_consistent', 'waitlist_creator_details_need_yes', 'waitlist_link_format'] loop
+  foreach c in array array['waitlist_email_normalized', 'waitlist_email_unique', 'waitlist_adults_only', 'waitlist_consent_version_format', 'waitlist_marketing_consistent', 'waitlist_creator_details_need_yes', 'waitlist_link_format', 'waitlist_marketing_needs_verified_email', 'waitlist_invite_needs_verified_email'] loop
     if not exists (select 1 from pg_constraint where conrelid = 'ops.waitlist'::regclass and conname = c) then
       raise exception 'FAIL: ops.waitlist is missing constraint %', c;
     end if;
@@ -105,4 +109,20 @@ begin
     raise exception 'FAIL: consent records may lack a notice version';
   end if;
   raise notice 'PASS: required fields, consent versions and no roles are enforced';
+end $$;
+
+-- 5. Invitations for unverified waitlist addresses are blocked, and the
+--    summary view reads with the caller's rights.
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger
+    where tgrelid = 'ops.invitations'::regclass and tgname = 'invitations_require_verified_waitlist_email' and tgenabled <> 'D'
+  ) then
+    raise exception 'FAIL: invitations for unverified waitlist addresses are not blocked';
+  end if;
+  if not coalesce((select 'security_invoker=true' = any (reloptions) from pg_class where oid = 'ops.waitlist_summary'::regclass), false) then
+    raise exception 'FAIL: ops.waitlist_summary does not use security_invoker';
+  end if;
+  raise notice 'PASS: unverified addresses cannot be invited, and the summary view respects row level security';
 end $$;
