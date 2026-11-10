@@ -66,13 +66,15 @@ Production still serves the frozen `demo` branch. These safeguards are in `main`
   * A Production build may only use the Production function, and while it's `null`, any waitlist address fails the build (fail closed).
   * The Production bundle check refuses the staging project; other builds refuse the Production project once it's set.
 * **Privacy gate.** `/privacy` shows the founder-approved wording: the notice will be published before registration opens, and no registrations are being collected. The form can't turn on unless an **approved** notice exists (`src/public/privacy/approved-notice.json` plus its text, added in a reviewed PR) whose version matches `VITE_PRIVACY_NOTICE_VERSION`, with the notice URL `/privacy`. A Production build with the form on and no approved notice (or a test notice) fails.
-* **Search indexing.** Indexing is off everywhere unless an approved Production build also has `CREVANT_ALLOW_INDEXING=true`. Then only `/` and `/join` on `crevant-prototype.vercel.app` may be indexed.
-  * `vercel.json` sends `noindex` on every other address (Previews, deployment addresses) and on `/tour`, `/privacy`, member paths and deeper paths of the production address.
-  * The robots meta tag and `robots.txt` default to `noindex` and "disallow all".
-  * The sitemap exists only once indexing is allowed.
+* **Search indexing.** Before indexing approval, every page is `noindex`. After it (an approved Production build with `CREVANT_ALLOW_INDEXING=true`), only `/` and `/join` on `crevant-prototype.vercel.app` may be indexed. This is enforced without JavaScript:
+  * `vercel.json` sends `X-Robots-Tag: noindex` on every other address, and on every path of the production address except exactly `/` and `/join` (one rule, `/((?!join$).+)`)
+  * the initial HTML's robots tag is `noindex` unless indexing is approved
+  * `robots.txt`, the sitemap and the page script follow the same rule as extra layers
+
+  Details and the Chrome check: `docs/LAUNCH-RUNBOOK.md`.
 * **Tests.** These run in the Public site CI job: an unapproved build at the production address still shows the demo, and an approved build shows the public site with only `/` and `/join` indexable. Unit and script tests cover the guards, endpoints, indexing and privacy gate.
 
-To verify on a Preview once deployed: the response has `X-Robots-Tag: noindex` (the header rules use Vercel `has`/`missing` host conditions, which can only be confirmed on Vercel itself).
+Deployment paths: only Git builds are authorized. Promoting a Preview or deploying a prebuilt build skips the build guard and is not an authorized path (`docs/LAUNCH-RUNBOOK.md`).
 
 ## Not done yet (each needs approval)
 

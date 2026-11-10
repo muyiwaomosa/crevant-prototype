@@ -50,6 +50,19 @@ const landing = (page) => page.getByRole('heading', { level: 1, name: /You earne
       check('/privacy shows the approved wording', ((await page.getByTestId('privacy-not-published').textContent()) || '').includes('Our privacy notice will be published before waitlist registration opens.'))
     }
 
+    // The rule without JavaScript: the robots tag in the INITIAL HTML the server
+    // sends, combined with the X-Robots-Tag header vercel.json gives that path
+    // on the production address (modelled from vercel.json; vite preview
+    // doesn't apply Vercel headers). noindex from either wins.
+    const { headerNoindex } = await import('../scripts/vercel-robots.mjs')
+    for (const p of ['/', '/join', '/tour', '/tour/discover', '/privacy', '/sign-in', '/app', '/xyz', '/join/creator']) {
+      const html = await (await page.goto(`${BASE}${p}`)).text()
+      const initialMeta = (html.match(/<meta name="robots" content="([^"]+)"/) || [])[1]
+      const effective = headerNoindex(HOST, p) || initialMeta !== 'index, follow' ? 'noindex' : 'index'
+      const expected = MODE === 'approved' && (p === '/' || p === '/join') ? 'index' : 'noindex'
+      check(`${p}: without JavaScript, header + initial HTML give ${expected}`, effective === expected, `meta=${initialMeta}, header=${headerNoindex(HOST, p) ? 'noindex' : 'none'}`)
+    }
+
     // Fetched through the browser, which resolves the mapped production address.
     const robotsTxt = await (await page.goto(`${BASE}/robots.txt`)).text()
     const sitemapText = await (await page.goto(`${BASE}/sitemap.xml`)).text()
