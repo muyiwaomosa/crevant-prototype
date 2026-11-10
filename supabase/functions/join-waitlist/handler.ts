@@ -248,22 +248,56 @@ function ipv6Network(ip: string): string | null {
     .join(':')
 }
 
+/** True for addresses no visitor can have as seen from the public edge. */
+function internalIpv4(ip: string): boolean {
+  const [a, b] = ip.split('.').map(Number)
+  return (
+    a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+  )
+}
+function internalIpv6Network(net: string): boolean {
+  const first = parseInt(net.split(':')[0], 16)
+  // ::/64 holds ::1 and the unspecified address; fc00::/7 unique local; fe80::/10 link local.
+  return net === '0:0:0:0' || (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80
+}
+
+/**
+ * How many X-Forwarded-For entries, counted from the right, Supabase's own
+ * proxies add. There is no default: until the number has been confirmed on
+ * the hosted platform (docs/WAITLIST.md, hosted staging check 3) it must not
+ * be guessed, and the function stays closed without it. Only 1 to 5.
+ */
+export function parseTrustedHops(raw: string | null | undefined): number | null {
+  return typeof raw === 'string' && /^[1-5]$/.test(raw.trim()) ? Number(raw.trim()) : null
+}
+
 /**
  * The client address, read only from X-Forwarded-For at the hop our own
  * proxies added (`trustedHops` from the right; 1 = the rightmost entry).
  * Entries further left can be written by the client, and so can headers
- * such as CF-Connecting-IP here, so they are ignored. IPv6 addresses are
- * reduced to their /64 network, since one connection can rotate through a
- * whole /64. Anything malformed gives null, which shares one bucket.
+ * such as X-Real-IP or CF-Connecting-IP here, so they are ignored. IPv6
+ * addresses are reduced to their /64 network, since one connection can
+ * rotate through a whole /64.
+ *
+ * Fails safe: anything it can't trust gives null, and every null shares one
+ * "unknown" bucket, so it can never be used to skip the per-client limit.
+ * That covers a missing, malformed or too short header, a hop count that
+ * isn't set, and a private or internal address in the trusted position
+ * (which would mean the hop count points at one of the platform's own
+ * proxies rather than at the visitor).
  */
-export function clientIpFrom(forwardedFor: string | null, trustedHops = 1): string | null {
-  if (!forwardedFor || !Number.isInteger(trustedHops) || trustedHops < 1 || trustedHops > 5) return null
+export function clientIpFrom(forwardedFor: string | null, trustedHops: number | null): string | null {
+  if (!forwardedFor || trustedHops === null || !Number.isInteger(trustedHops) || trustedHops < 1 || trustedHops > 5) return null
+  if (forwardedFor.length > 4096) return null
   const hops = forwardedFor.split(',').map((h) => h.trim())
+  if (hops.length < trustedHops) return null
   const ip = hops[hops.length - trustedHops]
   if (!ip) return null
-  if (IPV4.test(ip)) return ip
+  if (IPV4.test(ip)) return internalIpv4(ip) ? null : ip
   const v6 = ipv6Network(ip.toLowerCase())
-  return v6 ? `${v6}::/64` : null
+  if (!v6 || internalIpv6Network(v6)) return null
+  return `${v6}::/64`
 }
 
 async function hmacHex(salt: string, message: string): Promise<string> {

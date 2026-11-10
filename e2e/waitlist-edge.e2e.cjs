@@ -3,14 +3,16 @@
 // database. Started by scripts/e2e/waitlist-edge.sh, which provides:
 //   EDGE_URL      the function (real handler and database code, stand-in Turnstile)
 //   EDGE_BAD_URL  the same function given the database owner's login
+//   EDGE_HOPS2_URL the same function trusting two proxy hops instead of one
 //   DB_URL        the local database owner (to inspect and clean up)
 //   WRITER_URL    waitlist_writer with a throwaway password
 //   ADMIN_URL     waitlist_admin with a throwaway password
 // Every check prints PASS or FAIL; the process exits non zero on any failure.
 
+const http = require('node:http')
 const postgres = require('postgres')
 
-const { EDGE_URL, EDGE_BAD_URL, DB_URL, WRITER_URL, ADMIN_URL } = process.env
+const { EDGE_URL, EDGE_BAD_URL, EDGE_HOPS2_URL, DB_URL, WRITER_URL, ADMIN_URL } = process.env
 const ORIGIN = 'https://site.test'
 const NOTICE = 'e2e-notice-1'
 
@@ -42,14 +44,33 @@ const body = (over = {}) => ({
   website: '',
   ...over,
 })
-async function post(payload, { origin = ORIGIN, xff = '198.51.100.7', url = EDGE_URL } = {}) {
+async function post(payload, { origin = ORIGIN, xff = '198.51.100.7', url = EDGE_URL, headers = {} } = {}) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: origin, 'X-Forwarded-For': xff },
+    headers: { 'Content-Type': 'application/json', Origin: origin, ...(xff === null ? {} : { 'X-Forwarded-For': xff }), ...headers },
     body: JSON.stringify(payload),
   })
   const data = await res.json().catch(() => ({}))
   return { status: res.status, state: data.status }
+}
+// Sends separate header lines for one name (fetch would join them first),
+// as a client can on the wire.
+function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ORIGIN, ...rawHeaders } }, (res) => {
+      let text = ''
+      res.on('data', (c) => (text += c))
+      res.on('end', () => {
+        let state
+        try {
+          state = JSON.parse(text).status
+        } catch {}
+        resolve({ status: res.statusCode, state })
+      })
+    })
+    req.on('error', reject)
+    req.end(JSON.stringify(payload))
+  })
 }
 
 ;(async () => {
@@ -119,6 +140,97 @@ async function post(payload, { origin = ORIGIN, xff = '198.51.100.7', url = EDGE
     check('another client is not limited', (await post(body({ email: 'q1@e2e.test' }), { xff: '203.0.113.51' })).state === 'ok')
     const buckets = await owner`select bucket from ops.waitlist_rate_limits`
     check('every rate limit key is a salted 64 character hash', buckets.every((b) => /^(global|email:[0-9a-f]{64}|client:[0-9a-f]{64})$/.test(b.bucket)))
+
+    // 9b. Forged client addresses, in depth. Each case: ten submissions that
+    // should all count against ONE client bucket (10 per hour), varying only
+    // what a visitor controls; the eleventh must be limited. Limits are
+    // cleared first, and no case runs near the edge of an hourly window.
+    let seq = 0
+    const email = () => `f${++seq}@e2e.test`
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+    async function awayFromWindowEdge(windowSeconds, marginSeconds) {
+      const into = Number((await owner`select extract(epoch from now())::numeric % ${windowSeconds} as s`)[0].s)
+      if (windowSeconds - into < marginSeconds) await sleep((windowSeconds - into + 1) * 1000)
+    }
+    async function freshLimits() {
+      await owner`delete from ops.waitlist_rate_limits`
+      await awayFromWindowEdge(3600, 30)
+    }
+    async function oneBucket(name, send) {
+      await freshLimits()
+      const states = []
+      for (let i = 1; i <= 10; i++) states.push((await send(i)).state)
+      const eleventh = (await send(11)).state
+      check(name, states.every((x) => x === 'ok') && eleventh === 'rate_limited', `${states.join(',')} then ${eleventh}`)
+    }
+    const forged = (i, n) => Array.from({ length: n }, (_, k) => `198.18.${i}.${k + 1}`).join(', ')
+
+    await oneBucket('many forged X-Forwarded-For entries (12, rotated) change nothing', (i) =>
+      post(body({ email: email() }), { xff: `${forged(i, 12)}, 203.0.113.80` }))
+    check('a different visitor right after is not limited', (await post(body({ email: email() }), { xff: `${forged(99, 12)}, 203.0.113.180` })).state === 'ok')
+
+    const junk = ['<script>', '999.1.1.1', '', 'unknown', '::::', '203.0.113.81 x', '"', 'a'.repeat(60), '2001:db8::1::2', 'null', '-1']
+    await oneBucket('malformed forged entries change nothing', (i) => post(body({ email: email() }), { xff: `${junk[i % junk.length]}${i}, ${junk[(i + 3) % junk.length]}, 203.0.113.81` }))
+
+    await oneBucket('duplicate X-Forwarded-For header lines count as one list (the last entry is trusted)', (i) =>
+      i === 11
+        ? post(body({ email: email() }), { xff: '203.0.113.82' })
+        : postRawHeaders(body({ email: email() }), { 'X-Forwarded-For': [`198.18.0.${i}`, `198.18.1.${i}, 203.0.113.82`] }))
+
+    await oneBucket('X-Real-IP, CF-Connecting-IP, True-Client-IP and Forwarded are ignored', (i) =>
+      post(body({ email: email() }), {
+        xff: '203.0.113.83',
+        headers: { 'X-Real-IP': `198.18.2.${i}`, 'CF-Connecting-IP': `198.18.3.${i}`, 'True-Client-IP': `198.18.4.${i}`, Forwarded: `for=198.18.5.${i}` },
+      }))
+    check('X-Real-IP naming a limited visitor does not make a request count as that visitor',
+      (await post(body({ email: email() }), { xff: '203.0.113.84', headers: { 'X-Real-IP': '203.0.113.83' } })).state === 'ok')
+
+    await oneBucket('IPv6 addresses in one /64 share a bucket', (i) => post(body({ email: email() }), { xff: i === 11 ? '2001:db8:5:6:ffff:ffff:ffff:ffff' : `2001:db8:5:6::${i.toString(16)}` }))
+    check('the next /64 is a different visitor', (await post(body({ email: email() }), { xff: '2001:db8:5:7::1' })).state === 'ok')
+    check('IPv6 written in capitals is the same /64', (await post(body({ email: email() }), { xff: '2001:DB8:5:6::abc' })).state === 'rate_limited')
+
+    const untrusted = [null, '10.1.2.3', 'junk', '192.168.0.9', '', 'fd00::1', '127.0.0.1', '100.64.1.1', 'fe80::1', '203.0.113.85,', '::1']
+    await oneBucket('a missing, malformed or private trusted entry falls into ONE shared bucket (never trusted)', (i) =>
+      post(body({ email: email() }), { xff: untrusted[i - 1] }))
+    check('a visitor with a real address is unaffected by the shared bucket', (await post(body({ email: email() }), { xff: '203.0.113.86' })).state === 'ok')
+
+    // Two trusted hops: the second entry from the right is the visitor.
+    const cfg2 = await (await fetch(`${EDGE_HOPS2_URL}/__config`)).json()
+    check('the two-hop instance reads its confirmed hop count', cfg2.trustedHops === 2 && cfg2.ok === true, JSON.stringify(cfg2))
+    await oneBucket('with two trusted hops, forged entries and the inner proxy entry change nothing', (i) =>
+      post(body({ email: email() }), { url: EDGE_HOPS2_URL, xff: `${forged(i, 3)}, 203.0.113.90, 10.9.9.${i}` }))
+    check('with two trusted hops, another visitor is not limited', (await post(body({ email: email() }), { url: EDGE_HOPS2_URL, xff: '203.0.113.91, 10.9.9.1' })).state === 'ok')
+    check('with two trusted hops, a header with only one entry is not trusted as that visitor',
+      (await post(body({ email: email() }), { url: EDGE_HOPS2_URL, xff: '203.0.113.90' })).state === 'ok')
+
+    // 9c. Rate limit boundaries and resets (time moved by shifting stored windows back).
+    await freshLimits()
+    for (let i = 1; i <= 10; i++) await post(body({ email: email() }), { xff: '203.0.113.95' })
+    check('client limit: the 11th in an hour is limited', (await post(body({ email: email() }), { xff: '203.0.113.95' })).state === 'rate_limited')
+    await owner`update ops.waitlist_rate_limits set window_start = window_start - interval '1 hour' where bucket like 'client:%'`
+    check('client limit: it resets in the next hour', (await post(body({ email: email() }), { xff: '203.0.113.95' })).state === 'ok')
+
+    await freshLimits()
+    await awayFromWindowEdge(86400, 60)
+    const same = email()
+    const tries = []
+    for (let i = 1; i <= 3; i++) tries.push((await post(body({ email: same }), { xff: `203.0.113.${100 + i}` })).state)
+    check('email limit: three submissions of one address in a day answer ok', tries.every((x) => x === 'ok'), tries.join(','))
+    check('email limit: the 4th is limited, from any client', (await post(body({ email: same.toUpperCase() }), { xff: '203.0.113.110' })).state === 'rate_limited')
+    await owner`update ops.waitlist_rate_limits set window_start = window_start - interval '1 day' where bucket like 'email:%'`
+    check('email limit: it resets the next day', (await post(body({ email: same }), { xff: '203.0.113.111' })).state === 'ok')
+
+    await freshLimits()
+    await awayFromWindowEdge(60, 15)
+    await owner`insert into ops.waitlist_rate_limits (bucket, window_start, hits)
+      values ('global', to_timestamp(floor(extract(epoch from now()) / 60) * 60), 59)
+      on conflict (bucket, window_start) do update set hits = 59`
+    check('global limit: the 60th in a minute is accepted', (await post(body({ email: email() }), { xff: '203.0.113.120' })).state === 'ok')
+    check('global limit: the 61st is limited, whoever sends it', (await post(body({ email: email() }), { xff: '203.0.113.121' })).state === 'rate_limited')
+    await owner`update ops.waitlist_rate_limits set window_start = window_start - interval '1 minute' where bucket = 'global'`
+    check('global limit: it resets the next minute', (await post(body({ email: email() }), { xff: '203.0.113.122' })).state === 'ok')
+    const keys = await owner`select bucket from ops.waitlist_rate_limits`
+    check('rate limit keys never contain an address', keys.every((b) => !/[.@]|2001/.test(b.bucket)))
 
     // 10. What the login roles can NOT do, over real connections.
     check('waitlist_writer cannot read the waitlist', await denied(() => writer`select * from ops.waitlist limit 1`))

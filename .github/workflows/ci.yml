@@ -85,7 +85,9 @@ jobs:
     # migrations, then runs scripts/db/integration-test.mjs through real
     # Supabase Auth and the Data API, and the join-waitlist function in
     # Supabase's Edge runtime as the restricted waitlist_writer login
-    # (scripts/e2e/waitlist-edge.sh; Turnstile is a stand-in there).
+    # (scripts/e2e/waitlist-edge.sh; Turnstile is a stand-in there, in test
+    # code under e2e/ only), the database TLS checks, and the staging rollback
+    # tests, all against this runner's own throwaway databases.
     name: Integration (real local Supabase)
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -116,6 +118,15 @@ jobs:
       - run: npm ci
       - name: Run the waitlist function in the Edge runtime as the restricted login
         run: scripts/e2e/waitlist-edge.sh
+      # Throwaway local CA and Postgres servers only: proves the database
+      # connection verifies the certificate and hostname, and never falls
+      # back to plain text or weaker settings.
+      - name: Database TLS checks (wrong CA, wrong hostname, no TLS, weakened settings)
+        run: scripts/e2e/waitlist-tls.sh
+      # Against this runner's local Supabase only: every refusal, a dry run,
+      # the real removal, and the migrations applying again cleanly.
+      - name: Staging rollback tests on local Supabase (refusals and a clean reapply)
+        run: scripts/db/rollback-test.sh
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup || true
