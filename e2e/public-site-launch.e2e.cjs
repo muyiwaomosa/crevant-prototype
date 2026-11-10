@@ -47,7 +47,7 @@ const landing = (page) => page.getByRole('heading', { level: 1, name: /You earne
         check(`${p} is noindex`, (await robots(page)) === 'noindex', await robots(page))
       }
       await page.goto(`${BASE}/privacy`)
-      check('/privacy says the notice is not yet published', (await page.getByTestId('privacy-not-published').count()) === 1)
+      check('/privacy shows the approved wording', ((await page.getByTestId('privacy-not-published').textContent()) || '').includes('Our privacy notice will be published before waitlist registration opens.'))
     }
 
     // Fetched through the browser, which resolves the mapped production address.

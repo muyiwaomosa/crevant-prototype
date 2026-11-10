@@ -65,7 +65,7 @@ Production still serves the frozen `demo` branch. These safeguards are in `main`
   * A Preview or local build may only use the staging function.
   * A Production build may only use the Production function, and while it's `null`, any waitlist address fails the build (fail closed).
   * The Production bundle check refuses the staging project; other builds refuse the Production project once it's set.
-* **Privacy gate.** `/privacy` says plainly that no notice is published and registrations aren't open. The form can't turn on unless an **approved** notice exists (`src/public/privacy/approved-notice.json` plus its text, added in a reviewed PR) whose version matches `VITE_PRIVACY_NOTICE_VERSION`, with the notice URL `/privacy`. A Production build with the form on and no approved notice (or a test notice) fails.
+* **Privacy gate.** `/privacy` shows the founder-approved wording: the notice will be published before registration opens, and no registrations are being collected. The form can't turn on unless an **approved** notice exists (`src/public/privacy/approved-notice.json` plus its text, added in a reviewed PR) whose version matches `VITE_PRIVACY_NOTICE_VERSION`, with the notice URL `/privacy`. A Production build with the form on and no approved notice (or a test notice) fails.
 * **Search indexing.** Indexing is off everywhere unless an approved Production build also has `CREVANT_ALLOW_INDEXING=true`. Then only `/` and `/join` on `crevant-prototype.vercel.app` may be indexed.
   * `vercel.json` sends `noindex` on every other address (Previews, deployment addresses) and on `/tour`, `/privacy`, member paths and deeper paths of the production address.
   * The robots meta tag and `robots.txt` default to `noindex` and "disallow all".

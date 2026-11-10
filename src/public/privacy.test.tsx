@@ -20,16 +20,18 @@ describe('/privacy before a notice is approved', () => {
     expect(APPROVED_NOTICE).toBeNull()
   })
 
-  it('says plainly that no notice is published and registrations are not open, with nothing to fill in', () => {
+  it('shows the approved wording: the notice is coming and no registrations are collected, with nothing to fill in', () => {
     const { container } = render(
       <MemoryRouter>
         <PrivacyPage />
       </MemoryRouter>,
     )
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Privacy Notice')
     const box = screen.getByTestId('privacy-not-published')
-    expect(box.textContent).toContain('Not yet published.')
-    expect(box.textContent).toContain('Nothing on this page is a privacy notice.')
-    expect(box.textContent).toContain("Crevant isn't accepting waitlist registrations")
+    expect(box.querySelectorAll('p')[0].textContent).toBe("We're preparing Crevant for its first members.")
+    expect(box.querySelectorAll('p')[1].textContent).toBe(
+      "Our privacy notice will be published before waitlist registration opens. We're not collecting waitlist registrations yet.",
+    )
     expect(container.querySelector('form, input, select, textarea')).toBeNull()
     expect(screen.queryByTestId('privacy-notice')).toBeNull()
   })

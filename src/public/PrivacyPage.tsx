@@ -4,8 +4,9 @@ import { APPROVED_NOTICE, type ApprovedNotice } from './privacy/notice'
 
 /**
  * /privacy. Until a privacy notice is approved (src/public/privacy/notice.ts),
- * this page says plainly that there is no published notice yet and that
- * Crevant isn't accepting registrations. It never shows placeholder text that
+ * this page says, in the founder-approved wording, that the notice will be
+ * published before registration opens and that no registrations are being
+ * collected. It never shows placeholder text that
  * could be mistaken for a notice, and search engines never index it.
  */
 export function PrivacyPage({ notice = APPROVED_NOTICE }: { notice?: ApprovedNotice | null }) {
@@ -16,7 +17,7 @@ export function PrivacyPage({ notice = APPROVED_NOTICE }: { notice?: ApprovedNot
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Crevant
         </Link>
         <h1 id="privacy-title" className="mt-6 font-display text-[2rem] font-extrabold leading-tight tracking-[-0.02em] text-ink-900 sm:text-[2.5rem]">
-          Privacy notice
+          Privacy Notice
         </h1>
         {notice ? (
           <div data-testid="privacy-notice">
@@ -30,10 +31,10 @@ export function PrivacyPage({ notice = APPROVED_NOTICE }: { notice?: ApprovedNot
         ) : (
           <div data-testid="privacy-not-published" className="mt-8 flex gap-3 rounded-3xl bg-spark-50 p-5 text-ink-700 ring-1 ring-spark-200">
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-spark-700" aria-hidden="true" />
+            {/* Founder-approved wording. */}
             <div className="space-y-2">
-              <p className="font-semibold text-ink-900">Not yet published.</p>
-              <p>Crevant's privacy notice hasn't been published yet. Nothing on this page is a privacy notice.</p>
-              <p>Crevant isn't accepting waitlist registrations until the approved notice is published here.</p>
+              <p className="font-semibold text-ink-900">We're preparing Crevant for its first members.</p>
+              <p>Our privacy notice will be published before waitlist registration opens. We're not collecting waitlist registrations yet.</p>
             </div>
           </div>
         )}
