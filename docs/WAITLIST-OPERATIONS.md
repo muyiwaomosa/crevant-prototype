@@ -36,7 +36,9 @@ Waves pick people. They don't invite anyone, and nothing here sends anything.
 * the wave actions pick verified entries only
 * the selections table refuses an unverified entry, whoever writes it
 
-Unverified registrations still appear in the summary counts. Until email verification exists, nobody is eligible, so waves stay empty.
+Unverified registrations still appear in the summary counts.
+
+**Required dependency: email verification.** Waves can't be used until email verification is built, reviewed and approved (a separate change, which needs an email provider). Until then nobody is eligible, so waves stay empty.
 
 1. **wave-preview:** set the group (`any`, `active_creator`, `aspiring_creator` or `supporter`). It shows how many verified entries are eligible, and, for information only, how many unverified entries in that group can't be picked. "Eligible" means verified with status `new`: not yet shortlisted, invited or not selected.
 2. **wave-select:** set the wave name (e.g. `wave_1`), the group, the reasons (`group_balance`, `targeted_feedback` or `both`) and a count from 1 to 100.

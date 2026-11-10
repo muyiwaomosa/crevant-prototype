@@ -152,7 +152,7 @@ Decisions:
 - [ ] Contact address for privacy requests
 - [ ] Retention period approved (proposed 12 months)
 - [ ] Participant group definitions and selection reasons approved (see "Participant groups and selection reasons")
-- [ ] Email verification designed and approved before any waitlist invitation (see above)
+- [ ] **Email verification built, reviewed and approved. Required before invitation waves can be used.** Waves take verified addresses only (enforced in the database), so until verification exists they stay empty and no one can be invited (see above).
 - [x] Supabase project region confirmed: **us-west-2 (West US, Oregon)**, staging project `kpudeppgokpjhvaqrprn` (confirmed 2026-11-10). The privacy notice should say where data is stored.
 - [x] GitHub `staging` environment limited to `main` with a required reviewer, and the Supabase GitHub integration disconnected (confirmed 2026-11-10)
 - [ ] **Branch protection on `main`** requiring pull requests and these CI checks: App, Database, Integration, Browser, and **Public site**. The Public site job must be a required check before Production moves to the public site build.
