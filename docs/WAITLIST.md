@@ -79,7 +79,7 @@ Nothing yet proves a visitor owns the address they type, so:
 | Login | Used by | Can do | Can't do |
 |---|---|---|---|
 | `waitlist_writer` | the join-waitlist function | `waitlist_api.submit` | read or write any table; call any other function; the admin actions |
-| `waitlist_admin` | the waitlist admin workflow (B3) | `waitlist_api.admin_summary`, `admin_status`, `admin_delete`, `admin_purge`, `admin_set_notice_version`, `admin_open`, `admin_close` | read or write any table; submit; anything else |
+| `waitlist_admin` | the waitlist admin workflow | `waitlist_api.admin_summary`, `admin_status`, `admin_delete`, `admin_purge`, `admin_set_notice_version`, `admin_open`, `admin_close`, and (B3) `admin_wave_preview`, `admin_wave_select`, `admin_wave_summary`, `admin_wave_clear` | read or write any table; submit; anything else |
 
 Both roles have no special powers: no superuser, no creating roles or databases, no replication, no bypassing row level security, and no membership of other roles. The `waitlist_api` functions run as the table owner, with a fixed empty search path and fully qualified names, so each can do exactly its one job. The schema isn't exposed through the Data API, and no API role (`anon`, `authenticated`, `service_role`) can use it.
 
@@ -137,7 +137,7 @@ The database holds the one notice version people must have been shown. It's set 
 
 ## Deletion and retention
 
-Both run through the **Waitlist admin (staging)** workflow, using only the admin entry points. It keeps the staging deploy safety: `main` only, the `staging` environment approval, and `scripts/db/verify-staging-target.sh`. It prints counts only. In B3 it moves to the restricted `waitlist_admin` login.
+Both run through the **Waitlist admin (staging)** workflow, as the restricted `waitlist_admin` login only (`WAITLIST_ADMIN_DATABASE_URL`). It keeps the staging deploy safety: `main` only, the `staging` environment approval, and `scripts/db/verify-staging-target.sh`, which also refuses any other login. It prints counts only. Day to day procedures, including waves, monitoring and emergency shutdown, are in `docs/WAITLIST-OPERATIONS.md`.
 
 * **Delete on request:** find the person's waitlist ID in the Supabase dashboard, then run the workflow with `delete` and that ID. Never type an email address into GitHub. This removes the entry, its consent record, its selection reasons and any unaccepted invitation. Rate limit counters are salted and can't be linked to the address. They expire within two days.
 * **Retention purge:** run with `purge`. It removes entries whose last verified confirmation, or failing that their signup, is older than the given number of months. Their pending invitations go too. **Proposed period: 12 months, subject to legal review.** An unverified repeat submission never extends it.
@@ -159,6 +159,7 @@ Decisions:
 - [ ] **Hosted staging check 1: pooler login.** The Supabase pooler accepts the custom `waitlist_writer.kpudeppgokpjhvaqrprn` login. If it doesn't, stop and decide; never fall back to a broader credential.
 - [ ] **Hosted staging check 2: TLS certificate.** The function connects with full certificate verification, adding Supabase's public CA as `WAITLIST_DB_CA_CERT` if needed. Never turn verification off.
 - [ ] **Hosted staging check 3: proxy hop count.** `WAITLIST_TRUSTED_PROXY_HOPS` is confirmed, so a made up `X-Forwarded-For` value can't change the client bucket.
+- [ ] Operations set up (`docs/WAITLIST-OPERATIONS.md`): `WAITLIST_ADMIN_DATABASE_URL`, the health check variables, and a monthly reminder to run the purge (no scheduled deletion)
 - [ ] Activation itself approved
 
 Setup, once approved (each step needs approval):
@@ -185,7 +186,7 @@ Setup, once approved (each step needs approval):
 10. **Open:** turn on `WAITLIST_FUNCTION_ENABLED=true`, then `waitlist_api.admin_open()`.
 11. **Public launch:** Production must move to the public site build, which is a separate decision (`docs/PUBLIC-SITE.md`).
 
-To close fast, run `waitlist_api.admin_close()`, or in an emergency set `ops.settings` `waitlist_submissions` to `false` in the Supabase table editor. It takes effect at once.
+To close fast, run the admin workflow's **close** action. If GitHub is unavailable, run `scripts/db/emergency-close.sql` in the Supabase SQL editor (`docs/WAITLIST-OPERATIONS.md`, "Emergency shutdown"). Either takes effect at once.
 
 ## Not included yet
 

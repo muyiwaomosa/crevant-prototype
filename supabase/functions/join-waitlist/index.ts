@@ -26,8 +26,8 @@
 //   supabase functions deploy join-waitlist --no-verify-jwt
 
 import postgres from 'npm:postgres@3.4.9'
-import { clientIpFrom, handleJoin, rateKeysFor, verifyWithCloudflare } from './handler.ts'
-import { databaseOptions, submitWithDatabase, type Sql } from './db.ts'
+import { cachedHealthCheck, clientIpFrom, handleJoin, rateKeysFor, verifyWithCloudflare } from './handler.ts'
+import { databaseOptions, databaseReachable, submitWithDatabase, type Sql } from './db.ts'
 
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
 const list = (k: string) =>
@@ -51,6 +51,9 @@ try {
 const enabled =
   env('WAITLIST_FUNCTION_ENABLED') === 'true' && sql !== null && env('WAITLIST_RATE_SALT').length >= 32 && env('TURNSTILE_SECRET_KEY') !== ''
 
+// At most one database health check per 30 seconds per instance.
+const health = cachedHealthCheck(() => databaseReachable(sql))
+
 Deno.serve(async (req: Request) => {
   // Only the trusted hop of X-Forwarded-For; client-supplied headers are ignored.
   const ip = clientIpFrom(req.headers.get('x-forwarded-for'), Number(env('WAITLIST_TRUSTED_PROXY_HOPS') || '1'))
@@ -69,9 +72,12 @@ Deno.serve(async (req: Request) => {
       verifyTurnstile: (token, clientIp) => verifyWithCloudflare(token, clientIp, env('TURNSTILE_SECRET_KEY'), fetch),
       rateKeys: (email, clientIp) => rateKeysFor(email, clientIp, env('WAITLIST_RATE_SALT')),
       submit: (payload) => submitWithDatabase(sql!, payload),
+      databaseReachable: health,
     },
   )
   // Status only: never the email, address or request body.
-  console.log(JSON.stringify({ event: 'join', status: out.status, result: JSON.parse(out.body || '{}').status ?? null }))
+  console.log(
+    JSON.stringify({ event: req.method === 'GET' ? 'health' : 'join', status: out.status, result: JSON.parse(out.body || '{}').status ?? null }),
+  )
   return new Response(out.body || null, { status: out.status, headers: out.headers })
 })

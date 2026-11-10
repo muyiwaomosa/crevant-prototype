@@ -56,7 +56,8 @@ begin
     'ops.waitlist_delete(uuid)'::regprocedure,
     'ops.waitlist_purge_expired(integer)'::regprocedure,
     'ops.invitations_require_verified_waitlist_email()'::regprocedure
-  ] loop
+  ] || coalesce((select array_agg(p.oid::regprocedure) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'ops' and p.proname = 'waitlist_selections_require_verified'), '{}') loop
     if exists (select 1 from aclexplode((select proacl from pg_proc where oid = f)) a where a.grantee = 0) then
       raise exception 'FAIL: everyone (PUBLIC) can execute %', f;
     end if;
@@ -111,7 +112,9 @@ begin
     allowed := case r
       when 'waitlist_writer' then array['waitlist_api.submit']
       else array['waitlist_api.admin_summary', 'waitlist_api.admin_status', 'waitlist_api.admin_delete', 'waitlist_api.admin_purge',
-                 'waitlist_api.admin_set_notice_version', 'waitlist_api.admin_open', 'waitlist_api.admin_close']
+                 'waitlist_api.admin_set_notice_version', 'waitlist_api.admin_open', 'waitlist_api.admin_close',
+                 'waitlist_api.admin_wave_preview', 'waitlist_api.admin_wave_select', 'waitlist_api.admin_wave_summary',
+                 'waitlist_api.admin_wave_clear']
     end;
 
     select string_agg(n.nspname || '.' || c.relname, ', ') into bad
@@ -246,6 +249,14 @@ begin
     where tgrelid = 'ops.invitations'::regclass and tgname = 'invitations_require_verified_waitlist_email' and tgenabled <> 'D'
   ) then
     raise exception 'FAIL: invitations for unverified waitlist addresses are not blocked';
+  end if;
+  -- From B3: only verified entries may enter an invitation wave.
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'waitlist_api' and p.proname = 'admin_wave_select')
+     and not exists (
+       select 1 from pg_trigger
+       where tgrelid = 'ops.waitlist_selections'::regclass and tgname = 'waitlist_selections_require_verified' and tgenabled <> 'D'
+     ) then
+    raise exception 'FAIL: unverified entries can be selected for an invitation wave';
   end if;
   raise notice 'PASS: required fields, minimal data and verification rules are enforced';
 end $$;

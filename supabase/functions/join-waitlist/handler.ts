@@ -14,6 +14,10 @@
 //      switch, the approved notice version and the rate limits, and stores
 //      new addresses only.
 //
+// A GET request is the health check: it answers {"status":"ok"} if the
+// restricted database login can connect, or {"status":"error"} if not. It
+// reads no data, needs no origin and says nothing about the switches.
+//
 // Responses never include the email address, and nothing here logs it.
 
 export type SubmitResult = 'ok' | 'closed' | 'invalid' | 'notice_changed' | 'rate_limited'
@@ -58,6 +62,8 @@ export interface JoinDeps {
   verifyTurnstile(token: string, ip: string | null): Promise<TurnstileResult>
   rateKeys(email: string, ip: string | null): Promise<RateKeys>
   submit(payload: SubmitPayload): Promise<SubmitResult>
+  /** True if the database login works (a bare `select 1`). */
+  databaseReachable(): Promise<boolean>
 }
 
 export interface IncomingRequest {
@@ -144,6 +150,15 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
 
   if (req.method === 'OPTIONS') {
     return origin ? { status: 204, headers: corsHeaders(origin), body: '' } : reply(403, 'forbidden', null)
+  }
+  if (req.method === 'GET') {
+    let ok = false
+    try {
+      ok = await deps.databaseReachable()
+    } catch {
+      ok = false
+    }
+    return reply(ok ? 200 : 503, ok ? 'ok' : 'error', null)
   }
   if (req.method !== 'POST') return reply(405, 'method_not_allowed', origin)
   if (!origin) return reply(403, 'forbidden', null)
@@ -288,5 +303,30 @@ export async function verifyWithCloudflare(
     success: data.success === true,
     hostname: typeof data.hostname === 'string' ? data.hostname : undefined,
     action: typeof data.action === 'string' ? data.action : undefined,
+  }
+}
+
+/**
+ * Limits how often the health check can reach the database: a result is
+ * reused for `ttlMs` (failures for a third of that, so recovery shows
+ * sooner), and simultaneous checks share one database call. However often
+ * someone requests GET, each function instance runs at most one `select 1`
+ * per period, over its single connection.
+ */
+export function cachedHealthCheck(check: () => Promise<boolean>, ttlMs = 30_000, now: () => number = () => Date.now()) {
+  let last: { ok: boolean; at: number } | null = null
+  let inFlight: Promise<boolean> | null = null
+  return async (): Promise<boolean> => {
+    if (last && now() - last.at < (last.ok ? ttlMs : ttlMs / 3)) return last.ok
+    if (!inFlight) {
+      inFlight = check()
+        .catch(() => false)
+        .then((ok) => {
+          last = { ok, at: now() }
+          inFlight = null
+          return ok
+        })
+    }
+    return inFlight
   }
 }

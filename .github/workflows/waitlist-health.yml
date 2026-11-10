@@ -1,0 +1,38 @@
+name: Waitlist health check
+
+# Daily check of the join-waitlist function (scripts/waitlist-health.mjs):
+# it answers, its restricted database login connects, the site's browser
+# preflight is allowed, and the function switch matches the expected state.
+# It submits nothing and uses no secrets, only three repository variables.
+# A failed run makes GitHub email a notification.
+#
+# The daily run is off until the repository variable WAITLIST_HEALTH_ENABLED
+# is 'true' (set once the function is deployed). It can always be run by hand.
+
+on:
+  schedule:
+    - cron: '23 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    name: Waitlist health
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || vars.WAITLIST_HEALTH_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check the waitlist function
+        env:
+          WAITLIST_FUNCTION_URL: ${{ vars.WAITLIST_FUNCTION_URL }}
+          WAITLIST_SITE_ORIGIN: ${{ vars.WAITLIST_SITE_ORIGIN }}
+          WAITLIST_EXPECTED_STATE: ${{ vars.WAITLIST_EXPECTED_STATE }}
+        run: node scripts/waitlist-health.mjs

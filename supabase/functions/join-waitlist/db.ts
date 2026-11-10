@@ -73,3 +73,10 @@ export async function submitWithDatabase(sql: Sql, p: SubmitPayload): Promise<Su
   if (typeof out === 'string' && (RESULTS as string[]).includes(out)) return out as SubmitResult
   throw new Error('unexpected result from waitlist_api.submit')
 }
+
+/** The health check: proves the waitlist_writer login can connect. Reads no data. */
+export async function databaseReachable(sql: Sql | null): Promise<boolean> {
+  if (!sql) return false
+  const rows = await sql`select 1 as ok`
+  return rows[0]?.ok === 1
+}

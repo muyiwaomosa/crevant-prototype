@@ -43,6 +43,15 @@ expect fail "wrong scheme"                                    "mysql://postgres.
 expect fail "empty connection string"                         ""
 expect fail "malformed URL"                                   "postgresql://postgres.$REF:$PW@$POOL:notaport/postgres"
 expect fail "environment variable names another project"      "postgresql://postgres.$REF:$PW@$POOL:5432/postgres" "abcdefghijabcdefghij"
+
+# The waitlist admin workflow requires the restricted waitlist_admin login.
+expect_admin() { EXPECTED_DB_USER=waitlist_admin expect "$@"; }
+expect_admin ok   "admin workflow: waitlist_admin via the session pooler"  "postgresql://waitlist_admin.$REF:$PW@$POOL:5432/postgres"
+expect_admin ok   "admin workflow: waitlist_admin via a direct connection" "postgresql://waitlist_admin:$PW@db.$REF.supabase.co:5432/postgres"
+expect_admin fail "admin workflow: the broad postgres login (pooler)"      "postgresql://postgres.$REF:$PW@$POOL:5432/postgres"
+expect_admin fail "admin workflow: the broad postgres login (direct)"      "postgresql://postgres:$PW@db.$REF.supabase.co:5432/postgres"
+expect_admin fail "admin workflow: the waitlist_writer login"              "postgresql://waitlist_writer.$REF:$PW@$POOL:5432/postgres"
+expect_admin fail "admin workflow: waitlist_admin on another project"      "postgresql://waitlist_admin.abcdefghijabcdefghij:$PW@$POOL:5432/postgres"
 expect fail "typed confirmation does not match"               "postgresql://postgres.$REF:$PW@$POOL:5432/postgres" "$REF" "kpudeppgokpjhvaqrprm"
 expect fail "typed confirmation empty"                        "postgresql://postgres.$REF:$PW@$POOL:5432/postgres" "$REF" ""
 
