@@ -31,10 +31,11 @@ export const PILOT_EVENTS = {
     props: { source: 'source_label', self_reported_referral: 'boolean', creator_link: 'link_ref' },
   },
   creator_link_visit: {
-    // Counted by waitlist_api.invite_preview when a usable link is opened: at
-    // most once per visitor per link per day, with no visitor detail stored.
-    // A visit is never a signup and never a follow; each step is its own event.
-    measures: 'Invitation-to-signup conversion (visits through a link, before signup)',
+    // Counted by waitlist_api.invite_preview when a usable link is opened:
+    // once per salted client key, link and UTC day, an ESTIMATE of visitors
+    // (shared networks undercount, changing networks overcount). The event
+    // stores no visitor detail. A visit is never a signup and never a follow.
+    measures: 'Invitation-to-signup conversion, estimated (visits through a link, before signup)',
     recordedBy: 'database',
     props: { creator_link: 'link_ref' },
   },

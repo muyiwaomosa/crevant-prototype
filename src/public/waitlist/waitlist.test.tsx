@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { introducerProblem, readAcquisition, readWaitlistConfig } from './config'
+import { readAcquisition, readWaitlistConfig } from './config'
 import { WaitlistForm } from './WaitlistForm'
 import { JoinPage } from '../JoinPage'
 import type { MountTurnstile } from './turnstile'
@@ -82,12 +82,6 @@ describe('waitlist switch (browser)', () => {
     }
   })
 
-  it('accepts a creator name or handle, and refuses links, email addresses and phone numbers', () => {
-    for (const ok of ['@priyaruns', 'Priya Raman', 'Zoë O’Brien-Nakamura', 'sam.collins', '']) expect(introducerProblem(ok), ok).toBeNull()
-    for (const bad of ['https://instagram.com/priya', 'www.priya.co', 'priya.com', 'priya@example.com', 'call 07700900123', '<script>', 'x'.repeat(61)]) {
-      expect(introducerProblem(bad), bad).not.toBeNull()
-    }
-  })
 })
 
 describe('waitlist form', () => {
@@ -175,7 +169,6 @@ describe('waitlist form', () => {
       noticeVersion: 'notice-2026-11',
       intent: null,
       introducedByCreator: null,
-      introducerReported: null,
       creatorRef: null,
       turnstileToken: 'turnstile-token',
       website: '',
@@ -192,15 +185,13 @@ describe('waitlist form', () => {
     expect(screen.getByTestId('waitlist-sharing')).toBeTruthy()
   })
 
-  it('asks for the creator name only after "Yes", and explains it is self-reported', () => {
+  it('asks only yes or no about a creator introduction, never for a name or handle', () => {
     setup()
     const q = screen.getByTestId('waitlist-introduced')
-    expect(screen.queryByLabelText(/Their name or handle/)).toBeNull()
     fireEvent.click(within(q).getByLabelText('Yes'))
-    expect(screen.getByLabelText(/Their name or handle/)).toBeTruthy()
-    expect(q.textContent).toContain("We won't contact them, and it doesn't link you to them or follow anyone.")
-    fireEvent.click(within(q).getByLabelText('No'))
-    expect(screen.queryByLabelText(/Their name or handle/)).toBeNull()
+    expect(screen.queryByLabelText(/name or handle/i)).toBeNull()
+    expect(q.querySelectorAll('input:not([type="radio"])')).toHaveLength(0)
+    expect(q.textContent).toContain("It names nobody and doesn't follow anyone.")
   })
 
   it('sends intent, the self-reported introduction and the creator code as separate fields', async () => {
@@ -208,7 +199,6 @@ describe('waitlist form', () => {
     fillRequired()
     fireEvent.click(screen.getByLabelText('Discover and support creators'))
     fireEvent.click(within(screen.getByTestId('waitlist-introduced')).getByLabelText('Yes'))
-    fireEvent.change(screen.getByLabelText(/Their name or handle/), { target: { value: '  @priyaruns ' } })
     await tokenReady()
     submit()
     await waitFor(() => expect(screen.getByTestId('waitlist-success')).toBeTruthy())
@@ -219,20 +209,9 @@ describe('waitlist form', () => {
       sharesContent: null,
       platform: null,
       introducedByCreator: true,
-      introducerReported: '@priyaruns',
       creatorRef: '0123456789abcdef0123',
     })
-  })
-
-  it('refuses a link typed as the creator name, before sending anything', async () => {
-    const f = setup()
-    fillRequired()
-    fireEvent.click(within(screen.getByTestId('waitlist-introduced')).getByLabelText('Yes'))
-    fireEvent.change(screen.getByLabelText(/Their name or handle/), { target: { value: 'https://instagram.com/priya' } })
-    await tokenReady()
-    submit()
-    expect(screen.getByText('Just their name or handle, please, not a link.')).toBeTruthy()
-    expect(f).not.toHaveBeenCalled()
+    expect(Object.keys(body)).not.toContain('introducerReported')
   })
 
   it('drops the sharing answers if someone switches to discovering only', async () => {

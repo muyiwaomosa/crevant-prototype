@@ -76,11 +76,11 @@ refuses() {
 if [ "$("${PSQL[@]}" -c "select count(*) from supabase_migrations.schema_migrations where version = '20261116000000'")" != 1 ]; then
   echo "FAIL  acquisition rollback: the acquisition migration is not applied here" >&2; exit 1
 fi
-# The earlier local tests leave anonymous events and preview limit records
+# The earlier local tests leave events and preview limit records
 # behind (this is a throwaway local database); start from staging's clean state.
 "${PSQL[@]}" -c "delete from ops.acquisition_events; delete from ops.invite_preview_limits; delete from ops.creator_link_redemptions;
   delete from ops.creator_links; delete from ops.pilot_creators; update ops.invitations set creator_link_id = null where creator_link_id is not null;
-  update ops.waitlist set intent = null, introducer_reported = null, introduced_by_creator = null, creator_link_id = null
+  update ops.waitlist set intent = null, introduced_by_creator = null, creator_link_id = null
    where intent is not null or introduced_by_creator is not null or creator_link_id is not null" >/dev/null
 
 U="insert into auth.users (id, email, email_confirmed_at) values ('00000000-0000-0000-0000-00000000a0c1', 'creator@rollback.test', now()) on conflict do nothing"
@@ -136,18 +136,18 @@ if [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" && [ "$(state)" = "$before"
 else
   bad "check mode (exit $code): $(tail -3 <<<"$out" | tr '\n' ' ')"
 fi
-grep -qE '^ +31 \| table +\| ops.creator_links *$' <<<"$out" && grep -qE '^ +30 \| column +\| ops.waitlist.intent *$' <<<"$out" \
+grep -qE '^ +28 \| table +\| ops.creator_links *$' <<<"$out" && grep -qE '^ +27 \| column +\| ops.waitlist.intent *$' <<<"$out" \
   && ok "check mode lists every object it would remove" || bad "check mode did not list the inventory"
 
 # 3. Apply removes exactly the inventory; the waitlist is as the waitlist migrations made it.
-waitlist_cols_expected=$("${PSQL[@]}" -c "select count(*) - 4 from pg_attribute where attrelid = 'ops.waitlist'::regclass and attnum > 0 and not attisdropped")
+waitlist_cols_expected=$("${PSQL[@]}" -c "select count(*) - 3 from pg_attribute where attrelid = 'ops.waitlist'::regclass and attnum > 0 and not attisdropped")
 join_src_before=$("${PSQL[@]}" -c "select md5(prosrc) from pg_proc where oid = 'ops.join_waitlist(text,text[],text,text,text,text,boolean,boolean,text,text,text)'::regprocedure")
 out=$(rollback apply "$PHRASE"); code=$?
 after=$("${PSQL[@]}" -c "select concat_ws('|',
   to_regclass('ops.creator_links') is null, to_regclass('ops.pilot_creators') is null, to_regclass('ops.acquisition_events') is null,
-  to_regclass('ops.invite_preview_limits') is null, to_regprocedure('waitlist_api.submit_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text,text)') is null,
+  to_regclass('ops.invite_preview_limits') is null, to_regprocedure('waitlist_api.submit_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text)') is null,
   to_regprocedure('waitlist_api.invite_preview(text,text)') is null,
-  not exists (select 1 from pg_attribute where attrelid = 'ops.waitlist'::regclass and attname in ('intent', 'introduced_by_creator', 'introducer_reported', 'creator_link_id') and not attisdropped),
+  not exists (select 1 from pg_attribute where attrelid = 'ops.waitlist'::regclass and attname in ('intent', 'introduced_by_creator', 'creator_link_id') and not attisdropped),
   not exists (select 1 from pg_attribute where attrelid = 'ops.invitations'::regclass and attname = 'creator_link_id' and not attisdropped),
   (select count(*) from pg_attribute where attrelid = 'ops.waitlist'::regclass and attnum > 0 and not attisdropped) = $waitlist_cols_expected,
   (select md5(prosrc) from pg_proc where oid = 'ops.join_waitlist(text,text[],text,text,text,text,boolean,boolean,text,text,text)'::regprocedure) = '$join_src_before',

@@ -113,7 +113,7 @@ test('the acquisition rollback inventory covers every object the acquisition mig
       ...[...m[2].matchAll(/add constraint ([a-z_]+)/g)].map((c) => ['constraint', `${c[1]} on ${m[1]}`]),
     ]),
   ]
-  assert.ok(created.length >= 30, `found ${created.length} created objects`)
+  assert.ok(created.length >= 25, `found ${created.length} created objects`)
   for (const [kind, name] of created) {
     const hit = inventory.some(([k, n]) => k === kind && (n === name || n.startsWith(`${name}(`) || n.startsWith(`${name} on `)))
     assert.ok(hit, `the acquisition rollback inventory is missing ${kind} ${name}`)

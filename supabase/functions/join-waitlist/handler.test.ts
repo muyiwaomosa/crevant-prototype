@@ -61,7 +61,6 @@ describe('join-waitlist handler', () => {
       noticeVersion: 'notice-2026-11',
       intent: null,
       introducedByCreator: null,
-      introducerReported: null,
       creatorRef: null,
       ...KEYS,
     })
@@ -69,17 +68,21 @@ describe('join-waitlist handler', () => {
 
   it('passes the optional acquisition answers through, trimmed, for the database to validate', async () => {
     const d = deps()
-    await handleJoin(post({ ...valid, intent: 'both', introducedByCreator: true, introducerReported: '  @priyaruns ', creatorRef: ' 0123456789ABCDEF0123 ' }), d)
-    expect(d.submit).toHaveBeenCalledWith(
-      expect.objectContaining({ intent: 'both', introducedByCreator: true, introducerReported: '@priyaruns', creatorRef: '0123456789abcdef0123' }),
-    )
+    await handleJoin(post({ ...valid, intent: 'both', introducedByCreator: true, creatorRef: ' 0123456789ABCDEF0123 ' }), d)
+    expect(d.submit).toHaveBeenCalledWith(expect.objectContaining({ intent: 'both', introducedByCreator: true, creatorRef: '0123456789abcdef0123' }))
+  })
+
+  it('never passes on a typed creator name, even if a browser sends one', async () => {
+    const d = deps()
+    await handleJoin(post({ ...valid, introducedByCreator: true, introducerReported: '@priyaruns', creatorName: 'Priya' }), d)
+    const sent = (d.submit as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(Object.keys(sent)).not.toContain('introducerReported')
+    expect(JSON.stringify(sent)).not.toMatch(/priya/i)
   })
 
   it('rejects wrongly shaped acquisition answers before reaching the database', async () => {
     for (const bad of [
       { ...valid, introducedByCreator: 'yes' },
-      { ...valid, introducerReported: 'x'.repeat(61) },
-      { ...valid, introducerReported: 42 },
       { ...valid, creatorRef: 'x'.repeat(41) },
       { ...valid, intent: ['create'] },
     ]) {
@@ -387,7 +390,7 @@ describe('database connection', () => {
     expect(await submitWithDatabase(sql, payload)).toBe('ok')
     expect(calls[0].text).toMatch(/^select waitlist_api\.submit_v2\(/)
     expect(calls[0].text).not.toMatch(/maya/i)
-    expect(calls[0].values).toEqual(['maya@example.com', ['reach_followers'], 'yes', 'youtube', '1k_10k', 'instagram', true, true, 'notice-2026-11', KEYS.emailKey, KEYS.clientKey, null, null, null, null])
+    expect(calls[0].values).toEqual(['maya@example.com', ['reach_followers'], 'yes', 'youtube', '1k_10k', 'instagram', true, true, 'notice-2026-11', KEYS.emailKey, KEYS.clientKey, null, null, null])
     const odd = (async () => [{ result: 'something else' }]) as unknown as Sql
     await expect(submitWithDatabase(odd, payload)).rejects.toThrow()
   })

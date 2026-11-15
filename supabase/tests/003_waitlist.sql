@@ -233,10 +233,10 @@ begin
     select 1 from pg_attribute
     where attrelid = 'ops.waitlist'::regclass and attnum > 0 and not attisdropped
       and attname ~* '(^ip|_ip$|address|role|account_type|creator|supporter|password|link|url|campaign|marketing|name|phone|birth)'
-      -- Approved for creator acquisition (founder strategy, 2026-11): whether a
-      -- creator introduced someone, what they typed (format-checked below), and
-      -- a server-resolved invitation link. Exactly these three; nothing else.
-      and attname not in ('introduced_by_creator', 'introducer_reported', 'creator_link_id')
+      -- Approved for creator acquisition (founder, 2026-11): whether a creator
+      -- introduced someone (yes / no, naming nobody) and a server-resolved
+      -- invitation link. Exactly these two; a typed creator name is NOT allowed.
+      and attname not in ('introduced_by_creator', 'creator_link_id')
   ) then
     raise exception 'FAIL: ops.waitlist has a column it should not (role, IP, link, campaign, marketing or other personal data)';
   end if;
@@ -269,11 +269,10 @@ begin
      ) then
     raise exception 'FAIL: unverified entries can be selected for an invitation wave';
   end if;
-  -- Creator acquisition: the self-reported name is format-checked (no links,
-  -- email addresses or phone numbers), only kept with "yes", and the
-  -- verified link points at the links table.
+  -- Creator acquisition: intent is a fixed list, and the verified link points
+  -- at the links table.
   if to_regclass('ops.creator_links') is not null then
-    foreach c in array array['waitlist_intent_allowed', 'waitlist_introducer_needs_yes', 'waitlist_introducer_format'] loop
+    foreach c in array array['waitlist_intent_allowed'] loop
       if not exists (select 1 from pg_constraint where conrelid = 'ops.waitlist'::regclass and conname = c) then
         raise exception 'FAIL: ops.waitlist is missing constraint %', c;
       end if;

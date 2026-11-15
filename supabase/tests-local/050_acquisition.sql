@@ -9,7 +9,7 @@ begin;
 
 create function pg_temp.k(seed text) returns text language sql as $$ select encode(sha256(convert_to(seed, 'UTF8')), 'hex') $$;
 create function pg_temp.submit2(p_email text, p_intent text default null, p_introduced boolean default null,
-                                p_introducer text default null, p_ref text default null, p_source text default null,
+                                p_ref text default null, p_source text default null,
                                 p_client text default 'client-a')
 returns text language plpgsql as $$
 declare
@@ -18,7 +18,7 @@ begin
   set local role waitlist_writer;
   r := waitlist_api.submit_v2(p_email, '{}', null, null, null, p_source, true, true, 'notice-2026-11',
                               pg_temp.k('email:' || lower(btrim(p_email))), pg_temp.k(p_client),
-                              p_intent, p_introduced, p_introducer, p_ref);
+                              p_intent, p_introduced, p_ref);
   reset role;
   return r;
 end $$;
@@ -90,7 +90,7 @@ begin
   foreach r in array array['anon', 'authenticated', 'waitlist_admin', 'service_role'] loop
     execute format('set local role %I', r);
     begin
-      perform waitlist_api.submit_v2('a@example.com', '{}', null, null, null, null, true, true, 'v1', repeat('a', 64), repeat('b', 64), null, null, null, null);
+      perform waitlist_api.submit_v2('a@example.com', '{}', null, null, null, null, true, true, 'v1', repeat('a', 64), repeat('b', 64), null, null, null);
       raise exception 'FAIL: % could call waitlist_api.submit_v2', r;
     exception when insufficient_privilege then null;
     end;
@@ -240,59 +240,59 @@ declare
   v_code text := (select code from ops.creator_links limit 1);
   w record;
 begin
-  if pg_temp.submit2('fan1@example.com', 'discover', true, '@priyaruns', v_code, 'ig_bio', 'c1') <> 'ok' then
+  if pg_temp.submit2('fan1@example.com', 'discover', true, v_code, 'ig_bio', 'c1') <> 'ok' then
     raise exception 'FAIL: a valid signup through a creator link was refused';
   end if;
   select * into w from ops.waitlist where email = 'fan1@example.com';
-  if w.intent <> 'discover' or w.introduced_by_creator is not true or w.introducer_reported <> '@priyaruns'
+  if w.intent <> 'discover' or w.introduced_by_creator is not true
      or w.creator_link_id <> (select id from ops.creator_links where code = v_code) or w.source <> 'ig_bio' then
     raise exception 'FAIL: the signup did not keep its answers and verified link: %', w;
   end if;
 
-  -- A self-reported name alone is NOT a verified referral.
-  if pg_temp.submit2('fan2@example.com', 'both', true, 'Priya Raman', null, null, 'c2') <> 'ok' then
+  -- "A creator introduced me" alone is NOT a verified referral, and names nobody.
+  if pg_temp.submit2('fan2@example.com', 'both', true, null, null, 'c2') <> 'ok' then
     raise exception 'FAIL: a self-reported introduction was refused';
   end if;
   if (select creator_link_id from ops.waitlist where email = 'fan2@example.com') is not null then
-    raise exception 'FAIL: a typed name became a verified link';
+    raise exception 'FAIL: a self-reported introduction became a verified link';
+  end if;
+  -- There is nowhere to store a typed creator name or handle.
+  if exists (select 1 from pg_attribute where attrelid = 'ops.waitlist'::regclass and not attisdropped
+             and attname ~* '(introducer|reported|handle|name)') then
+    raise exception 'FAIL: the waitlist has a column for a typed creator name or handle';
+  end if;
+  if exists (select 1 from pg_proc where proname in ('submit_v2', 'join_waitlist_v2')
+             and (pronargs <> 14 or array_to_string(proargnames, ',') ~ 'introducer')) then
+    raise exception 'FAIL: the entry points take a typed creator name';
   end if;
 
   -- An unusable code is ignored and the signup still works, unattributed.
-  if pg_temp.submit2('fan3@example.com', 'create', null, null, 'ffffffffffffffffffff', null, 'c3') <> 'ok' then
+  if pg_temp.submit2('fan3@example.com', 'create', null, 'ffffffffffffffffffff', null, 'c3') <> 'ok' then
     raise exception 'FAIL: a signup with an unknown code was refused';
   end if;
   if (select creator_link_id from ops.waitlist where email = 'fan3@example.com') is not null then
     raise exception 'FAIL: an unknown code was attributed';
   end if;
 
-  -- Bad answers are refused and nothing is stored.
-  if pg_temp.submit2('bad1@example.com', 'influencer', null, null, null, null, 'c4') <> 'invalid'
-     or pg_temp.submit2('bad2@example.com', null, false, '@priyaruns', null, null, 'c4') <> 'invalid'
-     or pg_temp.submit2('bad3@example.com', null, null, '@priyaruns', null, null, 'c4') <> 'invalid'
-     or pg_temp.submit2('bad4@example.com', null, true, 'https://evil.example/x', null, null, 'c5') <> 'invalid'
-     or pg_temp.submit2('bad5@example.com', null, true, 'priya@example.com', null, null, 'c5') <> 'invalid'
-     or pg_temp.submit2('bad6@example.com', null, true, 'call 07700900123', null, null, 'c5') <> 'invalid'
-     or pg_temp.submit2('bad7@example.com', null, true, 'priya.com', null, null, 'c6') <> 'invalid'
-     or pg_temp.submit2('bad8@example.com', null, true, repeat('a', 61), null, null, 'c6') <> 'invalid'
-     or pg_temp.submit2('bad9@example.com', null, true, '<script>', null, null, 'c6') <> 'invalid' then
-    raise exception 'FAIL: an invalid intent or introducer was accepted';
+  -- A bad intent is refused and nothing is stored.
+  if pg_temp.submit2('bad1@example.com', 'influencer', null, null, null, 'c4') <> 'invalid' then
+    raise exception 'FAIL: an invalid intent was accepted';
   end if;
   if exists (select 1 from ops.waitlist where email like 'bad%') then
     raise exception 'FAIL: an invalid signup was stored';
   end if;
 
   -- A repeat submission changes nothing, attribution included.
-  if pg_temp.submit2('fan2@example.com', 'create', true, 'Someone Else', v_code, null, 'c7') <> 'ok' then
+  if pg_temp.submit2('fan2@example.com', 'create', false, v_code, null, 'c7') <> 'ok' then
     raise exception 'FAIL: a repeat signup did not answer ok';
   end if;
-  if (select (intent, introducer_reported, creator_link_id) from ops.waitlist where email = 'fan2@example.com')
-     is distinct from ('both'::text, 'Priya Raman'::text, null::uuid) then
+  if (select (intent, introduced_by_creator, creator_link_id) from ops.waitlist where email = 'fan2@example.com')
+     is distinct from ('both'::text, true, null::uuid) then
     raise exception 'FAIL: a repeat signup changed an existing entry';
   end if;
 
-  -- Names in any language are fine.
-  if pg_temp.submit2('fan4@example.com', null, true, 'Zoë O’Brien-Nakamura', null, null, 'c8') <> 'ok' then
-    raise exception 'FAIL: an ordinary international name was refused';
+  if pg_temp.submit2('fan4@example.com', null, true, null, null, 'c8') <> 'ok' then
+    raise exception 'FAIL: a plain yes was refused';
   end if;
 
   -- The first entry point still works and leaves the new answers empty.
@@ -323,7 +323,7 @@ begin
   if (select status from ops.resolve_creator_link(v_code)) <> 'revoked' then
     raise exception 'FAIL: a revoked link still resolves';
   end if;
-  if pg_temp.submit2('late1@example.com', null, null, null, v_code, null, 'd1') <> 'ok' then
+  if pg_temp.submit2('late1@example.com', null, null, v_code, null, 'd1') <> 'ok' then
     raise exception 'FAIL: a signup with a revoked link was refused';
   end if;
   if not exists (select 1 from ops.waitlist where email = 'late1@example.com' and creator_link_id is null) then
@@ -408,7 +408,7 @@ begin
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'ops' and table_name = 'acquisition_events'
-      and column_name ~* '(email|user|account|ip|address|name|handle|introducer|text)'
+      and column_name ~* '(email|user|account|ip|address|name|handle|introducer|text|hash|key)'
   ) then
     raise exception 'FAIL: acquisition events hold personal data';
   end if;
@@ -423,10 +423,20 @@ begin
   if s::text ~* '(@example\.com|priya|someone|0000000000)' then
     raise exception 'FAIL: the summary exposes an address, name or id: %', s;
   end if;
-  if (s->>'verified_link_signups')::int <> 1 or (s->>'self_reported_with_name')::int <> 3 or (s->>'accepted_creators')::int <> 1 then
+  if (s->>'verified_link_signups')::int <> 1 or (s->'introduced_by_creator'->>'yes')::int <> 3 or (s->>'accepted_creators')::int <> 1 then
     raise exception 'FAIL: unexpected summary: %', s;
   end if;
-  raise notice 'PASS: events and the summary are anonymous counts';
+  -- Event times are kept to the hour, so an event can't be matched to a
+  -- waitlist entry by its exact time.
+  if exists (select 1 from ops.acquisition_events where occurred_at <> date_trunc('hour', occurred_at)) then
+    raise exception 'FAIL: an event keeps a finer time than the hour';
+  end if;
+  begin
+    insert into ops.acquisition_events (event, occurred_at) values ('waitlist_signup', date_trunc('hour', now()) + interval '17 minutes');
+    raise exception 'FAIL: an event with an exact time was stored';
+  exception when check_violation then null;
+  end;
+  raise notice 'PASS: events hold no identifier, are timed to the hour, and the summary is counts only';
 end $$;
 
 -- 9. The public invitation preview: a usable link shows only the name its
@@ -496,12 +506,12 @@ begin
   end if;
 
   -- A visit is not a signup: only joining the waitlist through the link counts as one.
-  if pg_temp.submit2('visitor@example.com', 'discover', null, null, v_code, null, 'visitor-a') <> 'ok' then
+  if pg_temp.submit2('visitor@example.com', 'discover', null, v_code, null, 'visitor-a') <> 'ok' then
     raise exception 'FAIL: signup through a previewed link was refused';
   end if;
   s := pg_temp.admin('waitlist_api.admin_acquisition_summary()');
   if not (s->'links') @> jsonb_build_array(jsonb_build_object('link', left(v_code, 6), 'campaign', 'preview_test', 'state', 'active',
-            'visits', 2, 'signups', 1, 'accounts', 0, 'follows_confirmed', 0, 'follows_declined', 0)) then
+            'visits_estimate', 2, 'signups', 1, 'accounts', 0, 'follows_confirmed', 0, 'follows_declined', 0)) then
     raise exception 'FAIL: the per-link funnel is wrong: %', s->'links';
   end if;
   if s::text ~ v_code or s::text ~* 'priya' then
@@ -528,14 +538,14 @@ begin
   raise notice 'PASS: the invitation preview shows only an agreed name, unusable links look alike, and visits are counted apart from signups';
 end $$;
 
--- 8. Deleting a waitlist entry removes the self-reported name with it.
+-- 8. Deleting a waitlist entry removes its answers and attribution with it.
 do $$
 begin
-  perform ops.waitlist_delete((select id from ops.waitlist where email = 'fan2@example.com'));
-  if exists (select 1 from ops.waitlist where introducer_reported = 'Priya Raman') then
-    raise exception 'FAIL: the self-reported name survived deletion';
+  perform ops.waitlist_delete((select id from ops.waitlist where email = 'fan1@example.com'));
+  if exists (select 1 from ops.waitlist where email = 'fan1@example.com') then
+    raise exception 'FAIL: the entry survived deletion';
   end if;
-  raise notice 'PASS: deletion removes the self-reported name';
+  raise notice 'PASS: deletion removes the entry with its answers and link attribution';
 end $$;
 
 rollback;

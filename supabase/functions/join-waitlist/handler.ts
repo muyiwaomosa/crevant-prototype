@@ -49,8 +49,6 @@ export interface SubmitPayload {
   intent: string | null
   /** Their answer to "Did a creator introduce you?" (null: skipped). */
   introducedByCreator: boolean | null
-  /** The creator's name or handle as they typed it. Self-reported, never verified. */
-  introducerReported: string | null
   /** A creator invitation code from ?ref=, resolved (or ignored) by the database. */
   creatorRef: string | null
   /** HMAC of the normalised email with the secret salt. */
@@ -153,7 +151,7 @@ export const normaliseEmail = (email: string) => email.trim().toLowerCase()
 /**
  * Turns the browser's JSON into the submission. Throws on a wrong shape.
  * Only the expected fields are read; anything else (a link, a campaign,
- * marketing consent) is ignored and never stored.
+ * marketing consent, a typed creator name) is ignored and never stored.
  */
 export function toPayload(input: Record<string, unknown>, keys: RateKeys): SubmitPayload {
   const email = str(input.email, 254)
@@ -176,7 +174,6 @@ export function toPayload(input: Record<string, unknown>, keys: RateKeys): Submi
     noticeVersion,
     intent: str(input.intent, 20),
     introducedByCreator: optionalBool(input.introducedByCreator),
-    introducerReported: str(input.introducerReported, 60),
     creatorRef: str(input.creatorRef, 40)?.toLowerCase() ?? null,
     emailKey: keys.emailKey,
     clientKey: keys.clientKey,

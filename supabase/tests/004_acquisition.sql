@@ -54,7 +54,7 @@ begin
 
   -- Events hold no personal data; nothing here holds points, rewards or money.
   if exists (select 1 from information_schema.columns where table_schema = 'ops' and table_name = 'acquisition_events'
-             and column_name ~* '(email|user|account|ip|address|name|handle|introducer|text)') then
+             and column_name ~* '(email|user|account|ip|address|name|handle|introducer|text|hash|key)') then
     raise exception 'FAIL: acquisition events hold personal data';
   end if;
   if exists (select 1 from information_schema.columns where table_schema = 'ops'
@@ -64,7 +64,7 @@ begin
   end if;
 
   -- The new entry points run with their owner's rights and only for their own role.
-  if not has_function_privilege('waitlist_writer', 'waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text)', 'EXECUTE')
+  if not has_function_privilege('waitlist_writer', 'waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text)', 'EXECUTE')
      or not has_function_privilege('waitlist_admin', 'waitlist_api.admin_acquisition_summary()', 'EXECUTE') then
     raise exception 'FAIL: a waitlist login role cannot run its new entry point';
   end if;
@@ -100,6 +100,15 @@ begin
   if (select count(*) from pg_constraint where conrelid = 'ops.pilot_creators'::regclass
       and conname in ('pilot_creators_public_name_agreed', 'pilot_creators_public_name_format')) <> 2 then
     raise exception 'FAIL: public names are not limited to agreed, safe display names';
+  end if;
+  -- Event times are kept to the hour (no exact timestamps to match against entries).
+  if not exists (select 1 from pg_constraint where conrelid = 'ops.acquisition_events'::regclass and conname = 'acquisition_events_hourly') then
+    raise exception 'FAIL: acquisition events may keep exact times';
+  end if;
+  -- No typed creator name or handle anywhere in the waitlist.
+  if exists (select 1 from pg_attribute where attrelid = 'ops.waitlist'::regclass and not attisdropped
+             and attname ~* '(introducer|reported|handle)') then
+    raise exception 'FAIL: the waitlist stores a typed creator name or handle';
   end if;
   -- The original waitlist entry point is untouched, so this can be rolled back on its own.
   if (select prosrc from pg_proc where oid = 'ops.join_waitlist(text, text[], text, text, text, text, boolean, boolean, text, text, text)'::regprocedure) ~ 'join_waitlist_v2' then

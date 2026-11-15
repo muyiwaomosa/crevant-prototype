@@ -264,7 +264,7 @@ function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
 
     // 11b. Creator invitation links (creator acquisition): issued by the admin
     // login only, previewed by the function as the restricted login, showing
-    // only the agreed public name, with anonymous visits counted apart.
+    // only the agreed public name, with visits (estimates) counted apart.
     await owner`insert into auth.users (id, email, email_confirmed_at) values (${E2E_CREATOR}, 'creator@e2e.test', now()) on conflict do nothing`
     check('waitlist_writer cannot issue a creator link', await denied(() => writer`select waitlist_api.admin_issue_creator_link(${E2E_CREATOR})`))
     check('the admin login accepts a creator', (await admin`select waitlist_api.admin_accept_creator(${E2E_CREATOR}, '{fitness}') as r`)[0].r === 'accepted')

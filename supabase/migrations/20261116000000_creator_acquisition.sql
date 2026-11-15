@@ -2,9 +2,9 @@
 -- links and acquisition measurement. Infrastructure only, everything OFF.
 --
 --   ops.waitlist (new columns)   intent (create / discover / both), whether a
---                                creator introduced the person, the creator's
---                                name or handle as THEY typed it, and a
---                                server-resolved creator link
+--                                creator introduced the person (yes / no only:
+--                                no name or handle is ever asked for or
+--                                stored), and a server-resolved creator link
 --   ops.pilot_creators           creators accepted into the pilot. A pilot
 --                                programme record, not an account role.
 --   ops.creator_links            creator-specific invitation links: opaque
@@ -16,7 +16,7 @@
 --   waitlist_api.submit_v2       the waitlist entry point with the new fields
 --   waitlist_api.invite_preview  for the public site: whether a link is usable
 --                                and the creator's agreed public name, nothing
---                                else; counts an anonymous link visit
+--                                else; counts an estimated link visit
 --   waitlist_api.admin_*         founder/admin only: accept creators, set the
 --                                public name they agreed to, issue links
 --                                (90 days by default) and revoke them
@@ -27,8 +27,8 @@
 -- removed on its own (scripts/db/staging-rollback-acquisition.sql).
 --
 -- Four concepts stay separate, by design:
---   1. Self-reported attribution. "A creator introduced me: @name" is what a
---      visitor typed. It is never matched to an account and never creates a
+--   1. Self-reported attribution. "A creator introduced me" (yes / no) is what a
+--      visitor said. It names nobody, and never creates a
 --      verified referral, a follow, Connection Points or any entitlement.
 --   2. Verified invitation. A link issued to an ACCEPTED pilot creator,
 --      resolved by the server. Unknown, expired or revoked codes, or a
@@ -193,45 +193,34 @@ alter table ops.waitlist
   add column intent text,
   -- Their answer to "Did a creator introduce you to Splitpost?" (null: skipped).
   add column introduced_by_creator boolean,
-  -- The creator's name or handle exactly as the visitor typed it. Self-reported
-  -- and unverified: never matched to an account, never a verified referral.
-  add column introducer_reported text,
   -- A verified invitation link, resolved by the server at signup. Never taken
   -- from the visitor as an id.
   add column creator_link_id uuid references ops.creator_links (id) on delete set null,
-  add constraint waitlist_intent_allowed check (intent is null or intent in ('create', 'discover', 'both')),
-  add constraint waitlist_introducer_needs_yes check (introducer_reported is null or introduced_by_creator is true),
-  -- A name or handle: 1 to 60 characters of letters, numbers, spaces and
-  -- @ . _ ' - only. No links, email addresses or phone numbers.
-  add constraint waitlist_introducer_format check (
-    introducer_reported is null or (
-      char_length(introducer_reported) between 1 and 60
-      and introducer_reported = btrim(introducer_reported)
-      and introducer_reported ~ '^[[:alnum:]@._''’ -]+$'
-      and introducer_reported !~* '(https?|www\.|\.(com|net|org|io|co|app|me|tv|gg|ly)\M)'
-      and introducer_reported !~ '[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+'
-      and introducer_reported !~ '[0-9]{7,}'
-    )
-  );
+  add constraint waitlist_intent_allowed check (intent is null or intent in ('create', 'discover', 'both'));
 
 comment on column ops.waitlist.intent is 'create, discover or both: how the person plans to use Splitpost. Recruitment only, never a role.';
-comment on column ops.waitlist.introducer_reported is 'Self-reported creator name or handle. Unverified: never a verified referral, follow, Connection Points or entitlement.';
+comment on column ops.waitlist.introduced_by_creator is 'Yes / no answer to "Did a creator introduce you?". Names nobody; never a verified referral, follow, Connection Points or entitlement.';
 comment on column ops.waitlist.creator_link_id is 'Verified invitation link, resolved by the server at signup. Attribution only.';
 
 -- ---------------------------------------------------------------------------
--- Acquisition events: counts for measurement, deliberately anonymous. No
--- email, account id, address or free text. A row says what happened, when,
--- through which channel label and (for verified invitations) which link.
+-- Acquisition events: counts for measurement. A row holds no email, account
+-- id, network address, hash or free text: only what happened, the hour it
+-- happened, the channel label and (for verified invitations) which link.
+-- The time is kept to the hour, not the moment, so a signup event can't be
+-- matched to its waitlist entry by timestamp. Not described as anonymous:
+-- with few signups per link and hour, a row can still be narrowed down by
+-- someone with database access; it is treated as personal data with the
+-- same protections as the waitlist.
 
 create table ops.acquisition_events (
   id                     bigint generated always as identity primary key,
   event                  text not null,
-  occurred_at            timestamptz not null default now(),
+  occurred_at            timestamptz not null default date_trunc('hour', now()),
   source                 text,
   self_reported_referral boolean,
   creator_link_id        uuid references ops.creator_links (id) on delete set null,
   constraint acquisition_events_allowed check (event in (
-    'creator_link_visit',       -- a valid link was opened (at most once per visitor per link per day)
+    'creator_link_visit',       -- a valid link was opened (estimate: once per salted client key, link and UTC day)
     'waitlist_signup',          -- a new address joined the waitlist
     'invitation_accepted',      -- an invited person created their account
     'invite_follow_confirmed',  -- they chose to follow the inviting creator
@@ -239,7 +228,9 @@ create table ops.acquisition_events (
   )),
   constraint acquisition_events_source_format check (source is null or source ~ '^[a-z0-9_-]{1,40}$')
 );
-comment on table ops.acquisition_events is 'Anonymous acquisition counts: no email, account id, address or free text. Server code only.';
+comment on table ops.acquisition_events is 'Acquisition counts, timed to the hour: no email, account id, address, hash or free text. Server code only.';
+-- The hour is enforced, so nothing can store a finer time later by mistake.
+alter table ops.acquisition_events add constraint acquisition_events_hourly check (occurred_at = date_trunc('hour', occurred_at));
 
 create index acquisition_events_link_idx on ops.acquisition_events (creator_link_id, event);
 
@@ -265,7 +256,6 @@ create function ops.join_waitlist_v2(
   p_client_key            text,
   p_intent                text,
   p_introduced_by_creator boolean,
-  p_introducer_reported   text,
   p_creator_ref           text
 )
 returns text
@@ -280,7 +270,6 @@ declare
   v_audience   text := nullif(btrim(coalesce(p_audience_band, '')), '');
   v_source     text := nullif(lower(btrim(coalesce(p_source, ''))), '');
   v_intent     text := nullif(btrim(coalesce(p_intent, '')), '');
-  v_introducer text := nullif(btrim(coalesce(p_introducer_reported, '')), '');
   v_ref        text := nullif(lower(btrim(coalesce(p_creator_ref, ''))), '');
   v_link       uuid;
   v_notice     text;
@@ -313,16 +302,8 @@ begin
     return 'invalid';
   end if;
 
-  -- New optional answers. A name or handle only counts with "yes"; one that
-  -- breaks the format rules is refused so the visitor can correct it.
-  if (v_intent is not null and v_intent not in ('create', 'discover', 'both'))
-     or (v_introducer is not null and p_introduced_by_creator is not true)
-     or (v_introducer is not null and (
-           char_length(v_introducer) > 60
-           or v_introducer !~ '^[[:alnum:]@._''’ -]+$'
-           or v_introducer ~* '(https?|www\.|\.(com|net|org|io|co|app|me|tv|gg|ly)\M)'
-           or v_introducer ~ '[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+'
-           or v_introducer ~ '[0-9]{7,}')) then
+  -- New optional answer: intent must be one of the three.
+  if v_intent is not null and v_intent not in ('create', 'discover', 'both') then
     return 'invalid';
   end if;
 
@@ -351,12 +332,12 @@ begin
   insert into ops.waitlist (
     id, email, interests, shares_content, platform, audience_band, source,
     age_confirmed, waitlist_consent_version, waitlist_consented_at,
-    intent, introduced_by_creator, introducer_reported, creator_link_id
+    intent, introduced_by_creator, creator_link_id
   )
   values (
     v_id, v_email, v_interests, v_shares, v_platform, v_audience, v_source,
     true, v_notice, now(),
-    v_intent, p_introduced_by_creator, v_introducer, v_link
+    v_intent, p_introduced_by_creator, v_link
   )
   on conflict (email) do nothing;
   get diagnostics v_inserted = row_count;
@@ -469,10 +450,10 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Measurement for the waitlist_admin login: counts only, never an address,
--- account id or the self-reported names. Visits, signups, accounts and
--- follow decisions are counted separately, overall and per link, so each
--- conversion step can be read on its own.
+-- Measurement for the waitlist_admin login: counts only, never an address
+-- or account id. Visits (an estimate), signups, accounts and follow
+-- decisions are counted separately, overall and per link, so each step can
+-- be read on its own. Conversion rates built from them are estimates.
 
 create function waitlist_api.admin_acquisition_summary()
 returns jsonb
@@ -486,7 +467,6 @@ as $$
     'introduced_by_creator', coalesce((select jsonb_object_agg(
                 case introduced_by_creator when true then 'yes' when false then 'no' else 'unanswered' end, n) from (
                 select introduced_by_creator, count(*) as n from ops.waitlist group by introduced_by_creator) s), '{}'::jsonb),
-    'self_reported_with_name', (select count(*) from ops.waitlist where introducer_reported is not null),
     'verified_link_signups',   (select count(*) from ops.waitlist where creator_link_id is not null),
     'events', coalesce((select jsonb_object_agg(event, n) from (
                 select event, count(*) as n from ops.acquisition_events group by event) s), '{}'::jsonb),
@@ -501,7 +481,8 @@ as $$
                 'state', case when l.revoked_at is not null then 'revoked' when l.expires_at <= now() then 'expired'
                               when c.status <> 'accepted' then 'creator_' || c.status else 'active' end,
                 'expires_on', l.expires_at::date,
-                'visits',             (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'creator_link_visit'),
+                -- An estimate (see waitlist_api.invite_preview), so named.
+                'visits_estimate',    (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'creator_link_visit'),
                 'signups',            (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'waitlist_signup'),
                 'accounts',           (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'invitation_accepted'),
                 'follows_confirmed',  (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'invite_follow_confirmed'),
@@ -613,10 +594,18 @@ $$;
 --
 -- It follows the waitlist's switches: while the waitlist is closed it answers
 -- 'closed' and records nothing. Its rate limits live in their own table,
--- keyed only by hashes of the salted client key the server function already
--- makes (never an address), and deleted within two days. A usable link's
--- visit is counted at most once per visitor per link per day; the event
--- itself has no visitor detail at all.
+-- keyed by the salted client key the server function already makes: an HMAC
+-- of the visitor's network address (an IPv6 address reduced to its /64)
+-- with a secret salt. That key is a temporary pseudonymous identifier, not
+-- an anonymous one: anyone holding the salt could test whether a given
+-- address made a request. It is never the address itself, the event rows
+-- never hold it, and every record of it is deleted within two days.
+--
+-- A usable link's visit is counted once per client key, link and UTC day.
+-- That is an estimate, not a count of people: several people behind one
+-- network share a key (undercount), one person moving between networks
+-- gets several (overcount), and a visitor whose address can't be trusted
+-- shares one "unknown" key with everyone else in that situation.
 
 create table ops.invite_preview_limits (
   bucket       text not null,
@@ -627,6 +616,8 @@ create table ops.invite_preview_limits (
   constraint invite_preview_limits_bucket_format check (bucket ~ '^(preview|client:[0-9a-f]{64}|visit:[0-9a-f]{64})$')
 );
 comment on table ops.invite_preview_limits is 'Rate limits and visit de-duplication for the invitation preview. Salted hashes only; rows older than two days are deleted on each preview.';
+-- Each preview deletes records older than two days; this keeps that cheap.
+create index invite_preview_limits_window_idx on ops.invite_preview_limits (window_start);
 
 create function ops.invite_preview_hit(p_bucket text, p_window interval, p_limit integer)
 returns boolean
@@ -703,7 +694,6 @@ create function waitlist_api.submit_v2(
   p_client_key            text,
   p_intent                text,
   p_introduced_by_creator boolean,
-  p_introducer_reported   text,
   p_creator_ref           text
 )
 returns text
@@ -714,7 +704,7 @@ as $$
   select ops.join_waitlist_v2(
     p_email, p_interests, p_shares_content, p_platform, p_audience_band, p_source,
     p_age_confirmed, p_waitlist_consent, p_notice_version, p_email_key, p_client_key,
-    p_intent, p_introduced_by_creator, p_introducer_reported, p_creator_ref
+    p_intent, p_introduced_by_creator, p_creator_ref
   );
 $$;
 
@@ -736,17 +726,17 @@ revoke all on function ops.creator_links_require_accepted_creator() from public,
 -- Issuing links is the admin's alone, so not even server code may call this directly.
 revoke all on function ops.create_creator_link(uuid, integer, text) from public, anon, authenticated, service_role;
 revoke all on function ops.resolve_creator_link(text) from public, anon, authenticated;
-revoke all on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text) from public, anon, authenticated;
+revoke all on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text) from public, anon, authenticated;
 revoke all on function ops.invitations_copy_creator_link() from public, anon, authenticated;
 revoke all on function ops.invitations_record_link_redemption() from public, anon, authenticated;
 revoke all on function ops.record_invite_follow_decision(uuid, text) from public, anon, authenticated;
 revoke all on function ops.invite_preview_hit(text, interval, integer) from public, anon, authenticated, service_role;
 
 grant execute on function ops.resolve_creator_link(text) to service_role;
-grant execute on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text) to service_role;
+grant execute on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text) to service_role;
 grant execute on function ops.record_invite_follow_decision(uuid, text) to service_role;
 
-revoke all on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text)
+revoke all on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text)
   from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.admin_acquisition_summary() from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.admin_accept_creator(uuid, text[]) from public, anon, authenticated, service_role;
@@ -755,7 +745,7 @@ revoke all on function waitlist_api.admin_set_creator_public_name(uuid, text) fr
 revoke all on function waitlist_api.admin_issue_creator_link(uuid, integer, text) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.admin_revoke_creator_link(text) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.invite_preview(text, text) from public, anon, authenticated, service_role;
-grant execute on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text)
+grant execute on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text)
   to waitlist_writer;
 grant execute on function waitlist_api.admin_acquisition_summary() to waitlist_admin;
 grant execute on function waitlist_api.admin_accept_creator(uuid, text[]) to waitlist_admin;

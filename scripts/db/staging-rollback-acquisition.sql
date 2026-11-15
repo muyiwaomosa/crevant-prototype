@@ -72,7 +72,7 @@ insert into rollback_inventory values
   ( 1, 'trigger',    'invitations_record_link_redemption on ops.invitations', 'drop trigger invitations_record_link_redemption on ops.invitations'),
   ( 2, 'trigger',    'invitations_copy_creator_link on ops.invitations', 'drop trigger invitations_copy_creator_link on ops.invitations'),
   ( 3, 'trigger',    'creator_links_require_accepted_creator on ops.creator_links', 'drop trigger creator_links_require_accepted_creator on ops.creator_links'),
-  ( 4, 'function',   'waitlist_api.submit_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text,text)', 'drop function waitlist_api.submit_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text,text)'),
+  ( 4, 'function',   'waitlist_api.submit_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text)', 'drop function waitlist_api.submit_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text)'),
   ( 5, 'function',   'waitlist_api.invite_preview(text,text)', 'drop function waitlist_api.invite_preview(text,text)'),
   ( 6, 'function',   'waitlist_api.admin_acquisition_summary()', 'drop function waitlist_api.admin_acquisition_summary()'),
   ( 7, 'function',   'waitlist_api.admin_accept_creator(uuid,text[])', 'drop function waitlist_api.admin_accept_creator(uuid,text[])'),
@@ -84,7 +84,7 @@ insert into rollback_inventory values
   (13, 'function',   'ops.record_invite_follow_decision(uuid,text)', 'drop function ops.record_invite_follow_decision(uuid,text)'),
   (14, 'function',   'ops.invitations_record_link_redemption()', 'drop function ops.invitations_record_link_redemption()'),
   (15, 'function',   'ops.invitations_copy_creator_link()', 'drop function ops.invitations_copy_creator_link()'),
-  (16, 'function',   'ops.join_waitlist_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text,text)', 'drop function ops.join_waitlist_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text,text)'),
+  (16, 'function',   'ops.join_waitlist_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text)', 'drop function ops.join_waitlist_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text)'),
   (17, 'function',   'ops.resolve_creator_link(text)', 'drop function ops.resolve_creator_link(text)'),
   (18, 'function',   'ops.create_creator_link(uuid,integer,text)', 'drop function ops.create_creator_link(uuid,integer,text)'),
   (19, 'function',   'ops.creator_links_require_accepted_creator()', 'drop function ops.creator_links_require_accepted_creator()'),
@@ -92,16 +92,13 @@ insert into rollback_inventory values
   (21, 'table',      'ops.acquisition_events', 'drop table ops.acquisition_events'),
   (22, 'table',      'ops.creator_link_redemptions', 'drop table ops.creator_link_redemptions'),
   (23, 'column',     'ops.invitations.creator_link_id', 'alter table ops.invitations drop column creator_link_id'),
-  (24, 'constraint', 'waitlist_introducer_format on ops.waitlist', 'alter table ops.waitlist drop constraint waitlist_introducer_format'),
-  (25, 'constraint', 'waitlist_introducer_needs_yes on ops.waitlist', 'alter table ops.waitlist drop constraint waitlist_introducer_needs_yes'),
-  (26, 'constraint', 'waitlist_intent_allowed on ops.waitlist', 'alter table ops.waitlist drop constraint waitlist_intent_allowed'),
-  (27, 'column',     'ops.waitlist.creator_link_id', 'alter table ops.waitlist drop column creator_link_id'),
-  (28, 'column',     'ops.waitlist.introducer_reported', 'alter table ops.waitlist drop column introducer_reported'),
-  (29, 'column',     'ops.waitlist.introduced_by_creator', 'alter table ops.waitlist drop column introduced_by_creator'),
-  (30, 'column',     'ops.waitlist.intent', 'alter table ops.waitlist drop column intent'),
-  (31, 'table',      'ops.creator_links', 'drop table ops.creator_links'),
-  (32, 'table',      'ops.pilot_creators', 'drop table ops.pilot_creators'),
-  (33, 'migration record', '20261116000000 creator_acquisition', $q$delete from supabase_migrations.schema_migrations where version = '20261116000000'$q$);
+  (24, 'constraint', 'waitlist_intent_allowed on ops.waitlist', 'alter table ops.waitlist drop constraint waitlist_intent_allowed'),
+  (25, 'column',     'ops.waitlist.creator_link_id', 'alter table ops.waitlist drop column creator_link_id'),
+  (26, 'column',     'ops.waitlist.introduced_by_creator', 'alter table ops.waitlist drop column introduced_by_creator'),
+  (27, 'column',     'ops.waitlist.intent', 'alter table ops.waitlist drop column intent'),
+  (28, 'table',      'ops.creator_links', 'drop table ops.creator_links'),
+  (29, 'table',      'ops.pilot_creators', 'drop table ops.pilot_creators'),
+  (30, 'migration record', '20261116000000 creator_acquisition', $q$delete from supabase_migrations.schema_migrations where version = '20261116000000'$q$);
 
 -- Every expected object must exist before anything is locked or checked.
 do $$
@@ -160,7 +157,7 @@ begin
   select count(*) into n from ops.invite_preview_limits;
   if n > 0 then problems := problems || format('%s preview limit record(s)', n); end if;
   select count(*) into n from ops.waitlist
-  where intent is not null or introduced_by_creator is not null or introducer_reported is not null or creator_link_id is not null;
+  where intent is not null or introduced_by_creator is not null or creator_link_id is not null;
   if n > 0 then problems := problems || format('%s waitlist entr(ies) with acquisition answers', n); end if;
   select count(*) into n from ops.invitations where creator_link_id is not null;
   if n > 0 then problems := problems || format('%s invitation(s) with a creator link', n); end if;
@@ -175,7 +172,7 @@ begin
   select count(*) into n from pg_proc p
   where p.oid::regprocedure::text not in (select name from rollback_inventory where kind = 'function')
     and p.pronamespace not in ('pg_catalog'::regnamespace, 'information_schema'::regnamespace)
-    and p.prosrc ~ '(pilot_creators|creator_link|acquisition_events|invite_preview|join_waitlist_v2|submit_v2|introducer_reported|introduced_by_creator|record_invite_follow_decision)';
+    and p.prosrc ~ '(pilot_creators|creator_link|acquisition_events|invite_preview|join_waitlist_v2|submit_v2|introduced_by_creator|record_invite_follow_decision)';
   if n > 0 then problems := problems || format('%s other function(s) refer to creator acquisition', n); end if;
 
   -- The login roles: no privilege on these tables (only ever on the

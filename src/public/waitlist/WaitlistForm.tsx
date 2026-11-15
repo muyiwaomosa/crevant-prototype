@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { buttonClass } from '../../components/ui'
-import { introducerProblem, readAcquisition, type WaitlistConfig } from './config'
+import { readAcquisition, type WaitlistConfig } from './config'
 import { mountTurnstile, type MountTurnstile, type TurnstileWidget } from './turnstile'
 
 // The unified waitlist form. Rendered only when readWaitlistConfig() returns a
@@ -53,7 +53,7 @@ const MESSAGES: Partial<Record<Outcome, string>> = {
   error: 'Something went wrong. Please try again.',
 }
 
-type Errors = Partial<Record<'email' | 'age' | 'consent' | 'check' | 'introducer', string>>
+type Errors = Partial<Record<'email' | 'age' | 'consent' | 'check', string>>
 
 export function WaitlistForm({
   config,
@@ -70,7 +70,6 @@ export function WaitlistForm({
   const [interests, setInterests] = useState<string[]>([])
   const [intent, setIntent] = useState<'' | 'create' | 'discover' | 'both'>('')
   const [introduced, setIntroduced] = useState<'' | 'yes' | 'no'>('')
-  const [introducer, setIntroducer] = useState('')
   const [shares, setShares] = useState<'' | 'yes' | 'not_yet'>('')
   const [platform, setPlatform] = useState('')
   const [audience, setAudience] = useState('')
@@ -104,8 +103,6 @@ export function WaitlistForm({
     if (!age) e.age = "Please confirm you're 18 or older."
     if (!consent) e.consent = 'Please agree so we can contact you about the pilot.'
     if (!token) e.check = 'Please complete the check below.'
-    const p = introduced === 'yes' ? introducerProblem(introducer) : null
-    if (p) e.introducer = p
     return e
   }
 
@@ -131,7 +128,6 @@ export function WaitlistForm({
       noticeVersion: config.noticeVersion,
       intent: intent || null,
       introducedByCreator: introduced === '' ? null : introduced === 'yes',
-      introducerReported: introduced === 'yes' && introducer.trim() ? introducer.trim() : null,
       creatorRef,
       turnstileToken: token,
       website,
@@ -306,28 +302,7 @@ export function WaitlistForm({
             </label>
           ))}
         </div>
-        {introduced === 'yes' && (
-          <div className="mt-4">
-            <label htmlFor="wl-introducer" className="text-sm font-semibold text-ink-800">
-              Their name or handle <span className="font-normal text-ink-500">Optional</span>
-            </label>
-            <input
-              id="wl-introducer"
-              type="text"
-              autoComplete="off"
-              maxLength={60}
-              value={introducer}
-              onChange={(e) => setIntroducer(e.target.value)}
-              aria-invalid={!!errors.introducer}
-              aria-describedby={errors.introducer ? 'wl-introducer-error' : 'wl-introducer-help'}
-              className={field}
-            />
-            <p id="wl-introducer-help" className="mt-1.5 text-sm text-ink-500">
-              Only to learn how people find us. We won't contact them, and it doesn't link you to them or follow anyone.
-            </p>
-            {err('introducer')}
-          </div>
-        )}
+        <p className="mt-2 text-sm text-ink-500">Only to learn how people find us. It names nobody and doesn't follow anyone.</p>
       </fieldset>
 
       {/* Honeypot: hidden from people and screen readers; bots fill it in. */}

@@ -152,6 +152,31 @@ else
   exit 1
 fi
 
+# The creator commands, as the restricted admin login: accept, name, issue
+# (90 days by default), pause, revoke for good, refuse an email address.
+C_ID=00000000-0000-0000-0000-0000000ad0c1
+psql "$DB_URL" -X -q -c "insert into auth.users (id, email, email_confirmed_at) values ('$C_ID', 'admin-creator@e2e.test', now()) on conflict do nothing" >/dev/null
+adm() { env DATABASE_URL="$ADMIN_DB_URL" REQUIRE_ADMIN_ROLE=1 "$@" scripts/db/waitlist-admin.sh 2>&1; }
+accepted="$(adm ACTION=accept-creator CREATOR_USER_ID=$C_ID CATEGORIES=fitness)"
+named="$(adm ACTION=creator-public-name CREATOR_USER_ID=$C_ID "PUBLIC_NAME=Priya Raman")"
+issued="$(adm ACTION=issue-link CREATOR_USER_ID=$C_ID CAMPAIGN=e2e)"
+code="$(grep -oE '[0-9a-f]{20}$' <<<"$issued" || true)"
+days="$(psql "$DB_URL" -X -q -At -c "select expires_at::date - created_at::date from ops.creator_links where code = '$code'")"
+paused="$(adm ACTION=creator-status CREATOR_USER_ID=$C_ID CREATOR_STATUS=paused)"
+revoked="$(adm ACTION=revoke-link LINK_CODE=$code)"
+again="$(adm ACTION=revoke-link LINK_CODE=$code)"
+by_email="$(adm ACTION=accept-creator CREATOR_USER_ID=admin-creator@e2e.test || true)"
+summary="$(adm ACTION=acquisition-summary)"
+psql "$DB_URL" -X -q -c "delete from ops.creator_links where creator_id = '$C_ID'; delete from ops.pilot_creators where user_id = '$C_ID'; delete from auth.users where id = '$C_ID'" >/dev/null
+if [ "$accepted" = "Creator: accepted" ] && [ "$named" = "Public name: set" ] && [ -n "$code" ] && [ "$days" = 90 ] \
+   && [ "$paused" = "Creator status: paused" ] && [ "$revoked" = "Link: revoked" ] && [ "$again" = "Link: already_revoked" ] \
+   && grep -q "not an email address" <<<"$by_email" && grep -q '"visits_estimate"' <<<"$summary" && ! grep -qE "$code|@e2e" <<<"$summary"; then
+  echo "PASS  the admin script's creator commands work as waitlist_admin (accept, name, 90 day link, pause, final revoke, no email)"
+else
+  echo "FAIL  the admin script's creator commands: $accepted | $named | $issued | $days | $paused | $revoked | $again | $by_email" >&2
+  exit 1
+fi
+
 # The function's logs must never contain an email address.
 logs="$(for c in crevant-waitlist-edge crevant-waitlist-edge-real crevant-waitlist-edge-hops2 crevant-waitlist-edge-nohops crevant-waitlist-edge-hosted; do docker logs "$c" 2>&1; done)"
 if grep -qi "@e2e.test" <<<"$logs"; then

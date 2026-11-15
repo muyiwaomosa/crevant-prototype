@@ -25,6 +25,21 @@
 #   GROUP:   any, active_creator, aspiring_creator or supporter
 #   REASONS: group_balance, targeted_feedback or both
 #
+# Creator acquisition (needs migration 20261116000000; founder/admin only):
+#   ACTION=accept-creator      CREATOR_USER_ID=<uuid> [CATEGORIES=fitness,food]
+#   ACTION=creator-status      CREATOR_USER_ID=<uuid> CREATOR_STATUS=accepted|paused|removed
+#                              (paused or removed stops all their links at once)
+#   ACTION=creator-public-name CREATOR_USER_ID=<uuid> PUBLIC_NAME=<name>
+#                              only after the creator has agreed to it; an
+#                              empty PUBLIC_NAME withdraws it at once
+#   ACTION=issue-link          CREATOR_USER_ID=<uuid> [LINK_DAYS=90] [CAMPAIGN=<label>]
+#                              prints the new code once (it is meant to be
+#                              shared publicly by the creator)
+#   ACTION=revoke-link         LINK_CODE=<20 hex characters>  (final)
+#   ACTION=acquisition-summary counts only; visits are estimates
+#
+#   CREATOR_USER_ID: the creator's account id from the Supabase dashboard.
+#
 # Prints counts only. Never prints or selects an email address or id list.
 set -euo pipefail
 : "${DATABASE_URL:?Set DATABASE_URL}"
@@ -46,6 +61,10 @@ say() { local label=$1 out; shift; out="$("$@")"; echo "$label: $out"; }
 
 group() {
   case "${GROUP:-}" in any|active_creator|aspiring_creator|supporter) echo "$GROUP" ;; *) fail "GROUP must be any, active_creator, aspiring_creator or supporter." ;; esac
+}
+creator() {
+  [[ "${CREATOR_USER_ID:-}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || fail "CREATOR_USER_ID must be the creator's account id (a UUID), not an email address."
+  echo "$CREATOR_USER_ID"
 }
 wave() {
   [[ "${WAVE:-}" =~ ^[a-z0-9_-]{1,40}$ ]] || fail "WAVE must be 1 to 40 lowercase letters, digits, _ or -."
@@ -108,7 +127,45 @@ case "$ACTION" in
     w="$(wave)"
     say "Wave cleared" run -v w="$w" <<<"select waitlist_api.admin_wave_clear(:'w');"
     ;;
+  accept-creator)
+    c="$(creator)"
+    cats="${CATEGORIES:-}"
+    [[ -z "$cats" || "$cats" =~ ^(food|money|travel|tech|music|art|fitness|books|wellness)(,(food|money|travel|tech|music|art|fitness|books|wellness)){0,2}$ ]] \
+      || fail "CATEGORIES must be up to three of food, money, travel, tech, music, art, fitness, books, wellness, separated by commas."
+    say "Creator" run -v c="$c" -v k="{$cats}" <<<"select waitlist_api.admin_accept_creator(:'c'::uuid, :'k'::text[]);"
+    ;;
+  creator-status)
+    c="$(creator)"
+    case "${CREATOR_STATUS:-}" in accepted|paused|removed) ;; *) fail "CREATOR_STATUS must be accepted, paused or removed." ;; esac
+    say "Creator status" run -v c="$c" -v s="$CREATOR_STATUS" <<<"select waitlist_api.admin_set_creator_status(:'c'::uuid, :'s');"
+    ;;
+  creator-public-name)
+    c="$(creator)"
+    # The database enforces the format too; this is an early, clearer refusal.
+    name="${PUBLIC_NAME:-}"
+    [[ -z "$name" || ( ${#name} -le 40 && "$name" =~ ^[[:alnum:]@._\'\ -]+$ ) ]] \
+      || fail "PUBLIC_NAME must be 1 to 40 letters, numbers, spaces or @ . _ ' - (empty withdraws it)."
+    say "Public name" run -v c="$c" -v n="$name" <<<"select waitlist_api.admin_set_creator_public_name(:'c'::uuid, nullif(:'n', ''));"
+    ;;
+  issue-link)
+    c="$(creator)"
+    days="${LINK_DAYS:-90}"
+    if ! [[ "$days" =~ ^[0-9]{1,3}$ ]] || [ "$days" -lt 1 ] || [ "$days" -gt 365 ]; then
+      fail "LINK_DAYS must be a whole number from 1 to 365 (default 90)."
+    fi
+    campaign="${CAMPAIGN:-}"
+    [[ -z "$campaign" || "$campaign" =~ ^[a-z0-9_-]{1,60}$ ]] || fail "CAMPAIGN must be 1 to 60 lowercase letters, digits, _ or - (or empty)."
+    say "New link code (valid $days days)" run -v c="$c" -v d="$days" -v k="$campaign" <<<"select waitlist_api.admin_issue_creator_link(:'c'::uuid, :'d'::integer, nullif(:'k', ''));"
+    ;;
+  revoke-link)
+    [[ "${LINK_CODE:-}" =~ ^[0-9a-f]{20}$ ]] || fail "LINK_CODE must be the 20 character link code."
+    say "Link" run -v k="$LINK_CODE" <<<"select waitlist_api.admin_revoke_creator_link(:'k');"
+    ;;
+  acquisition-summary)
+    echo "Creator acquisition summary (counts only; visits are estimates):"
+    run -c "select jsonb_pretty(waitlist_api.admin_acquisition_summary())"
+    ;;
   *)
-    fail "ACTION must be summary, status, delete, purge, set-notice-version, open, close, wave-preview, wave-select, wave-summary or wave-clear."
+    fail "ACTION must be summary, status, delete, purge, set-notice-version, open, close, wave-preview, wave-select, wave-summary, wave-clear, accept-creator, creator-status, creator-public-name, issue-link, revoke-link or acquisition-summary."
     ;;
 esac

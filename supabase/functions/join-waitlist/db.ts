@@ -155,7 +155,7 @@ export async function submitWithDatabase(sql: Sql, p: SubmitPayload): Promise<Su
   const rows = await sql`select waitlist_api.submit_v2(
     ${p.email}, ${p.interests}::text[], ${p.sharesContent}, ${p.platform}, ${p.audienceBand}, ${p.source},
     ${p.ageConfirmed}, ${p.waitlistConsent}, ${p.noticeVersion}, ${p.emailKey}, ${p.clientKey},
-    ${p.intent}, ${p.introducedByCreator}::boolean, ${p.introducerReported}, ${p.creatorRef}
+    ${p.intent}, ${p.introducedByCreator}::boolean, ${p.creatorRef}
   ) as result`
   const out = rows[0]?.result
   if (typeof out === 'string' && (RESULTS as string[]).includes(out)) return out as SubmitResult
