@@ -60,7 +60,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             {account && <span className="hidden min-[420px]:contents [&_a]:text-white [&_a:hover]:bg-white/10">{account}</span>}
             <Link
               to="/join"
-              className="inline-flex h-9 items-center rounded-full bg-sp-orange px-4 text-sm font-bold text-sp-midnight transition-[background-color,color,box-shadow,transform] hover:bg-[#ff7e45] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+              className="inline-flex h-9 items-center whitespace-nowrap rounded-full bg-sp-orange px-3 text-[13px] font-bold min-[360px]:px-4 min-[360px]:text-sm text-sp-midnight transition-[background-color,color,box-shadow,transform] hover:bg-[#ff7e45] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
             >
               {HOMEPAGE_COPY.hero.primaryCta}
             </Link>
