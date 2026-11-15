@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, Info } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
+import { CreatorStudio } from '../ui/CreatorStudio'
 import { Photo } from '../ui/Photo'
 import { SamplePost } from '../ui/PostJourney'
 
@@ -55,7 +56,7 @@ export function What() {
             <ValueCard
               side="creator"
               {...copy.creator}
-              photo={<Photo id="creatorAtWork" className="absolute inset-0 h-full w-full object-cover object-[70%_22%]" />}
+              photo={<CreatorStudio className="absolute inset-0" />}
             />
           </div>
           <div className="order-2 lg:order-2">
@@ -77,7 +78,7 @@ export function What() {
               photo={
                 <>
                   <span className="absolute -bottom-1/2 left-1/2 aspect-square w-[70%] -translate-x-1/2 rounded-full bg-sp-orange" />
-                  <Photo id="fanOnPhone" className="absolute bottom-0 left-1/2 h-[104%] w-auto max-w-none -translate-x-1/2" />
+                  <Photo id="fanOnPhone" className="absolute bottom-0 left-1/2 h-[86%] w-auto max-w-none -translate-x-1/2 [mask-image:linear-gradient(to_bottom,black_84%,transparent)]" />
                 </>
               }
             />

@@ -19,13 +19,29 @@ export interface StockPhoto {
 const photo = (p: Omit<StockPhoto, 'source' | 'licence'>): StockPhoto => ({ ...p, source: 'Canva content library', licence: 'Canva Content License' })
 
 export const PHOTOS = {
-  creatorAtWork: photo({
-    id: 'creator-at-work',
-    src: '/media/landing/sp-creator-laptop.webp',
-    width: 785,
-    height: 1118,
-    alt: 'A smiling creator at her desk, talking to camera beside her laptop.',
+  creatorSmiling: photo({
+    id: 'creator-smiling',
+    src: '/media/landing/sp-creator-smiling.webp',
+    width: 690,
+    height: 1032,
+    alt: 'A smiling creator talking to her audience, hands open.',
+    cutout: true,
+  }),
+  studioRoom: photo({
+    id: 'studio-room',
+    src: '/media/landing/sp-studio-room.webp',
+    width: 1086,
+    height: 1086,
+    alt: '',
     cutout: false,
+  }),
+  ringLight: photo({
+    id: 'ring-light',
+    src: '/media/landing/sp-ring-light-studio.webp',
+    width: 439,
+    height: 851,
+    alt: '',
+    cutout: true,
   }),
   creatorFrustrated: photo({
     id: 'creator-frustrated',
@@ -43,14 +59,6 @@ export const PHOTOS = {
     alt: '',
     cutout: false,
   }),
-  ringLight: photo({
-    id: 'ring-light',
-    src: '/media/landing/sp-ring-light.webp',
-    width: 255,
-    height: 706,
-    alt: '',
-    cutout: true,
-  }),
   fanOnPhone: photo({
     id: 'fan-on-phone',
     src: '/media/landing/sp-fan-phone.webp',
@@ -65,22 +73,6 @@ export const PHOTOS = {
     width: 451,
     height: 687,
     alt: 'Two friends laughing together at something one of them is pointing to.',
-    cutout: true,
-  }),
-  fanGlasses: photo({
-    id: 'fan-glasses',
-    src: '/media/landing/sp-fan-glasses.webp',
-    width: 432,
-    height: 746,
-    alt: 'A fan in a hoodie, laughing.',
-    cutout: true,
-  }),
-  fanBraids: photo({
-    id: 'fan-braids',
-    src: '/media/landing/sp-fan-braids.webp',
-    width: 451,
-    height: 612,
-    alt: 'A fan with braids, smiling.',
     cutout: true,
   }),
 } as const

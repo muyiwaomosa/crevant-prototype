@@ -22,7 +22,7 @@ function CreatorScene() {
   return (
     <div className="relative aspect-[4/3] overflow-hidden rounded-[28px] bg-sp-midnight">
       <Photo id="deskAtNight" className="absolute inset-0 h-full w-full object-cover opacity-70" />
-      <Photo id="ringLight" className="absolute bottom-0 left-[4%] h-[72%] w-auto max-w-none opacity-90" />
+      <Photo id="ringLight" className="absolute bottom-0 left-[3%] h-[70%] w-auto max-w-none opacity-80 brightness-75" />
       <Photo id="creatorFrustrated" className="absolute bottom-0 left-1/2 h-[92%] w-auto max-w-none -translate-x-[38%]" />
       <Chip className="left-[4%] top-[8%]">
         <TrendingUp className="h-3.5 w-3.5 text-sp-orange-text" /> Followers up again
@@ -44,7 +44,7 @@ function FanScene() {
   return (
     <div className="relative aspect-[4/3] overflow-hidden rounded-[28px] bg-[#ffd9c7]">
       <div aria-hidden="true" className="absolute -bottom-[34%] -right-[12%] aspect-square w-[82%] rounded-full bg-sp-orange" />
-      <Photo id="fansTogether" className="absolute bottom-0 right-0 h-[97%] w-auto max-w-none" />
+      <Photo id="fansTogether" className="absolute bottom-0 right-0 h-[88%] w-auto max-w-none" />
       <Chip className="left-[4%] top-[9%]">
         <MessageCircle className="h-3.5 w-3.5 text-sp-orange-text" /> First to comment
       </Chip>

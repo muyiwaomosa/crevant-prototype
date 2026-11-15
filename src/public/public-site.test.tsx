@@ -112,7 +112,7 @@ describe('HERO', () => {
   })
   it('pictures a creator, a fan and a recognisable post between them', () => {
     const scene = hero().querySelector('[data-testid="hero-scene"]')!
-    expect([...scene.querySelectorAll('img')].map((i) => i.getAttribute('data-photo'))).toEqual(['creator-at-work', 'fan-on-phone'])
+    expect([...scene.querySelectorAll('img')].map((i) => i.getAttribute('data-photo'))).toEqual(['studio-room', 'ring-light', 'creator-smiling', 'fan-on-phone'])
     expect(norm(scene)).toContain('Priya Raman')
     expect(norm(scene)).toContain('Sample')
     expect(norm(scene.querySelector('figcaption'))).toContain('stock images')

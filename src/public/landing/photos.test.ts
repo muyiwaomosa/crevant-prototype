@@ -26,7 +26,7 @@ describe('homepage photos', () => {
     expect(p.source).toBe('Canva content library')
     expect(p.licence).toBe('Canva Content License')
     // Decorative backgrounds have empty alt text; every person is described.
-    if (!['desk-at-night', 'ring-light'].includes(p.id)) expect(p.alt.length).toBeGreaterThan(20)
+    if (!['desk-at-night', 'ring-light', 'studio-room'].includes(p.id)) expect(p.alt.length).toBeGreaterThan(20)
   })
 
   it.each(photos.map((p) => [p.src, p] as const))('%s exists at its recorded size, is small and carries no metadata', (_, p) => {

@@ -1,5 +1,6 @@
 import clsx from 'clsx'
 import { Share2 } from 'lucide-react'
+import { CreatorStudio } from './CreatorStudio'
 import { Photo } from './Photo'
 import { Avatar, SamplePost } from './PostJourney'
 
@@ -13,14 +14,12 @@ export function HeroScene({ className }: { className?: string }) {
   return (
     <figure data-testid="hero-scene" className={clsx('relative m-0 mx-auto aspect-[5/6] w-full max-w-[480px] lg:max-w-none', className)}>
       {/* The creator. */}
-      <div className="absolute left-[6%] top-0 h-[78%] w-[66%] overflow-hidden rounded-[28px] bg-sp-midnight-raised shadow-[0_40px_80px_-30px_rgb(0_0_0/0.7)]">
-        <Photo id="creatorAtWork" eager className="h-full w-full object-cover object-[60%_20%]" />
-      </div>
+      <CreatorStudio eager className="absolute left-[6%] top-0 h-[78%] w-[66%] rounded-[28px] shadow-[0_40px_80px_-30px_rgb(0_0_0/0.7)]" />
 
       {/* The fan, cut out over an orange disc. */}
       <div className="absolute bottom-[14%] right-0 h-[46%] w-[44%]">
         <div aria-hidden="true" className="absolute inset-x-[4%] bottom-0 aspect-square rounded-full bg-sp-orange" />
-        <Photo id="fanOnPhone" eager className="absolute bottom-0 left-1/2 h-full w-auto max-w-none -translate-x-1/2 object-contain" />
+        <Photo id="fanOnPhone" eager className="absolute bottom-0 left-1/2 h-full w-auto max-w-none -translate-x-1/2 object-contain [mask-image:linear-gradient(to_bottom,black_84%,transparent)]" />
       </div>
 
       {/* The post that connects them. */}

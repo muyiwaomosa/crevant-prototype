@@ -212,6 +212,43 @@ async function newContext(browser, options = {}) {
       await ctx.close()
     }
 
+    // 5d. Image quality on high-density screens: every image on the homepage
+    //     and tour loads, and none is shown more than 1.25x larger than its
+    //     real pixels (which is when photos start to look soft or blurry).
+    for (const [label, viewport] of [
+      ['desktop', { width: 1440, height: 900 }],
+      ['phone', { width: 390, height: 844 }],
+    ]) {
+      const ctx = await newContext(browser, { viewport, deviceScaleFactor: 2 })
+      const page = await ctx.newPage()
+      const issues = []
+      for (const path of ['/', '/join', '/tour/discover', '/tour/creator/amara', '/tour/profile']) {
+        await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' })
+        await page.evaluate(async () => {
+          for (let y = 0; y < document.body.scrollHeight; y += 400) {
+            window.scrollTo(0, y)
+            await new Promise((r) => setTimeout(r, 30))
+          }
+        })
+        await page.waitForLoadState('networkidle')
+        const rows = await page.$$eval('img', (imgs) =>
+          imgs.map((i) => {
+            const r = i.getBoundingClientRect()
+            const fit = getComputedStyle(i).objectFit
+            const scale =
+              fit === 'cover' ? Math.max(r.width / i.naturalWidth, r.height / i.naturalHeight) : fit === 'contain' ? Math.min(r.width / i.naturalWidth, r.height / i.naturalHeight) : r.width / i.naturalWidth
+            return { src: i.getAttribute('src'), ok: i.complete && i.naturalWidth > 0, upscale: scale * 2, shown: r.width > 0 }
+          }),
+        )
+        for (const r of rows) {
+          if (!r.ok) issues.push(`${path}: ${r.src} did not load`)
+          else if (r.shown && r.upscale > 1.25) issues.push(`${path}: ${r.src} upscaled ${r.upscale.toFixed(2)}x`)
+        }
+      }
+      check(`${label}: every image loads and stays sharp on a high-density screen`, issues.length === 0, issues.slice(0, 5).join(' | '))
+      await ctx.close()
+    }
+
     // 6. Nothing reached Supabase or any other outside service.
     const outside = [...new Set(requests.map((u) => new URL(u).hostname))].filter((h) => h !== new URL(BASE).hostname && !ALLOWED_THIRD_PARTY.includes(h))
     check('no request left this site (fonts aside)', outside.length === 0, outside.join(', '))
