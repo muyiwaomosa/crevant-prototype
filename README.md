@@ -100,10 +100,6 @@ npx vite preview --port 4175 --strictPort
 ```
 
 ```bash
-node e2e/phase1a-landing.e2e.cjs http://localhost:4175
-```
-
-```bash
 node e2e/release2.e2e.cjs http://localhost:4175/tour
 ```
 
@@ -111,7 +107,7 @@ node e2e/release2.e2e.cjs http://localhost:4175/tour
 node e2e/release1.e2e.cjs http://localhost:4175/tour
 ```
 
-`phase1a-landing` covers the public site, layout at 320 to 1280 pixels, no data collection, redirects, keyboard access and the production fallback. `release2` covers the unified experience and onboarding; `release1` covers creator specific CP, anti farming, redemption, and pictures.
+The public site itself is covered by `scripts/e2e/public-site.sh` (also the Public site CI job), which builds the site and checks it in Chromium with the real security headers. `release2` covers the unified experience and onboarding; `release1` covers creator specific CP, anti farming, redemption, and pictures.
 
 ## Technical choices
 

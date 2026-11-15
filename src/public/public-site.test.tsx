@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PublicRoutes } from './PublicApp'
-import { HOMEPAGE_COPY } from './landing/copy'
-import { DISCLOSURES, findMisleadingClaims } from './landing/claims'
+import { allHomepageText, HOMEPAGE_COPY } from './landing/copy'
+import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation } from './landing/claims'
 import { PLACEHOLDER_LABEL } from './landing/ui/HeroVisual'
 
 const PUBLIC_PATHS = ['/', '/join', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
@@ -35,29 +35,26 @@ afterEach(() => {
 })
 
 const norm = (el: Element | null) => (el?.textContent || '').replace(/\s+/g, ' ')
-// Splitpost sections 1 to 3 (PRs 2 and 3), then the remaining older sections until PR 4.
-const SECTION_ORDER = ['hero', 'problem', 'solution', 'difference', 'fans', 'how', 'founding']
+// The five Splitpost sections, in the approved order.
+const SECTION_ORDER = ['hero', 'problem', 'solution', 'experience', 'invitation']
 // The founder-approved headings, in order. The hero is the Splitpost hero
 // (PR 2); the sections after it change in PRs 3 and 4.
 const HEADINGS = [
   HOMEPAGE_COPY.hero.headline,
   HOMEPAGE_COPY.problem.headline,
   HOMEPAGE_COPY.solution.headline,
-  "You don't need a million followers. You need the right 1,000.",
-  "You're more than a follower. You're part of their success.",
-  'Start building something that lasts.',
-  'The future of content creation should be built by creators.',
+  HOMEPAGE_COPY.experience.headline,
+  HOMEPAGE_COPY.invitation.headline,
 ]
 // Approved disclaimers that contain the word "guarantee". They are the only
 // allowed uses of it (approved narrow exception).
 const APPROVED_GUARANTEE_SENTENCES = [
-  'Connection Points are not cash and have no guaranteed monetary value.',
-  'Participation does not guarantee earnings or rewards.',
-  'No guaranteed income, views or engagement.',
-  // The founder-approved waitlist introduction on /join.
+  DISCLOSURES.noGuarantee,
+  DISCLOSURES.invitationOnly,
+  // The founder-approved wording on /join (reworded in PR 5).
   "Joining the waitlist doesn't guarantee an invitation to the pilot.",
+  'Participation does not guarantee earnings or rewards.',
 ]
-const POINTS_DISCLAIMER = 'Connection Points are not cash and have no guaranteed monetary value. Rewards depend on what each creator offers.'
 const landing = () => renderAt('/').container
 const section = (id: string) => landing().querySelector(`#${id}`)!
 
@@ -71,17 +68,14 @@ describe('structure and approved copy', () => {
     expect(norm(c.querySelector('h1'))).toBe(HEADINGS[0])
     SECTION_ORDER.slice(1).forEach((id, i) => expect(norm(c.querySelector(`#${id} h2`))).toBe(HEADINGS[i + 1]))
   })
-  it('keeps key approved passages word for word', () => {
+  it('keeps every approved homepage line word for word', () => {
     const t = norm(landing())
-    for (const passage of [
-      'When someone follows you on Crevant, your new posts appear in their chronological Following feed.',
-      'Crevant is developing Connection Points, a way to recognize supporters for participating with creators they care about.',
-      "It's to help you build something valuable enough to last.",
-      "It's built by the people who believe in them.",
-      'Your content starts the conversation.',
-      'Your relationships build the future.',
-      "Joining the waitlist doesn't secure a place in the pilot. We invite people in small groups and improve the experience together. Participation does not guarantee earnings or rewards.",
-    ]) expect(t, passage).toContain(passage)
+    for (const line of allHomepageText()) expect(t, line).toContain(line)
+  })
+  it('has no older Crevant homepage sections left', () => {
+    for (const id of ['story', 'why', 'who', 'difference', 'fans', 'how', 'founding']) expect(landing().querySelector(`#${id}`), id).toBeNull()
+    const main = [...landing().querySelectorAll('section[id]')].map((sec) => norm(sec)).join(' ')
+    expect(main).not.toMatch(/Crevant/)
   })
 })
 
@@ -183,119 +177,81 @@ describe('section 3: POST. SUPPORT. SPLIT. (Splitpost)', () => {
   })
 })
 
-describe('the Crevant difference', () => {
-  const block = (n: number) => section('difference').querySelector(`[data-block="${n}"]`)!
-  it('qualifies "the right 1,000" right under the heading', () => {
-    expect(norm(section('difference').querySelector('[data-testid="thousand-note"]'))).toContain(
-      "Every creator's right number is different, and we can't promise what any community will earn.",
-    )
-  })
-  it('tells one story: reach, then loyalty, then income opportunities', () => {
-    expect(norm(section('difference').querySelector('ol[aria-label]'))).toContain('Reach')
-    expect([1, 2, 3].map((n) => norm(block(n).querySelector('h3')))).toEqual([
-      '1. Reach the people who follow you.',
-      '2. Give your supporters a reason to keep coming back.',
-      '3. Build relationships that can support your livelihood.',
-    ])
-  })
-  it('6.1 shows the genuine feed, being built, without promising views', () => {
-    const b = block(1)
-    expect(b.querySelector('[data-status]')!.getAttribute('data-status')).toBe('building')
-    expect(b.querySelector('figure[data-screenshot="feedPosts"]')).not.toBeNull()
-    expect(norm(b.querySelector('[data-testid="feed-note"]'))).toContain("It isn't a promise that each follower will open, view or engage with every post.")
-  })
-  it('6.2 shows Connection Points and rewards with the not-money disclaimer beside them', () => {
-    const b = block(2)
-    expect(b.querySelector('[data-status]')!.getAttribute('data-status')).toBe('building')
-    expect(b.querySelector('figure[data-screenshot="creator"]')).not.toBeNull()
-    expect(b.querySelector('figure[data-screenshot="rewards"]')).not.toBeNull()
-    expect(norm(b.querySelector('[data-testid="points-note"]'))).toContain(POINTS_DISCLAIMER)
-  })
-  it('6.3 is Planned, shows no screenshot, and says income is an ambition', () => {
-    const b = block(3)
-    expect(b.querySelector('[data-status]')!.getAttribute('data-status')).toBe('planned')
-    expect(b.querySelectorAll('figure[data-screenshot], img')).toHaveLength(0)
-    expect(norm(b.querySelector('[data-testid="planned-panel"]'))).toContain('No payments are enabled')
-    expect(norm(b.querySelector('[data-testid="income-note"]'))).toContain('Sustainable income is our ambition for creators, not a promise.')
-  })
-})
 
-describe('for the fans', () => {
-  it('shows Discover and the fan journey, with the disclaimer and status beside the claim', () => {
-    const f = section('fans')
-    expect(f.querySelector('figure[data-screenshot="discover"]')).not.toBeNull()
-    expect(f.querySelector('[data-testid="fan-journey"]')).not.toBeNull()
-    expect(norm(f.querySelector('[data-testid="fans-points-note"]'))).toContain(POINTS_DISCLAIMER)
-    expect(norm(f.querySelector('[data-testid="fans-status"]'))).toContain('Not yet available to real members.')
-    expect(f.querySelector('[data-status="building"]')).not.toBeNull()
-  })
-})
 
-describe('how it works', () => {
-  it('labels each step with its real status', () => {
-    const steps = [...section('how').querySelectorAll('[data-step]')]
-    expect(steps.map((s) => s.querySelector('[data-status]')!.getAttribute('data-status'))).toEqual(['building', 'planned', 'building'])
-    expect(norm(steps[1])).toContain('Creator invite links are planned and not built yet.')
-    expect(norm(steps[1].querySelector('[data-testid="step2-concept"]'))).toContain('Concept · Planned')
-    expect(steps[1].querySelectorAll('figure[data-screenshot]')).toHaveLength(0)
-  })
-  it('ends with Join the Waitlist', () => {
-    expect([...section('how').querySelectorAll('a')].some((a) => a.getAttribute('href') === '#founding')).toBe(true)
-  })
-})
 
-describe('founding community', () => {
-  it('offers one waitlist, not applications or roles', () => {
-    const f = section('founding')
-    const links = [...f.querySelectorAll('a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
-    expect(links).toEqual([['Join the Waitlist', '/join']])
-    expect(norm(f)).toContain("Joining the waitlist doesn't secure a place in the pilot.")
-    expect(norm(f)).not.toMatch(/apply to join|join as a supporter/i)
-  })
-  it('offers the two approved opportunities, word for word', () => {
-    const tiles = [...section('founding').querySelectorAll('[data-testid="founding-opportunities"] li')].map((li) => norm(li).trim())
-    expect(tiles).toEqual([
-      "Experience Crevant early.Be among the first to use Crevant while it's being built, and see what a creator-first social network feels like.",
-      "Help shape its future.Test new ideas, tell us what works and what doesn't, and help decide what Crevant becomes.",
-    ])
-  })
-  it('is signed by the founder, with the founder photo', () => {
-    const sign = section('founding').querySelector('[data-testid="founder-signoff"]')!
-    expect(norm(sign).trim()).toBe('Muyiwa Omosa, Founder of Crevant.')
-    expect(sign.querySelector('img')!.getAttribute('src')).toBe('/media/landing/founder.jpg')
-  })
-  it('keeps the pilot details compact and complete', () => {
-    const d = section('founding').querySelector('details#pilot-details')!
-    expect(d.hasAttribute('open')).toBe(false)
-    const t = norm(d)
-    for (const s of [
-      'Invitation-only pilot for adults 18 and older.',
-      'An intended 60-day testing period.',
-      'No real payments yet.',
-      'No guaranteed income, views or engagement.',
-      'Features are still being developed and tested.',
-    ]) expect(t).toContain(s)
-  })
-})
 
 describe('waitlist calls to action', () => {
   it('uses "Join the Waitlist" consistently and never the old labels', () => {
     for (const path of PUBLIC_PATHS) expect(textOf(path)).not.toMatch(/Join the Founding Community|Join the Pilot|Learn About the Creator Pilot|Learn About Joining as a Supporter/)
   })
-  it('places the one waitlist link after the Crevant difference and after For the fans, with no roles', () => {
-    for (const id of ['difference', 'fans']) {
-      const a = section(id).querySelector('[data-cta="waitlist"] a')!
-      expect(norm(a).trim()).toBe('Join the Waitlist')
-      expect(a.getAttribute('href')).toBe('/join')
+  it('offers one waitlist for everyone, from the hero and the invitation, with no roles', () => {
+    for (const id of ['hero', 'invitation']) {
+      const join = [...section(id).querySelectorAll('a')].filter((a) => norm(a).trim() === 'Join the Waitlist')
+      expect(join.map((a) => a.getAttribute('href')), id).toEqual(['/join'])
     }
-    expect(textOf('/')).not.toMatch(/as a Creator|as a Supporter/)
-    for (const id of ['difference', 'fans']) expect(norm(section(id))).toContain("Joining the waitlist doesn't secure a place in the pilot.")
+    expect(textOf('/')).not.toMatch(/as a Creator|as a Supporter|apply/i)
   })
-  it('has a phone-only waitlist bar that starts hidden', () => {
+  it('has a phone-only waitlist bar that starts hidden and goes to /join', () => {
     const bar = landing().querySelector('[data-testid="mobile-waitlist-bar"]')!
     expect(bar.getAttribute('aria-hidden')).toBe('true')
     expect(bar.className).toContain('md:hidden')
-    expect(bar.querySelector('a')!.getAttribute('href')).toBe('#founding')
+    expect(bar.querySelector('a')!.getAttribute('href')).toBe('/join')
+    expect(bar.querySelector('a')!.getAttribute('tabindex')).toBe('-1')
+  })
+})
+
+describe('section 4: the experience (Splitpost)', () => {
+  const exp = () => section('experience')
+  it('uses the approved headline, intro and status', () => {
+    expect(norm(exp().querySelector('h2'))).toBe('Built for creators. Powered by fans.')
+    expect(norm(exp())).toContain(HOMEPAGE_COPY.experience.intro)
+    expect(norm(exp().querySelector('[data-status]'))).toBe('Being built for the pilot')
+  })
+  it('shows the four concept screens, in order, each captioned and labelled concept and sample data', () => {
+    const figs = [...exp().querySelectorAll('figure[data-mockup]')]
+    expect(figs.map((f) => f.getAttribute('data-mockup'))).toEqual(['Following feed', 'Creator insights', 'Fan recognition', 'Perks'])
+    HOMEPAGE_COPY.experience.mockups.forEach((m, i) => {
+      expect(norm(figs[i].querySelector('figcaption'))).toContain(`${m.title}${m.line}`)
+      // Inside the frame itself, so the label survives cropping, and in the caption for screen readers.
+      expect(norm(figs[i].querySelector('[aria-hidden="true"]'))).toContain('Concept · Sample data')
+      expect(norm(figs[i].querySelector('figcaption'))).toContain('Concept · Sample data')
+      expect(figs[i].querySelectorAll('img')).toHaveLength(0)
+    })
+  })
+  it('shows Connection Points as recognition per creator, with provisional values and no money', () => {
+    const rec = exp().querySelector('figure[data-mockup="Fan recognition"]')!
+    expect(norm(rec)).toContain('No cash value.')
+    expect(norm(rec)).toContain('provisional samples, not yet validated')
+    expect(norm(exp())).not.toMatch(/[$€£¥]|\bcash out\b|payout/i)
+  })
+  it('sends people to the tour rather than explaining every feature, with the reach qualifier beside it', () => {
+    const tour = [...exp().querySelectorAll('a')].find((a) => norm(a).trim() === 'Take the guided tour')!
+    expect(tour.getAttribute('href')).toBe('/tour')
+    expect(norm(exp().querySelector('[data-testid="experience-small-print"]'))).toBe(DISCLOSURES.noGuarantee)
+  })
+  it('keeps the phone carousel reachable by keyboard', () => {
+    const region = exp().querySelector('[role="region"]')!
+    expect(region.getAttribute('tabindex')).toBe('0')
+    expect(region.getAttribute('aria-label')).toBe('Concept screens with sample data')
+  })
+})
+
+describe('section 5: the invitation (Splitpost)', () => {
+  const inv = () => section('invitation')
+  it('uses the approved headline and body', () => {
+    expect(norm(inv().querySelector('h2'))).toBe('Be part of a better split.')
+    expect(norm(inv().querySelector('[data-testid="invitation-body"]'))).toBe(HOMEPAGE_COPY.invitation.body)
+  })
+  it('lists every required pilot disclosure, always visible', () => {
+    const details = inv().querySelector('[data-testid="pilot-details"]')!
+    expect([...details.querySelectorAll('li')].map((li) => norm(li))).toEqual([...HOMEPAGE_COPY.invitation.pilotDetails])
+    expect(details.closest('details')).toBeNull()
+  })
+  it('is signed by the founder, with the founder photo', () => {
+    const sign = inv().querySelector('[data-testid="founder-signoff"]')!
+    expect(norm(sign)).toBe('Muyiwa Omosa, Founder of Splitpost')
+    expect(sign.querySelector('img')!.getAttribute('src')).toBe('/media/landing/founder.jpg')
   })
 })
 
@@ -313,20 +269,13 @@ describe('product honesty', () => {
     }
     expect(norm(c)).not.toMatch(/\bIllustration\b|From the Crevant tour/)
   })
-  it('uses genuine, described tour screenshots', () => {
-    const figures = [...landing().querySelectorAll('figure[data-screenshot]')]
-    // The hero's screenshot gave way to the placeholder visual (PR 2), and the
-    // old problem section's feed screenshot left with that section (PR 3).
-    expect(figures.length).toBe(6)
-    expect(new Set(figures.map((f) => f.getAttribute('data-screenshot'))).size).toBe(6)
-    for (const f of figures) {
-      expect(f.querySelector('img')!.getAttribute('src')).toMatch(/^\/media\/landing\/tour-[a-z-]+\.jpg$/)
-      expect(f.querySelector('img')!.getAttribute('alt')!.length).toBeGreaterThan(40)
-    }
+  it('uses no photographs of people except the founder, and no captured screenshots', () => {
+    const srcs = [...landing().querySelectorAll('img')].map((i) => i.getAttribute('src'))
+    expect(srcs).toEqual(['/media/landing/founder.jpg'])
   })
   it('only uses the approved status labels', () => {
     const labels = new Set([...landing().querySelectorAll('[data-status]')].map((el) => norm(el)))
-    expect([...labels].sort()).toEqual(['Being built for the pilot', 'Planned'])
+    expect([...labels].sort()).toEqual(['Being built for the pilot'])
   })
   it('never describes anything as live or available now', () => {
     for (const path of PUBLIC_PATHS) expect(textOf(path)).not.toMatch(/\b(now live|live now|available now|is live)\b/i)
@@ -354,38 +303,18 @@ describe('the waitlist page', () => {
     expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('This page collects nothing.')
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
     expect(hrefs).toContain('/tour')
-    expect(hrefs).toContain('/#founding')
+    expect(hrefs).toContain('/#invitation')
     expect(norm(container)).toContain('demonstration with sample data')
   })
 })
 
-describe('explanatory visuals', () => {
-  it('keeps "the right 1,000" about relationships, never money', () => {
-    const t = norm(section('difference').querySelector('[data-testid="right-thousand"]'))
-    expect(t).toContain('The lines are relationships')
-    expect(t).not.toMatch(/earn|income|money|pay|support|[$£€]|\bCP\b/i)
-    expect(section('difference').querySelectorAll('[data-testid="right-thousand"] circle').length).toBeGreaterThan(950)
-  })
-  it('draws planned features only as labelled concepts', () => {
-    expect(norm(section('difference').querySelector('[data-testid="planned-panel"]'))).toContain('Concept sketch.')
-    expect(norm(section('how').querySelector('[data-testid="step2-concept"]'))).toContain('Concept · Planned')
-  })
+describe('content security', () => {
   it('adds no inline <style> blocks, which the Content Security Policy would block', () => {
     for (const path of PUBLIC_PATHS) {
       const { container } = renderAt(path)
       expect(container.querySelectorAll('style'), path).toHaveLength(0)
       cleanup()
     }
-  })
-  it('only calls out words the tour itself shows', () => {
-    const callouts = [...landing().querySelectorAll('[data-callout]')].map((el) => norm(el).trim())
-    expect(callouts).toEqual(['10 CP with Amara', 'Only CP earned with Amara counts here.'])
-  })
-  it("shows a fan's journey in four real tour crops", () => {
-    const j = section('fans').querySelector('[data-testid="fan-journey"]')!
-    const imgs = [...j.querySelectorAll('img')]
-    expect(imgs.map((i) => i.getAttribute('src'))).toEqual(['follow', 'comment', 'points', 'reward'].map((n) => `/media/landing/tour-journey-${n}.jpg`))
-    for (const i of imgs) expect(i.getAttribute('alt')!.length).toBeGreaterThan(40)
   })
 })
 
@@ -412,22 +341,21 @@ describe('header and footer', () => {
     expect(norm(footer)).toContain('© 2026 Crevant. All rights reserved.')
     const links = [...footer.querySelectorAll('a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
     expect(links).toEqual([
-      ['Our Story', '/#story'],
-      ['How It Works', '/#how'],
-      ['Join the Waitlist', '/#founding'],
+      ['Our Story', '/#problem'],
+      ['How It Works', '/#solution'],
+      ['Join the Waitlist', '/join'],
       ['Explore Crevant', '/tour'],
       ['Sign in', '/sign-in'],
     ])
     expect(norm(footer)).not.toMatch(/privacy|terms/i)
   })
-  it('names every link to the tour "Discover Splitpost" in the header and hero, and "Explore Crevant" elsewhere until PR 5', () => {
+  it('names the tour links "Discover Splitpost" (header, hero), "Take the guided tour" (section 4), and "Explore Crevant" in the footer and /join until PR 5', () => {
     for (const path of PUBLIC_PATHS) {
       const { container } = renderAt(path)
       for (const a of container.querySelectorAll('a[href="/tour"]')) {
-        const inNewParts = Boolean(a.closest('header, #hero'))
-        expect(norm(a).trim(), path).toBe(inNewParts ? 'Discover Splitpost' : 'Explore Crevant')
+        const expected = a.closest('header, #hero') ? 'Discover Splitpost' : a.closest('#experience') ? 'Take the guided tour' : 'Explore Crevant'
+        expect(norm(a).trim(), path).toBe(expected)
       }
-      expect(norm(container)).not.toMatch(/take the tour/i)
       cleanup()
     }
   })
@@ -435,28 +363,20 @@ describe('header and footer', () => {
 
 describe('required disclosures', () => {
   const text = () => textOf('/')
-  it('says Connection Points are not money and cannot be traded', () => {
-    expect(text()).toMatch(/They're not money\. They can't be bought, sold, cashed out or moved to another creator/)
+  it.each(Object.entries(DISCLOSURES).filter(([k]) => !['sampleData', 'concept', 'cpCreatorSpecific'].includes(k)))('shows the %s disclosure on the homepage', (_k, sentence) => {
+    expect(text()).toContain(sentence)
   })
-  it('says no money changes hands and earnings are not promised', () => {
+  it('says fans receive no cash rewards, close to the very first call to action', () => {
+    expect(norm(section('hero'))).toContain(DISCLOSURES.noFanCash)
+  })
+  it('keeps revenue sharing a labelled vision, and never publishes the provisional allocation', () => {
     const t = text()
-    expect(t).toContain('No money changes hands on Crevant')
-    expect(t).toContain("we can't promise what any community will earn")
+    expect(t).toContain('Later · our vision')
+    expect(mentionsProvisionalAllocation(t)).toBe(false)
   })
-  it('describes the feed by its order only, and does not promise reach', () => {
-    const t = text()
-    expect(t).toContain('newest first')
-    expect(t).toMatch(/isn't ranked by likes, comments or any engagement score/)
-    expect(t).toContain("we don't promise any particular reach")
-  })
-  it('states the age limit, the invitation, and when the pilot clock starts', () => {
-    const t = text()
-    expect(t).toContain('adults 18 and older')
-    expect(t).toContain('Invitation-only pilot')
-    expect(t).toContain('The 60 days begin when invited participants can actually use Crevant')
-  })
-  it('says nothing involving money is live', () => {
-    expect(text()).toContain("It isn't available yet. Before anything involving money goes live")
+  it('makes no misleading financial claim anywhere on the homepage (a safeguard alongside human review)', () => {
+    const blocks = [...landing().querySelectorAll('h1, h2, h3, p, li, span, a, figcaption')].map((el) => norm(el).trim()).filter(Boolean)
+    expect(blocks.flatMap((b) => findMisleadingClaims(b))).toEqual([])
   })
 })
 
@@ -495,7 +415,6 @@ describe('copy rules', () => {
   // which may appear in the founder story section only.
   const checkedText = (path: string) => {
     const { container } = renderAt(path)
-    container.querySelector('#story')?.remove()
     let text = norm(container)
     for (const s of APPROVED_GUARANTEE_SENTENCES) text = text.split(s).join(' ')
     cleanup()
@@ -513,16 +432,6 @@ describe('copy rules', () => {
     const count = (t.match(/guarantee/gi) || []).length
     const approved = APPROVED_GUARANTEE_SENTENCES.reduce((n, s) => n + t.split(s).length - 1, 0)
     expect(count).toBe(approved)
-  })
-  it('every mention of "1,000" sits in the Crevant difference section, next to its qualification', () => {
-    const c = landing()
-    const hits = [...c.querySelectorAll('h1, h2, h3, p, li, summary, span')].filter(
-      (el) => /1,000/.test(el.textContent || '') && ![...el.children].some((ch) => /1,000/.test(ch.textContent || '')),
-    )
-    expect(hits.length).toBeGreaterThan(0)
-    for (const el of hits) {
-      expect(el.closest('#difference')?.querySelector('[data-testid="thousand-note"]'), `"${el.textContent}" appears without its qualification`).toBeTruthy()
-    }
   })
 })
 
