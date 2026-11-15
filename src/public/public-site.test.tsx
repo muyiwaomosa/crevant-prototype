@@ -35,15 +35,14 @@ afterEach(() => {
 })
 
 const norm = (el: Element | null) => (el?.textContent || '').replace(/\s+/g, ' ')
-const SECTION_ORDER = ['hero', 'story', 'problem', 'why', 'who', 'difference', 'fans', 'how', 'founding']
+// Splitpost sections 1 to 3 (PRs 2 and 3), then the remaining older sections until PR 4.
+const SECTION_ORDER = ['hero', 'problem', 'solution', 'difference', 'fans', 'how', 'founding']
 // The founder-approved headings, in order. The hero is the Splitpost hero
 // (PR 2); the sections after it change in PRs 3 and 4.
 const HEADINGS = [
   HOMEPAGE_COPY.hero.headline,
-  'My audience tripled. My income dropped by 60%.',
-  'You can have a million followers and still struggle to make a living.',
-  'What if social media worked for the people creating the value?',
-  'For creators who want more than views.',
+  HOMEPAGE_COPY.problem.headline,
+  HOMEPAGE_COPY.solution.headline,
   "You don't need a million followers. You need the right 1,000.",
   "You're more than a follower. You're part of their success.",
   'Start building something that lasts.',
@@ -63,7 +62,7 @@ const landing = () => renderAt('/').container
 const section = (id: string) => landing().querySelector(`#${id}`)!
 
 describe('structure and approved copy', () => {
-  it('has the nine approved sections, in order', () => {
+  it('has the approved sections, in order', () => {
     expect([...landing().querySelectorAll('section[id]')].map((s) => s.id)).toEqual(SECTION_ORDER)
   })
   it('uses the approved headings, with exactly one main heading', () => {
@@ -75,10 +74,6 @@ describe('structure and approved copy', () => {
   it('keeps key approved passages word for word', () => {
     const t = norm(landing())
     for (const passage of [
-      "What's the point of building an audience if you can't reliably reach the people who chose to follow you?",
-      'How do you build trust when you can\'t consistently connect with your audience?',
-      'When someone chooses to follow you, your content should have a reliable place in their feed.',
-      "If any of these sound familiar, we're building Crevant with people like you in mind.",
       'When someone follows you on Crevant, your new posts appear in their chronological Following feed.',
       'Crevant is developing Connection Points, a way to recognize supporters for participating with creators they care about.',
       "It's to help you build something valuable enough to last.",
@@ -86,17 +81,7 @@ describe('structure and approved copy', () => {
       'Your content starts the conversation.',
       'Your relationships build the future.',
       "Joining the waitlist doesn't secure a place in the pilot. We invite people in small groups and improve the experience together. Participation does not guarantee earnings or rewards.",
-      'Think about that.',
-      "You worked hard to build your audience. But what good is having thousands of followers if you can't consistently reach them?",
     ]) expect(t, passage).toContain(passage)
-  })
-  it('trims the problem section without losing its message', () => {
-    const t = norm(section('problem'))
-    expect(t).not.toContain('And I noticed something else.')
-    expect(t).not.toContain('You spend years building an audience.')
-    expect(t).not.toContain('how can content creation become a respected profession')
-    expect(section('problem').querySelectorAll('[data-testid="problem-questions"] p')).toHaveLength(2)
-    expect(t).toContain('We believe creators deserve a better opportunity.')
   })
 })
 
@@ -141,29 +126,60 @@ describe('hero (Splitpost)', () => {
   })
 })
 
-describe('founder story', () => {
-  it('shows a short version, with the rest behind "Read the full story"', () => {
-    const story = section('story')
-    const details = story.querySelector('details[data-testid="full-story"]')!
-    const summary = details.querySelector('summary')!.cloneNode(true) as Element
-    summary.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove())
-    expect(norm(summary).trim()).toBe('Read the full story')
-    expect(details.hasAttribute('open')).toBe(false)
-    const outside = norm(story).replace(norm(details), '')
-    expect(outside).toContain('Two years ago, I made my wife a promise. I told her she\'d be able to retire by her 40th birthday.')
-    expect(norm(details)).toContain('I reached 12,000 subscribers and finally got monetized. My first earnings were about $500.')
-    expect(norm(details)).toContain('But instead of earning more, I earned about $200.')
-    expect(norm(details)).toContain('My audience had grown by 200%. My income had fallen by 60%.')
-    expect(norm(details)).toContain("And I wasn't the only one experiencing this.")
+describe('section 2: the problem (Splitpost)', () => {
+  const problem = () => section('problem')
+  it('keeps the exact headline', () => {
+    expect(norm(problem().querySelector('h2'))).toBe("You helped build it. Where's your split?")
   })
-  it('shows the confirmed earnings contrast', () => {
-    const c = norm(section('story').querySelector('[data-testid="earnings-contrast"]'))
-    for (const v of ['12,000', '~$500', '36,000', '(+200%)', '~$200', '(−60%)']) expect(c).toContain(v)
+  it('tells two stories, creator then fan, each a label and one line', () => {
+    const stories = [...problem().querySelectorAll('article[data-story]')]
+    expect(stories.map((a) => a.getAttribute('data-story'))).toEqual(['creator', 'fan'])
+    expect(stories.map((a) => norm(a.querySelector('h3')))).toEqual(['The creator.', 'The fan.'])
+    expect(norm(stories[0].querySelector('h3 + p'))).toBe('More posts. More followers. Not more income.')
+    expect(norm(stories[1].querySelector('h3 + p'))).toBe('You shared it. You started the conversation. Nobody noticed.')
   })
-  it("uses the founder's own photograph, nothing generated or stock", () => {
-    const img = section('story').querySelector('img')!
-    expect(img.getAttribute('src')).toBe('/media/landing/founder.jpg')
-    expect(img.getAttribute('alt')).toBe("Portrait of Crevant's founder")
+  it('keeps the illustrations decorative, with no numbers that read as statistics', () => {
+    for (const a of problem().querySelectorAll('article[data-story]')) {
+      const art = a.querySelector('[aria-hidden="true"]')!
+      expect(art).not.toBeNull()
+      expect(art.querySelectorAll('img')).toHaveLength(0)
+      // Only the approved chips carry digits ("5 times", "3 friends").
+      expect(norm(art).replace(/Posted 5 times this week|Shared it with 3 friends/g, '')).not.toMatch(/\d/)
+    }
+  })
+  it('is short: no paragraphs beyond the two story lines', () => {
+    expect(problem().querySelectorAll('p')).toHaveLength(2)
+    expect(norm(problem()).length).toBeLessThan(400)
+  })
+})
+
+describe('section 3: POST. SUPPORT. SPLIT. (Splitpost)', () => {
+  const solution = () => section('solution')
+  it('uses the approved headline and three steps, in order', () => {
+    expect(norm(solution().querySelector('h2'))).toBe('POST. SUPPORT. SPLIT.')
+    const steps = [...solution().querySelectorAll('[data-testid="solution-steps"] > li')].map((li) => norm(li).replace(/Step \d: /, ''))
+    expect(steps).toEqual([
+      'POST.Create something worth sharing.',
+      'SUPPORT.Help it reach more people.',
+      'SPLIT.Make meaningful contributions count.',
+    ])
+    expect(solution().querySelector('ol[data-testid="solution-steps"]')).not.toBeNull()
+  })
+  it('keeps pilot recognition and the future vision apart, both always visible', () => {
+    const now = solution().querySelector('[data-panel="now"]')!
+    const later = solution().querySelector('[data-panel="later"]')!
+    expect(norm(now)).toContain('Now · in the pilot')
+    expect(norm(now)).toContain('They have no cash value.')
+    expect(norm(later)).toContain('Later · our vision')
+    expect(norm(later)).toContain(DISCLOSURES.visionOnly)
+    expect(norm(later)).not.toMatch(/\d|[$€£%]/)
+    for (const panel of [now, later]) expect(panel.closest('details')).toBeNull()
+  })
+  it('makes no misleading financial claim (a safeguard alongside human review)', () => {
+    for (const id of ['problem', 'solution']) {
+      const blocks = [...section(id).querySelectorAll('h2, h3, p, span')].map((el) => norm(el).trim()).filter(Boolean)
+      expect(blocks.flatMap((b) => findMisleadingClaims(b)), id).toEqual([])
+    }
   })
 })
 
@@ -299,9 +315,10 @@ describe('product honesty', () => {
   })
   it('uses genuine, described tour screenshots', () => {
     const figures = [...landing().querySelectorAll('figure[data-screenshot]')]
-    // The hero's screenshot gave way to the placeholder visual (PR 2).
-    expect(figures.length).toBe(7)
-    expect(new Set(figures.map((f) => f.getAttribute('data-screenshot'))).size).toBe(7)
+    // The hero's screenshot gave way to the placeholder visual (PR 2), and the
+    // old problem section's feed screenshot left with that section (PR 3).
+    expect(figures.length).toBe(6)
+    expect(new Set(figures.map((f) => f.getAttribute('data-screenshot'))).size).toBe(6)
     for (const f of figures) {
       expect(f.querySelector('img')!.getAttribute('src')).toMatch(/^\/media\/landing\/tour-[a-z-]+\.jpg$/)
       expect(f.querySelector('img')!.getAttribute('alt')!.length).toBeGreaterThan(40)
@@ -343,16 +360,6 @@ describe('the waitlist page', () => {
 })
 
 describe('explanatory visuals', () => {
-  it("draws the founder's year and keeps his figures inside the founder story", () => {
-    const story = section('story')
-    expect(norm(story.querySelector('[data-testid="year-grid"]'))).toContain('One video a day for 365 days')
-    expect(story.querySelectorAll('[data-testid="year-grid"] rect')).toHaveLength(365)
-    expect(norm(story.querySelector('[data-testid="earnings-contrast"]'))).toContain('Each line uses its own scale, starting from zero.')
-  })
-  it('shows the ranked feed as a drawing and the Following feed as the real product', () => {
-    const c = section('problem').querySelector('[data-testid="feed-comparison"]')!
-    expect(c.querySelector('figure[data-screenshot="feed"]')).not.toBeNull()
-  })
   it('keeps "the right 1,000" about relationships, never money', () => {
     const t = norm(section('difference').querySelector('[data-testid="right-thousand"]'))
     expect(t).toContain('The lines are relationships')
@@ -498,17 +505,8 @@ describe('copy rules', () => {
     const t = checkedText(path)
     for (const re of BANNED) expect(t, `matched ${re}`).not.toMatch(re)
   })
-  it('money figures appear only in the founder story', () => {
-    const c = landing()
-    const hits = [...c.querySelectorAll('p, li, span, h2, h3')].filter((el) => /[$£€]\s?\d/.test(el.textContent || '') && ![...el.children].some((ch) => /[$£€]\s?\d/.test(ch.textContent || '')))
-    expect(hits.length).toBeGreaterThan(0)
-    for (const el of hits) expect(el.closest('#story'), `"${el.textContent}" is outside the founder story`).not.toBeNull()
-    for (const path of PUBLIC_PATHS.filter((p) => p !== '/')) expect(textOf(path)).not.toMatch(/[$£€]\s?\d/)
-  })
-  it('the founder story itself still avoids every other banned phrase', () => {
-    let t = norm(section('story'))
-    for (const s of APPROVED_GUARANTEE_SENTENCES) t = t.split(s).join(' ')
-    for (const re of BANNED.filter((r) => !String(r).includes('[$£€]'))) expect(t, `matched ${re}`).not.toMatch(re)
+  it('no money figures appear on any public page (the founder story with its figures was retired in PR 3)', () => {
+    for (const path of PUBLIC_PATHS) expect(textOf(path), path).not.toMatch(/[$£€]\s?\d/)
   })
   it('"guarantee" appears only in the approved disclaimers', () => {
     const t = norm(landing())
