@@ -110,12 +110,18 @@ declare
 begin
   foreach r in array array['waitlist_writer', 'waitlist_admin'] loop
     allowed := case r
-      -- submit_v2 (creator acquisition) adds optional attribution fields to the same submission.
-      when 'waitlist_writer' then array['waitlist_api.submit', 'waitlist_api.submit_v2']
+      -- Creator acquisition: submit_v2 adds optional attribution fields to the
+      -- same submission; invite_preview answers only whether a link is usable
+      -- and its creator's agreed public name.
+      when 'waitlist_writer' then array['waitlist_api.submit', 'waitlist_api.submit_v2', 'waitlist_api.invite_preview']
       else array['waitlist_api.admin_summary', 'waitlist_api.admin_status', 'waitlist_api.admin_delete', 'waitlist_api.admin_purge',
                  'waitlist_api.admin_set_notice_version', 'waitlist_api.admin_open', 'waitlist_api.admin_close',
                  'waitlist_api.admin_wave_preview', 'waitlist_api.admin_wave_select', 'waitlist_api.admin_wave_summary',
-                 'waitlist_api.admin_wave_clear', 'waitlist_api.admin_acquisition_summary']
+                 'waitlist_api.admin_wave_clear', 'waitlist_api.admin_acquisition_summary',
+                 -- Creator acquisition: the founder/admin issues and revokes pilot links.
+                 'waitlist_api.admin_accept_creator', 'waitlist_api.admin_set_creator_status',
+                 'waitlist_api.admin_set_creator_public_name', 'waitlist_api.admin_issue_creator_link',
+                 'waitlist_api.admin_revoke_creator_link']
     end;
 
     select string_agg(n.nspname || '.' || c.relname, ', ') into bad

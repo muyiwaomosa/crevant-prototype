@@ -154,5 +154,15 @@ guard "rollback SQL: refuses without the confirmation phrase for apply, and roll
 guard "only the rollback workflow and its local test run the rollback SQL" \
   "[ \"\$(grep -rlF 'staging-rollback-waitlist.sql' .github scripts | grep -v -e '^scripts/db/staging-rollback-waitlist.sql$' | sort | paste -sd,)\" = '.github/workflows/waitlist-rollback-staging.yml,scripts/db/rollback-test.sh,scripts/db/test-guards.sh,scripts/waitlist-isolation.test.mjs' ]"
 
+# The creator acquisition rollback (removed before the waitlist rollback).
+acqsql=scripts/db/staging-rollback-acquisition.sql
+guard "acquisition rollback SQL: never cascades, never drops owned objects in bulk" \
+  "! grep -viE '^ *--' $acqsql | grep -qiE 'cascade|drop owned|reassign owned'"
+guard "acquisition rollback SQL: its own confirmation phrase for apply, and rolls back in check mode" \
+  "grep -q \"'DELETE THE STAGING CREATOR ACQUISITION'\" $acqsql && grep -qE '^  rollback;' $acqsql"
+# Not wired to any workflow: running it on staging needs the founder's approval first.
+guard "only the local tests run the acquisition rollback SQL (no workflow yet)" \
+  "[ \"\$(grep -rlF 'staging-rollback-acquisition.sql' .github scripts | grep -v -e '^scripts/db/staging-rollback-acquisition.sql$' | sort | paste -sd,)\" = 'scripts/db/rollback-acquisition-test.sh,scripts/db/rollback-test.sh,scripts/db/test-guards.sh,scripts/waitlist-isolation.test.mjs' ]"
+
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]

@@ -16,6 +16,14 @@
 //      answers; it needs the 20261116 migration applied before this code is
 //      deployed.)
 //
+// An invitation preview is a POST of {"action":"invite_preview","code":"..."}
+// from the same allowed origins, behind the same function switch. It needs
+// no Turnstile (it stores nothing about the visitor and is rate limited per
+// salted client key) and answers only {"status":"ok","invite":"valid","name":
+// <the creator's agreed public name or null>} or {"status":"ok","invite":
+// "unavailable"}, the same for every unusable link. See
+// waitlist_api.invite_preview.
+//
 // A GET request is the health check: it answers {"status":"ok"} if the
 // restricted database login can connect, or {"status":"error"} if not. It
 // reads no data, needs no origin and says nothing about the switches.
@@ -51,6 +59,15 @@ export interface SubmitPayload {
   clientKey: string
 }
 
+/** What the database says about an invitation link, already checked for shape. */
+export type InvitePreview =
+  | { status: 'ok'; invite: 'valid'; name: string | null }
+  | { status: 'ok'; invite: 'unavailable' }
+  | { status: 'closed' | 'rate_limited' | 'invalid' }
+
+/** Exactly what an invitation code looks like (ops.creator_links). */
+export const INVITE_CODE = /^[0-9a-f]{20}$/
+
 export interface TurnstileResult {
   success: boolean
   hostname?: string
@@ -72,6 +89,8 @@ export interface JoinDeps {
   verifyTurnstile(token: string, ip: string | null): Promise<TurnstileResult>
   rateKeys(email: string, ip: string | null): Promise<RateKeys>
   submit(payload: SubmitPayload): Promise<SubmitResult>
+  /** waitlist_api.invite_preview as the restricted login: its raw answer, shape-checked here. */
+  previewInvite(code: string, clientKey: string): Promise<unknown>
   /** True if the database login works (a bare `select 1`). */
   databaseReachable(): Promise<boolean>
 }
@@ -194,6 +213,8 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
   if (!input || typeof input !== 'object' || Array.isArray(input)) return reply(400, 'invalid', origin)
   const body = input as Record<string, unknown>
 
+  if (body.action === 'invite_preview') return handlePreview(body, req, deps, origin)
+
   // Honeypot: looks like success, stores nothing, costs no Turnstile call.
   if (typeof body.website === 'string' && body.website.trim() !== '') return reply(200, 'ok', origin)
 
@@ -244,6 +265,54 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
       return reply(429, 'rate_limited', origin)
     case 'notice_changed':
       return reply(409, 'notice_changed', origin)
+    default:
+      return reply(400, 'invalid', origin)
+  }
+}
+
+function replyJson(status: number, data: Record<string, unknown>, origin: string): Outgoing {
+  return {
+    status,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders(origin) },
+    body: JSON.stringify(data),
+  }
+}
+
+/** Shape check for the database's answer: anything unexpected is an error, never passed on. */
+export function checkPreview(raw: unknown): InvitePreview {
+  const r = raw as Record<string, unknown> | null
+  if (!r || typeof r !== 'object') throw new Error('unexpected preview')
+  if (r.status === 'ok' && r.invite === 'unavailable' && Object.keys(r).length === 2) return { status: 'ok', invite: 'unavailable' }
+  if (
+    r.status === 'ok' && r.invite === 'valid' && Object.keys(r).length === 3 &&
+    (r.name === null || (typeof r.name === 'string' && r.name.length >= 1 && r.name.length <= 40))
+  ) {
+    return { status: 'ok', invite: 'valid', name: r.name as string | null }
+  }
+  if ((r.status === 'closed' || r.status === 'rate_limited' || r.status === 'invalid') && Object.keys(r).length === 1) {
+    return { status: r.status }
+  }
+  throw new Error('unexpected preview')
+}
+
+async function handlePreview(body: Record<string, unknown>, req: IncomingRequest, deps: JoinDeps, origin: string): Promise<Outgoing> {
+  const code = typeof body.code === 'string' ? body.code.trim().toLowerCase() : ''
+  // A malformed code can never be valid: answer without touching the database.
+  if (!INVITE_CODE.test(code)) return replyJson(200, { status: 'ok', invite: 'unavailable' }, origin)
+  let result: InvitePreview
+  try {
+    const keys = await deps.rateKeys('', req.ip)
+    result = checkPreview(await deps.previewInvite(code, keys.clientKey))
+  } catch {
+    return reply(500, 'error', origin)
+  }
+  switch (result.status) {
+    case 'ok':
+      return replyJson(200, result, origin)
+    case 'closed':
+      return reply(503, 'closed', origin)
+    case 'rate_limited':
+      return reply(429, 'rate_limited', origin)
     default:
       return reply(400, 'invalid', origin)
   }

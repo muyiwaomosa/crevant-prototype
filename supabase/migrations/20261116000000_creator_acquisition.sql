@@ -14,7 +14,17 @@
 --   ops.acquisition_events       counts for measurement: no email, no
 --                                account id, no address, no free text
 --   waitlist_api.submit_v2       the waitlist entry point with the new fields
+--   waitlist_api.invite_preview  for the public site: whether a link is usable
+--                                and the creator's agreed public name, nothing
+--                                else; counts an anonymous link visit
+--   waitlist_api.admin_*         founder/admin only: accept creators, set the
+--                                public name they agreed to, issue links
+--                                (90 days by default) and revoke them
 --   waitlist_api.admin_acquisition_summary   counts only
+--
+-- Nothing existing is redefined: ops.join_waitlist and waitlist_api.submit
+-- stay exactly as the waitlist migrations made them, so this migration can be
+-- removed on its own (scripts/db/staging-rollback-acquisition.sql).
 --
 -- Four concepts stay separate, by design:
 --   1. Self-reported attribution. "A creator introduced me: @name" is what a
@@ -44,10 +54,29 @@ create table ops.pilot_creators (
   categories  text[] not null default '{}',
   accepted_at timestamptz not null default now(),
   accepted_by uuid references auth.users (id) on delete set null,
+  -- The name shown to someone holding one of this creator's links ("Priya
+  -- invited you"). Set by an admin only once the creator has agreed to it;
+  -- with no name, a valid link shows a generic invitation instead. Never the
+  -- creator's email, username or account id.
+  public_name           text,
+  public_name_agreed_at timestamptz,
   constraint pilot_creators_status_allowed check (status in ('accepted', 'paused', 'removed')),
   constraint pilot_creators_categories_allowed check (
     cardinality(categories) <= 3
     and categories <@ array['food', 'money', 'travel', 'tech', 'music', 'art', 'fitness', 'books', 'wellness']::text[]
+  ),
+  constraint pilot_creators_public_name_agreed check ((public_name is null) = (public_name_agreed_at is null)),
+  -- A display name: letters, numbers, spaces and @ . _ ' -. No links, email
+  -- addresses or phone numbers.
+  constraint pilot_creators_public_name_format check (
+    public_name is null or (
+      char_length(public_name) between 1 and 40
+      and public_name = btrim(public_name)
+      and public_name ~ '^[[:alnum:]@._''’ -]+$'
+      and public_name !~* '(https?|www\.|\.(com|net|org|io|co|app|me|tv|gg|ly)\M)'
+      and public_name !~ '[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+'
+      and public_name !~ '[0-9]{7,}'
+    )
   )
 );
 comment on table ops.pilot_creators is 'Creators accepted into the pilot. A programme record, never an account role: it decides only who may hold active invitation links.';
@@ -56,9 +85,9 @@ comment on table ops.pilot_creators is 'Creators accepted into the pilot. A prog
 -- Creator invitation links.
 --
 -- The code is random (80 bits, from two random UUIDs), so it reveals nothing
--- about the creator: not their id, username or email. Showing the creator's
--- public name to someone holding a link is a separate, unbuilt step that
--- needs approval (docs/ACQUISITION.md).
+-- about the creator: not their id, username or email. Only an admin issues
+-- links (waitlist_api.admin_issue_creator_link): 90 days by default, a year
+-- at most, revoked explicitly and never un-revoked.
 
 create table ops.creator_links (
   id          uuid primary key default gen_random_uuid(),
@@ -86,6 +115,10 @@ language plpgsql
 set search_path = ''
 as $$
 begin
+  if tg_op = 'UPDATE' and old.revoked_at is not null and new.revoked_at is null then
+    raise exception 'a revoked link stays revoked; issue a new one instead'
+      using errcode = 'check_violation';
+  end if;
   if new.revoked_at is null and not exists (
     select 1 from ops.pilot_creators c where c.user_id = new.creator_id and c.status = 'accepted'
   ) then
@@ -100,7 +133,8 @@ create trigger creator_links_require_accepted_creator
   before insert or update of creator_id, revoked_at, expires_at on ops.creator_links
   for each row execute function ops.creator_links_require_accepted_creator();
 
--- Creates a link for an accepted creator. Server code (service_role) only.
+-- Creates a link for an accepted creator. Called only through
+-- waitlist_api.admin_issue_creator_link (the founder's admin login).
 create function ops.create_creator_link(p_creator uuid, p_days integer default 90, p_campaign text default null)
 returns text
 language plpgsql
@@ -197,6 +231,7 @@ create table ops.acquisition_events (
   self_reported_referral boolean,
   creator_link_id        uuid references ops.creator_links (id) on delete set null,
   constraint acquisition_events_allowed check (event in (
+    'creator_link_visit',       -- a valid link was opened (at most once per visitor per link per day)
     'waitlist_signup',          -- a new address joined the waitlist
     'invitation_accepted',      -- an invited person created their account
     'invite_follow_confirmed',  -- they chose to follow the inviting creator
@@ -210,7 +245,8 @@ create index acquisition_events_link_idx on ops.acquisition_events (creator_link
 
 -- ---------------------------------------------------------------------------
 -- The waitlist entry point, with the new optional fields. Everything the
--- first version checks is checked here in the same order; the new fields
+-- first version (ops.join_waitlist, unchanged) checks is checked here in the
+-- same order; the new fields
 -- are validated after the required ones. An unusable creator link is ignored
 -- (the signup still works, unattributed), so a bad link can't block anyone
 -- and can't be probed: the reply is the same 'ok' either way.
@@ -336,32 +372,6 @@ begin
 end;
 $$;
 
--- The first version keeps working, unchanged for its callers: it now runs
--- the same code with the new answers left empty, so there is one path.
-create or replace function ops.join_waitlist(
-  p_email               text,
-  p_interests           text[],
-  p_shares_content      text,
-  p_platform            text,
-  p_audience_band       text,
-  p_source              text,
-  p_age_confirmed       boolean,
-  p_waitlist_consent    boolean,
-  p_notice_version      text,
-  p_email_key           text,
-  p_client_key          text
-)
-returns text
-language sql
-set search_path = ''
-as $$
-  select ops.join_waitlist_v2(
-    p_email, p_interests, p_shares_content, p_platform, p_audience_band, p_source,
-    p_age_confirmed, p_waitlist_consent, p_notice_version, p_email_key, p_client_key,
-    null, null, null, null
-  );
-$$;
-
 -- ---------------------------------------------------------------------------
 -- Attribution through invitation and signup.
 
@@ -460,7 +470,9 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- Measurement for the waitlist_admin login: counts only, never an address,
--- account id or the self-reported names.
+-- account id or the self-reported names. Visits, signups, accounts and
+-- follow decisions are counted separately, overall and per link, so each
+-- conversion step can be read on its own.
 
 create function waitlist_api.admin_acquisition_summary()
 returns jsonb
@@ -480,8 +492,198 @@ as $$
                 select event, count(*) as n from ops.acquisition_events group by event) s), '{}'::jsonb),
     'active_links', (select count(*) from ops.creator_links l join ops.pilot_creators c on c.user_id = l.creator_id
                      where l.revoked_at is null and l.expires_at > now() and c.status = 'accepted'),
-    'accepted_creators', (select count(*) from ops.pilot_creators where status = 'accepted')
+    'accepted_creators', (select count(*) from ops.pilot_creators where status = 'accepted'),
+    -- Per link, by its first six characters only (enough to tell links apart,
+    -- not enough to use one): its state and each step of the funnel.
+    'links', coalesce((select jsonb_agg(jsonb_build_object(
+                'link', left(l.code, 6),
+                'campaign', l.campaign,
+                'state', case when l.revoked_at is not null then 'revoked' when l.expires_at <= now() then 'expired'
+                              when c.status <> 'accepted' then 'creator_' || c.status else 'active' end,
+                'expires_on', l.expires_at::date,
+                'visits',             (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'creator_link_visit'),
+                'signups',            (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'waitlist_signup'),
+                'accounts',           (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'invitation_accepted'),
+                'follows_confirmed',  (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'invite_follow_confirmed'),
+                'follows_declined',   (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'invite_follow_declined')
+              ) order by l.created_at)
+              from ops.creator_links l join ops.pilot_creators c on c.user_id = l.creator_id), '[]'::jsonb)
   );
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Pilot invitation policy: founder/admin-controlled. Only the waitlist_admin
+-- login (the founder's admin workflow) can accept creators, record the public
+-- name a creator agreed to, issue links and revoke them. Nothing issues a
+-- link automatically, and no creator can issue their own.
+
+-- Accepts (or re-accepts) a creator into the pilot, with up to three categories.
+create function waitlist_api.admin_accept_creator(p_user uuid, p_categories text[] default '{}')
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (select 1 from auth.users where id = p_user) then
+    return 'no_such_account';
+  end if;
+  insert into ops.pilot_creators (user_id, status, categories)
+  values (p_user, 'accepted', coalesce(p_categories, '{}'))
+  on conflict (user_id) do update set status = 'accepted', categories = excluded.categories, accepted_at = now();
+  return 'accepted';
+end;
+$$;
+
+-- Pauses or removes a creator (their links stop working at once), or accepts them again.
+create function waitlist_api.admin_set_creator_status(p_user uuid, p_status text)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_status not in ('accepted', 'paused', 'removed') then
+    raise exception 'status must be accepted, paused or removed';
+  end if;
+  update ops.pilot_creators set status = p_status where user_id = p_user;
+  return case when found then p_status else 'not_a_pilot_creator' end;
+end;
+$$;
+
+-- Records the public name the creator agreed to show on their links, or
+-- clears it (null) if they withdraw that agreement.
+create function waitlist_api.admin_set_creator_public_name(p_user uuid, p_public_name text)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_name text := nullif(btrim(coalesce(p_public_name, '')), '');
+begin
+  update ops.pilot_creators
+     set public_name = v_name, public_name_agreed_at = case when v_name is null then null else now() end
+   where user_id = p_user;
+  return case when not found then 'not_a_pilot_creator' when v_name is null then 'cleared' else 'set' end;
+end;
+$$;
+
+-- Issues a link: 90 days unless the admin says otherwise (1 to 365). Returns
+-- the code once; it is shared with the creator by the admin.
+create function waitlist_api.admin_issue_creator_link(p_user uuid, p_days integer default 90, p_campaign text default null)
+returns text
+language sql
+security definer
+set search_path = ''
+as $$
+  select ops.create_creator_link(p_user, coalesce(p_days, 90), p_campaign);
+$$;
+
+-- Revokes a link for good. A revoked link can't be restored (the trigger
+-- refuses); issue a new one instead.
+create function waitlist_api.admin_revoke_creator_link(p_code text)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_revoked timestamptz;
+begin
+  select revoked_at into v_revoked from ops.creator_links where code = lower(btrim(coalesce(p_code, '')));
+  if not found then
+    return 'unknown';
+  end if;
+  if v_revoked is not null then
+    return 'already_revoked';
+  end if;
+  update ops.creator_links set revoked_at = now() where code = lower(btrim(p_code));
+  return 'revoked';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- The public invitation preview, for the server function only (the
+-- waitlist_writer login). Answers whether a link can be used right now and,
+-- if so, the public name its creator agreed to show. Nothing else: never the
+-- creator's account id, email, username, categories or status, never why a
+-- link is unusable (unknown, expired, revoked or a paused creator all read
+-- 'unavailable'), and nothing about the waitlist.
+--
+-- It follows the waitlist's switches: while the waitlist is closed it answers
+-- 'closed' and records nothing. Its rate limits live in their own table,
+-- keyed only by hashes of the salted client key the server function already
+-- makes (never an address), and deleted within two days. A usable link's
+-- visit is counted at most once per visitor per link per day; the event
+-- itself has no visitor detail at all.
+
+create table ops.invite_preview_limits (
+  bucket       text not null,
+  window_start timestamptz not null,
+  hits         integer not null default 1,
+  primary key (bucket, window_start),
+  -- 'preview' (everyone), 'client:<hash>' (one visitor), 'visit:<hash of link and visitor>'.
+  constraint invite_preview_limits_bucket_format check (bucket ~ '^(preview|client:[0-9a-f]{64}|visit:[0-9a-f]{64})$')
+);
+comment on table ops.invite_preview_limits is 'Rate limits and visit de-duplication for the invitation preview. Salted hashes only; rows older than two days are deleted on each preview.';
+
+create function ops.invite_preview_hit(p_bucket text, p_window interval, p_limit integer)
+returns boolean
+language plpgsql
+set search_path = ''
+as $$
+declare
+  w timestamptz := to_timestamp(floor(extract(epoch from now()) / extract(epoch from p_window)) * extract(epoch from p_window));
+  n integer;
+begin
+  insert into ops.invite_preview_limits as r (bucket, window_start, hits)
+  values (p_bucket, w, 1)
+  on conflict (bucket, window_start) do update set hits = r.hits + 1
+  returning r.hits into n;
+  return n > p_limit;
+end;
+$$;
+
+create function waitlist_api.invite_preview(p_code text, p_client_key text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_code text := lower(btrim(coalesce(p_code, '')));
+  v_link uuid;
+  v_creator uuid;
+  v_name text;
+begin
+  if not coalesce((select enabled from ops.settings where key = 'waitlist_submissions'), false)
+     or (select value from ops.settings where key = 'waitlist_notice_version') is null then
+    return jsonb_build_object('status', 'closed');
+  end if;
+  if coalesce(p_client_key, '') !~ '^[0-9a-f]{64}$' then
+    return jsonb_build_object('status', 'invalid');
+  end if;
+
+  delete from ops.invite_preview_limits where window_start < now() - interval '2 days';
+  if ops.invite_preview_hit('preview', interval '1 minute', 300)
+     or ops.invite_preview_hit('client:' || p_client_key, interval '1 hour', 30) then
+    return jsonb_build_object('status', 'rate_limited');
+  end if;
+
+  select r.link_id, r.creator_id into v_link, v_creator from ops.resolve_creator_link(v_code) r where r.status = 'valid';
+  if v_link is null then
+    return jsonb_build_object('status', 'ok', 'invite', 'unavailable');
+  end if;
+
+  if not ops.invite_preview_hit('visit:' || encode(sha256(convert_to(v_link::text || ':' || p_client_key, 'UTF8')), 'hex'),
+                                interval '1 day', 1) then
+    insert into ops.acquisition_events (event, creator_link_id) values ('creator_link_visit', v_link);
+  end if;
+
+  v_name := (select public_name from ops.pilot_creators where user_id = v_creator);
+  return jsonb_build_object('status', 'ok', 'invite', 'valid', 'name', v_name);
+end;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -523,21 +725,23 @@ alter table ops.pilot_creators enable row level security;
 alter table ops.creator_links enable row level security;
 alter table ops.creator_link_redemptions enable row level security;
 alter table ops.acquisition_events enable row level security;
+alter table ops.invite_preview_limits enable row level security;
 
-revoke all on ops.pilot_creators, ops.creator_links, ops.creator_link_redemptions, ops.acquisition_events
+revoke all on ops.pilot_creators, ops.creator_links, ops.creator_link_redemptions, ops.acquisition_events, ops.invite_preview_limits
   from public, anon, authenticated;
-grant all on ops.pilot_creators, ops.creator_links, ops.creator_link_redemptions, ops.acquisition_events
+grant all on ops.pilot_creators, ops.creator_links, ops.creator_link_redemptions, ops.acquisition_events, ops.invite_preview_limits
   to service_role;
 
 revoke all on function ops.creator_links_require_accepted_creator() from public, anon, authenticated;
-revoke all on function ops.create_creator_link(uuid, integer, text) from public, anon, authenticated;
+-- Issuing links is the admin's alone, so not even server code may call this directly.
+revoke all on function ops.create_creator_link(uuid, integer, text) from public, anon, authenticated, service_role;
 revoke all on function ops.resolve_creator_link(text) from public, anon, authenticated;
 revoke all on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text) from public, anon, authenticated;
 revoke all on function ops.invitations_copy_creator_link() from public, anon, authenticated;
 revoke all on function ops.invitations_record_link_redemption() from public, anon, authenticated;
 revoke all on function ops.record_invite_follow_decision(uuid, text) from public, anon, authenticated;
+revoke all on function ops.invite_preview_hit(text, interval, integer) from public, anon, authenticated, service_role;
 
-grant execute on function ops.create_creator_link(uuid, integer, text) to service_role;
 grant execute on function ops.resolve_creator_link(text) to service_role;
 grant execute on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text) to service_role;
 grant execute on function ops.record_invite_follow_decision(uuid, text) to service_role;
@@ -545,6 +749,18 @@ grant execute on function ops.record_invite_follow_decision(uuid, text) to servi
 revoke all on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text)
   from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.admin_acquisition_summary() from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.admin_accept_creator(uuid, text[]) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.admin_set_creator_status(uuid, text) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.admin_set_creator_public_name(uuid, text) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.admin_issue_creator_link(uuid, integer, text) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.admin_revoke_creator_link(text) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.invite_preview(text, text) from public, anon, authenticated, service_role;
 grant execute on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text)
   to waitlist_writer;
 grant execute on function waitlist_api.admin_acquisition_summary() to waitlist_admin;
+grant execute on function waitlist_api.admin_accept_creator(uuid, text[]) to waitlist_admin;
+grant execute on function waitlist_api.admin_set_creator_status(uuid, text) to waitlist_admin;
+grant execute on function waitlist_api.admin_set_creator_public_name(uuid, text) to waitlist_admin;
+grant execute on function waitlist_api.admin_issue_creator_link(uuid, integer, text) to waitlist_admin;
+grant execute on function waitlist_api.admin_revoke_creator_link(text) to waitlist_admin;
+grant execute on function waitlist_api.invite_preview(text, text) to waitlist_writer;

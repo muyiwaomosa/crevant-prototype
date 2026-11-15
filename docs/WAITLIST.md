@@ -31,12 +31,13 @@ Creator acquisition (intent, "did a creator introduce you?", accepted-creator in
 | Joined at, verified at, last verified confirmation | Retention and verification |
 | Participant groups (worked out from the answers above, not asked) | Analysis: who joined |
 | Status, invitation link, selection reasons per wave (fixed list) | Internal, for invitations later |
+| Intent (create / discover / both), "a creator introduced me", the creator's name or handle as typed, a verified creator link (creator acquisition, not yet approved) | Optional; see `docs/ACQUISITION.md` and the draft notice `docs/PRIVACY-NOTICE-ACQUISITION-DRAFT.md` |
 
 **Not stored:**
 * public links
 * campaign labels
 * marketing consent
-* names
+* names, except a creator's name or handle someone chooses to type when asked who introduced them (creator acquisition, pending approval)
 * IP addresses
 * roles
 * free text notes

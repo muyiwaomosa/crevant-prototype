@@ -31,8 +31,11 @@ export const PILOT_EVENTS = {
     props: { source: 'source_label', self_reported_referral: 'boolean', creator_link: 'link_ref' },
   },
   creator_link_visit: {
+    // Counted by waitlist_api.invite_preview when a usable link is opened: at
+    // most once per visitor per link per day, with no visitor detail stored.
+    // A visit is never a signup and never a follow; each step is its own event.
     measures: 'Invitation-to-signup conversion (visits through a link, before signup)',
-    recordedBy: 'app',
+    recordedBy: 'database',
     props: { creator_link: 'link_ref' },
   },
   invitation_accepted: {

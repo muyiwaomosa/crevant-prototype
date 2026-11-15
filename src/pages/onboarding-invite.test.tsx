@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import App from '../App'
 import { TOUR_BASE } from '../entry'
 import { STORAGE_KEY } from '../state/storage'
+import { EARN_RULES } from '../lib/points'
 
 // Personalized onboarding in the tour: intent and topics, the inviting
 // creator shown with an explicit choice, matched suggestions, and Discover
@@ -105,6 +106,43 @@ describe('personalized onboarding', () => {
       cleanup()
       localStorage.clear()
     }
+  })
+})
+
+describe('Connection Points and invitations', () => {
+  type Entry = { creatorId?: string; amount?: number; kind?: string }
+  const ledgerFor = (creatorId: string) => (saved().ledger as Entry[]).filter((e) => e.creatorId === creatorId)
+
+  it('following the inviter earns exactly the normal follow bonus; the invitation itself earns nothing', () => {
+    start(`?invite=${JORDAN_LINK}`)
+    click('Get started')
+    click('Continue')
+    fireEvent.click(within(screen.getByTestId('invite-choice')).getByRole('button', { name: 'Follow' }))
+    click('Continue')
+    click('Go to my feed')
+    const entries = ledgerFor('jordan')
+    expect(entries).toHaveLength(1)
+    expect(entries[0].amount).toBe(EARN_RULES.follow.points)
+    expect(entries[0].kind).toBe('follow')
+    expect(JSON.stringify(saved().ledger)).not.toMatch(/invite|referr/i)
+  })
+
+  it('"Not now" and an unusable link earn nothing for anyone', () => {
+    start(`?invite=${JORDAN_LINK}`)
+    click('Get started')
+    click('Continue')
+    fireEvent.click(within(screen.getByTestId('invite-choice')).getByRole('button', { name: 'Not now' }))
+    click('Continue')
+    click('Go to my feed')
+    expect(saved().ledger).toEqual([])
+    cleanup()
+    localStorage.clear()
+    start('?invite=5b8d2e7a1c94f063b2e1')
+    click('Get started')
+    click('Continue')
+    click('Continue')
+    click('Go to my feed')
+    expect(saved().ledger).toEqual([])
   })
 })
 

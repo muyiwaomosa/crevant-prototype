@@ -36,7 +36,7 @@
 
 import postgres from 'npm:postgres@3.4.9'
 import { cachedHealthCheck, clientIpFrom, handleJoin, parseTrustedHops, rateKeysFor, verifyWithCloudflare } from './handler.ts'
-import { checkDatabaseTarget, databaseOptions, databaseReachable, submitWithDatabase, type Sql } from './db.ts'
+import { checkDatabaseTarget, databaseOptions, databaseReachable, previewWithDatabase, submitWithDatabase, type Sql } from './db.ts'
 
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
 const list = (k: string) =>
@@ -94,6 +94,7 @@ Deno.serve(async (req: Request) => {
       verifyTurnstile: (token, clientIp) => verifyWithCloudflare(token, clientIp, env('TURNSTILE_SECRET_KEY'), fetch),
       rateKeys: (email, clientIp) => rateKeysFor(email, clientIp, env('WAITLIST_RATE_SALT')),
       submit: (payload) => submitWithDatabase(sql!, payload),
+      previewInvite: (code, clientKey) => previewWithDatabase(sql!, code, clientKey),
       databaseReachable: health,
     },
   )

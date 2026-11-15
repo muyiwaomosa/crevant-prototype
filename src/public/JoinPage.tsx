@@ -4,6 +4,7 @@ import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
 import { readWaitlistConfig } from './waitlist/config'
 import { WaitlistForm } from './waitlist/WaitlistForm'
+import { InviteBanner } from './waitlist/InviteBanner'
 import { DISCLOSURES } from './landing/claims'
 import { HOMEPAGE_COPY } from './landing/copy'
 
@@ -36,7 +37,10 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
         </div>
 
         {waitlist ? (
-          <WaitlistForm config={waitlist} />
+          <>
+            <InviteBanner config={waitlist} />
+            <WaitlistForm config={waitlist} />
+          </>
         ) : (
           <div data-testid="not-open" className="mt-8 flex gap-3 rounded-3xl bg-spark-50 p-5 text-ink-700 ring-1 ring-spark-200">
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-spark-700" aria-hidden="true" />

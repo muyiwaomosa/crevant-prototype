@@ -97,3 +97,30 @@ test('the staging rollback inventory covers every object the waitlist migrations
   }
   assert.ok(names.includes('20261110000000 waitlist') && names.includes('20261111000000 waitlist_admin_tools'))
 })
+
+test('the acquisition rollback inventory covers every object the acquisition migration creates or adds', () => {
+  const sql = read('scripts/db/staging-rollback-acquisition.sql')
+  const inventory = [...sql.matchAll(/^\s*\(\s*\d+,\s*'([^']+)',\s*'([^']+)'/gm)].map((m) => [m[1], m[2]])
+  const migration = read('supabase/migrations/20261116000000_creator_acquisition.sql')
+  // It must not redefine anything the waitlist migrations own, so it can be removed on its own.
+  assert.doesNotMatch(migration, /create or replace/i)
+  const created = [
+    ...[...migration.matchAll(/^create function ([a-z0-9_.]+)\(/gm)].map((m) => ['function', m[1]]),
+    ...[...migration.matchAll(/^create table ([a-z_.]+)/gm)].map((m) => ['table', m[1]]),
+    ...[...migration.matchAll(/^create trigger ([a-z_]+)/gm)].map((m) => ['trigger', m[1]]),
+    ...[...migration.matchAll(/^alter table (ops\.[a-z_]+)\n((?:\s+.*\n)+?)(?=\S|\n)/gm)].flatMap((m) => [
+      ...[...m[2].matchAll(/add column ([a-z_]+)/g)].map((c) => ['column', `${m[1]}.${c[1]}`]),
+      ...[...m[2].matchAll(/add constraint ([a-z_]+)/g)].map((c) => ['constraint', `${c[1]} on ${m[1]}`]),
+    ]),
+  ]
+  assert.ok(created.length >= 30, `found ${created.length} created objects`)
+  for (const [kind, name] of created) {
+    const hit = inventory.some(([k, n]) => k === kind && (n === name || n.startsWith(`${name}(`) || n.startsWith(`${name} on `)))
+    assert.ok(hit, `the acquisition rollback inventory is missing ${kind} ${name}`)
+  }
+  for (const [kind, name] of inventory.filter(([k]) => ['function', 'table', 'column', 'constraint'].includes(k))) {
+    assert.ok(created.some(([k, n]) => k === kind && (name.split('(')[0] === n || name === n)), `the acquisition rollback names ${kind} ${name}, which the migration did not create`)
+  }
+  assert.ok(inventory.some(([, n]) => n === '20261116000000 creator_acquisition'))
+  assert.doesNotMatch(sql.replace(/^\s*--.*$/gm, ''), /cascade|drop owned|reassign owned/i)
+})

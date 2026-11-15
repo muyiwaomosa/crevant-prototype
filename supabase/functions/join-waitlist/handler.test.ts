@@ -27,6 +27,7 @@ function deps(over: Partial<JoinDeps> = {}): JoinDeps {
     verifyTurnstile: vi.fn(async () => ({ success: true, hostname: 'crevant.example', action: 'join' })),
     rateKeys: vi.fn(async () => KEYS),
     submit: vi.fn(async () => 'ok' as const),
+    previewInvite: vi.fn(async () => ({ status: 'ok', invite: 'valid', name: 'Priya Raman' })),
     databaseReachable: vi.fn(async () => true),
     ...over,
   }
@@ -442,5 +443,48 @@ describe('health check reveals nothing', () => {
         expect(JSON.stringify(out)).not.toMatch(/waitlist_writer|pooler|kpudeppgokpjhvaqrprn|password|203\.0|x@y/)
       }
     }
+  })
+})
+
+describe('invitation preview', () => {
+  it('answers with only the validity and the agreed public name, without Turnstile', async () => {
+    const d = deps()
+    const out = await handleJoin(post({ action: 'invite_preview', code: '7C1E94A2B05D3F68E1A9' }), d)
+    expect(out.status).toBe(200)
+    expect(JSON.parse(out.body)).toEqual({ status: 'ok', invite: 'valid', name: 'Priya Raman' })
+    expect(d.previewInvite).toHaveBeenCalledWith('7c1e94a2b05d3f68e1a9', KEYS.clientKey)
+    expect(d.verifyTurnstile).not.toHaveBeenCalled()
+    expect(d.submit).not.toHaveBeenCalled()
+  })
+
+  it('never asks the database about a malformed code', async () => {
+    const d = deps()
+    for (const code of ['', 'nope', '7c1e94a2b05d3f68e1a', 'https://x.example', 42]) {
+      const out = await handleJoin(post({ action: 'invite_preview', code }), d)
+      expect(JSON.parse(out.body)).toEqual({ status: 'ok', invite: 'unavailable' })
+    }
+    expect(d.previewInvite).not.toHaveBeenCalled()
+  })
+
+  it('passes on nothing the database adds beyond the agreed shape', async () => {
+    for (const raw of [
+      { status: 'ok', invite: 'valid', name: 'Priya', creator_id: 'x' },
+      { status: 'ok', invite: 'valid', name: 'x'.repeat(41) },
+      { status: 'ok', invite: 'unavailable', reason: 'revoked' },
+      null,
+    ]) {
+      const out = await handleJoin(post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), deps({ previewInvite: vi.fn(async () => raw) }))
+      expect(out.status).toBe(500)
+      expect(out.body).not.toMatch(/Priya|creator_id|revoked/)
+    }
+  })
+
+  it('keeps the function switch, the origin check and the database switches', async () => {
+    expect((await handleJoin(post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), deps({ enabled: false }))).status).toBe(503)
+    expect((await handleJoin({ ...post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), origin: 'https://evil.example' }, deps())).status).toBe(403)
+    const closed = await handleJoin(post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), deps({ previewInvite: vi.fn(async () => ({ status: 'closed' })) }))
+    expect([closed.status, JSON.parse(closed.body)]).toEqual([503, { status: 'closed' }])
+    const limited = await handleJoin(post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), deps({ previewInvite: vi.fn(async () => ({ status: 'rate_limited' })) }))
+    expect(limited.status).toBe(429)
   })
 })

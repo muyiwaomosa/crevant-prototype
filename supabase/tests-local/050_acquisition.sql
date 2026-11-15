@@ -22,6 +22,22 @@ begin
   reset role;
   return r;
 end $$;
+create function pg_temp.admin_text(call text) returns text language plpgsql as $$
+declare r text;
+begin
+  set local role waitlist_admin;
+  execute 'select ' || call into r;
+  reset role;
+  return r;
+end $$;
+create function pg_temp.preview(p_code text, p_client text default 'visitor-a') returns jsonb language plpgsql as $$
+declare r jsonb;
+begin
+  set local role waitlist_writer;
+  r := waitlist_api.invite_preview(p_code, pg_temp.k(p_client));
+  reset role;
+  return r;
+end $$;
 create function pg_temp.admin(call text) returns jsonb language plpgsql as $$
 declare r jsonb;
 begin
@@ -44,7 +60,7 @@ declare
   t text;
 begin
   foreach r in array array['anon', 'authenticated', 'waitlist_writer', 'waitlist_admin'] loop
-    foreach t in array array['ops.pilot_creators', 'ops.creator_links', 'ops.creator_link_redemptions', 'ops.acquisition_events'] loop
+    foreach t in array array['ops.pilot_creators', 'ops.creator_links', 'ops.creator_link_redemptions', 'ops.acquisition_events', 'ops.invite_preview_limits'] loop
       execute format('set local role %I', r);
       begin
         execute format('select count(*) from %s', t);
@@ -89,7 +105,44 @@ begin
     end;
     reset role;
   end loop;
-  raise notice 'PASS: acquisition data is reachable by server code only';
+  -- Issuing and revoking links, and accepting creators, is the admin login's
+  -- alone; the public preview is the server function's alone.
+  foreach r in array array['anon', 'authenticated', 'waitlist_writer', 'service_role'] loop
+    execute format('set local role %I', r);
+    begin
+      perform waitlist_api.admin_issue_creator_link('00000000-0000-0000-0000-0000000000c1');
+      raise exception 'FAIL: % could issue a link', r;
+    exception when insufficient_privilege then null;
+    end;
+    begin
+      perform waitlist_api.admin_revoke_creator_link('0123456789abcdef0123');
+      raise exception 'FAIL: % could revoke a link', r;
+    exception when insufficient_privilege then null;
+    end;
+    begin
+      perform waitlist_api.admin_accept_creator('00000000-0000-0000-0000-0000000000f1');
+      raise exception 'FAIL: % could accept a creator', r;
+    exception when insufficient_privilege then null;
+    end;
+    reset role;
+  end loop;
+  foreach r in array array['anon', 'authenticated', 'waitlist_admin', 'service_role'] loop
+    execute format('set local role %I', r);
+    begin
+      perform waitlist_api.invite_preview('0123456789abcdef0123', repeat('a', 64));
+      raise exception 'FAIL: % could call the invitation preview', r;
+    exception when insufficient_privilege then null;
+    end;
+    reset role;
+  end loop;
+  set local role service_role;
+  begin
+    perform ops.create_creator_link('00000000-0000-0000-0000-0000000000c1');
+    raise exception 'FAIL: server code could create a link without the admin';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  raise notice 'PASS: acquisition data is reachable by server code only, and links are issued by the admin only';
 end $$;
 
 -- 1. Off by default: the new entry point stores nothing while the switch is off.
@@ -98,7 +151,11 @@ begin
   if pg_temp.submit2('closed@example.com', 'discover') <> 'closed' then
     raise exception 'FAIL: submit_v2 accepted a signup while the waitlist is off';
   end if;
-  if exists (select 1 from ops.waitlist) or exists (select 1 from ops.acquisition_events) then
+  if pg_temp.preview('0123456789abcdef0123') <> '{"status": "closed"}'::jsonb then
+    raise exception 'FAIL: the invitation preview answered while the waitlist is off';
+  end if;
+  if exists (select 1 from ops.waitlist) or exists (select 1 from ops.acquisition_events)
+     or exists (select 1 from ops.waitlist_rate_limits) or exists (select 1 from ops.invite_preview_limits) then
     raise exception 'FAIL: something was stored while the switch is off';
   end if;
   raise notice 'PASS: submit_v2 is closed by default and stores nothing';
@@ -130,7 +187,25 @@ begin
     raise exception 'FAIL: an unknown category was accepted';
   exception when check_violation then null;
   end;
-  v_code := ops.create_creator_link('00000000-0000-0000-0000-0000000000c1', 30, 'pilot_wave_1');
+  if pg_temp.admin_text($q$waitlist_api.admin_accept_creator('00000000-0000-0000-0000-00000000dead')$q$) <> 'no_such_account' then
+    raise exception 'FAIL: a creator was accepted without an account';
+  end if;
+  begin
+    perform pg_temp.admin_text($q$waitlist_api.admin_issue_creator_link('00000000-0000-0000-0000-0000000000c1', 366)$q$);
+    raise exception 'FAIL: a link longer than a year was issued';
+  exception when raise_exception then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+  end;
+  v_code := pg_temp.admin_text($q$waitlist_api.admin_issue_creator_link('00000000-0000-0000-0000-0000000000c1', 30, 'pilot_wave_1')$q$);
+  if (select expires_at::date - created_at::date from ops.creator_links where code = v_code) <> 30 then
+    raise exception 'FAIL: the admin''s expiry was not used';
+  end if;
+  -- The default is 90 days.
+  if (select expires_at::date - created_at::date from ops.creator_links
+      where code = pg_temp.admin_text($q$waitlist_api.admin_issue_creator_link('00000000-0000-0000-0000-0000000000c1')$q$)) <> 90 then
+    raise exception 'FAIL: the default link expiry is not 90 days';
+  end if;
+  delete from ops.creator_links where code <> v_code;
   if v_code !~ '^[0-9a-f]{20}$' then
     raise exception 'FAIL: link code is not 20 random hex characters: %', v_code;
   end if;
@@ -229,6 +304,10 @@ begin
      is distinct from (null::text, null::boolean, null::uuid) then
     raise exception 'FAIL: the first entry point stored new answers';
   end if;
+  -- It is the waitlist migration's own code, untouched: it records no acquisition event.
+  if (select count(*) from ops.acquisition_events where event = 'waitlist_signup') <> 4 then
+    raise exception 'FAIL: unexpected signup events after the first entry point';
+  end if;
   raise notice 'PASS: intent, self-reported and verified attribution are stored separately and validated';
 end $$;
 
@@ -238,27 +317,37 @@ declare
   v_code text := (select code from ops.creator_links limit 1);
   v_status text;
 begin
-  update ops.creator_links set revoked_at = now() where code = v_code;
+  if pg_temp.admin_text(format('waitlist_api.admin_revoke_creator_link(%L)', v_code)) <> 'revoked' then
+    raise exception 'FAIL: the admin could not revoke a link';
+  end if;
   if (select status from ops.resolve_creator_link(v_code)) <> 'revoked' then
     raise exception 'FAIL: a revoked link still resolves';
   end if;
-  if pg_temp.submit2('late1@example.com', null, null, null, v_code, null, 'd1') <> 'ok'
-     or (select creator_link_id from ops.waitlist where email = 'late1@example.com') is not null then
+  if pg_temp.submit2('late1@example.com', null, null, null, v_code, null, 'd1') <> 'ok' then
+    raise exception 'FAIL: a signup with a revoked link was refused';
+  end if;
+  if not exists (select 1 from ops.waitlist where email = 'late1@example.com' and creator_link_id is null) then
     raise exception 'FAIL: a revoked link attributed a signup';
   end if;
+  -- Revocation is explicit and final.
   begin
-    update ops.pilot_creators set status = 'removed' where user_id = '00000000-0000-0000-0000-0000000000c1';
     update ops.creator_links set revoked_at = null where code = v_code;
-    raise exception 'FAIL: a link was reactivated for a removed creator';
+    raise exception 'FAIL: a revoked link was restored';
   exception when check_violation then null;
   end;
-  update ops.pilot_creators set status = 'accepted' where user_id = '00000000-0000-0000-0000-0000000000c1';
-  update ops.creator_links set revoked_at = null where code = v_code;
-  update ops.pilot_creators set status = 'paused' where user_id = '00000000-0000-0000-0000-0000000000c1';
+  if pg_temp.admin_text(format('waitlist_api.admin_revoke_creator_link(%L)', v_code)) <> 'already_revoked'
+     or pg_temp.admin_text($q$waitlist_api.admin_revoke_creator_link('ffffffffffffffffffff')$q$) <> 'unknown' then
+    raise exception 'FAIL: revoking an unknown or revoked link did not say so';
+  end if;
+  -- A new link for the rest of the test; pausing the creator stops it at once.
+  v_code := pg_temp.admin_text($q$waitlist_api.admin_issue_creator_link('00000000-0000-0000-0000-0000000000c1', 30)$q$);
+  if pg_temp.admin_text($q$waitlist_api.admin_set_creator_status('00000000-0000-0000-0000-0000000000c1', 'paused')$q$) <> 'paused' then
+    raise exception 'FAIL: the admin could not pause a creator';
+  end if;
   if (select status from ops.resolve_creator_link(v_code)) <> 'creator_inactive' then
     raise exception 'FAIL: a paused creator''s link still resolves';
   end if;
-  update ops.pilot_creators set status = 'accepted' where user_id = '00000000-0000-0000-0000-0000000000c1';
+  perform pg_temp.admin_text($q$waitlist_api.admin_set_creator_status('00000000-0000-0000-0000-0000000000c1', 'accepted')$q$);
   update ops.creator_links set created_at = now() - interval '40 days', expires_at = now() - interval '1 day' where code = v_code;
   if (select status from ops.resolve_creator_link(v_code)) <> 'expired' then
     raise exception 'FAIL: an expired link still resolves';
@@ -323,7 +412,7 @@ begin
   ) then
     raise exception 'FAIL: acquisition events hold personal data';
   end if;
-  if (select count(*) from ops.acquisition_events where event = 'waitlist_signup') <> 6
+  if (select count(*) from ops.acquisition_events where event = 'waitlist_signup') <> 5
      or (select count(*) from ops.acquisition_events where event = 'waitlist_signup' and self_reported_referral) <> 3
      or (select count(*) from ops.acquisition_events where event = 'waitlist_signup' and creator_link_id is not null) <> 1
      or (select count(*) from ops.acquisition_events where event = 'invitation_accepted') <> 1
@@ -338,6 +427,105 @@ begin
     raise exception 'FAIL: unexpected summary: %', s;
   end if;
   raise notice 'PASS: events and the summary are anonymous counts';
+end $$;
+
+-- 9. The public invitation preview: a usable link shows only the name its
+--    creator agreed to; every unusable link looks the same; visits are
+--    counted anonymously, at most once per visitor per link per day, and
+--    kept apart from signups and follows.
+do $$
+declare
+  v_creator uuid := '00000000-0000-0000-0000-0000000000c1';
+  v_code text;
+  v_old text := (select code from ops.creator_links where revoked_at is not null limit 1);
+  v_link uuid;
+  p jsonb;
+  s jsonb;
+  i int;
+begin
+  v_code := pg_temp.admin_text($q$waitlist_api.admin_issue_creator_link('00000000-0000-0000-0000-0000000000c1', 30, 'preview_test')$q$);
+  v_link := (select id from ops.creator_links where code = v_code);
+
+  -- No agreed name yet: valid, but nameless.
+  p := pg_temp.preview(v_code);
+  if p <> '{"status": "ok", "invite": "valid", "name": null}'::jsonb then
+    raise exception 'FAIL: unexpected preview without a public name: %', p;
+  end if;
+
+  -- A name needs a safe format, and is shown only once agreed.
+  begin
+    perform pg_temp.admin_text($q$waitlist_api.admin_set_creator_public_name('00000000-0000-0000-0000-0000000000c1', 'priya.com')$q$);
+    raise exception 'FAIL: a web address was accepted as a public name';
+  exception when check_violation then null;
+  end;
+  if pg_temp.admin_text($q$waitlist_api.admin_set_creator_public_name('00000000-0000-0000-0000-0000000000c1', 'Priya Raman')$q$) <> 'set' then
+    raise exception 'FAIL: the admin could not record the agreed public name';
+  end if;
+  if (select public_name_agreed_at from ops.pilot_creators where user_id = v_creator) is null then
+    raise exception 'FAIL: the agreed public name was not recorded with its time';
+  end if;
+  p := pg_temp.preview(v_code, 'visitor-b');
+  if p <> '{"status": "ok", "invite": "valid", "name": "Priya Raman"}'::jsonb then
+    raise exception 'FAIL: unexpected preview: %', p;
+  end if;
+  if p::text ~* ('(00000000|priya@|example\.com|fitness|accepted|' || v_creator::text || ')') then
+    raise exception 'FAIL: the preview exposes private creator details: %', p;
+  end if;
+
+  -- Unknown, malformed, revoked, expired and paused links all look the same.
+  foreach v_old in array array['ffffffffffffffffffff', 'not-a-code', '', v_old] loop
+    if pg_temp.preview(v_old, 'visitor-c') <> '{"status": "ok", "invite": "unavailable"}'::jsonb then
+      raise exception 'FAIL: an unusable link (%) said more than unavailable', v_old;
+    end if;
+  end loop;
+  perform pg_temp.admin_text($q$waitlist_api.admin_set_creator_status('00000000-0000-0000-0000-0000000000c1', 'paused')$q$);
+  if pg_temp.preview(v_code, 'visitor-c') <> '{"status": "ok", "invite": "unavailable"}'::jsonb then
+    raise exception 'FAIL: a paused creator''s link still previews';
+  end if;
+  perform pg_temp.admin_text($q$waitlist_api.admin_set_creator_status('00000000-0000-0000-0000-0000000000c1', 'accepted')$q$);
+
+  -- Visits: one per visitor per link per day, however often they reload;
+  -- only usable links count; the events say nothing about the visitor.
+  for i in 1..5 loop perform pg_temp.preview(v_code, 'visitor-a'); end loop;
+  if (select count(*) from ops.acquisition_events where event = 'creator_link_visit' and creator_link_id = v_link) <> 2 then
+    raise exception 'FAIL: expected 2 visits (visitors a and b, however often a reloads), got %',
+      (select count(*) from ops.acquisition_events where event = 'creator_link_visit' and creator_link_id = v_link);
+  end if;
+  if exists (select 1 from ops.acquisition_events where event = 'creator_link_visit' and creator_link_id is null) then
+    raise exception 'FAIL: an unusable link counted as a visit';
+  end if;
+
+  -- A visit is not a signup: only joining the waitlist through the link counts as one.
+  if pg_temp.submit2('visitor@example.com', 'discover', null, null, v_code, null, 'visitor-a') <> 'ok' then
+    raise exception 'FAIL: signup through a previewed link was refused';
+  end if;
+  s := pg_temp.admin('waitlist_api.admin_acquisition_summary()');
+  if not (s->'links') @> jsonb_build_array(jsonb_build_object('link', left(v_code, 6), 'campaign', 'preview_test', 'state', 'active',
+            'visits', 2, 'signups', 1, 'accounts', 0, 'follows_confirmed', 0, 'follows_declined', 0)) then
+    raise exception 'FAIL: the per-link funnel is wrong: %', s->'links';
+  end if;
+  if s::text ~ v_code or s::text ~* 'priya' then
+    raise exception 'FAIL: the summary exposes a full link code or a creator name';
+  end if;
+
+  -- Rate limited per visitor.
+  for i in 1..40 loop p := pg_temp.preview('ffffffffffffffffffff', 'busy-visitor'); end loop;
+  if p <> '{"status": "rate_limited"}'::jsonb then
+    raise exception 'FAIL: the preview is not rate limited: %', p;
+  end if;
+
+  -- Withdrawing agreement removes the name at once.
+  if pg_temp.admin_text($q$waitlist_api.admin_set_creator_public_name('00000000-0000-0000-0000-0000000000c1', null)$q$) <> 'cleared' then
+    raise exception 'FAIL: the public name could not be cleared';
+  end if;
+  if pg_temp.preview(v_code, 'visitor-d')->>'name' is not null then
+    raise exception 'FAIL: a withdrawn public name is still shown';
+  end if;
+  -- The preview's limits hold salted hashes only, never a link id or code.
+  if exists (select 1 from ops.invite_preview_limits where bucket ~ v_link::text or bucket ~ v_code) then
+    raise exception 'FAIL: the preview limits store a link id or code';
+  end if;
+  raise notice 'PASS: the invitation preview shows only an agreed name, unusable links look alike, and visits are counted apart from signups';
 end $$;
 
 -- 8. Deleting a waitlist entry removes the self-reported name with it.

@@ -12,7 +12,7 @@ begin
   end if;
 
   -- Private tables, row level security on, no API or waitlist role access.
-  foreach t in array array['ops.pilot_creators', 'ops.creator_links', 'ops.creator_link_redemptions', 'ops.acquisition_events'] loop
+  foreach t in array array['ops.pilot_creators', 'ops.creator_links', 'ops.creator_link_redemptions', 'ops.acquisition_events', 'ops.invite_preview_limits'] loop
     if not (select relrowsecurity from pg_class where oid = t::regclass) then
       raise exception 'FAIL: % has row level security off', t;
     end if;
@@ -32,7 +32,11 @@ begin
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where (n.nspname, p.proname) in (('ops', 'create_creator_link'), ('ops', 'resolve_creator_link'), ('ops', 'join_waitlist_v2'),
                                      ('ops', 'record_invite_follow_decision'), ('ops', 'creator_links_require_accepted_creator'),
-                                     ('ops', 'invitations_copy_creator_link'), ('ops', 'invitations_record_link_redemption'))
+                                     ('ops', 'invitations_copy_creator_link'), ('ops', 'invitations_record_link_redemption'), ('ops', 'invite_preview_hit'),
+                                     ('waitlist_api', 'submit_v2'), ('waitlist_api', 'invite_preview'),
+                                     ('waitlist_api', 'admin_acquisition_summary'), ('waitlist_api', 'admin_accept_creator'),
+                                     ('waitlist_api', 'admin_set_creator_status'), ('waitlist_api', 'admin_set_creator_public_name'),
+                                     ('waitlist_api', 'admin_issue_creator_link'), ('waitlist_api', 'admin_revoke_creator_link'))
       and not coalesce(p.proconfig, '{}') @> array['search_path=""']
   ) then
     raise exception 'FAIL: an acquisition function has no fixed empty search path';
@@ -64,5 +68,43 @@ begin
      or not has_function_privilege('waitlist_admin', 'waitlist_api.admin_acquisition_summary()', 'EXECUTE') then
     raise exception 'FAIL: a waitlist login role cannot run its new entry point';
   end if;
+  -- Founder/admin-controlled issuance: only the admin login issues or revokes
+  -- links; not server code, not the public login.
+  foreach r in array array['anon', 'authenticated', 'service_role', 'waitlist_writer', 'waitlist_admin'] loop
+    if has_function_privilege(r, 'ops.create_creator_link(uuid, integer, text)', 'EXECUTE') then
+      raise exception 'FAIL: % can create links directly', r;
+    end if;
+  end loop;
+  foreach t in array array['waitlist_api.admin_accept_creator(uuid, text[])', 'waitlist_api.admin_set_creator_status(uuid, text)',
+                           'waitlist_api.admin_set_creator_public_name(uuid, text)', 'waitlist_api.admin_issue_creator_link(uuid, integer, text)',
+                           'waitlist_api.admin_revoke_creator_link(text)'] loop
+    if not has_function_privilege('waitlist_admin', t, 'EXECUTE') then
+      raise exception 'FAIL: the admin login cannot run %', t;
+    end if;
+    foreach r in array array['anon', 'authenticated', 'service_role', 'waitlist_writer'] loop
+      if has_function_privilege(r, t, 'EXECUTE') then
+        raise exception 'FAIL: % can run %', r, t;
+      end if;
+    end loop;
+  end loop;
+  -- The public preview is the server function's alone.
+  if not has_function_privilege('waitlist_writer', 'waitlist_api.invite_preview(text, text)', 'EXECUTE') then
+    raise exception 'FAIL: the server function cannot preview invitations';
+  end if;
+  foreach r in array array['anon', 'authenticated', 'service_role', 'waitlist_admin'] loop
+    if has_function_privilege(r, 'waitlist_api.invite_preview(text, text)', 'EXECUTE') then
+      raise exception 'FAIL: % can preview invitations', r;
+    end if;
+  end loop;
+  -- A shown name needs the creator's recorded agreement and a safe format.
+  if (select count(*) from pg_constraint where conrelid = 'ops.pilot_creators'::regclass
+      and conname in ('pilot_creators_public_name_agreed', 'pilot_creators_public_name_format')) <> 2 then
+    raise exception 'FAIL: public names are not limited to agreed, safe display names';
+  end if;
+  -- The original waitlist entry point is untouched, so this can be rolled back on its own.
+  if (select prosrc from pg_proc where oid = 'ops.join_waitlist(text, text[], text, text, text, text, boolean, boolean, text, text, text)'::regprocedure) ~ 'join_waitlist_v2' then
+    raise exception 'FAIL: ops.join_waitlist was redefined by the acquisition migration';
+  end if;
+
   raise notice 'PASS: creator acquisition data is private, anonymous where measured, and kept apart from points and money';
 end $$;
