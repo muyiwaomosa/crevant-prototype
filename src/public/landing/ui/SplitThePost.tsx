@@ -2,20 +2,21 @@ import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import { Heart, MessageCircle, Repeat2, Send } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
-import { Avatar, PostArt } from './PostJourney'
+import { Avatar, PostArt } from './SamplePost'
 import { SplitMark } from './SplitpostWordmark'
 
 /**
- * The hero picture, "Split the post" (approved concept A).
+ * The hero picture, "Split the post" (approved concept A, Connected Growth).
  *
- * Priya's sample post, cut once on the diagonal of the Splitpost mark. The
- * white piece is what the creator made (her words and photo); the orange piece
- * is what fans added (likes, comments, reposts, the people who shared it). The
- * pieces sit a hair apart along the same cut, so they still read as one post.
- * No money, no amounts, no percentages: only the post and the people.
+ * Priya's sample post, a running coach teaching a drill, cut once on the
+ * diagonal of the Splitpost mark. The cream piece is what the creator made
+ * (her lesson); the green piece is what her community added (likes, comments,
+ * reposts, the people who shared it). A gold seam joins them: the shared
+ * value. No money, no amounts, no percentages: only the post and the people.
  */
 
 const post = HOMEPAGE_COPY.post
+const split = HOMEPAGE_COPY.split
 /** How far the cut climbs across the card, in px. The fans' piece uses the same value so the edges match. */
 const CUT = 46
 
@@ -26,7 +27,7 @@ export function SplitThePost({ className }: { className?: string }) {
         {/* The creator's piece: her post, as she made it. */}
         <div className="relative -rotate-[1.5deg] [filter:drop-shadow(0_28px_36px_rgb(0_0_0/0.45))]">
           <div
-            className="rounded-[24px] bg-white px-4 pt-7 text-sp-ink sm:px-5 sm:pt-8"
+            className="rounded-[24px] bg-sp-cream px-4 pt-7 text-sp-ink sm:px-5 sm:pt-8"
             style={{ clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${CUT}px), 0 100%)`, paddingBottom: CUT + 10 }}
           >
             <div className="flex items-center gap-2.5">
@@ -34,28 +35,28 @@ export function SplitThePost({ className }: { className?: string }) {
               <div className="min-w-0 leading-tight">
                 <p className="text-sm font-bold">{post.author}</p>
                 <p className="text-xs text-sp-muted">
-                  {post.handle} · {post.time}
+                  {post.role} · {post.time}
                 </p>
               </div>
-              <span className="ml-auto rounded-full bg-sp-neutral px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-sp-muted">Sample</span>
+              <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-sp-muted">Sample</span>
             </div>
             <p className="mt-2.5 text-[0.875rem] leading-snug sm:mt-3 sm:text-[0.95rem]">{post.text}</p>
             <PostArt className="mt-2.5 h-[5.5rem] min-[400px]:h-28 sm:mt-3 sm:h-32" />
           </div>
-          <Tag className="absolute -left-1 -top-4 bg-sp-midnight text-white ring-1 ring-white/25 sm:-left-4">
-            <Avatar initials="PR" tone="priya" className="h-5 w-5 text-[8px]" /> Priya made it
+          <Tag className="absolute -left-1 -top-4 bg-sp-teal text-sp-cream ring-1 ring-sp-cream/30 sm:-left-4">
+            <Avatar initials="PR" tone="priya" className="h-5 w-5 text-[8px]" /> {split.creatorTag}
           </Tag>
         </div>
 
         {/* The fans' piece: everything they added to the same post. */}
         <div className="relative translate-x-2.5 rotate-[1.5deg] [filter:drop-shadow(0_28px_36px_rgb(0_0_0/0.45))] sm:translate-x-4" style={{ marginTop: -CUT + 10 }}>
           <div
-            className="rounded-[24px] bg-sp-orange px-4 pb-4 text-sp-midnight sm:px-5 sm:pb-5"
+            className="rounded-[24px] bg-sp-green px-4 pb-4 text-sp-ink sm:px-5 sm:pb-5"
             style={{ clipPath: `polygon(0 ${CUT}px, 100% 0, 100% 100%, 0 100%)`, paddingTop: CUT + 12 }}
           >
             <div className="flex items-center gap-4 text-sm font-extrabold">
               <span className="inline-flex items-center gap-1.5">
-                <Heart className="h-4 w-4 fill-sp-midnight" /> {post.likes}
+                <Heart className="h-4 w-4 fill-sp-teal" /> {post.likes}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <MessageCircle className="h-4 w-4" /> {post.comments}
@@ -65,33 +66,44 @@ export function SplitThePost({ className }: { className?: string }) {
               </span>
               <Send className="ml-auto h-4 w-4" />
             </div>
-            <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-sp-midnight/10 p-2">
+            <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-sp-teal/10 p-2">
               <span className="flex">
-                <Avatar initials="AN" tone="ana" className="h-8 w-8 text-[10px] ring-2 ring-sp-orange" />
-                <Avatar initials="LE" tone="leo" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-orange" />
-                <Avatar initials="JK" tone="friend" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-orange" />
+                <Avatar initials="AN" tone="ana" className="h-8 w-8 text-[10px] ring-2 ring-sp-green" />
+                <Avatar initials="LE" tone="leo" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-green" />
+                <Avatar initials="JK" tone="friend" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-green" />
               </span>
               <p className="min-w-0 text-[13px] font-semibold leading-snug">
-                <b>Ana</b> shared it. <b>Leo</b> reposted it. Their friends joined in.
+                {split.communityLine}
               </p>
             </div>
           </div>
-          {/* The join: the Splitpost mark sits on the cut, so the two pieces read as one post. */}
+          {/* The gold seam along the cut: the value the creator and her community share. */}
+          <svg
+            data-testid="gold-seam"
+            aria-hidden="true"
+            viewBox="0 0 100 10"
+            preserveAspectRatio="none"
+            className="pointer-events-none absolute inset-x-0 w-full overflow-visible"
+            style={{ top: -5, height: CUT }}
+          >
+            <line x1="0" y1="10" x2="100" y2="0" stroke="var(--color-sp-gold)" strokeWidth="4" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          </svg>
+          {/* The join: the Splitpost mark sits on the seam, so the two pieces read as one post. */}
           <span
-            className="absolute left-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-sp-midnight shadow-[0_10px_24px_-8px_rgb(0_0_0/0.7)] ring-[3px] ring-white/90"
+            className="absolute left-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-sp-teal shadow-[0_10px_24px_-8px_rgb(0_0_0/0.7)] ring-[3px] ring-sp-gold"
             style={{ top: CUT / 2 - 5 }}
           >
             <SplitMark tone="dark" className="h-5 w-5" />
           </span>
-          <Tag className="absolute -bottom-3.5 -right-1 bg-white text-sp-midnight sm:-right-3">
-            <Repeat2 className="h-3.5 w-3.5 text-sp-orange-text" /> Fans grew it
+          <Tag className="absolute -bottom-3.5 -right-1 bg-sp-cream text-sp-teal sm:-right-3">
+            <Repeat2 className="h-3.5 w-3.5 text-sp-green-text" /> {split.communityTag}
           </Tag>
         </div>
 
       </div>
       <figcaption className="sr-only">
-        Priya’s sample post, split into two pieces that fit together: the part Priya made, her words and photo, and the part her fans added, their likes,
-        comments and reposts. One post, made and grown together.
+        Priya’s sample post, a running coach sharing a 60-second calf drill, split into two pieces that fit together along a gold seam: the part Priya
+        created, her lesson, and the part her community grew, their likes, comments and reposts. One post, created and grown together.
       </figcaption>
     </figure>
   )

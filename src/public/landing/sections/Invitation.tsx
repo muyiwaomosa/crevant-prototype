@@ -16,9 +16,9 @@ export function Invitation() {
     <section
       id="invitation"
       aria-labelledby="invitation-title"
-      className="relative isolate scroll-mt-16 overflow-hidden bg-sp-midnight text-white"
+      className="relative isolate scroll-mt-16 overflow-hidden bg-sp-teal text-white"
     >
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(118deg,transparent_0_70%,var(--color-sp-orange)_70%_100%)] opacity-90" />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(118deg,transparent_0_70%,var(--color-sp-green)_70%_100%)] opacity-90" />
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-18 sm:px-6 sm:py-24 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-14 lg:py-28">
         <div className="min-w-0">
           <h2
@@ -30,9 +30,12 @@ export function Invitation() {
           <p data-testid="invitation-body" className="mt-5 max-w-xl text-[1.1rem] leading-relaxed text-sp-muted-on-dark sm:text-xl">
             {copy.body}
           </p>
+          <p data-testid="invitation-audience" className="mt-3 max-w-xl text-[1.02rem] font-semibold leading-relaxed text-sp-cream">
+            {copy.audience}
+          </p>
           <Link
             to="/join"
-            className={`mt-8 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-sp-orange px-8 text-base font-bold text-sp-midnight transition-[background-color,transform] hover:bg-[#ff7e45] active:scale-[0.98] motion-reduce:transition-none min-[420px]:w-auto ${focusRing}`}
+            className={`mt-8 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-sp-green px-8 text-base font-bold text-sp-ink transition-[background-color,transform] hover:bg-[#4fb699] active:scale-[0.98] motion-reduce:transition-none min-[420px]:w-auto ${focusRing}`}
           >
             {copy.cta} <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
@@ -42,19 +45,19 @@ export function Invitation() {
           </div>
         </div>
 
-        <div data-testid="pilot-details" className="rounded-[28px] bg-sp-midnight p-6 shadow-[0_30px_60px_-30px_rgb(0_0_0/0.7)] ring-1 ring-white/15 sm:p-8">
-          <h3 className="font-sp-display text-sm font-extrabold uppercase tracking-[0.16em] text-sp-orange">{copy.pilotDetailsTitle}</h3>
+        <div data-testid="pilot-details" className="rounded-[28px] bg-sp-teal p-6 shadow-[0_30px_60px_-30px_rgb(0_0_0/0.7)] ring-1 ring-white/15 sm:p-8">
+          <h3 className="font-sp-display text-sm font-extrabold uppercase tracking-[0.16em] text-sp-green-on-dark">{copy.pilotDetailsTitle}</h3>
           <ul className="mt-4 space-y-3">
             {copy.pilotDetails.map((d) => (
               <li key={d} className="flex gap-3 text-[0.97rem] leading-relaxed text-white/90">
-                <Check className="mt-1 h-4 w-4 shrink-0 text-sp-orange" aria-hidden="true" />
+                <Check className="mt-1 h-4 w-4 shrink-0 text-sp-green" aria-hidden="true" />
                 <span>{d}</span>
               </li>
             ))}
           </ul>
         </div>
       </div>
-      <div className="relative bg-sp-midnight">
+      <div className="relative bg-sp-teal">
         <p data-testid="people-note" className="mx-auto max-w-6xl px-4 py-6 text-[13px] leading-relaxed text-sp-muted-on-dark sm:px-6">
           {HOMEPAGE_COPY.peopleNote}
         </p>

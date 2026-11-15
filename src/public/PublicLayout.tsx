@@ -38,7 +38,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
       </a>
 
       {/* Splitpost header (PR 2). The footer below changes in PR 5. */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-sp-midnight/95 pt-[env(safe-area-inset-top)] text-white backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-sp-teal/95 pt-[env(safe-area-inset-top)] text-white backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
           <Link
             to="/"
@@ -60,7 +60,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             {account && <span className="hidden min-[420px]:contents [&_a]:text-white [&_a:hover]:bg-white/10">{account}</span>}
             <Link
               to="/join"
-              className="inline-flex h-9 items-center whitespace-nowrap rounded-full bg-sp-orange px-3 text-[13px] font-bold min-[360px]:px-4 min-[360px]:text-sm text-sp-midnight transition-[background-color,color,box-shadow,transform] hover:bg-[#ff7e45] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+              className="inline-flex h-9 items-center whitespace-nowrap rounded-full bg-sp-green px-3 text-[13px] font-bold min-[360px]:px-4 min-[360px]:text-sm text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#4fb699] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
             >
               {HOMEPAGE_COPY.hero.primaryCta}
             </Link>
@@ -72,29 +72,29 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
         <Outlet />
       </main>
 
-      <footer className="bg-sp-midnight text-white">
+      <footer className="bg-sp-teal text-white">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1fr_auto] md:items-start">
           <div className="max-w-md">
             <SplitpostWordmark />
-            <p className="mt-4 font-sp-display text-lg font-extrabold text-sp-orange">{HOMEPAGE_COPY.hero.tagline}</p>
+            <p className="mt-4 font-sp-display text-xl font-extrabold text-sp-green">{HOMEPAGE_COPY.hero.tagline}</p>
             <p className="mt-2 text-sm leading-relaxed text-sp-muted-on-dark">An invitation-only pilot for adults 18 and older.</p>
             <p data-testid="product-images-note" className="mt-1 text-sm leading-relaxed text-sp-muted-on-dark">{PRODUCT_IMAGES_DISCLOSURE}</p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-white/85">
-            <Link to="/#why" className="hover:text-sp-orange">
+            <Link to="/#problem" className="hover:text-sp-green-on-dark">
               Why Splitpost
             </Link>
-            <Link to="/#how" className="hover:text-sp-orange">
+            <Link to="/#alternative" className="hover:text-sp-green-on-dark">
               How It Works
             </Link>
-            <Link to="/join" className="hover:text-sp-orange">
+            <Link to="/join" className="hover:text-sp-green-on-dark">
               {HOMEPAGE_COPY.hero.primaryCta}
             </Link>
-            <a href={TOUR_BASE} className="hover:text-sp-orange">
+            <a href={TOUR_BASE} className="hover:text-sp-green-on-dark">
               {HOMEPAGE_COPY.hero.secondaryCta}
             </a>
             {import.meta.env.MODE !== 'site' && memberLinks && (
-              <Link to="/sign-in" className="hover:text-sp-orange">
+              <Link to="/sign-in" className="hover:text-sp-green-on-dark">
                 Sign in
               </Link>
             )}

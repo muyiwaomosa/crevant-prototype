@@ -13,10 +13,10 @@ export const HEADLINE_LINES = ['SOCIAL MEDIA', 'NEEDS A', 'BETTER SPLIT.'] as co
 const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-white'
 
 /**
- * Section 1: the hero. A midnight band with the headline as a poster, the
- * approved belief in three short sentences, both calls to action, and the
- * pilot small print. The picture is one post split in two: what the creator
- * made and what fans added.
+ * Section 1: the hero. A Deep Teal band with the headline as a poster, the
+ * core belief and the positioning, both calls to action, and the pilot small
+ * print. The picture is one post split in two along a gold seam: what the
+ * creator made and what her community grew.
  *
  * Phones: headline, picture, then the words, actions and small print, so the
  * picture shows in the first screen. From lg up: text left, picture right.
@@ -34,7 +34,7 @@ export function Hero() {
         {HEADLINE_LINES[2].split(' ')[0]}{' '}
         <span
           data-testid="split-word"
-          className="inline-block bg-[linear-gradient(135deg,#ffffff_0_46%,var(--color-sp-orange)_46%_100%)] bg-clip-text text-transparent forced-colors:bg-none forced-colors:text-[CanvasText]"
+          className="inline-block bg-[linear-gradient(135deg,var(--color-sp-cream)_0_46%,var(--color-sp-green)_46%_100%)] bg-clip-text text-transparent forced-colors:bg-none forced-colors:text-[CanvasText]"
         >
           {HEADLINE_LINES[2].split(' ')[1]}
         </span>
@@ -43,18 +43,21 @@ export function Hero() {
   )
   const rest = (
     <>
-      <p data-testid="hero-tagline" className="mt-5 font-sp-display text-xl font-extrabold tracking-[-0.01em] text-sp-orange [font-stretch:110%] sm:text-2xl">
+      <p data-testid="hero-tagline" className="mt-5 font-sp-display text-xl font-extrabold tracking-[-0.01em] text-sp-green [font-stretch:110%] sm:text-2xl">
         {copy.tagline}
       </p>
 
-      <p data-testid="hero-body" className="mt-4 max-w-[34rem] text-[1.05rem] leading-relaxed text-sp-muted-on-dark sm:text-lg">
+      <p data-testid="hero-body" className="mt-4 max-w-[34rem] text-[1.08rem] font-semibold leading-relaxed text-sp-cream sm:text-lg">
         {copy.body.join(' ')}
+      </p>
+      <p data-testid="hero-positioning" className="mt-3 max-w-[34rem] text-[1.02rem] leading-relaxed text-sp-muted-on-dark sm:text-[1.05rem]">
+        {copy.positioning}
       </p>
 
       <div data-testid="hero-actions" className="mt-7 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:flex-wrap">
         <Link
           to="/join"
-          className={`inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-sp-orange px-7 text-base font-bold text-sp-midnight transition-[background-color,color,box-shadow,transform] hover:bg-[#ff7e45] active:scale-[0.98] motion-reduce:transition-none ${focusRing}`}
+          className={`inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-sp-green px-7 text-base font-bold text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#4fb699] active:scale-[0.98] motion-reduce:transition-none ${focusRing}`}
         >
           {copy.primaryCta} <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </Link>
@@ -74,7 +77,7 @@ export function Hero() {
       {import.meta.env.MODE !== 'site' && memberLinks && (
         <p className="mt-2 text-sm text-sp-muted-on-dark">
           Already invited?{' '}
-          <Link to="/sign-in" className={`font-semibold text-white underline underline-offset-4 hover:text-sp-orange ${focusRing}`}>
+          <Link to="/sign-in" className={`font-semibold text-white underline underline-offset-4 hover:text-sp-green-on-dark ${focusRing}`}>
             Sign in
           </Link>
         </p>
@@ -82,7 +85,7 @@ export function Hero() {
     </>
   )
   return (
-    <section id="hero" aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-sp-midnight text-white">
+    <section id="hero" aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-sp-teal text-sp-cream">
       {/* The split: one diagonal cut across the whole band. */}
       <div
         aria-hidden="true"

@@ -1,28 +1,27 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Hero } from './landing/sections/Hero'
-import { Why } from './landing/sections/Why'
-import { Who } from './landing/sections/Who'
-import { What } from './landing/sections/What'
-import { How } from './landing/sections/How'
+import { Problem } from './landing/sections/Problem'
+import { Alternative } from './landing/sections/Alternative'
+import { Connection } from './landing/sections/Connection'
+import { Vision } from './landing/sections/Vision'
 import { Invitation } from './landing/sections/Invitation'
 import { MobileWaitlistBar } from './landing/sections/MobileWaitlistBar'
 
-// The Splitpost homepage: one story, following one sample post.
+// The Splitpost homepage: one story, led by the creator's experience.
 //
-//  HERO   SOCIAL MEDIA NEEDS A BETTER SPLIT.
-//  WHY    You helped build it. Where's your split?
-//  WHO    The creator who keeps posting. The fan who keeps sharing.
-//  WHAT   What if every successful post created more winners?
-//  HOW    POST. SUPPORT. SPLIT.
-//  CLOSE  Be part of a better split.
+//  HERO         SOCIAL MEDIA NEEDS A BETTER SPLIT.
+//  PROBLEM      You create the value. The algorithm decides who sees it.
+//  ALTERNATIVE  A social platform built around connection, not just attention.
+//  CONNECTION   When your community helps you grow, they're recognized too.
+//  VISION       Content creation deserves to be a respected profession.
+//  CLOSE        Be part of a better split.
 //
 // Every word comes from landing/copy.ts and landing/claims.ts. Rules (enforced by
 // src/public/public-site.test.tsx): no promise of money, earnings, reach or
 // rewards; Connection Points are never money; revenue sharing is only ever a
 // labelled vision, shown apart from the pilot; every product screen is labelled
-// concept and sample data; photos are stock images of models, said so on the
-// page; no statistics; the waitlist never secures a place.
+// concept and sample data; no statistics; the waitlist never secures a place.
 
 export function LandingPage() {
   // Links such as /#invitation from other pages: scroll to the section once rendered.
@@ -36,10 +35,10 @@ export function LandingPage() {
   return (
     <>
       <Hero />
-      <Why />
-      <Who />
-      <What />
-      <How />
+      <Problem />
+      <Alternative />
+      <Connection />
+      <Vision />
       <Invitation />
       <MobileWaitlistBar />
     </>

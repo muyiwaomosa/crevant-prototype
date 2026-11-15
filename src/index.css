@@ -4,7 +4,7 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Archivo', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-paper: #f6f2ec;
+  --color-paper: #f5f1e8;
   --color-card: #ffffff;
 
   --color-ink-50: #f4f5f5;
@@ -18,26 +18,27 @@
   --color-ink-800: #21282a;
   --color-ink-900: #13191b;
 
-  /* Splitpost: the brand scale is midnight (was teal), the spark scale is orange (was amber). */
-  --color-brand-50: #eef0fa;
-  --color-brand-100: #dfe2f4;
-  --color-brand-200: #c0c6e8;
-  --color-brand-300: #939cd3;
-  --color-brand-400: #5f6ab4;
-  --color-brand-500: #3b4590;
-  --color-brand-600: #272f73;
-  --color-brand-700: #1b2152;
-  --color-brand-800: #141a42;
-  --color-brand-900: #10142e;
+  /* Splitpost "Connected Growth": the brand scale is Deep Teal, the spark
+     scale is Growth Green (500 and up are the darker text greens). */
+  --color-brand-50: #eef5f3;
+  --color-brand-100: #dcebe7;
+  --color-brand-200: #b7d6ce;
+  --color-brand-300: #86b9ad;
+  --color-brand-400: #4f9585;
+  --color-brand-500: #2e7466;
+  --color-brand-600: #225d53;
+  --color-brand-700: #1f4f4a;
+  --color-brand-800: #1a453f;
+  --color-brand-900: #163d3a;
 
-  --color-spark-50: #fff1ea;
-  --color-spark-100: #ffe2d4;
-  --color-spark-200: #ffc9ae;
-  --color-spark-300: #ff9f73;
-  --color-spark-400: #ff6a2b;
-  --color-spark-500: #e85a1c;
-  --color-spark-600: #b83c14;
-  --color-spark-700: #8f2d0e;
+  --color-spark-50: #eaf7f2;
+  --color-spark-100: #d3efe5;
+  --color-spark-200: #a8dfcb;
+  --color-spark-300: #6fc7a8;
+  --color-spark-400: #38a88a;
+  --color-spark-500: #2c9177;
+  --color-spark-600: #23775f;
+  --color-spark-700: #1a5c49;
 
   --color-heart: #e0483a;
 
@@ -47,24 +48,37 @@
 }
 
 /*
- * Splitpost design tokens (sp-), used by the public site. The shared tokens
- * above (brand, spark, paper, display font) are tuned to the same palette, so
- * the tour, account screens and waitlist look like Splitpost too. Contrast
- * pairs are checked in src/public/landing/tokens.test.ts. Provisional, not a
- * final identity.
+ * Splitpost "Connected Growth" design tokens (sp-), used by the public site.
+ * The shared tokens above (brand, spark, paper, display font) are tuned to the
+ * same palette, so the tour, account screens and waitlist match.
+ *
+ *   teal   #163D3A  credibility: dark bands, body text on cream
+ *   green  #38A88A  connection and growth: fills, illustrations, large text
+ *                   on teal (4.05:1). NOT for text on cream or white (2.6:1):
+ *                   use green-text #23775F there, and green-on-dark #6FC7A8
+ *                   for small text on teal (5.9:1). Text on a green fill is
+ *                   ink #12302D (4.8:1)
+ *   cream  #F5F1E8  warmth: page background, text on teal
+ *   gold   #D6A14A  shared value, sparingly (the split seam, Connection
+ *                   Points). Text on cream uses gold-text #8A5F1A
+ *
+ * Contrast pairs are checked in src/public/landing/tokens.test.ts.
  */
 @theme {
   --font-sp-display: 'Archivo', 'Arial Narrow', ui-sans-serif, system-ui, sans-serif;
   --font-sp-body: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --color-sp-midnight: #10142e;
-  --color-sp-midnight-raised: #1b2152;
-  --color-sp-orange: #ff6a2b;
-  --color-sp-orange-text: #b83c14;
-  --color-sp-neutral: #f6f2ec;
-  --color-sp-ink: #141833;
-  --color-sp-muted: #545b78;
-  --color-sp-muted-on-dark: #b7bad0;
+  --color-sp-teal: #163d3a;
+  --color-sp-teal-raised: #1f4f4a;
+  --color-sp-green: #38a88a;
+  --color-sp-green-text: #23775f;
+  --color-sp-green-on-dark: #6fc7a8;
+  --color-sp-cream: #f5f1e8;
+  --color-sp-gold: #d6a14a;
+  --color-sp-gold-text: #8a5f1a;
+  --color-sp-ink: #12302d;
+  --color-sp-muted: #4a5f5b;
+  --color-sp-muted-on-dark: #b5cbc5;
 }
 
 @keyframes pop {

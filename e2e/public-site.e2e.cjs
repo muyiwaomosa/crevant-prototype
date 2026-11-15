@@ -116,10 +116,10 @@ async function newContext(browser, options = {}) {
     }
 
     // 5b. The Splitpost homepage, from the smallest phone to a wide desktop:
-    //     every section in order, no sideways scrolling, the post journey
-    //     reflows (one step per row, then two, then four), every photo loads,
-    //     the pilot and the vision are both visible, and the HOW screens can be
-    //     scrolled on phones.
+    //     every section in order, no sideways scrolling, the problem points
+    //     reflow (one per row, then two, then one beside the text), the limits
+    //     sit beside the claims they qualify, the founder photo loads, and the
+    //     concept screens can be scrolled on phones.
     for (const width of [320, 390, 768, 1024, 1440]) {
       const label = `${width}px`
       const ctx = await newContext(browser, { viewport: { width, height: 900 } })
@@ -130,33 +130,33 @@ async function newContext(browser, options = {}) {
       await page.goto(`${BASE}/`)
 
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check(`${label}: the six sections in order`, ids === 'hero,why,who,what,how,invitation', ids)
+      check(`${label}: the six sections in order`, ids === 'hero,problem,alternative,connection,vision,invitation', ids)
       const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
       check(`${label}: no Crevant left on the landing page`, !/Crevant/i.test(await page.locator('body').innerText()))
 
-      const rows = await page.$$eval('[data-testid="post-journey"] > li', (lis) => new Set(lis.map((li) => Math.round(li.getBoundingClientRect().top))).size)
-      const expectedRows = width < 640 ? 4 : width < 1024 ? 2 : 1
-      check(`${label}: the post journey shows ${expectedRows} row(s)`, rows === expectedRows, `rows=${rows}`)
+      const rows = await page.$$eval('[data-testid="problem-points"] > li', (lis) => new Set(lis.map((li) => Math.round(li.getBoundingClientRect().top))).size)
+      const expectedRows = width < 640 ? 4 : width < 1024 ? 2 : 4
+      check(`${label}: the problem points show ${expectedRows} row(s)`, rows === expectedRows, `rows=${rows}`)
 
-      // Load every lazy photo, then check each one decoded.
+      // Load every lazy image, then check each one decoded.
       await page.evaluate(async () => {
         for (let y = 0; y < document.body.scrollHeight; y += 500) {
           window.scrollTo(0, y)
           await new Promise((r) => setTimeout(r, 30))
         }
       })
-      const photos = await page.$$eval('img[data-photo]', (imgs) =>
-        Promise.all(imgs.map((img) => (img.complete ? img.naturalWidth : new Promise((ok) => img.addEventListener('load', () => ok(img.naturalWidth), { once: true }))))),
+      const imgs = await page.$$eval('main img', (els) =>
+        Promise.all(els.map((img) => (img.complete ? img.naturalWidth : new Promise((ok) => img.addEventListener('load', () => ok(img.naturalWidth), { once: true }))))),
       )
-      check(`${label}: all ${photos.length} photos load`, photos.length >= 8 && photos.every((w) => w > 0), photos.join(','))
+      check(`${label}: every image loads (the founder photo; no stock photos until approved)`, imgs.length >= 1 && imgs.every((w) => w > 0), imgs.join(','))
 
-      const disclosures = await Promise.all(['what-today', 'what-vision'].map((t) => page.getByTestId(t).isVisible()))
-      check(`${label}: what the pilot does today and the vision are both disclosed`, disclosures.every(Boolean))
+      const disclosures = await Promise.all(['alternative-note', 'connection-disclosure', 'vision-disclosure', 'pilot-details'].map((t) => page.getByTestId(t).isVisible()))
+      check(`${label}: each limitation is visible beside its claim, and the full pilot details near signup`, disclosures.every(Boolean))
 
-      const scroller = page.getByRole('region', { name: /The post, step by step/ })
+      const scroller = page.getByRole('region', { name: /concept screens/ })
       const fits = await scroller.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
-      check(`${label}: the HOW screens ${width < 1024 ? 'scroll sideways inside their own box' : 'all fit in one row'}`, width < 1024 ? !fits : fits)
+      check(`${label}: the concept screens ${width < 1024 ? 'scroll sideways inside their own box' : 'all fit in one row'}`, width < 1024 ? !fits : fits)
       await ctx.close()
     }
 
