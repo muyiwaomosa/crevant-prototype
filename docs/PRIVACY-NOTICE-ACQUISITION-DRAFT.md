@@ -66,11 +66,11 @@ open one:
 
 If you then join the waitlist, we record which link you used with your entry.
 
-If you're invited and create an account:
-- That record carries over to your account.
-- We ask whether you'd like to follow the creator who invited you. You
-  choose Follow or Not now, and we never follow anyone for you.
-- We record your answer, so we can see how well invitations work.
+If you're invited and create an account, that record carries over to your
+account. Once following is available on Splitpost, we'll ask whether you'd
+like to follow the creator who invited you. You'll choose Follow or Not now,
+and we never follow anyone for you. Until then, nothing about following is
+recorded.
 
 The creator doesn't receive your email address or any other detail about
 you. They can see totals for their link, never individuals. Using a link earns
@@ -101,9 +101,10 @@ nothing is stored on your device.
 - **Your answers above, and which link you used,** are part of your waitlist
   entry. They're deleted with it: proposed 12 months after you joined or last
   confirmed your place **[legal]**. Deleting your entry deletes them.
-- **Your follow decision** stays with your account while you have one
-  **[legal: confirm]**.
-- **The hourly counts** are kept for the length of the pilot **[legal: confirm]**.
+- **Which invitation link brought you** stays with your account while you
+  have one **[legal: confirm]**.
+- **The hourly counts** are kept for **90 days**, then deleted **[legal:
+  confirm the period]**.
 - **The temporary codes made from network addresses** are deleted within two
   days.
 
@@ -129,8 +130,8 @@ the waitlist notice. **[legal]**
 - Splitpost issues links, not you. They last 90 days unless we agree
   otherwise (never more than a year), and can be revoked at any time.
   Revoking is final.
-- You can see totals for your links: estimated visits, sign-ups, accounts
-  created and follow decisions. You never see who visited, joined or
+- You can see totals for your links: estimated visits, sign-ups and accounts
+  created. You never see who visited, joined or
   followed.
 - Invitations earn you no money, Connection Points or other reward.
 
@@ -144,8 +145,8 @@ the waitlist notice. **[legal]**
 | "A creator introduced me" (yes / no) | `ops.waitlist.introduced_by_creator` | Personal, names nobody | With the entry |
 | Channel label from `?src=` | `ops.waitlist.source` (existing) | A label we chose | With the entry |
 | Which verified link they joined through | `ops.waitlist.creator_link_id`, then `ops.invitations`, then `ops.creator_link_redemptions` | Personal | With the entry or account |
-| Follow decision (pending, followed, declined) | `ops.creator_link_redemptions` | Personal, account linked | With the account **[legal]** |
-| Step counts: visits, sign-ups, accounts, follow decisions | `ops.acquisition_events` | No identifier; hour, channel label, link only. Could be narrowed down when numbers are small | For the pilot **[legal]** |
+| Invitation redemption (follow decision held at "pending" until real follows exist) | `ops.creator_link_redemptions` | Personal, account linked | With the account **[legal]** |
+| Step counts: visits, sign-ups, accounts | `ops.acquisition_events` | No identifier; hour, channel label, link only. Could be narrowed down when numbers are small | Proposed **90 days**, deleted by a manual admin purge **[legal]** |
 | Preview rate limits and visit de-duplication | `ops.invite_preview_limits` | **Pseudonymous**: HMAC of the network address with a secret salt (and, for visits, a hash of that with the link) | Two days |
 | Creator's agreed public name and when they agreed | `ops.pilot_creators` | Personal, the creator's | While they're a pilot creator, or until withdrawn |
 

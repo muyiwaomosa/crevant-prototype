@@ -121,7 +121,7 @@ begin
                  -- Creator acquisition: the founder/admin issues and revokes pilot links.
                  'waitlist_api.admin_accept_creator', 'waitlist_api.admin_set_creator_status',
                  'waitlist_api.admin_set_creator_public_name', 'waitlist_api.admin_issue_creator_link',
-                 'waitlist_api.admin_revoke_creator_link']
+                 'waitlist_api.admin_revoke_creator_link', 'waitlist_api.admin_purge_acquisition_events']
     end;
 
     select string_agg(n.nspname || '.' || c.relname, ', ') into bad

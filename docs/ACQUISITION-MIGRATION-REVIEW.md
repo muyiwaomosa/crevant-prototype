@@ -17,7 +17,7 @@ grant are unchanged.
 | --- | --- |
 | `ops.pilot_creators` | Accepted creators: account id, status (accepted / paused / removed), up to 3 categories, agreed public name and agreement time |
 | `ops.creator_links` | Invitation links: random 20 hex code, creator, optional campaign label, created, expiry (≤ 1 year), revoked time |
-| `ops.creator_link_redemptions` | Accounts that joined through a link, and their own follow decision (pending / followed / declined) |
+| `ops.creator_link_redemptions` | Accounts that joined through a link. The follow decision is held at `pending` by a constraint until real-account follows exist |
 | `ops.acquisition_events` | Step counts: event, hour, channel label, link. No identifier |
 | `ops.invite_preview_limits` | Preview rate limits and visit de-duplication: salted hashes only, 2 days |
 
@@ -43,7 +43,7 @@ privacy draft match.
   - `submit_v2` and `invite_preview` for `waitlist_writer`;
   - `admin_accept_creator`, `admin_set_creator_status`,
     `admin_set_creator_public_name`, `admin_issue_creator_link`,
-    `admin_revoke_creator_link` and `admin_acquisition_summary` for
+    `admin_revoke_creator_link`, `admin_acquisition_summary` and `admin_purge_acquisition_events` for
     `waitlist_admin`.
 - **Internal `ops` functions** for server code only.
 
@@ -53,16 +53,17 @@ privacy draft match.
 | --- | --- |
 | Visitors (`anon`), members (`authenticated`) | Nothing. RLS on, no policies, no grants, no schema usage |
 | `waitlist_writer` (the server function) | `submit`, `submit_v2`, `invite_preview`. No table access |
-| `waitlist_admin` (the founder's workflow) | The existing admin functions, plus the six above. No table access |
-| `service_role` (server code) | The acquisition tables, resolve links, record a follow decision. **Cannot issue links** |
+| `waitlist_admin` (the founder's workflow) | The existing admin functions, plus the seven above. No table access |
+| `service_role` (server code) | The acquisition tables and link resolution. **Cannot issue links, purge counts, or record a follow decision** (the constraint refuses it) |
 | Creators | Nothing directly. They never issue, see or change links |
 
 These are enforced by `supabase/tests/003` and `004` on every CI run and
-deploy. 51 deliberate violations are each caught, including:
+deploy. 52 deliberate violations are each caught, including:
 - the public calling the preview;
 - server code issuing links;
 - a name shown without agreement;
-- a typed creator name column.
+- a typed creator name column;
+- an invitation marked followed when no real follow exists.
 
 ## Stored data and retention
 
@@ -71,7 +72,7 @@ deploy. 51 deliberate violations are each caught, including:
 | Intent, yes/no introduction, verified link on the waitlist entry | Yes | Deleted with the entry (proposed 12 months, existing purge) |
 | Link on invitation, redemption and follow decision | Yes, account linked | With the account (**to confirm in legal review**) |
 | Pilot creator record and agreed public name | Yes, the creator's | While a pilot creator; name cleared at once when agreement is withdrawn |
-| Hourly step counts | No identifier, but small counts can be narrowed down | Pilot length (**to confirm**); no purge exists yet |
+| Hourly step counts | No identifier, but small counts can be narrowed down | **Proposed 90 days** (pending privacy/legal approval). Manual, bounded admin purge; no schedule |
 | Preview limits and visit de-duplication | **Pseudonymous** (salted HMAC of network address) | Deleted after 2 days, on every preview |
 
 Visits are **estimates**:
@@ -130,13 +131,13 @@ deliberately first.
 
 ## Unresolved risks before approval
 
-1. **No staging workflow runs this rollback yet.** It's tested locally and
-   in CI only. It needs wiring, with the same safeguards as the waitlist
-   rollback, before the migration reaches staging.
-2. **No purge for the hourly step counts.** They hold no identifier, but they
-   grow for the pilot's length, and small counts can be narrowed down.
-   Retention should be set in the legal review.
+1. **The staging rollback is wired but switched off.** It runs only through the
+   existing rollback workflow (`target: creator_acquisition`), with the same
+   safeguards. Its switch, `WAITLIST_ROLLBACK_ENABLED`, isn't set, and it has
+   never run against staging.
+2. **Retention is proposed, not approved.** The 90-day purge exists and is
+   tested, but it's manual and has never run; nothing schedules it.
 3. **Legal review of the privacy draft** (`PRIVACY-NOTICE-ACQUISITION-DRAFT.md`),
    including the pseudonymous temporary codes.
-4. **Real-account follows don't exist yet.** A `followed` decision is
-   recorded but performs no follow until that work is built and reviewed.
+4. **Real-account follows don't exist yet.** Invitation decisions stay
+   `pending` (enforced) until that work is built and reviewed.

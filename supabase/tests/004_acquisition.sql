@@ -31,12 +31,13 @@ begin
   if exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where (n.nspname, p.proname) in (('ops', 'create_creator_link'), ('ops', 'resolve_creator_link'), ('ops', 'join_waitlist_v2'),
-                                     ('ops', 'record_invite_follow_decision'), ('ops', 'creator_links_require_accepted_creator'),
+                                     ('ops', 'creator_links_require_accepted_creator'),
                                      ('ops', 'invitations_copy_creator_link'), ('ops', 'invitations_record_link_redemption'), ('ops', 'invite_preview_hit'),
                                      ('waitlist_api', 'submit_v2'), ('waitlist_api', 'invite_preview'),
                                      ('waitlist_api', 'admin_acquisition_summary'), ('waitlist_api', 'admin_accept_creator'),
                                      ('waitlist_api', 'admin_set_creator_status'), ('waitlist_api', 'admin_set_creator_public_name'),
-                                     ('waitlist_api', 'admin_issue_creator_link'), ('waitlist_api', 'admin_revoke_creator_link'))
+                                     ('waitlist_api', 'admin_issue_creator_link'), ('waitlist_api', 'admin_revoke_creator_link'),
+                                     ('waitlist_api', 'admin_purge_acquisition_events'))
       and not coalesce(p.proconfig, '{}') @> array['search_path=""']
   ) then
     raise exception 'FAIL: an acquisition function has no fixed empty search path';
@@ -77,7 +78,7 @@ begin
   end loop;
   foreach t in array array['waitlist_api.admin_accept_creator(uuid, text[])', 'waitlist_api.admin_set_creator_status(uuid, text)',
                            'waitlist_api.admin_set_creator_public_name(uuid, text)', 'waitlist_api.admin_issue_creator_link(uuid, integer, text)',
-                           'waitlist_api.admin_revoke_creator_link(text)'] loop
+                           'waitlist_api.admin_revoke_creator_link(text)', 'waitlist_api.admin_purge_acquisition_events(integer)'] loop
     if not has_function_privilege('waitlist_admin', t, 'EXECUTE') then
       raise exception 'FAIL: the admin login cannot run %', t;
     end if;
@@ -109,6 +110,13 @@ begin
   if exists (select 1 from pg_attribute where attrelid = 'ops.waitlist'::regclass and not attisdropped
              and attname ~* '(introducer|reported|handle)') then
     raise exception 'FAIL: the waitlist stores a typed creator name or handle';
+  end if;
+  -- No completed follow can be recorded before real-account follows exist.
+  if not exists (select 1 from pg_constraint where conrelid = 'ops.creator_link_redemptions'::regclass
+                 and conname = 'creator_link_redemptions_pending_until_follows')
+     or to_regprocedure('ops.record_invite_follow_decision(uuid, text)') is not null
+     or exists (select 1 from ops.creator_link_redemptions where follow_decision <> 'pending') then
+    raise exception 'FAIL: an invitation follow decision can be recorded before real follows exist';
   end if;
   -- The original waitlist entry point is untouched, so this can be rolled back on its own.
   if (select prosrc from pg_proc where oid = 'ops.join_waitlist(text, text[], text, text, text, text, boolean, boolean, text, text, text)'::regprocedure) ~ 'join_waitlist_v2' then

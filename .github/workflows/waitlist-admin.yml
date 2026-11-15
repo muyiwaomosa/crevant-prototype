@@ -35,6 +35,9 @@ name: Waitlist admin (staging)
 #                       the creator, so the run log holding one is accepted.
 #   revoke-link         revoke a link for good
 #   acquisition-summary counts only; visits are estimates
+#   purge-acquisition-events  delete hourly acquisition counts older than N
+#                       days (proposed 90, pending privacy/legal approval).
+#                       By hand only; nothing schedules it.
 #
 # Retention runs only when someone starts "purge" by hand. There is no
 # scheduled deletion (docs/WAITLIST-OPERATIONS.md explains the options for
@@ -69,6 +72,7 @@ on:
           - issue-link
           - revoke-link
           - acquisition-summary
+          - purge-acquisition-events
         default: summary
         required: true
       waitlist_id:
@@ -143,6 +147,11 @@ on:
         description: "For revoke-link: the 20 character code."
         type: string
         required: false
+      acq_retention_days:
+        description: "For purge-acquisition-events: days of hourly counts to keep (30 to 400; proposed 90, pending approval)."
+        type: string
+        default: '90'
+        required: false
       confirm_project_ref:
         description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
         type: string
@@ -195,6 +204,7 @@ jobs:
           LINK_DAYS: ${{ inputs.link_days }}
           CAMPAIGN: ${{ inputs.campaign }}
           LINK_CODE: ${{ inputs.link_code }}
+          ACQ_RETENTION_DAYS: ${{ inputs.acq_retention_days }}
           PGSSLMODE: require
           PGCONNECT_TIMEOUT: '15'
         run: scripts/db/waitlist-admin.sh

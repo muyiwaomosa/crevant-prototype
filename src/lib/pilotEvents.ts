@@ -44,14 +44,17 @@ export const PILOT_EVENTS = {
     recordedBy: 'database',
     props: { creator_link: 'link_ref' },
   },
+  // Not recorded anywhere yet: the decision stays pending in the database
+  // until real-account follows exist (ops.creator_link_redemptions). The tour
+  // demonstrates the experience with sample data only.
   invite_follow_confirmed: {
-    measures: 'Invitation-to-follow conversion',
-    recordedBy: 'database',
+    measures: 'Invitation-to-follow conversion (once real-account follows exist)',
+    recordedBy: 'app',
     props: { creator_link: 'link_ref' },
   },
   invite_follow_declined: {
-    measures: 'Invitation-to-follow conversion (the other answer)',
-    recordedBy: 'database',
+    measures: 'Invitation-to-follow conversion, the other answer (once real-account follows exist)',
+    recordedBy: 'app',
     props: { creator_link: 'link_ref' },
   },
   interests_selected: {

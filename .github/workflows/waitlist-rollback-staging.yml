@@ -4,6 +4,18 @@ name: Waitlist rollback (staging)
 # Supabase project (scripts/db/staging-rollback-waitlist.sql), so they can be
 # applied again cleanly. Staging only. It never runs on its own.
 #
+# target  waitlist             (default) the waitlist rollback, as before
+#         creator_acquisition  scripts/db/staging-rollback-acquisition.sql:
+#                              removes exactly what migration 20261116000000
+#                              added. It comes after the waitlist, so it must
+#                              be removed FIRST; the waitlist rollback refuses
+#                              while it is recorded. Its own confirmation
+#                              phrase: DELETE THE STAGING CREATOR ACQUISITION
+#
+# Both targets share every safeguard below: the same switch, owner-only
+# start and re-run, main only, staging approval, target verification,
+# verify-full TLS, the dry-run default and the deploy queue.
+#
 #   check  (default) every check, and the drops themselves, inside one
 #          transaction that is then rolled back. Changes nothing.
 #   apply  the same, committed. Needs the typed confirmation phrase.
@@ -56,8 +68,16 @@ on:
         description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
         type: string
         required: true
+      target:
+        description: "Which rollback. creator_acquisition must be removed before waitlist."
+        type: choice
+        options:
+          - waitlist
+          - creator_acquisition
+        default: waitlist
+        required: true
       confirm_phrase:
-        description: "For apply only, type exactly: DELETE THE STAGING WAITLIST"
+        description: "For apply only, type exactly: DELETE THE STAGING WAITLIST (waitlist) or DELETE THE STAGING CREATOR ACQUISITION (creator_acquisition)"
         type: string
         required: false
 
@@ -91,7 +111,7 @@ jobs:
           fi
 
   rollback:
-    name: ${{ inputs.mode == 'apply' && 'Roll back the waitlist on staging' || 'Rollback check on staging (no changes)' }}
+    name: ${{ inputs.mode == 'apply' && format('Roll back {0} on staging', inputs.target) || format('Rollback check of {0} on staging (no changes)', inputs.target) }}
     needs: switch-scope
     if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
@@ -107,13 +127,19 @@ jobs:
             exit 1
           fi
 
-      - name: Refuse apply without the confirmation phrase
+      - name: Refuse an unknown target, or apply without that target's confirmation phrase
         env:
           MODE: ${{ inputs.mode }}
+          TARGET: ${{ inputs.target }}
           PHRASE: ${{ inputs.confirm_phrase }}
         run: |
-          if [ "$MODE" = apply ] && [ "$PHRASE" != "DELETE THE STAGING WAITLIST" ]; then
-            echo "::error::apply needs the exact confirmation phrase. Nothing was done."
+          case "$TARGET" in
+            waitlist) expected="DELETE THE STAGING WAITLIST" ;;
+            creator_acquisition) expected="DELETE THE STAGING CREATOR ACQUISITION" ;;
+            *) echo "::error::Unknown target. Nothing was done."; exit 1 ;;
+          esac
+          if [ "$MODE" = apply ] && [ "$PHRASE" != "$expected" ]; then
+            echo "::error::apply needs the exact confirmation phrase for $TARGET. Nothing was done."
             exit 1
           fi
 
@@ -131,6 +157,7 @@ jobs:
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           MODE: ${{ inputs.mode }}
+          TARGET: ${{ inputs.target }}
           PHRASE: ${{ inputs.confirm_phrase }}
           PGSSLMODE: verify-full
           PGSSLROOTCERT: system
@@ -142,5 +169,9 @@ jobs:
             echo "::error::psql $major cannot verify against the system certificates (needs 16 or later). Nothing was done."
             exit 1
           fi
-          psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v mode="$MODE" -v confirm="$PHRASE" \
-            -f scripts/db/staging-rollback-waitlist.sql
+          case "$TARGET" in
+            waitlist) sql=scripts/db/staging-rollback-waitlist.sql ;;
+            creator_acquisition) sql=scripts/db/staging-rollback-acquisition.sql ;;
+            *) echo "::error::Unknown target. Nothing was done."; exit 1 ;;
+          esac
+          psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v mode="$MODE" -v confirm="$PHRASE" -f "$sql"

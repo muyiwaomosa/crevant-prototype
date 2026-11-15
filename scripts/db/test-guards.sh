@@ -160,9 +160,14 @@ guard "acquisition rollback SQL: never cascades, never drops owned objects in bu
   "! grep -viE '^ *--' $acqsql | grep -qiE 'cascade|drop owned|reassign owned'"
 guard "acquisition rollback SQL: its own confirmation phrase for apply, and rolls back in check mode" \
   "grep -q \"'DELETE THE STAGING CREATOR ACQUISITION'\" $acqsql && grep -qE '^  rollback;' $acqsql"
-# Not wired to any workflow: running it on staging needs the founder's approval first.
-guard "only the local tests run the acquisition rollback SQL (no workflow yet)" \
-  "[ \"\$(grep -rlF 'staging-rollback-acquisition.sql' .github scripts | grep -v -e '^scripts/db/staging-rollback-acquisition.sql$' | sort | paste -sd,)\" = 'scripts/db/rollback-acquisition-test.sh,scripts/db/rollback-test.sh,scripts/db/test-guards.sh,scripts/waitlist-isolation.test.mjs' ]"
+# Run on staging only through the same rollback workflow (target
+# creator_acquisition), and locally by its tests.
+guard "only the rollback workflow and the local tests run the acquisition rollback SQL" \
+  "[ \"\$(grep -rlF 'staging-rollback-acquisition.sql' .github scripts | grep -v -e '^scripts/db/staging-rollback-acquisition.sql$' | sort | paste -sd,)\" = '.github/workflows/waitlist-rollback-staging.yml,scripts/db/rollback-acquisition-test.sh,scripts/db/rollback-test.sh,scripts/db/test-guards.sh,scripts/waitlist-isolation.test.mjs' ]"
+guard "rollback workflow: each target has its own phrase, checked before connecting, and picks its own SQL file" \
+  "grep -q 'waitlist) expected=\"DELETE THE STAGING WAITLIST\" ;;' $rb && grep -q 'creator_acquisition) expected=\"DELETE THE STAGING CREATOR ACQUISITION\" ;;' $rb \
+   && grep -q 'waitlist) sql=scripts/db/staging-rollback-waitlist.sql ;;' $rb && grep -q 'creator_acquisition) sql=scripts/db/staging-rollback-acquisition.sql ;;' $rb \
+   && [ \"\$(grep -c 'Unknown target. Nothing was done.' $rb)\" = 2 ] && grep -A8 '      target:' $rb | grep -q 'default: waitlist'"
 
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]

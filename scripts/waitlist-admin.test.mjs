@@ -38,10 +38,10 @@ test('the health workflow uses no secrets and no environment, and runs daily onl
 })
 
 test('the admin script uses only the admin entry points and never selects an email address', () => {
-  assert.equal(sqlLines.length, 17)
+  assert.equal(sqlLines.length, 18)
   for (const line of sqlLines) {
     assert.doesNotMatch(line, /email/i, line)
-    assert.match(line, /waitlist_api\.admin_(summary|status|delete|purge|set_notice_version|open|close|wave_preview|wave_select|wave_summary|wave_clear|accept_creator|set_creator_status|set_creator_public_name|issue_creator_link|revoke_creator_link|acquisition_summary)\(/, line)
+    assert.match(line, /waitlist_api\.admin_(summary|status|delete|purge|set_notice_version|open|close|wave_preview|wave_select|wave_summary|wave_clear|accept_creator|set_creator_status|set_creator_public_name|issue_creator_link|revoke_creator_link|acquisition_summary|purge_acquisition_events)\(/, line)
     assert.doesNotMatch(line, /\bops\./, line)
   }
   assert.match(script, /WAITLIST_ID must be a waitlist id \(a UUID\)/)
@@ -53,7 +53,7 @@ test('creator actions take an account id, never an email, and inputs reach the s
   assert.match(script, /CREATOR_USER_ID must be the creator's account id \(a UUID\), not an email address/)
   assert.match(script, /LINK_DAYS must be a whole number from 1 to 365 \(default 90\)/)
   assert.match(script, /LINK_CODE must be the 20 character link code/)
-  for (const input of ['creator_user_id', 'categories', 'creator_status', 'public_name', 'link_days', 'campaign', 'link_code']) {
+  for (const input of ['creator_user_id', 'categories', 'creator_status', 'public_name', 'link_days', 'campaign', 'link_code', 'acq_retention_days']) {
     // Every use of the input is an env assignment in the run step, never inline in a command.
     for (const m of workflow.matchAll(new RegExp(`\\$\\{\\{ inputs\\.${input} \\}\\}`, 'g'))) {
       const line = workflow.slice(workflow.lastIndexOf('\n', m.index) + 1, workflow.indexOf('\n', m.index))
@@ -61,4 +61,7 @@ test('creator actions take an account id, never an email, and inputs reach the s
     }
   }
   assert.match(workflow, /default: '90'/)
+  assert.match(script, /ACQ_RETENTION_DAYS must be a whole number from 30 to 400 \(proposed 90\)/)
+  // Retention is by hand only: no schedule anywhere runs the purge.
+  assert.doesNotMatch(workflow, /schedule:|cron:/)
 })

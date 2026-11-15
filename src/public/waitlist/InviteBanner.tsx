@@ -15,9 +15,10 @@ import { readAcquisition, type WaitlistConfig } from './config'
  *   unavailable           a short note; joining still works
  *   anything else         nothing (closed, rate limited, offline)
  *
- * Following is NOT offered here: the person has no account yet. They are
- * told that, once invited, they'll be asked themselves (Follow or Not now,
- * ops.record_invite_follow_decision), and that nothing is followed for them.
+ * Following is NOT offered or promised here: the person has no account yet,
+ * and real-account follows don't exist (the invitation's follow decision
+ * stays pending in the database until they do). The banner only says that
+ * following is always their own choice and earns nothing.
  */
 type Shown = { kind: 'named'; name: string } | { kind: 'nameless' } | { kind: 'unavailable' } | null
 
@@ -70,7 +71,6 @@ export function InviteBanner({
       </p>
     )
   }
-  const who = shown.kind === 'named' ? shown.name : 'the creator who invited you'
   return (
     <div data-testid="invite-banner" className="mt-8 flex gap-3 rounded-3xl bg-white p-5 ring-1 ring-ink-100">
       <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-spark-700" aria-hidden="true" />
@@ -78,10 +78,7 @@ export function InviteBanner({
         <p className="font-semibold text-ink-900">
           {shown.kind === 'named' ? `${shown.name} invited you to Splitpost.` : 'A creator in the Splitpost pilot invited you.'}
         </p>
-        <p>
-          If you're invited to the pilot, we'll ask whether you'd like to follow {who} when you set up your account. You choose Follow or Not
-          now. Nobody is followed for you, and an invitation earns nothing for anyone.
-        </p>
+        <p>Following anyone on Splitpost is always your own choice. Nobody is followed for you, and an invitation earns nothing for anyone.</p>
       </div>
     </div>
   )

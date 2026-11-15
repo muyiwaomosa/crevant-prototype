@@ -167,13 +167,16 @@ revoked="$(adm ACTION=revoke-link LINK_CODE=$code)"
 again="$(adm ACTION=revoke-link LINK_CODE=$code)"
 by_email="$(adm ACTION=accept-creator CREATOR_USER_ID=admin-creator@e2e.test || true)"
 summary="$(adm ACTION=acquisition-summary)"
+purged="$(adm ACTION=purge-acquisition-events)"
+too_short="$(adm ACTION=purge-acquisition-events ACQ_RETENTION_DAYS=7 || true)"
 psql "$DB_URL" -X -q -c "delete from ops.creator_links where creator_id = '$C_ID'; delete from ops.pilot_creators where user_id = '$C_ID'; delete from auth.users where id = '$C_ID'" >/dev/null
 if [ "$accepted" = "Creator: accepted" ] && [ "$named" = "Public name: set" ] && [ -n "$code" ] && [ "$days" = 90 ] \
    && [ "$paused" = "Creator status: paused" ] && [ "$revoked" = "Link: revoked" ] && [ "$again" = "Link: already_revoked" ] \
-   && grep -q "not an email address" <<<"$by_email" && grep -q '"visits_estimate"' <<<"$summary" && ! grep -qE "$code|@e2e" <<<"$summary"; then
-  echo "PASS  the admin script's creator commands work as waitlist_admin (accept, name, 90 day link, pause, final revoke, no email)"
+   && grep -q "not an email address" <<<"$by_email" && grep -q '"visits_estimate"' <<<"$summary" && ! grep -qE "$code|@e2e" <<<"$summary" \
+   && grep -qE '^Acquisition counts older than 90 days deleted: [0-9]+$' <<<"$purged" && grep -q "from 30 to 400" <<<"$too_short"; then
+  echo "PASS  the admin script's creator commands work as waitlist_admin (accept, name, 90 day link, pause, final revoke, no email, bounded 90 day purge)"
 else
-  echo "FAIL  the admin script's creator commands: $accepted | $named | $issued | $days | $paused | $revoked | $again | $by_email" >&2
+  echo "FAIL  the admin script's creator commands: $accepted | $named | $issued | $days | $paused | $revoked | $again | $by_email | $purged | $too_short" >&2
   exit 1
 fi
 

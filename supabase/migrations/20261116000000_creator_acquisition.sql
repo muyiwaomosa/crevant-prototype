@@ -9,8 +9,9 @@
 --                                programme record, not an account role.
 --   ops.creator_links            creator-specific invitation links: opaque
 --                                random codes, expiry and revocation
---   ops.creator_link_redemptions an account that joined through a link, and
---                                that person's own follow decision
+--   ops.creator_link_redemptions an account that joined through a link; its
+--                                follow decision stays 'pending' until
+--                                real-account follows exist
 --   ops.acquisition_events       counts for measurement: no email, no
 --                                account id, no address, no free text
 --   waitlist_api.submit_v2       the waitlist entry point with the new fields
@@ -21,6 +22,8 @@
 --                                public name they agreed to, issue links
 --                                (90 days by default) and revoke them
 --   waitlist_api.admin_acquisition_summary   counts only
+--   waitlist_api.admin_purge_acquisition_events  manual retention purge of
+--                                the hourly counts (proposed 90 days)
 --
 -- Nothing existing is redefined: ops.join_waitlist and waitlist_api.submit
 -- stay exactly as the waitlist migrations made them, so this migration can be
@@ -35,7 +38,8 @@
 --      creator who is no longer accepted, resolve to nothing and the signup
 --      carries on unattributed.
 --   3. Following. Only ever the person's own explicit choice. A redemption
---      starts 'pending'; nothing here follows anyone.
+--      stays 'pending' (enforced); nothing here follows anyone or records a
+--      follow, because real-account follows don't exist yet.
 --   4. Connection Points and any future monetary eligibility. Nothing here
 --      creates, references or implies either.
 --
@@ -222,9 +226,9 @@ create table ops.acquisition_events (
   constraint acquisition_events_allowed check (event in (
     'creator_link_visit',       -- a valid link was opened (estimate: once per salted client key, link and UTC day)
     'waitlist_signup',          -- a new address joined the waitlist
-    'invitation_accepted',      -- an invited person created their account
-    'invite_follow_confirmed',  -- they chose to follow the inviting creator
-    'invite_follow_declined'    -- they chose not to
+    'invitation_accepted'       -- an invited person created their account
+    -- No follow events yet: real-account follows don't exist, so nothing may
+    -- record a follow decision (see ops.creator_link_redemptions).
   )),
   constraint acquisition_events_source_format check (source is null or source ~ '^[a-z0-9_-]{1,40}$')
 );
@@ -379,9 +383,15 @@ create trigger invitations_copy_creator_link
   for each row execute function ops.invitations_copy_creator_link();
 
 -- One row per account that arrived through a verified link, with that
--- person's own follow decision. 'pending' until they choose. Recording
--- 'followed' records their choice; it does not create the follow, award
--- Connection Points or create any entitlement for anyone.
+-- person's follow decision about the inviting creator.
+--
+-- The decision stays 'pending', enforced by the database, until real-account
+-- follows exist: until then there is no follow relationship to create, so
+-- nothing may record or show a completed follow (or a decline). The
+-- migration that adds real follows drops creator_link_redemptions_pending_until_follows
+-- and adds the function that records the person's own choice together with
+-- the real follow. A decision never awards Connection Points or creates any
+-- entitlement for anyone.
 create table ops.creator_link_redemptions (
   user_id         uuid primary key references auth.users (id) on delete cascade,
   link_id         uuid references ops.creator_links (id) on delete set null,
@@ -391,9 +401,10 @@ create table ops.creator_link_redemptions (
   decided_at      timestamptz,
   constraint creator_link_redemptions_decision_allowed check (follow_decision in ('pending', 'followed', 'declined')),
   constraint creator_link_redemptions_decided_at check ((follow_decision = 'pending') = (decided_at is null)),
-  constraint creator_link_redemptions_not_self check (creator_id is distinct from user_id)
+  constraint creator_link_redemptions_not_self check (creator_id is distinct from user_id),
+  constraint creator_link_redemptions_pending_until_follows check (follow_decision = 'pending' and decided_at is null)
 );
-comment on table ops.creator_link_redemptions is 'Accounts that joined through a verified creator link, and their own follow decision. Never creates a follow, Connection Points or entitlement.';
+comment on table ops.creator_link_redemptions is 'Accounts that joined through a verified creator link. The follow decision stays pending until real-account follows exist. Never creates a follow, Connection Points or entitlement.';
 
 create function ops.invitations_record_link_redemption()
 returns trigger
@@ -421,33 +432,6 @@ $$;
 create trigger invitations_record_link_redemption
   after update of accepted_at on ops.invitations
   for each row execute function ops.invitations_record_link_redemption();
-
--- The person's own answer to "Follow <creator>?". Called by server code for
--- the signed-in person only, once: a later change of mind is an ordinary
--- follow or unfollow, not a new attribution.
-create function ops.record_invite_follow_decision(p_user uuid, p_decision text)
-returns text
-language plpgsql
-set search_path = ''
-as $$
-declare
-  v_link uuid;
-begin
-  if p_decision not in ('followed', 'declined') then
-    raise exception 'decision must be followed or declined';
-  end if;
-  update ops.creator_link_redemptions
-     set follow_decision = p_decision, decided_at = now()
-   where user_id = p_user and follow_decision = 'pending'
-  returning link_id into v_link;
-  if not found then
-    return 'unchanged';
-  end if;
-  insert into ops.acquisition_events (event, creator_link_id)
-  values (case p_decision when 'followed' then 'invite_follow_confirmed' else 'invite_follow_declined' end, v_link);
-  return p_decision;
-end;
-$$;
 
 -- ---------------------------------------------------------------------------
 -- Measurement for the waitlist_admin login: counts only, never an address
@@ -484,9 +468,7 @@ as $$
                 -- An estimate (see waitlist_api.invite_preview), so named.
                 'visits_estimate',    (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'creator_link_visit'),
                 'signups',            (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'waitlist_signup'),
-                'accounts',           (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'invitation_accepted'),
-                'follows_confirmed',  (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'invite_follow_confirmed'),
-                'follows_declined',   (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'invite_follow_declined')
+                'accounts',           (select count(*) from ops.acquisition_events e where e.creator_link_id = l.id and e.event = 'invitation_accepted')
               ) order by l.created_at)
               from ops.creator_links l join ops.pilot_creators c on c.user_id = l.creator_id), '[]'::jsonb)
   );
@@ -581,6 +563,33 @@ begin
   end if;
   update ops.creator_links set revoked_at = now() where code = lower(btrim(p_code));
   return 'revoked';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Retention for the hourly acquisition counts (proposed: 90 days for the
+-- pilot, subject to privacy and legal approval). Manual only: the founder
+-- runs it through the admin workflow; nothing schedules it. It deletes
+-- ONLY rows of ops.acquisition_events older than the given number of days
+-- (30 to 400, so a typo can't empty the table), touches no other table, and
+-- returns how many rows it removed.
+
+create function waitlist_api.admin_purge_acquisition_events(p_days integer)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  n integer;
+begin
+  if p_days is null or p_days < 30 or p_days > 400 then
+    raise exception 'retention must be between 30 and 400 days';
+  end if;
+  delete from ops.acquisition_events
+   where occurred_at < date_trunc('hour', now()) - make_interval(days => p_days);
+  get diagnostics n = row_count;
+  return n;
 end;
 $$;
 
@@ -729,12 +738,10 @@ revoke all on function ops.resolve_creator_link(text) from public, anon, authent
 revoke all on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text) from public, anon, authenticated;
 revoke all on function ops.invitations_copy_creator_link() from public, anon, authenticated;
 revoke all on function ops.invitations_record_link_redemption() from public, anon, authenticated;
-revoke all on function ops.record_invite_follow_decision(uuid, text) from public, anon, authenticated;
 revoke all on function ops.invite_preview_hit(text, interval, integer) from public, anon, authenticated, service_role;
 
 grant execute on function ops.resolve_creator_link(text) to service_role;
 grant execute on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text) to service_role;
-grant execute on function ops.record_invite_follow_decision(uuid, text) to service_role;
 
 revoke all on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text)
   from public, anon, authenticated, service_role;
@@ -744,6 +751,7 @@ revoke all on function waitlist_api.admin_set_creator_status(uuid, text) from pu
 revoke all on function waitlist_api.admin_set_creator_public_name(uuid, text) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.admin_issue_creator_link(uuid, integer, text) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.admin_revoke_creator_link(text) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.admin_purge_acquisition_events(integer) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.invite_preview(text, text) from public, anon, authenticated, service_role;
 grant execute on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text)
   to waitlist_writer;
@@ -753,4 +761,5 @@ grant execute on function waitlist_api.admin_set_creator_status(uuid, text) to w
 grant execute on function waitlist_api.admin_set_creator_public_name(uuid, text) to waitlist_admin;
 grant execute on function waitlist_api.admin_issue_creator_link(uuid, integer, text) to waitlist_admin;
 grant execute on function waitlist_api.admin_revoke_creator_link(text) to waitlist_admin;
+grant execute on function waitlist_api.admin_purge_acquisition_events(integer) to waitlist_admin;
 grant execute on function waitlist_api.invite_preview(text, text) to waitlist_writer;

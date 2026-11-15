@@ -24,7 +24,7 @@ Privacy notice wording for all of this: `docs/PRIVACY-NOTICE-ACQUISITION-DRAFT.m
 | Self-reported attribution | "A creator introduced me": yes or no only. No name or handle is asked for or stored | `ops.waitlist.introduced_by_creator` | **No.** Names nobody, never a verified referral. |
 | Verified invitation | An accepted pilot creator's link, issued by the admin and resolved by the server | `ops.creator_links`, `ops.waitlist.creator_link_id`, `ops.invitations.creator_link_id`, `ops.creator_link_redemptions` | **No.** Attribution only. |
 | Link visit | Someone opened a usable link (an estimate, stored without any identifier) | `ops.acquisition_events` (`creator_link_visit`) | **No.** A visit is not a signup and not a follow. |
-| Following | The person's own explicit choice | Tour today; real-account follows don't exist yet | Only when the person chooses it. A redemption starts `pending`. |
+| Following | The person's own explicit choice | Tour today (sample data); real-account follows don't exist yet | Only when the person chooses it. A redemption stays `pending`, enforced by the database, until real follows exist. |
 | Connection Points / future money | Recognition with one creator; any future monetary eligibility | Tour CP rules; nothing in the database | **Nothing extra for invitations.** A genuine follow earns the normal follow bonus only; "Not now", visits, signups and attribution earn nothing. Tests fail otherwise. |
 
 ## Phase 1: the waitlist (one waitlist, no second signup system)
@@ -102,17 +102,26 @@ The name is shown only if the creator agreed. The admin records when they
 agreed, and the database refuses a name without that time or in an unsafe
 format.
 
-**The follow choice** happens once the invited person has an account:
-- The redemption starts `pending`.
-- The onboarding screen shows the inviting creator first, with explicit
-  **Follow** / **Not now**.
-- `ops.record_invite_follow_decision` records the answer once.
-- In the tour this is built and tested (`/tour/welcome?invite=<code>`). For
-  real accounts it needs the follow work below.
+**The follow choice (follow-state accuracy).** Real-account follows don't
+exist yet, so no live flow can record or show a completed follow:
+- A redemption is created `pending` when the invited person accepts, and the
+  database **keeps it pending**:
+  - the constraint `creator_link_redemptions_pending_until_follows` refuses
+    `followed` or `declined`, even from server code;
+  - no function records a decision;
+  - no follow event exists in the event list.
+- No live page shows or promises a follow. The `/join` banner says only that
+  following is always the person's own choice.
+- The **tour** demonstrates the intended experience with sample data
+  (`/tour/welcome?invite=<code>`): explicit **Follow** / **Not now**, nothing
+  followed automatically, only the normal follow bonus.
+- The migration that adds real follows will drop that constraint and add a
+  function that records the person's choice **together with** the real
+  follow.
 
 Attribution carries through: waitlist entry → invitation (copied by trigger)
-→ account (a `pending` redemption when the invitation is accepted) → the
-person's own decision.
+→ account (a `pending` redemption when the invitation is accepted). The
+person's own decision comes once real follows exist.
 
 ## Phase 3: personalized onboarding (in the tour today)
 
@@ -146,7 +155,7 @@ invited and accept. Only their own choice is a follow.
 | Verified creator invitation | `waitlist_signup` with a link; `invitation_accepted` | Database |
 | Link visits (estimate) | `creator_link_visit`: a usable link opened, once per salted client key, link and UTC day | Database (invitation preview) |
 | Invitation-to-signup conversion (estimate) | signups through a link ÷ estimated visits to it | Database |
-| Invitation-to-follow conversion | `invite_follow_confirmed` ÷ (`confirmed` + `declined`) | Database |
+| Invitation-to-follow conversion | `invite_follow_confirmed` ÷ (`confirmed` + `declined`) | Not recorded until real-account follows exist |
 | Interest selection | `interests_selected`: topics, count, plans to create | App, once real accounts exist |
 | Discovery-to-follow conversion | `discover_follow` ÷ `discover_suggestion_shown`, split by matched interest | App, once real accounts exist |
 | Returning fan engagement | accounts that engage with someone they follow in a later week, in aggregate | Derived, once real accounts exist |
@@ -174,7 +183,7 @@ invited and accept. Only their own choice is a follow.
 `waitlist_api.admin_acquisition_summary()` gives the admin totals, plus a
 per-link funnel. Each link is identified only by its first six characters,
 with its campaign, state, expiry and its `visits_estimate`, signups,
-accounts, follows confirmed and follows declined. It never shows a full code, an address or a
+and accounts. It never shows a full code, an address or a
 name.
 
 ## Rolling back
@@ -196,8 +205,35 @@ unchanged: it still refuses while any later migration is recorded. CI now:
 5. proves the order holds: the waitlist rollback refuses while acquisition is
    recorded, and the acquisition check passes again.
 
-It is **not wired to a staging workflow.** That is a decision below. A guard
-test fails if anything but the local tests runs it.
+**On staging** it runs only through the existing "Waitlist rollback
+(staging)" workflow, with `target: creator_acquisition`. It shares every
+safeguard of the waitlist rollback:
+- the same `WAITLIST_ROLLBACK_ENABLED` switch (staging environment only);
+- started and re-run by the owner only, from main only;
+- staging environment approval;
+- target and verify-full TLS checks;
+- the dry-run default and the deploy queue.
+
+It has its own confirmation phrase (`DELETE THE STAGING CREATOR ACQUISITION`).
+Guard tests check all of this, and that nothing else runs it. **It has not
+been run against staging.**
+
+## Retention of the hourly counts
+
+**Proposed: 90 days for the pilot, subject to privacy and legal approval.**
+
+`waitlist_api.admin_purge_acquisition_events(days)` deletes rows of
+`ops.acquisition_events` older than the given number of days, and nothing
+else.
+- **Admin login only.**
+- **Bounded:** 30 to 400 days, so a typo can't empty the table.
+- **Returns the count** of rows deleted.
+- **Tested:** it removes exactly the old rows and leaves every other table
+  unchanged.
+
+The founder runs it by hand with the admin workflow action
+`purge-acquisition-events` (default 90 days). **No schedule exists, and none
+should be added until the retention policy is approved.**
 
 ## Real accounts: the minimum to make Following, Discover and interests real
 
@@ -213,7 +249,7 @@ data, and none of this is built yet. The minimum, in order:
    - follow and unfollow (self only, rate limited);
    - Following feed: posts from people I follow, newest first, paged;
    - Discover suggestions: creators matching my topics first, then A to Z, nobody I already follow, no engagement ranking;
-   - record my invitation follow decision, as a wrapper on `ops.record_invite_follow_decision` that only ever acts for the signed-in person, and that performs the follow only on Follow.
+   - record my invitation follow decision, for the signed-in person only, creating the real follow on Follow in the same transaction. That same migration drops `creator_link_redemptions_pending_until_follows`.
 3. **Onboarding screens for real accounts,** porting the tour's steps (intent, topics, inviting creator with Follow / Not now, suggestions).
 4. **Measurement:** record `interests_selected`, `discover_suggestion_shown` and `discover_follow` as counts with no identifier, timed to the hour. Derive returning engagement from aggregates.
 5. **Connection Points:** if real CP exists by then, an invitation follow uses the **normal** follow rule and nothing else. If not, no CP at all. Never a separate invitation award.
@@ -252,13 +288,6 @@ approval) has six new actions:
 
 ## Decisions still open
 
-The product decisions are approved. What remains:
-
-1. **Approve the migration**, after reading `ACQUISITION-MIGRATION-REVIEW.md`.
-2. **Wire the acquisition rollback into a staging workflow** before the
-   migration reaches staging.
-3. **Legal review and approval of the privacy wording**
-   (`PRIVACY-NOTICE-ACQUISITION-DRAFT.md`), including retention for the
-   hourly counts and follow decisions.
-4. **Real-account follows, feed and interests** (the list above), when
-   you're ready to schedule them.
+See the approval checklist in the PR description: approve the retention
+period and the privacy wording, enable the rollback switch, approve the
+migration, and choose when to build real-account follows.

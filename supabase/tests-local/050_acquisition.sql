@@ -80,11 +80,6 @@ begin
       raise exception 'FAIL: % could create a creator link', r;
     exception when insufficient_privilege then null;
     end;
-    begin
-      perform ops.record_invite_follow_decision('00000000-0000-0000-0000-0000000000f1', 'followed');
-      raise exception 'FAIL: % could record a follow decision', r;
-    exception when insufficient_privilege then null;
-    end;
     reset role;
   end loop;
   foreach r in array array['anon', 'authenticated', 'waitlist_admin', 'service_role'] loop
@@ -378,16 +373,28 @@ begin
     raise exception 'FAIL: accepting the invitation did not record a pending redemption';
   end if;
 
-  if ops.record_invite_follow_decision('00000000-0000-0000-0000-0000000000f2', 'followed') <> 'followed'
-     or ops.record_invite_follow_decision('00000000-0000-0000-0000-0000000000f2', 'declined') <> 'unchanged' then
-    raise exception 'FAIL: the follow decision was not recorded once, by the person';
+  -- Real-account follows don't exist yet, so nothing can record a completed
+  -- follow (or a decline): not server code, and no function offers it.
+  if to_regprocedure('ops.record_invite_follow_decision(uuid, text)') is not null then
+    raise exception 'FAIL: a function can record an invitation follow decision before real follows exist';
   end if;
+  set local role service_role;
   begin
-    perform ops.record_invite_follow_decision('00000000-0000-0000-0000-0000000000f2', 'auto');
-    raise exception 'FAIL: an unknown decision was accepted';
-  exception when raise_exception then
-    if sqlerrm like 'FAIL:%' then raise; end if;
+    update ops.creator_link_redemptions set follow_decision = 'followed', decided_at = now()
+     where user_id = '00000000-0000-0000-0000-0000000000f2';
+    raise exception 'FAIL: server code recorded a completed follow with no follow relationship';
+  exception when check_violation then null;
   end;
+  begin
+    update ops.creator_link_redemptions set follow_decision = 'declined', decided_at = now()
+     where user_id = '00000000-0000-0000-0000-0000000000f2';
+    raise exception 'FAIL: server code recorded a decision before real follows exist';
+  exception when check_violation then null;
+  end;
+  reset role;
+  if (select follow_decision from ops.creator_link_redemptions where user_id = '00000000-0000-0000-0000-0000000000f2') <> 'pending' then
+    raise exception 'FAIL: the invitation decision is not pending';
+  end if;
 
   -- No new table or column connects attribution to Connection Points, rewards, money or follows.
   if exists (
@@ -397,7 +404,7 @@ begin
   ) then
     raise exception 'FAIL: acquisition data has a points, money or follower column';
   end if;
-  raise notice 'PASS: attribution flows from waitlist to account; following stays the person''s own choice';
+  raise notice 'PASS: attribution flows from waitlist to account; the follow decision stays pending until real follows exist';
 end $$;
 
 -- 7. Events are anonymous counts, and the summary shows counts only.
@@ -416,7 +423,7 @@ begin
      or (select count(*) from ops.acquisition_events where event = 'waitlist_signup' and self_reported_referral) <> 3
      or (select count(*) from ops.acquisition_events where event = 'waitlist_signup' and creator_link_id is not null) <> 1
      or (select count(*) from ops.acquisition_events where event = 'invitation_accepted') <> 1
-     or (select count(*) from ops.acquisition_events where event = 'invite_follow_confirmed') <> 1 then
+     or exists (select 1 from ops.acquisition_events where event ~ 'follow') then
     raise exception 'FAIL: unexpected event counts: %', (select jsonb_agg(e) from ops.acquisition_events e);
   end if;
   s := pg_temp.admin('waitlist_api.admin_acquisition_summary()');
@@ -511,10 +518,10 @@ begin
   end if;
   s := pg_temp.admin('waitlist_api.admin_acquisition_summary()');
   if not (s->'links') @> jsonb_build_array(jsonb_build_object('link', left(v_code, 6), 'campaign', 'preview_test', 'state', 'active',
-            'visits_estimate', 2, 'signups', 1, 'accounts', 0, 'follows_confirmed', 0, 'follows_declined', 0)) then
+            'visits_estimate', 2, 'signups', 1, 'accounts', 0)) then
     raise exception 'FAIL: the per-link funnel is wrong: %', s->'links';
   end if;
-  if s::text ~ v_code or s::text ~* 'priya' then
+  if s::text ~ v_code or s::text ~* '(priya|follow)' then
     raise exception 'FAIL: the summary exposes a full link code or a creator name';
   end if;
 
@@ -536,6 +543,72 @@ begin
     raise exception 'FAIL: the preview limits store a link id or code';
   end if;
   raise notice 'PASS: the invitation preview shows only an agreed name, unusable links look alike, and visits are counted apart from signups';
+end $$;
+
+-- 10. Retention purge of the hourly counts: admin only, 30 to 400 days,
+--     deletes only old acquisition events and nothing else.
+do $$
+declare
+  before_other text;
+  before_events int;
+  n int;
+  snapshot text := $s$select concat_ws('|', (select count(*) from ops.waitlist), (select count(*) from ops.waitlist_consents),
+    (select count(*) from ops.pilot_creators), (select count(*) from ops.creator_links), (select count(*) from ops.creator_link_redemptions),
+    (select count(*) from ops.invitations), (select count(*) from ops.invite_preview_limits), (select count(*) from ops.waitlist_rate_limits),
+    (select count(*) from auth.users))$s$;
+begin
+  -- Some old events, some recent ones.
+  insert into ops.acquisition_events (event, occurred_at, source) values
+    ('waitlist_signup', date_trunc('hour', now() - interval '120 days'), 'old'),
+    ('creator_link_visit', date_trunc('hour', now() - interval '91 days'), null),
+    ('waitlist_signup', date_trunc('hour', now() - interval '89 days'), 'kept');
+  execute snapshot into before_other;
+  before_events := (select count(*) from ops.acquisition_events);
+  foreach n in array array[0, 29, 401, -1] loop
+    begin
+      perform pg_temp.admin_text(format('waitlist_api.admin_purge_acquisition_events(%s)', n));
+      raise exception 'FAIL: a purge of % days was accepted', n;
+    exception when raise_exception then
+      if sqlerrm like 'FAIL:%' then raise; end if;
+    end;
+  end loop;
+  begin
+    perform pg_temp.admin_text('waitlist_api.admin_purge_acquisition_events(null)');
+    raise exception 'FAIL: a purge without a period was accepted';
+  exception when raise_exception then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+  end;
+  if pg_temp.admin_text('waitlist_api.admin_purge_acquisition_events(90)')::int <> 2 then
+    raise exception 'FAIL: the 90 day purge did not remove exactly the two older events';
+  end if;
+  if exists (select 1 from ops.acquisition_events where occurred_at < date_trunc('hour', now()) - interval '90 days')
+     or not exists (select 1 from ops.acquisition_events where source = 'kept')
+     or (select count(*) from ops.acquisition_events) <> before_events - 2 then
+    raise exception 'FAIL: the purge removed the wrong events';
+  end if;
+  declare after_other text;
+  begin
+    execute snapshot into after_other;
+    if after_other <> before_other then
+      raise exception 'FAIL: the purge touched other tables (% then %)', before_other, after_other;
+    end if;
+  end;
+  -- Only the admin login may purge.
+  set local role waitlist_writer;
+  begin
+    perform waitlist_api.admin_purge_acquisition_events(90);
+    raise exception 'FAIL: the writer login could purge';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role service_role;
+  begin
+    perform waitlist_api.admin_purge_acquisition_events(90);
+    raise exception 'FAIL: server code could purge';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  raise notice 'PASS: the retention purge is admin only, bounded, and deletes only old acquisition events';
 end $$;
 
 -- 8. Deleting a waitlist entry removes its answers and attribution with it.

@@ -81,7 +81,7 @@ insert into rollback_inventory values
   (10, 'function',   'waitlist_api.admin_issue_creator_link(uuid,integer,text)', 'drop function waitlist_api.admin_issue_creator_link(uuid,integer,text)'),
   (11, 'function',   'waitlist_api.admin_revoke_creator_link(text)', 'drop function waitlist_api.admin_revoke_creator_link(text)'),
   (12, 'function',   'ops.invite_preview_hit(text,interval,integer)', 'drop function ops.invite_preview_hit(text,interval,integer)'),
-  (13, 'function',   'ops.record_invite_follow_decision(uuid,text)', 'drop function ops.record_invite_follow_decision(uuid,text)'),
+  (13, 'function',   'waitlist_api.admin_purge_acquisition_events(integer)', 'drop function waitlist_api.admin_purge_acquisition_events(integer)'),
   (14, 'function',   'ops.invitations_record_link_redemption()', 'drop function ops.invitations_record_link_redemption()'),
   (15, 'function',   'ops.invitations_copy_creator_link()', 'drop function ops.invitations_copy_creator_link()'),
   (16, 'function',   'ops.join_waitlist_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text)', 'drop function ops.join_waitlist_v2(text,text[],text,text,text,text,boolean,boolean,text,text,text,text,boolean,text)'),
@@ -172,7 +172,7 @@ begin
   select count(*) into n from pg_proc p
   where p.oid::regprocedure::text not in (select name from rollback_inventory where kind = 'function')
     and p.pronamespace not in ('pg_catalog'::regnamespace, 'information_schema'::regnamespace)
-    and p.prosrc ~ '(pilot_creators|creator_link|acquisition_events|invite_preview|join_waitlist_v2|submit_v2|introduced_by_creator|record_invite_follow_decision)';
+    and p.prosrc ~ '(pilot_creators|creator_link|acquisition_events|invite_preview|join_waitlist_v2|submit_v2|introduced_by_creator|admin_purge_acquisition_events)';
   if n > 0 then problems := problems || format('%s other function(s) refer to creator acquisition', n); end if;
 
   -- The login roles: no privilege on these tables (only ever on the

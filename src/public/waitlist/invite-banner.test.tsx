@@ -18,12 +18,13 @@ const show = (fetchImpl: ReturnType<typeof vi.fn>, search = `?ref=${CODE}`) =>
   render(<InviteBanner config={config} fetchImpl={fetchImpl as unknown as typeof fetch} search={search} />)
 
 describe('invitation banner on /join', () => {
-  it("shows the creator's agreed name, and explains that following is the person's own choice later", async () => {
+  it("shows the creator's agreed name, and promises no follow: following is only ever the person's own choice", async () => {
     const f = answer({ status: 'ok', invite: 'valid', name: 'Priya Raman' })
     show(f)
     const banner = await screen.findByTestId('invite-banner')
     expect(banner.textContent).toContain('Priya Raman invited you to Splitpost.')
-    expect(banner.textContent).toContain('You choose Follow or Not now. Nobody is followed for you, and an invitation earns nothing for anyone.')
+    expect(banner.textContent).toContain('Following anyone on Splitpost is always your own choice. Nobody is followed for you, and an invitation earns nothing for anyone.')
+    expect(banner.textContent).not.toMatch(/we'll ask|you follow|following [A-Z]/)
     expect(f).toHaveBeenCalledWith(config.endpoint, expect.objectContaining({ method: 'POST', body: JSON.stringify({ action: 'invite_preview', code: CODE }) }))
     // No follow button here: there is no account yet.
     expect(screen.queryByRole('button')).toBeNull()

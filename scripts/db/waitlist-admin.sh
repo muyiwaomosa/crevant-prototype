@@ -37,6 +37,11 @@
 #                              shared publicly by the creator)
 #   ACTION=revoke-link         LINK_CODE=<20 hex characters>  (final)
 #   ACTION=acquisition-summary counts only; visits are estimates
+#   ACTION=purge-acquisition-events [ACQ_RETENTION_DAYS=90]
+#                              deletes hourly acquisition counts older than N
+#                              days (30 to 400), nothing else. Manual only:
+#                              proposed 90 days, subject to privacy/legal
+#                              approval; nothing schedules it.
 #
 #   CREATOR_USER_ID: the creator's account id from the Supabase dashboard.
 #
@@ -165,7 +170,14 @@ case "$ACTION" in
     echo "Creator acquisition summary (counts only; visits are estimates):"
     run -c "select jsonb_pretty(waitlist_api.admin_acquisition_summary())"
     ;;
+  purge-acquisition-events)
+    adays="${ACQ_RETENTION_DAYS:-90}"
+    if ! [[ "$adays" =~ ^[0-9]{1,3}$ ]] || [ "$adays" -lt 30 ] || [ "$adays" -gt 400 ]; then
+      fail "ACQ_RETENTION_DAYS must be a whole number from 30 to 400 (proposed 90)."
+    fi
+    say "Acquisition counts older than $adays days deleted" run -v d="$adays" <<<"select waitlist_api.admin_purge_acquisition_events(:'d'::integer);"
+    ;;
   *)
-    fail "ACTION must be summary, status, delete, purge, set-notice-version, open, close, wave-preview, wave-select, wave-summary, wave-clear, accept-creator, creator-status, creator-public-name, issue-link, revoke-link or acquisition-summary."
+    fail "ACTION must be summary, status, delete, purge, set-notice-version, open, close, wave-preview, wave-select, wave-summary, wave-clear, accept-creator, creator-status, creator-public-name, issue-link, revoke-link, acquisition-summary or purge-acquisition-events."
     ;;
 esac
