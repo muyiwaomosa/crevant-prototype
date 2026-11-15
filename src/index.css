@@ -45,6 +45,27 @@
   --animate-float: float-up 1100ms ease-out forwards;
 }
 
+/*
+ * Splitpost design tokens (sp-). Added beside the tokens above, which are
+ * unchanged; nothing uses these yet. Each surface (homepage, tour, account
+ * screens) opts in in its own reviewed change, so adding them changes no
+ * existing page. Contrast pairs are checked in
+ * src/public/landing/tokens.test.ts. Exploratory, not a final identity.
+ */
+@theme {
+  --font-sp-display: 'Archivo', 'Arial Narrow', ui-sans-serif, system-ui, sans-serif;
+  --font-sp-body: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-sp-midnight: #10142e;
+  --color-sp-midnight-raised: #1b2152;
+  --color-sp-orange: #ff6a2b;
+  --color-sp-orange-text: #b83c14;
+  --color-sp-neutral: #f6f2ec;
+  --color-sp-ink: #141833;
+  --color-sp-muted: #545b78;
+  --color-sp-muted-on-dark: #b7bad0;
+}
+
 @keyframes pop {
   0% { transform: scale(1); }
   40% { transform: scale(1.32); }
