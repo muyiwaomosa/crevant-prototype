@@ -39,7 +39,7 @@ describe('Splitpost design tokens', () => {
     expect(css).toMatch(/--font-display: 'Bricolage Grotesque'/)
   })
 
-  it('nothing uses the sp- tokens yet, so no existing screen can change', async () => {
+  it('only the public site uses the sp- tokens, so the tour and account screens are unchanged', async () => {
     const { readdirSync, statSync } = await import('node:fs')
     const walk = (dir: string): string[] =>
       readdirSync(dir).flatMap((n) => {
@@ -49,7 +49,11 @@ describe('Splitpost design tokens', () => {
     const users = walk(join(ROOT, 'src'))
       .filter((p) => /\.(tsx?|css)$/.test(p) && !/\.test\.tsx?$/.test(p) && !p.endsWith('index.css'))
       .filter((p) => /\bsp-(midnight|orange|neutral|ink|muted)|font-sp-/.test(readFileSync(p, 'utf8')))
-    expect(users).toEqual([])
+    // The public site's header and homepage opt in; the tour (src/pages,
+    // src/components) and account screens (src/public/auth) do not, until PR 8.
+    const allowed = (p: string) => p.includes(join('src', 'public', 'landing')) || p.endsWith(join('src', 'public', 'PublicLayout.tsx'))
+    expect(users.filter((p) => !allowed(p))).toEqual([])
+    expect(users.length).toBeGreaterThan(0)
   })
 
   it('meets WCAG 2.2 AA for the pairs the design uses', () => {

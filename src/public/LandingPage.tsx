@@ -3,9 +3,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ArrowRight, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
-import { TOUR_BASE } from '../entry'
-import { useMemberLinks } from './member-links'
 import { cardShadow, Section, StatusBadge, TourScreenshot } from './landing/shared'
+import { Hero } from './landing/sections/Hero'
 import { DifferenceRail, PyramidComparison } from './landing/visuals'
 import {
   AlgorithmNotes,
@@ -40,31 +39,12 @@ export { StatusBadge } from './landing/shared'
 //    the privacy notice is published. Joining the waitlist never secures a
 //    place in the pilot; invitations go out in small groups.
 
-const DEMO_NOTE = 'A demonstration with sample data'
-
 function Qualifier({ testId, children }: { testId: string; children: ReactNode }) {
   return (
     <p data-testid={testId} className="mt-3 flex gap-2 text-[13px] leading-relaxed text-ink-500">
       <Info aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span>{children}</span>
     </p>
-  )
-}
-
-function ExploreButton({ variant = 'secondary' }: { variant?: 'secondary' | 'ghost-dark' }) {
-  return (
-    <div className="w-full min-[420px]:w-auto">
-      <a
-        href={TOUR_BASE}
-        className={clsx(
-          variant === 'secondary' ? buttonClass('secondary', 'lg') : clsx(buttonClass('ghost', 'lg'), 'text-white ring-1 ring-white/25 hover:bg-white/10'),
-          'w-full min-[420px]:w-auto',
-        )}
-      >
-        Explore Crevant
-      </a>
-      <p className={clsx('mt-1.5 text-center text-[13px]', variant === 'secondary' ? 'text-ink-500' : 'text-ink-400')}>{DEMO_NOTE}</p>
-    </div>
   )
 }
 
@@ -135,61 +115,7 @@ function MobileWaitlistBar() {
   )
 }
 
-// ---- 1. Hero ----------------------------------------------------------------
-
-function Hero() {
-  const memberLinks = useMemberLinks()
-  // Same order on every screen: headline, what Crevant is, then the actions.
-  // Phones show the product preview between the explanation and the actions;
-  // desktop shows it on the right.
-  return (
-    <section id="hero" aria-labelledby="hero-title" className="overflow-hidden px-4 pb-12 pt-8 sm:px-6 sm:pt-16 lg:pb-20">
-      <div className="mx-auto flex max-w-6xl flex-col lg:grid lg:grid-cols-[1.2fr_0.8fr] lg:items-center lg:gap-x-10">
-        <h1
-          id="hero-title"
-          className="font-display text-[2.15rem] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink-900 min-[400px]:text-[2.45rem] sm:text-[3.4rem] lg:col-start-1 lg:row-start-1 lg:self-end lg:text-[3.85rem]"
-        >
-          You earned the follow. <span className="text-brand-600">You deserve the reach.</span>
-        </h1>
-        <p data-hero="product" className="mt-5 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:col-start-1 lg:row-start-2">
-          <strong className="font-semibold text-ink-900">Meet Crevant.</strong> A creator-first social network built for predictability. When someone
-          follows you, your new posts appear in their Following feed, newest first, so you can plan, build trust and grow, instead of guessing what an
-          algorithm will do.
-        </p>
-        <div data-hero="preview" className="relative mt-6 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-0">
-          <div aria-hidden="true" className="absolute -inset-4 rounded-[48px] bg-gradient-to-br from-brand-100 via-paper to-spark-100 opacity-50 lg:-inset-6" />
-          <TourScreenshot
-            screen="hero"
-            caption="A post in your Following feed"
-            priority
-            callout={{ text: 'Newest first. No ranking.', top: '9.5%' }}
-            disclose
-            className="relative max-w-[210px] sm:max-w-[240px] lg:max-w-[260px]"
-          />
-        </div>
-        <div data-hero="actions" className="mt-6 lg:col-start-1 lg:row-start-3 lg:self-start">
-          <div className="flex flex-col items-stretch gap-3 min-[420px]:flex-row min-[420px]:flex-wrap min-[420px]:items-start">
-            <JoinButton />
-            <ExploreButton />
-          </div>
-          <p className="mt-4 max-w-xl text-sm italic leading-relaxed text-ink-500">An invitation-only platform being built for creators and their supporters.</p>
-          <Qualifier testId="hero-note">
-            Being built for the pilot. The Following feed shows posts from people you follow, newest first. It isn't a promise that each post reaches
-            each follower.
-          </Qualifier>
-          {import.meta.env.MODE !== 'site' && memberLinks && (
-            <p className="mt-3 text-sm text-ink-500">
-              Already invited?{' '}
-              <Link to="/sign-in" className="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800">
-                Sign in
-              </Link>
-            </p>
-          )}
-        </div>
-      </div>
-    </section>
-  )
-}
+// ---- 1. Hero: src/public/landing/sections/Hero.tsx (Splitpost, PR 2) ----------
 
 // ---- 2. Founder story -------------------------------------------------------
 
