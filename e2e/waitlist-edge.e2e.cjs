@@ -122,7 +122,11 @@ function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
     const first = await rowOf('maya@e2e.test')
     check('it is stored, unverified, with the approved notice version',
       first && first.verified === false && first.email_verified_at === null && first.waitlist_consent_version === NOTICE && first.platform === 'youtube')
-    check('no link, campaign or marketing field exists to store', first && !Object.keys(first).some((k) => /link|campaign|marketing/.test(k)))
+    // creator_link_id (creator acquisition) is the one approved exception: it is
+    // set only by the server resolving ?ref=, never from what the browser sends.
+    check('no link, campaign or marketing field exists to store',
+      first && !Object.keys(first).some((k) => /link|campaign|marketing/.test(k) && k !== 'creator_link_id'))
+    check('a link sent by the browser is never stored as attribution', first && first.creator_link_id === null)
     const consents = await owner`select count(*)::int as n from ops.waitlist_consents c join ops.waitlist w on w.id = c.waitlist_id where w.email = 'maya@e2e.test'`
     check('one consent record', consents[0].n === 1)
 
