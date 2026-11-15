@@ -4,6 +4,8 @@ Status: **infrastructure only, switched off.** Nothing here collects data until 
 
 One unified waitlist, no roles. People give an email, confirm they are 18 or older, and agree to be contacted about the pilot. A few research questions are optional. Joining does not create an account or secure a place in the pilot.
 
+Creator acquisition (intent, "did a creator introduce you?", accepted-creator invitation links and anonymous acquisition events) extends this same waitlist: see [ACQUISITION.md](ACQUISITION.md).
+
 ## How it fits together
 
 1. **Form** (`src/public/waitlist/`). Rendered on `/join` only when the frontend switch is on, in the full app and in the public site build. It posts JSON straight to the server function, with **no Supabase key**. It loads Cloudflare Turnstile (action `join`) only when switched on, and has a hidden honeypot field.

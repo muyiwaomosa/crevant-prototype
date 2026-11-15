@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { buttonClass } from '../../components/ui'
-import { readAcquisition, type WaitlistConfig } from './config'
+import { introducerProblem, readAcquisition, type WaitlistConfig } from './config'
 import { mountTurnstile, type MountTurnstile, type TurnstileWidget } from './turnstile'
 
 // The unified waitlist form. Rendered only when readWaitlistConfig() returns a
@@ -29,6 +29,12 @@ export const PLATFORMS: Array<[string, string]> = [
   ['newsletter', 'Newsletter or blog'],
   ['other', 'Other'],
 ]
+/** How someone plans to use Splitpost. For recruiting a balanced pilot only: never an account role. */
+export const INTENTS: Array<[string, string]> = [
+  ['create', 'Create content'],
+  ['discover', 'Discover and support creators'],
+  ['both', 'Both'],
+]
 export const AUDIENCE: Array<[string, string]> = [
   ['under_1k', 'Under 1,000'],
   ['1k_10k', '1,000 to 10,000'],
@@ -47,7 +53,7 @@ const MESSAGES: Partial<Record<Outcome, string>> = {
   error: 'Something went wrong. Please try again.',
 }
 
-type Errors = Partial<Record<'email' | 'age' | 'consent' | 'check', string>>
+type Errors = Partial<Record<'email' | 'age' | 'consent' | 'check' | 'introducer', string>>
 
 export function WaitlistForm({
   config,
@@ -62,6 +68,9 @@ export function WaitlistForm({
 }) {
   const [email, setEmail] = useState('')
   const [interests, setInterests] = useState<string[]>([])
+  const [intent, setIntent] = useState<'' | 'create' | 'discover' | 'both'>('')
+  const [introduced, setIntroduced] = useState<'' | 'yes' | 'no'>('')
+  const [introducer, setIntroducer] = useState('')
   const [shares, setShares] = useState<'' | 'yes' | 'not_yet'>('')
   const [platform, setPlatform] = useState('')
   const [audience, setAudience] = useState('')
@@ -95,6 +104,8 @@ export function WaitlistForm({
     if (!age) e.age = "Please confirm you're 18 or older."
     if (!consent) e.consent = 'Please agree so we can contact you about the pilot.'
     if (!token) e.check = 'Please complete the check below.'
+    const p = introduced === 'yes' ? introducerProblem(introducer) : null
+    if (p) e.introducer = p
     return e
   }
 
@@ -104,18 +115,24 @@ export function WaitlistForm({
     setErrors(e)
     if (Object.keys(e).length) return
     setOutcome('sending')
-    const { source } = readAcquisition(search)
-    const yes = shares === 'yes'
+    const { source, creatorRef } = readAcquisition(search)
+    // The sharing details only apply to people who plan to create.
+    const asksSharing = intent !== 'discover'
+    const yes = asksSharing && shares === 'yes'
     const body = {
       email: email.trim(),
       interests,
-      sharesContent: shares || null,
+      sharesContent: (asksSharing && shares) || null,
       platform: yes && platform ? platform : null,
       audienceBand: yes && audience ? audience : null,
       source,
       ageConfirmed: age,
       waitlistConsent: consent,
       noticeVersion: config.noticeVersion,
+      intent: intent || null,
+      introducedByCreator: introduced === '' ? null : introduced === 'yes',
+      introducerReported: introduced === 'yes' && introducer.trim() ? introducer.trim() : null,
+      creatorRef,
       turnstileToken: token,
       website,
     }
@@ -186,6 +203,21 @@ export function WaitlistForm({
 
       <fieldset>
         <legend className="font-semibold text-ink-900">
+          How do you plan to use Splitpost? <span className="font-normal text-ink-500">Optional</span>
+        </legend>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {INTENTS.map(([value, label]) => (
+            <label key={value} className={clsx('cursor-pointer rounded-full px-4 py-2 text-sm ring-1', intent === value ? 'bg-brand-600 text-white ring-brand-600' : 'bg-paper text-ink-700 ring-ink-200')}>
+              <input type="radio" name="wl-intent" className="sr-only" checked={intent === value} onChange={() => setIntent(value as typeof intent)} />
+              {label}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1.5 text-sm text-ink-500">This helps us invite a balanced mix of people. It isn't an account type: everyone can do both.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend className="font-semibold text-ink-900">
           What interests you most about Splitpost? <span className="font-normal text-ink-500">Optional, choose any</span>
         </legend>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -206,7 +238,8 @@ export function WaitlistForm({
         </div>
       </fieldset>
 
-      <fieldset>
+      {intent !== 'discover' && (
+      <fieldset data-testid="waitlist-sharing">
         <legend className="font-semibold text-ink-900">
           Do you share your own content anywhere today? <span className="font-normal text-ink-500">Optional</span>
         </legend>
@@ -251,6 +284,48 @@ export function WaitlistForm({
                 ))}
               </select>
             </div>
+          </div>
+        )}
+      </fieldset>
+      )}
+
+      <fieldset data-testid="waitlist-introduced">
+        <legend className="font-semibold text-ink-900">
+          Did a creator introduce you to Splitpost? <span className="font-normal text-ink-500">Optional</span>
+        </legend>
+        <div className="mt-2 flex gap-2">
+          {(
+            [
+              ['yes', 'Yes'],
+              ['no', 'No'],
+            ] as const
+          ).map(([value, label]) => (
+            <label key={value} className={clsx('cursor-pointer rounded-full px-4 py-2 text-sm ring-1', introduced === value ? 'bg-brand-600 text-white ring-brand-600' : 'bg-paper text-ink-700 ring-ink-200')}>
+              <input type="radio" name="wl-introduced" className="sr-only" checked={introduced === value} onChange={() => setIntroduced(value)} />
+              {label}
+            </label>
+          ))}
+        </div>
+        {introduced === 'yes' && (
+          <div className="mt-4">
+            <label htmlFor="wl-introducer" className="text-sm font-semibold text-ink-800">
+              Their name or handle <span className="font-normal text-ink-500">Optional</span>
+            </label>
+            <input
+              id="wl-introducer"
+              type="text"
+              autoComplete="off"
+              maxLength={60}
+              value={introducer}
+              onChange={(e) => setIntroducer(e.target.value)}
+              aria-invalid={!!errors.introducer}
+              aria-describedby={errors.introducer ? 'wl-introducer-error' : 'wl-introducer-help'}
+              className={field}
+            />
+            <p id="wl-introducer-help" className="mt-1.5 text-sm text-ink-500">
+              Only to learn how people find us. We won't contact them, and it doesn't link you to them or follow anyone.
+            </p>
+            {err('introducer')}
           </div>
         )}
       </fieldset>

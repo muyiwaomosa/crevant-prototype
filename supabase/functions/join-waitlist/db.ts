@@ -150,15 +150,16 @@ export function databaseOptions(rawUrl: string, opts: { caCert?: string; localPl
 
 const RESULTS: SubmitResult[] = ['ok', 'closed', 'invalid', 'notice_changed', 'rate_limited']
 
-/** Calls waitlist_api.submit with bound parameters (never string building). */
+/** Calls waitlist_api.submit_v2 with bound parameters (never string building). */
 export async function submitWithDatabase(sql: Sql, p: SubmitPayload): Promise<SubmitResult> {
-  const rows = await sql`select waitlist_api.submit(
+  const rows = await sql`select waitlist_api.submit_v2(
     ${p.email}, ${p.interests}::text[], ${p.sharesContent}, ${p.platform}, ${p.audienceBand}, ${p.source},
-    ${p.ageConfirmed}, ${p.waitlistConsent}, ${p.noticeVersion}, ${p.emailKey}, ${p.clientKey}
+    ${p.ageConfirmed}, ${p.waitlistConsent}, ${p.noticeVersion}, ${p.emailKey}, ${p.clientKey},
+    ${p.intent}, ${p.introducedByCreator}::boolean, ${p.introducerReported}, ${p.creatorRef}
   ) as result`
   const out = rows[0]?.result
   if (typeof out === 'string' && (RESULTS as string[]).includes(out)) return out as SubmitResult
-  throw new Error('unexpected result from waitlist_api.submit')
+  throw new Error('unexpected result from waitlist_api.submit_v2')
 }
 
 /** The health check: proves the waitlist_writer login can connect. Reads no data. */

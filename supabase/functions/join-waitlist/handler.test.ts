@@ -58,8 +58,34 @@ describe('join-waitlist handler', () => {
       ageConfirmed: true,
       waitlistConsent: true,
       noticeVersion: 'notice-2026-11',
+      intent: null,
+      introducedByCreator: null,
+      introducerReported: null,
+      creatorRef: null,
       ...KEYS,
     })
+  })
+
+  it('passes the optional acquisition answers through, trimmed, for the database to validate', async () => {
+    const d = deps()
+    await handleJoin(post({ ...valid, intent: 'both', introducedByCreator: true, introducerReported: '  @priyaruns ', creatorRef: ' 0123456789ABCDEF0123 ' }), d)
+    expect(d.submit).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: 'both', introducedByCreator: true, introducerReported: '@priyaruns', creatorRef: '0123456789abcdef0123' }),
+    )
+  })
+
+  it('rejects wrongly shaped acquisition answers before reaching the database', async () => {
+    for (const bad of [
+      { ...valid, introducedByCreator: 'yes' },
+      { ...valid, introducerReported: 'x'.repeat(61) },
+      { ...valid, introducerReported: 42 },
+      { ...valid, creatorRef: 'x'.repeat(41) },
+      { ...valid, intent: ['create'] },
+    ]) {
+      const d = deps()
+      expect(state(await handleJoin(post(bad), d))).toBe('invalid')
+      expect(d.submit).not.toHaveBeenCalled()
+    }
   })
 
   it('is closed when the function switch is off, before any check or call', async () => {
@@ -350,7 +376,7 @@ describe('database connection', () => {
     }
   })
 
-  it('calls only waitlist_api.submit, with bound parameters', async () => {
+  it('calls only waitlist_api.submit_v2, with bound parameters', async () => {
     const calls: Array<{ text: string; values: unknown[] }> = []
     const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
       calls.push({ text: strings.join('$'), values })
@@ -358,9 +384,9 @@ describe('database connection', () => {
     }) as Sql
     const payload = toPayload(valid, KEYS)
     expect(await submitWithDatabase(sql, payload)).toBe('ok')
-    expect(calls[0].text).toMatch(/^select waitlist_api\.submit\(/)
+    expect(calls[0].text).toMatch(/^select waitlist_api\.submit_v2\(/)
     expect(calls[0].text).not.toMatch(/maya/i)
-    expect(calls[0].values).toEqual(['maya@example.com', ['reach_followers'], 'yes', 'youtube', '1k_10k', 'instagram', true, true, 'notice-2026-11', KEYS.emailKey, KEYS.clientKey])
+    expect(calls[0].values).toEqual(['maya@example.com', ['reach_followers'], 'yes', 'youtube', '1k_10k', 'instagram', true, true, 'notice-2026-11', KEYS.emailKey, KEYS.clientKey, null, null, null, null])
     const odd = (async () => [{ result: 'something else' }]) as unknown as Sql
     await expect(submitWithDatabase(odd, payload)).rejects.toThrow()
   })

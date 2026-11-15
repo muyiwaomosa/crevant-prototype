@@ -9,10 +9,12 @@
 //      and store nothing, so bots learn nothing.
 //   4. Cloudflare Turnstile, verified server side: success, an allowed
 //      hostname and the expected action ('join').
-//   5. Basic shape checks, then waitlist_api.submit as the restricted
+//   5. Basic shape checks, then waitlist_api.submit_v2 as the restricted
 //      waitlist_writer login, which repeats every check, applies the database
 //      switch, the approved notice version and the rate limits, and stores
-//      new addresses only.
+//      new addresses only. (submit_v2 adds the optional creator-acquisition
+//      answers; it needs the 20261116 migration applied before this code is
+//      deployed.)
 //
 // A GET request is the health check: it answers {"status":"ok"} if the
 // restricted database login can connect, or {"status":"error"} if not. It
@@ -35,6 +37,14 @@ export interface SubmitPayload {
   ageConfirmed: boolean
   waitlistConsent: boolean
   noticeVersion: string
+  /** How they plan to use Splitpost: create, discover or both. Recruitment only. */
+  intent: string | null
+  /** Their answer to "Did a creator introduce you?" (null: skipped). */
+  introducedByCreator: boolean | null
+  /** The creator's name or handle as they typed it. Self-reported, never verified. */
+  introducerReported: string | null
+  /** A creator invitation code from ?ref=, resolved (or ignored) by the database. */
+  creatorRef: string | null
   /** HMAC of the normalised email with the secret salt. */
   emailKey: string
   /** HMAC of the client address (or a shared bucket) with the secret salt. */
@@ -112,6 +122,11 @@ const bool = (v: unknown): boolean => {
   if (typeof v !== 'boolean') throw new Error('shape')
   return v
 }
+const optionalBool = (v: unknown): boolean | null => {
+  if (v === undefined || v === null) return null
+  if (typeof v !== 'boolean') throw new Error('shape')
+  return v
+}
 
 /** Normalises an email the same way the database does. */
 export const normaliseEmail = (email: string) => email.trim().toLowerCase()
@@ -140,6 +155,10 @@ export function toPayload(input: Record<string, unknown>, keys: RateKeys): Submi
     ageConfirmed: bool(input.ageConfirmed),
     waitlistConsent: bool(input.waitlistConsent),
     noticeVersion,
+    intent: str(input.intent, 20),
+    introducedByCreator: optionalBool(input.introducedByCreator),
+    introducerReported: str(input.introducerReported, 60),
+    creatorRef: str(input.creatorRef, 40)?.toLowerCase() ?? null,
     emailKey: keys.emailKey,
     clientKey: keys.clientKey,
   }

@@ -1,0 +1,550 @@
+-- Creator–fan acquisition: waitlist attribution, accepted-creator invitation
+-- links and acquisition measurement. Infrastructure only, everything OFF.
+--
+--   ops.waitlist (new columns)   intent (create / discover / both), whether a
+--                                creator introduced the person, the creator's
+--                                name or handle as THEY typed it, and a
+--                                server-resolved creator link
+--   ops.pilot_creators           creators accepted into the pilot. A pilot
+--                                programme record, not an account role.
+--   ops.creator_links            creator-specific invitation links: opaque
+--                                random codes, expiry and revocation
+--   ops.creator_link_redemptions an account that joined through a link, and
+--                                that person's own follow decision
+--   ops.acquisition_events       counts for measurement: no email, no
+--                                account id, no address, no free text
+--   waitlist_api.submit_v2       the waitlist entry point with the new fields
+--   waitlist_api.admin_acquisition_summary   counts only
+--
+-- Four concepts stay separate, by design:
+--   1. Self-reported attribution. "A creator introduced me: @name" is what a
+--      visitor typed. It is never matched to an account and never creates a
+--      verified referral, a follow, Connection Points or any entitlement.
+--   2. Verified invitation. A link issued to an ACCEPTED pilot creator,
+--      resolved by the server. Unknown, expired or revoked codes, or a
+--      creator who is no longer accepted, resolve to nothing and the signup
+--      carries on unattributed.
+--   3. Following. Only ever the person's own explicit choice. A redemption
+--      starts 'pending'; nothing here follows anyone.
+--   4. Connection Points and any future monetary eligibility. Nothing here
+--      creates, references or implies either.
+--
+-- Nothing in this migration turns anything on: the waitlist switch, the
+-- notice version and the function switch are unchanged, no link exists until
+-- one is created by hand, and no email is sent. This migration changes no
+-- Supabase Auth configuration and creates no login role.
+
+-- ---------------------------------------------------------------------------
+-- Pilot creators.
+
+create table ops.pilot_creators (
+  user_id     uuid primary key references auth.users (id) on delete cascade,
+  status      text not null default 'accepted',
+  -- The creator's primary content categories, from a fixed list. At most three.
+  categories  text[] not null default '{}',
+  accepted_at timestamptz not null default now(),
+  accepted_by uuid references auth.users (id) on delete set null,
+  constraint pilot_creators_status_allowed check (status in ('accepted', 'paused', 'removed')),
+  constraint pilot_creators_categories_allowed check (
+    cardinality(categories) <= 3
+    and categories <@ array['food', 'money', 'travel', 'tech', 'music', 'art', 'fitness', 'books', 'wellness']::text[]
+  )
+);
+comment on table ops.pilot_creators is 'Creators accepted into the pilot. A programme record, never an account role: it decides only who may hold active invitation links.';
+
+-- ---------------------------------------------------------------------------
+-- Creator invitation links.
+--
+-- The code is random (80 bits, from two random UUIDs), so it reveals nothing
+-- about the creator: not their id, username or email. Showing the creator's
+-- public name to someone holding a link is a separate, unbuilt step that
+-- needs approval (docs/ACQUISITION.md).
+
+create table ops.creator_links (
+  id          uuid primary key default gen_random_uuid(),
+  creator_id  uuid not null references ops.pilot_creators (user_id) on delete cascade,
+  code        text not null,
+  campaign    text,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz not null,
+  revoked_at  timestamptz,
+  constraint creator_links_code_format check (code ~ '^[0-9a-f]{20}$'),
+  constraint creator_links_code_unique unique (code),
+  constraint creator_links_campaign_format check (campaign is null or campaign ~ '^[a-z0-9_-]{1,60}$'),
+  constraint creator_links_expiry_after_creation check (expires_at > created_at),
+  constraint creator_links_expiry_within_a_year check (expires_at <= created_at + interval '366 days')
+);
+comment on table ops.creator_links is 'Invitation links for accepted pilot creators. Random codes; expire; can be revoked. Server code only.';
+
+create index creator_links_creator_idx on ops.creator_links (creator_id);
+
+-- Only an ACCEPTED creator can hold an active link: creating a link, or
+-- un-revoking or extending one, is refused otherwise.
+create function ops.creator_links_require_accepted_creator()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.revoked_at is null and not exists (
+    select 1 from ops.pilot_creators c where c.user_id = new.creator_id and c.status = 'accepted'
+  ) then
+    raise exception 'only creators accepted into the pilot can hold an active invitation link'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger creator_links_require_accepted_creator
+  before insert or update of creator_id, revoked_at, expires_at on ops.creator_links
+  for each row execute function ops.creator_links_require_accepted_creator();
+
+-- Creates a link for an accepted creator. Server code (service_role) only.
+create function ops.create_creator_link(p_creator uuid, p_days integer default 90, p_campaign text default null)
+returns text
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_code text;
+begin
+  if p_days is null or p_days < 1 or p_days > 365 then
+    raise exception 'a link must last between 1 and 365 days';
+  end if;
+  v_code := substr(replace(gen_random_uuid()::text, '-', ''), 1, 12) || substr(replace(gen_random_uuid()::text, '-', ''), 1, 8);
+  insert into ops.creator_links (creator_id, code, campaign, expires_at)
+  values (p_creator, v_code, p_campaign, now() + make_interval(days => p_days));
+  return v_code;
+end;
+$$;
+
+-- What a code means right now. Never raises; anything unusable is a status.
+--   valid             an active link of an accepted creator
+--   unknown           not a well-formed code, or no such link
+--   expired / revoked the link itself is no longer usable
+--   creator_inactive  the creator is paused or removed from the pilot
+create function ops.resolve_creator_link(p_code text)
+returns table (status text, link_id uuid, creator_id uuid)
+language sql
+stable
+set search_path = ''
+as $$
+  with l as (
+    select l.id, l.creator_id, l.expires_at, l.revoked_at, c.status as creator_status
+    from ops.creator_links l
+    join ops.pilot_creators c on c.user_id = l.creator_id
+    where p_code ~ '^[0-9a-f]{20}$' and l.code = p_code
+  )
+  select
+    case
+      when not exists (select 1 from l) then 'unknown'
+      when (select revoked_at from l) is not null then 'revoked'
+      when (select expires_at from l) <= now() then 'expired'
+      when (select creator_status from l) <> 'accepted' then 'creator_inactive'
+      else 'valid'
+    end,
+    case when (select revoked_at from l) is null and (select expires_at from l) > now() and (select creator_status from l) = 'accepted'
+         then (select id from l) end,
+    case when (select revoked_at from l) is null and (select expires_at from l) > now() and (select creator_status from l) = 'accepted'
+         then (select creator_id from l) end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Waitlist: recruitment intent and attribution.
+
+alter table ops.waitlist
+  -- How someone plans to use Splitpost. Recruitment only: never a role,
+  -- never copied to an account, never decides what anyone can do.
+  add column intent text,
+  -- Their answer to "Did a creator introduce you to Splitpost?" (null: skipped).
+  add column introduced_by_creator boolean,
+  -- The creator's name or handle exactly as the visitor typed it. Self-reported
+  -- and unverified: never matched to an account, never a verified referral.
+  add column introducer_reported text,
+  -- A verified invitation link, resolved by the server at signup. Never taken
+  -- from the visitor as an id.
+  add column creator_link_id uuid references ops.creator_links (id) on delete set null,
+  add constraint waitlist_intent_allowed check (intent is null or intent in ('create', 'discover', 'both')),
+  add constraint waitlist_introducer_needs_yes check (introducer_reported is null or introduced_by_creator is true),
+  -- A name or handle: 1 to 60 characters of letters, numbers, spaces and
+  -- @ . _ ' - only. No links, email addresses or phone numbers.
+  add constraint waitlist_introducer_format check (
+    introducer_reported is null or (
+      char_length(introducer_reported) between 1 and 60
+      and introducer_reported = btrim(introducer_reported)
+      and introducer_reported ~ '^[[:alnum:]@._''’ -]+$'
+      and introducer_reported !~* '(https?|www\.|\.(com|net|org|io|co|app|me|tv|gg|ly)\M)'
+      and introducer_reported !~ '[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+'
+      and introducer_reported !~ '[0-9]{7,}'
+    )
+  );
+
+comment on column ops.waitlist.intent is 'create, discover or both: how the person plans to use Splitpost. Recruitment only, never a role.';
+comment on column ops.waitlist.introducer_reported is 'Self-reported creator name or handle. Unverified: never a verified referral, follow, Connection Points or entitlement.';
+comment on column ops.waitlist.creator_link_id is 'Verified invitation link, resolved by the server at signup. Attribution only.';
+
+-- ---------------------------------------------------------------------------
+-- Acquisition events: counts for measurement, deliberately anonymous. No
+-- email, account id, address or free text. A row says what happened, when,
+-- through which channel label and (for verified invitations) which link.
+
+create table ops.acquisition_events (
+  id                     bigint generated always as identity primary key,
+  event                  text not null,
+  occurred_at            timestamptz not null default now(),
+  source                 text,
+  self_reported_referral boolean,
+  creator_link_id        uuid references ops.creator_links (id) on delete set null,
+  constraint acquisition_events_allowed check (event in (
+    'waitlist_signup',          -- a new address joined the waitlist
+    'invitation_accepted',      -- an invited person created their account
+    'invite_follow_confirmed',  -- they chose to follow the inviting creator
+    'invite_follow_declined'    -- they chose not to
+  )),
+  constraint acquisition_events_source_format check (source is null or source ~ '^[a-z0-9_-]{1,40}$')
+);
+comment on table ops.acquisition_events is 'Anonymous acquisition counts: no email, account id, address or free text. Server code only.';
+
+create index acquisition_events_link_idx on ops.acquisition_events (creator_link_id, event);
+
+-- ---------------------------------------------------------------------------
+-- The waitlist entry point, with the new optional fields. Everything the
+-- first version checks is checked here in the same order; the new fields
+-- are validated after the required ones. An unusable creator link is ignored
+-- (the signup still works, unattributed), so a bad link can't block anyone
+-- and can't be probed: the reply is the same 'ok' either way.
+
+create function ops.join_waitlist_v2(
+  p_email                 text,
+  p_interests             text[],
+  p_shares_content        text,
+  p_platform              text,
+  p_audience_band         text,
+  p_source                text,
+  p_age_confirmed         boolean,
+  p_waitlist_consent      boolean,
+  p_notice_version        text,
+  p_email_key             text,
+  p_client_key            text,
+  p_intent                text,
+  p_introduced_by_creator boolean,
+  p_introducer_reported   text,
+  p_creator_ref           text
+)
+returns text
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_email      text := lower(btrim(coalesce(p_email, '')));
+  v_interests  text[] := coalesce(p_interests, '{}');
+  v_shares     text := nullif(btrim(coalesce(p_shares_content, '')), '');
+  v_platform   text := nullif(btrim(coalesce(p_platform, '')), '');
+  v_audience   text := nullif(btrim(coalesce(p_audience_band, '')), '');
+  v_source     text := nullif(lower(btrim(coalesce(p_source, ''))), '');
+  v_intent     text := nullif(btrim(coalesce(p_intent, '')), '');
+  v_introducer text := nullif(btrim(coalesce(p_introducer_reported, '')), '');
+  v_ref        text := nullif(lower(btrim(coalesce(p_creator_ref, ''))), '');
+  v_link       uuid;
+  v_notice     text;
+  v_id         uuid := gen_random_uuid();
+  v_inserted   integer;
+begin
+  if not coalesce((select enabled from ops.settings where key = 'waitlist_submissions'), false) then
+    return 'closed';
+  end if;
+  v_notice := (select value from ops.settings where key = 'waitlist_notice_version');
+  if v_notice is null then
+    return 'closed';
+  end if;
+
+  if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or length(v_email) > 254
+     or coalesce(p_age_confirmed, false) is false
+     or coalesce(p_waitlist_consent, false) is false then
+    return 'invalid';
+  end if;
+  if p_notice_version is distinct from v_notice then
+    return 'notice_changed';
+  end if;
+
+  if not (v_interests <@ array['reach_followers', 'closer_community', 'support_creators', 'discover_creators', 'sustainable_income', 'shape_platform']::text[])
+     or cardinality(v_interests) > 6
+     or (v_shares is not null and v_shares not in ('yes', 'not_yet'))
+     or (v_platform is not null and v_platform not in ('youtube', 'tiktok', 'instagram', 'twitch', 'x', 'facebook', 'podcast', 'newsletter', 'other'))
+     or (v_audience is not null and v_audience not in ('under_1k', '1k_10k', '10k_100k', 'over_100k'))
+     or (coalesce(v_shares, '') <> 'yes' and (v_platform is not null or v_audience is not null)) then
+    return 'invalid';
+  end if;
+
+  -- New optional answers. A name or handle only counts with "yes"; one that
+  -- breaks the format rules is refused so the visitor can correct it.
+  if (v_intent is not null and v_intent not in ('create', 'discover', 'both'))
+     or (v_introducer is not null and p_introduced_by_creator is not true)
+     or (v_introducer is not null and (
+           char_length(v_introducer) > 60
+           or v_introducer !~ '^[[:alnum:]@._''’ -]+$'
+           or v_introducer ~* '(https?|www\.|\.(com|net|org|io|co|app|me|tv|gg|ly)\M)'
+           or v_introducer ~ '[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+'
+           or v_introducer ~ '[0-9]{7,}')) then
+    return 'invalid';
+  end if;
+
+  if v_source is not null and v_source !~ '^[a-z0-9_-]{1,40}$' then v_source := null; end if;
+
+  if coalesce(p_email_key, '') !~ '^[0-9a-f]{64}$' or coalesce(p_client_key, '') !~ '^[0-9a-f]{64}$' then
+    return 'invalid';
+  end if;
+
+  delete from ops.waitlist_rate_limits where window_start < now() - interval '2 days';
+  if ops.waitlist_rate_hit('global', interval '1 minute', 60) then
+    return 'rate_limited';
+  end if;
+  if ops.waitlist_rate_hit('client:' || p_client_key, interval '1 hour', 10) then
+    return 'rate_limited';
+  end if;
+  if ops.waitlist_rate_hit('email:' || p_email_key, interval '1 day', 3) then
+    return 'rate_limited';
+  end if;
+
+  -- A verified link only if the server can resolve it right now.
+  if v_ref is not null then
+    select r.link_id into v_link from ops.resolve_creator_link(v_ref) r where r.status = 'valid';
+  end if;
+
+  insert into ops.waitlist (
+    id, email, interests, shares_content, platform, audience_band, source,
+    age_confirmed, waitlist_consent_version, waitlist_consented_at,
+    intent, introduced_by_creator, introducer_reported, creator_link_id
+  )
+  values (
+    v_id, v_email, v_interests, v_shares, v_platform, v_audience, v_source,
+    true, v_notice, now(),
+    v_intent, p_introduced_by_creator, v_introducer, v_link
+  )
+  on conflict (email) do nothing;
+  get diagnostics v_inserted = row_count;
+
+  if v_inserted = 1 then
+    insert into ops.waitlist_consents (waitlist_id, kind, granted, notice_version)
+    values (v_id, 'waitlist', true, v_notice);
+    insert into ops.acquisition_events (event, source, self_reported_referral, creator_link_id)
+    values ('waitlist_signup', v_source, coalesce(p_introduced_by_creator, false), v_link);
+  end if;
+
+  return 'ok';
+end;
+$$;
+
+-- The first version keeps working, unchanged for its callers: it now runs
+-- the same code with the new answers left empty, so there is one path.
+create or replace function ops.join_waitlist(
+  p_email               text,
+  p_interests           text[],
+  p_shares_content      text,
+  p_platform            text,
+  p_audience_band       text,
+  p_source              text,
+  p_age_confirmed       boolean,
+  p_waitlist_consent    boolean,
+  p_notice_version      text,
+  p_email_key           text,
+  p_client_key          text
+)
+returns text
+language sql
+set search_path = ''
+as $$
+  select ops.join_waitlist_v2(
+    p_email, p_interests, p_shares_content, p_platform, p_audience_band, p_source,
+    p_age_confirmed, p_waitlist_consent, p_notice_version, p_email_key, p_client_key,
+    null, null, null, null
+  );
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Attribution through invitation and signup.
+
+alter table ops.invitations
+  add column creator_link_id uuid references ops.creator_links (id) on delete set null;
+comment on column ops.invitations.creator_link_id is 'The verified creator link this person arrived through, copied from their waitlist entry. Attribution only.';
+
+-- An invitation for a waitlist address carries that entry's verified link.
+create function ops.invitations_copy_creator_link()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.creator_link_id is null then
+    new.creator_link_id := (select w.creator_link_id from ops.waitlist w where w.email = new.email);
+  end if;
+  return new;
+end;
+$$;
+
+create trigger invitations_copy_creator_link
+  before insert on ops.invitations
+  for each row execute function ops.invitations_copy_creator_link();
+
+-- One row per account that arrived through a verified link, with that
+-- person's own follow decision. 'pending' until they choose. Recording
+-- 'followed' records their choice; it does not create the follow, award
+-- Connection Points or create any entitlement for anyone.
+create table ops.creator_link_redemptions (
+  user_id         uuid primary key references auth.users (id) on delete cascade,
+  link_id         uuid references ops.creator_links (id) on delete set null,
+  creator_id      uuid references auth.users (id) on delete set null,
+  redeemed_at     timestamptz not null default now(),
+  follow_decision text not null default 'pending',
+  decided_at      timestamptz,
+  constraint creator_link_redemptions_decision_allowed check (follow_decision in ('pending', 'followed', 'declined')),
+  constraint creator_link_redemptions_decided_at check ((follow_decision = 'pending') = (decided_at is null)),
+  constraint creator_link_redemptions_not_self check (creator_id is distinct from user_id)
+);
+comment on table ops.creator_link_redemptions is 'Accounts that joined through a verified creator link, and their own follow decision. Never creates a follow, Connection Points or entitlement.';
+
+create function ops.invitations_record_link_redemption()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_creator uuid;
+begin
+  if new.accepted_at is not null and old.accepted_at is null
+     and new.accepted_user_id is not null and new.creator_link_id is not null then
+    v_creator := (select creator_id from ops.creator_links where id = new.creator_link_id);
+    -- A creator joining through their own link is not a redemption.
+    if v_creator is distinct from new.accepted_user_id then
+      insert into ops.creator_link_redemptions (user_id, link_id, creator_id)
+      values (new.accepted_user_id, new.creator_link_id, v_creator)
+      on conflict (user_id) do nothing;
+      insert into ops.acquisition_events (event, creator_link_id) values ('invitation_accepted', new.creator_link_id);
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger invitations_record_link_redemption
+  after update of accepted_at on ops.invitations
+  for each row execute function ops.invitations_record_link_redemption();
+
+-- The person's own answer to "Follow <creator>?". Called by server code for
+-- the signed-in person only, once: a later change of mind is an ordinary
+-- follow or unfollow, not a new attribution.
+create function ops.record_invite_follow_decision(p_user uuid, p_decision text)
+returns text
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_link uuid;
+begin
+  if p_decision not in ('followed', 'declined') then
+    raise exception 'decision must be followed or declined';
+  end if;
+  update ops.creator_link_redemptions
+     set follow_decision = p_decision, decided_at = now()
+   where user_id = p_user and follow_decision = 'pending'
+  returning link_id into v_link;
+  if not found then
+    return 'unchanged';
+  end if;
+  insert into ops.acquisition_events (event, creator_link_id)
+  values (case p_decision when 'followed' then 'invite_follow_confirmed' else 'invite_follow_declined' end, v_link);
+  return p_decision;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Measurement for the waitlist_admin login: counts only, never an address,
+-- account id or the self-reported names.
+
+create function waitlist_api.admin_acquisition_summary()
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'intent', coalesce((select jsonb_object_agg(coalesce(intent, 'unanswered'), n) from (
+                select intent, count(*) as n from ops.waitlist group by intent) s), '{}'::jsonb),
+    'introduced_by_creator', coalesce((select jsonb_object_agg(
+                case introduced_by_creator when true then 'yes' when false then 'no' else 'unanswered' end, n) from (
+                select introduced_by_creator, count(*) as n from ops.waitlist group by introduced_by_creator) s), '{}'::jsonb),
+    'self_reported_with_name', (select count(*) from ops.waitlist where introducer_reported is not null),
+    'verified_link_signups',   (select count(*) from ops.waitlist where creator_link_id is not null),
+    'events', coalesce((select jsonb_object_agg(event, n) from (
+                select event, count(*) as n from ops.acquisition_events group by event) s), '{}'::jsonb),
+    'active_links', (select count(*) from ops.creator_links l join ops.pilot_creators c on c.user_id = l.creator_id
+                     where l.revoked_at is null and l.expires_at > now() and c.status = 'accepted'),
+    'accepted_creators', (select count(*) from ops.pilot_creators where status = 'accepted')
+  );
+$$;
+
+-- ---------------------------------------------------------------------------
+-- The server function's new entry point (the first one stays as it was).
+
+create function waitlist_api.submit_v2(
+  p_email                 text,
+  p_interests             text[],
+  p_shares_content        text,
+  p_platform              text,
+  p_audience_band         text,
+  p_source                text,
+  p_age_confirmed         boolean,
+  p_waitlist_consent      boolean,
+  p_notice_version        text,
+  p_email_key             text,
+  p_client_key            text,
+  p_intent                text,
+  p_introduced_by_creator boolean,
+  p_introducer_reported   text,
+  p_creator_ref           text
+)
+returns text
+language sql
+security definer
+set search_path = ''
+as $$
+  select ops.join_waitlist_v2(
+    p_email, p_interests, p_shares_content, p_platform, p_audience_band, p_source,
+    p_age_confirmed, p_waitlist_consent, p_notice_version, p_email_key, p_client_key,
+    p_intent, p_introduced_by_creator, p_introducer_reported, p_creator_ref
+  );
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Privileges: server code only, exactly like the rest of ops.
+
+alter table ops.pilot_creators enable row level security;
+alter table ops.creator_links enable row level security;
+alter table ops.creator_link_redemptions enable row level security;
+alter table ops.acquisition_events enable row level security;
+
+revoke all on ops.pilot_creators, ops.creator_links, ops.creator_link_redemptions, ops.acquisition_events
+  from public, anon, authenticated;
+grant all on ops.pilot_creators, ops.creator_links, ops.creator_link_redemptions, ops.acquisition_events
+  to service_role;
+
+revoke all on function ops.creator_links_require_accepted_creator() from public, anon, authenticated;
+revoke all on function ops.create_creator_link(uuid, integer, text) from public, anon, authenticated;
+revoke all on function ops.resolve_creator_link(text) from public, anon, authenticated;
+revoke all on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text) from public, anon, authenticated;
+revoke all on function ops.invitations_copy_creator_link() from public, anon, authenticated;
+revoke all on function ops.invitations_record_link_redemption() from public, anon, authenticated;
+revoke all on function ops.record_invite_follow_decision(uuid, text) from public, anon, authenticated;
+
+grant execute on function ops.create_creator_link(uuid, integer, text) to service_role;
+grant execute on function ops.resolve_creator_link(text) to service_role;
+grant execute on function ops.join_waitlist_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text) to service_role;
+grant execute on function ops.record_invite_follow_decision(uuid, text) to service_role;
+
+revoke all on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text)
+  from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.admin_acquisition_summary() from public, anon, authenticated, service_role;
+grant execute on function waitlist_api.submit_v2(text, text[], text, text, text, text, boolean, boolean, text, text, text, text, boolean, text, text)
+  to waitlist_writer;
+grant execute on function waitlist_api.admin_acquisition_summary() to waitlist_admin;

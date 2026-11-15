@@ -49,8 +49,36 @@ export function readWaitlistConfig(env: Record<string, unknown>, notice: Approve
   return { endpoint, turnstileSiteKey, noticeUrl, noticeVersion }
 }
 
-/** Where someone came from, from ?src= in the link, if well formed. */
-export function readAcquisition(search: string): { source: string | null } {
-  const s = (new URLSearchParams(search).get('src') ?? '').trim().toLowerCase()
-  return { source: /^[a-z0-9_-]{1,40}$/.test(s) ? s : null }
+/**
+ * Where someone came from, from the link:
+ *   ?src=  the acquisition channel label (for example ig_bio)
+ *   ?ref=  a creator invitation code, kept separate from the channel. It is
+ *          only a claim until the server resolves it against an accepted
+ *          creator's active link; an unknown code is simply ignored there.
+ */
+export function readAcquisition(search: string): { source: string | null; creatorRef: string | null } {
+  const params = new URLSearchParams(search)
+  const s = (params.get('src') ?? '').trim().toLowerCase()
+  const r = (params.get('ref') ?? '').trim().toLowerCase()
+  return {
+    source: /^[a-z0-9_-]{1,40}$/.test(s) ? s : null,
+    creatorRef: /^[0-9a-f]{20}$/.test(r) ? r : null,
+  }
+}
+
+/**
+ * A creator's name or handle as someone typed it: 1 to 60 letters, numbers,
+ * spaces and @ . _ ' - only, with no links, email addresses or phone numbers.
+ * Mirrors the database rule (ops.waitlist introducer_reported), which is the
+ * one that counts.
+ */
+export function introducerProblem(value: string): string | null {
+  const v = value.trim()
+  if (!v) return null
+  if (v.length > 60) return 'Please keep it to 60 characters.'
+  if (/https?|www\.|\.(com|net|org|io|co|app|me|tv|gg|ly)\b/i.test(v)) return 'Just their name or handle, please, not a link.'
+  if (/[^@\s]+@[^@\s]+\.[^@\s]+/.test(v)) return 'Just their name or handle, please, not an email address.'
+  if (/[0-9]{7,}/.test(v)) return 'Just their name or handle, please, not a phone number.'
+  if (!/^[\p{L}\p{N}@._'’ -]+$/u.test(v)) return 'Please use only letters, numbers, spaces and @ . _ \' -'
+  return null
 }

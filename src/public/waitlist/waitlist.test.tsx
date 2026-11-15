@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { readAcquisition, readWaitlistConfig } from './config'
+import { introducerProblem, readAcquisition, readWaitlistConfig } from './config'
 import { WaitlistForm } from './WaitlistForm'
 import { JoinPage } from '../JoinPage'
 import type { MountTurnstile } from './turnstile'
@@ -73,9 +73,20 @@ describe('waitlist switch (browser)', () => {
     expect(document.querySelector('script[src*="challenges.cloudflare.com"]')).toBeNull()
   })
 
-  it('reads only the acquisition source, and only when well formed', () => {
-    expect(readAcquisition('?src=Instagram&c=launch_1')).toEqual({ source: 'instagram' })
-    expect(readAcquisition('?src=<script>')).toEqual({ source: null })
+  it('reads the acquisition channel and a creator code separately, and only when well formed', () => {
+    expect(readAcquisition('?src=Instagram&c=launch_1')).toEqual({ source: 'instagram', creatorRef: null })
+    expect(readAcquisition('?src=<script>')).toEqual({ source: null, creatorRef: null })
+    expect(readAcquisition('?src=ig_bio&ref=0123456789ABCDEF0123')).toEqual({ source: 'ig_bio', creatorRef: '0123456789abcdef0123' })
+    for (const bad of ['?ref=priya', '?ref=0123456789abcdef012', '?ref=0123456789abcdef0123x', '?ref=../../admin']) {
+      expect(readAcquisition(bad).creatorRef, bad).toBeNull()
+    }
+  })
+
+  it('accepts a creator name or handle, and refuses links, email addresses and phone numbers', () => {
+    for (const ok of ['@priyaruns', 'Priya Raman', 'Zoë O’Brien-Nakamura', 'sam.collins', '']) expect(introducerProblem(ok), ok).toBeNull()
+    for (const bad of ['https://instagram.com/priya', 'www.priya.co', 'priya.com', 'priya@example.com', 'call 07700900123', '<script>', 'x'.repeat(61)]) {
+      expect(introducerProblem(bad), bad).not.toBeNull()
+    }
   })
 })
 
@@ -125,7 +136,7 @@ describe('waitlist form', () => {
   it('asks for platform and audience only after "Yes", and never for a link', () => {
     setup()
     expect(screen.queryByTestId('waitlist-sharing-details')).toBeNull()
-    fireEvent.click(screen.getByLabelText('Yes'))
+    fireEvent.click(within(screen.getByTestId('waitlist-sharing')).getByLabelText('Yes'))
     expect(screen.getByTestId('waitlist-sharing-details')).toBeTruthy()
     expect(screen.queryByLabelText(/link/i)).toBeNull()
     expect(document.querySelector('input[type="url"]')).toBeNull()
@@ -144,7 +155,7 @@ describe('waitlist form', () => {
     const f = setup()
     fillRequired()
     fireEvent.click(screen.getByLabelText('Discovering new creators'))
-    fireEvent.click(screen.getByLabelText('Yes'))
+    fireEvent.click(within(screen.getByTestId('waitlist-sharing')).getByLabelText('Yes'))
     fireEvent.change(screen.getByLabelText(/Where\?/), { target: { value: 'youtube' } })
     await tokenReady()
     submit()
@@ -162,10 +173,79 @@ describe('waitlist form', () => {
       ageConfirmed: true,
       waitlistConsent: true,
       noticeVersion: 'notice-2026-11',
+      intent: null,
+      introducedByCreator: null,
+      introducerReported: null,
+      creatorRef: null,
       turnstileToken: 'turnstile-token',
       website: '',
     })
     expect(screen.getByText("Thanks, you're on the waitlist.")).toBeTruthy()
+  })
+
+  it('keeps signup short for people who only want to discover: no creator questions', () => {
+    setup()
+    expect(screen.getByTestId('waitlist-sharing')).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Discover and support creators'))
+    expect(screen.queryByTestId('waitlist-sharing')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Both'))
+    expect(screen.getByTestId('waitlist-sharing')).toBeTruthy()
+  })
+
+  it('asks for the creator name only after "Yes", and explains it is self-reported', () => {
+    setup()
+    const q = screen.getByTestId('waitlist-introduced')
+    expect(screen.queryByLabelText(/Their name or handle/)).toBeNull()
+    fireEvent.click(within(q).getByLabelText('Yes'))
+    expect(screen.getByLabelText(/Their name or handle/)).toBeTruthy()
+    expect(q.textContent).toContain("We won't contact them, and it doesn't link you to them or follow anyone.")
+    fireEvent.click(within(q).getByLabelText('No'))
+    expect(screen.queryByLabelText(/Their name or handle/)).toBeNull()
+  })
+
+  it('sends intent, the self-reported introduction and the creator code as separate fields', async () => {
+    const f = setup(respond('ok'), '?src=ig_bio&ref=0123456789abcdef0123')
+    fillRequired()
+    fireEvent.click(screen.getByLabelText('Discover and support creators'))
+    fireEvent.click(within(screen.getByTestId('waitlist-introduced')).getByLabelText('Yes'))
+    fireEvent.change(screen.getByLabelText(/Their name or handle/), { target: { value: '  @priyaruns ' } })
+    await tokenReady()
+    submit()
+    await waitFor(() => expect(screen.getByTestId('waitlist-success')).toBeTruthy())
+    const body = JSON.parse((f.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+    expect(body).toMatchObject({
+      source: 'ig_bio',
+      intent: 'discover',
+      sharesContent: null,
+      platform: null,
+      introducedByCreator: true,
+      introducerReported: '@priyaruns',
+      creatorRef: '0123456789abcdef0123',
+    })
+  })
+
+  it('refuses a link typed as the creator name, before sending anything', async () => {
+    const f = setup()
+    fillRequired()
+    fireEvent.click(within(screen.getByTestId('waitlist-introduced')).getByLabelText('Yes'))
+    fireEvent.change(screen.getByLabelText(/Their name or handle/), { target: { value: 'https://instagram.com/priya' } })
+    await tokenReady()
+    submit()
+    expect(screen.getByText('Just their name or handle, please, not a link.')).toBeTruthy()
+    expect(f).not.toHaveBeenCalled()
+  })
+
+  it('drops the sharing answers if someone switches to discovering only', async () => {
+    const f = setup()
+    fillRequired()
+    fireEvent.click(within(screen.getByTestId('waitlist-sharing')).getByLabelText('Yes'))
+    fireEvent.change(screen.getByLabelText(/Where\?/), { target: { value: 'youtube' } })
+    fireEvent.click(screen.getByLabelText('Discover and support creators'))
+    await tokenReady()
+    submit()
+    await waitFor(() => expect(screen.getByTestId('waitlist-success')).toBeTruthy())
+    const body = JSON.parse((f.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+    expect([body.sharesContent, body.platform, body.audienceBand]).toEqual([null, null, null])
   })
 
   it('shows clear messages for closed, rate limited and failed checks, and resets the check', async () => {
