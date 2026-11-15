@@ -22,43 +22,43 @@ describe('Splitpost homepage copy', () => {
     ])
   })
 
-  it('WHY states the gap accurately, not absolutely, and has no money in the story', () => {
+  it('WHY uses the approved introduction, the simple story and the closing question', () => {
     const w = HOMEPAGE_COPY.why
-    expect(w.steps.map((s) => s.title)).toEqual(['Priya posts.', 'Ana joins in.', 'Leo recommends it.', 'The post takes off.'])
-    expect(w.gap.headline).toBe('They all helped it grow. Not all of them had a way to benefit.')
-    const story = allHomepageText(w).join(' ')
-    expect(story).not.toMatch(/\bnobody (shared|benefit)|\bno one (shared|benefit)|everyone helped/i)
-    expect(story).not.toMatch(/[$€£¥]|\bad(vertising)? revenue\b/i)
-  })
-
-  it('WHO names three specific frustrations each, with no quotes that could read as testimonials', () => {
-    const w = HOMEPAGE_COPY.who
-    expect(w.creator.points).toHaveLength(3)
-    expect(w.fan.points).toHaveLength(3)
-    expect(allHomepageText(w).join(' ')).not.toMatch(/[“”"]/)
-  })
-
-  it('POST. SUPPORT. SPLIT. is exactly as approved', () => {
-    expect(HOMEPAGE_COPY.how.steps.map((x) => `${x.word} ${x.line}`)).toEqual([
-      'POST. Create something worth sharing.',
-      'SUPPORT. Help it reach more people.',
-      'SPLIT. Make meaningful contributions count.',
+    expect(w.intro).toBe('One post goes viral. Thousands help it spread. But who gets a piece of its success?')
+    expect(w.steps.map((s) => s.title)).toEqual([
+      'Priya creates a relatable post.',
+      'Ana comments and shares it with friends.',
+      'Leo reposts it and introduces new people.',
+      'The post takes off because people helped it spread.',
     ])
+    expect(w.question).toBe("So where's their split?")
+    expect(allHomepageText(w).join(' ')).not.toMatch(/[$€£¥]|\bad(vertising)? revenue\b/i)
   })
 
-  it('keeps pilot recognition and the future vision apart', () => {
-    const { now, later } = HOMEPAGE_COPY.what
-    expect(now.badge).toMatch(/pilot/i)
-    for (const k of ['noFanCash', 'cpNoCashValue', 'cpRules'] as const) expect(now.note).toContain(DISCLOSURES[k])
-    // The pilot side never mentions revenue or payment at all.
-    expect(allHomepageText(now).join(' ')).not.toMatch(/revenue|\bpaid\b|payout|\bincome\b/i)
-    expect(later.badge).toMatch(/vision/i)
-    expect(later.body).toMatch(/working toward a future/)
-    expect(later.body).toMatch(/Not every post would earn it/)
-    expect(later.body).toMatch(/hasn't been decided/)
-    expect(later.note).toBe(DISCLOSURES.visionOnly)
-    // No numbers, percentages or currency anywhere in the vision.
-    expect(allHomepageText(later).join(' ')).not.toMatch(/\d|[$€£¥%]/)
+  it('the sample post is relatable, not technical, and its numbers are sample data', () => {
+    expect(HOMEPAGE_COPY.post.text).toMatch(/first 10K/)
+    expect(allHomepageText().join(' ')).not.toMatch(/offline mode|build log|sync bug/i)
+    expect(HOMEPAGE_COPY.why.steps[3].line).toMatch(/Sample numbers/)
+  })
+
+  it('WHO uses the approved headlines, with split central for fans, and no testimonial-like quotes', () => {
+    expect(HOMEPAGE_COPY.who.creator.line).toBe('You’re creating content people love. But the money doesn’t reflect the work.')
+    expect(HOMEPAGE_COPY.who.fan.line).toBe("You helped make that post successful. But where's your split?")
+    expect(HOMEPAGE_COPY.who.creator.points).toHaveLength(3)
+    expect(HOMEPAGE_COPY.who.fan.points).toHaveLength(3)
+    expect(allHomepageText(HOMEPAGE_COPY.who).join(' ')).not.toMatch(/[“”"]/)
+  })
+
+  it('WHAT leads with the value proposition and keeps both disclosures accurate', () => {
+    const w = HOMEPAGE_COPY.what
+    expect(w.creator.headline).toBe('Create what matters. Earn a better split.')
+    expect(w.fan.headline).toBe("Don't just share the post. Share in its success.")
+    for (const k of ['noFanCash', 'cpNoCashValue'] as const) expect(w.today.body).toContain(DISCLOSURES[k])
+    expect(w.today.body).not.toMatch(/revenue|\bpaid\b|payout/i)
+    expect(w.vision.body).toMatch(/future vision/)
+    expect(w.vision.body).toMatch(/isn't guaranteed/)
+    expect(w.vision.body).toContain(DISCLOSURES.visionOnly)
+    expect(allHomepageText(w).join(' ')).not.toMatch(/\d|[$€£¥%]/)
   })
 
   it('carries every required pilot disclosure in the invitation', () => {
@@ -68,6 +68,7 @@ describe('Splitpost homepage copy', () => {
     }
     expect(HOMEPAGE_COPY.hero.smallPrint).toContain(DISCLOSURES.noFanCash)
     expect(HOMEPAGE_COPY.how.smallPrint).toBe(DISCLOSURES.noGuarantee)
+    expect(HOMEPAGE_COPY.how.headline).toBe('POST. SUPPORT. SPLIT.')
   })
 
   it('says the photos are stock images of models and the people in the story are samples', () => {

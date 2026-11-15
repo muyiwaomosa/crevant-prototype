@@ -8,7 +8,7 @@ import { RewardManager } from './RewardManager'
  * Profile → Creator tools. Optional tools for anyone who has followers or
  * offers rewards. There is no special account type: every participant can open
  * this page. Supporter insights and a redemption inbox are placeholders until
- * Crevant has real, shared accounts.
+ * Splitpost has real, shared accounts.
  */
 export function CreatorToolsPage() {
   return (
@@ -18,7 +18,7 @@ export function CreatorToolsPage() {
       </Link>
       <PageHeader
         title="Creator tools"
-        subtitle="Optional tools for when people follow you. Anyone on Crevant can use them, whenever they're ready."
+        subtitle="Optional tools for when people follow you. Anyone on Splitpost can use them, whenever they're ready."
       />
 
       <nav aria-label="Creator tools sections" className="no-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -71,8 +71,8 @@ export function CreatorToolsPage() {
                 fulfilled.
               </p>
               <p className="mt-2 text-ink-600">
-                Right now Crevant runs only in your browser, so nobody else can engage with your posts or earn CP with you. Rather than show made up
-                supporters, this section stays empty until Crevant has real, shared accounts.
+                Right now Splitpost runs only in your browser, so nobody else can engage with your posts or earn CP with you. Rather than show made up
+                supporters, this section stays empty until Splitpost has real, shared accounts.
               </p>
             </div>
           </div>

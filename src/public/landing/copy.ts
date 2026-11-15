@@ -21,26 +21,30 @@ export const HOMEPAGE_COPY = {
     smallPrint: ['Invitation-only pilot.', DISCLOSURES.noFanCash],
   },
 
+  /** The one sample post the whole page follows. Fictional, and labelled as sample data wherever it appears. */
+  post: {
+    author: 'Priya Raman',
+    handle: '@priyaruns',
+    time: '2h',
+    text: 'A year ago I couldn’t run to the end of my street. This morning I finished my first 10K. If you’re starting something hard, start slow. Just start.',
+    imageAlt: 'Finish line at sunrise',
+    likes: '12.4K',
+    comments: '1.8K',
+    reposts: '3.2K',
+  },
+
   why: {
     status: 'approved-in-principle' as CopyStatus,
     eyebrow: 'Why',
     headline: "You helped build it. Where's your split?",
-    intro: 'Follow one post. See who helps it grow, and who gets a chance to benefit.',
+    intro: 'One post goes viral. Thousands help it spread. But who gets a piece of its success?',
     steps: [
-      { title: 'Priya posts.', line: 'Her fourth build log this week. Posting is the easy part. Being seen is not.' },
-      { title: 'Ana joins in.', line: 'She starts the conversation and carries the post to people Priya couldn’t reach.' },
-      { title: 'Leo recommends it.', line: 'A recommendation from a friend. Three new followers who might never have found her.' },
-      { title: 'The post takes off.', line: 'It grew because people helped it grow.' },
+      { title: 'Priya creates a relatable post.', line: 'Her first 10K, and the year it took to get there.' },
+      { title: 'Ana comments and shares it with friends.', line: 'Her comment starts the conversation. Her group chat does the rest.' },
+      { title: 'Leo reposts it and introduces new people.', line: 'His followers have never heard of Priya. Now they follow her.' },
+      { title: 'The post takes off because people helped it spread.', line: 'Thousands of likes, comments and reposts. Sample numbers, for illustration.' },
     ],
-    gap: {
-      kicker: 'And then?',
-      headline: 'They all helped it grow. Not all of them had a way to benefit.',
-      people: [
-        { name: 'Priya', line: 'Reach went up this week. Her income didn’t follow, and the next post could reach far fewer people.' },
-        { name: 'Ana', line: 'Started the conversation and shared it with her team. Her part went unrecognized.' },
-        { name: 'Leo', line: 'Brought three new followers. Priya had no way of knowing they came through him.' },
-      ],
-    },
+    question: "So where's their split?",
   },
 
   who: {
@@ -49,20 +53,20 @@ export const HOMEPAGE_COPY = {
     headline: ['The creator who keeps posting.', 'The fan who keeps sharing.'],
     creator: {
       label: 'The creator',
-      line: 'More posts. More followers. Not more income.',
+      line: 'You’re creating content people love. But the money doesn’t reflect the work.',
       points: [
-        'You check the numbers before you check your messages.',
-        'One post takes off, the next one disappears, and you never learn why.',
-        'Your audience keeps growing. Your income doesn’t keep up.',
+        'You publish week after week, because your audience counts on you.',
+        'Your audience keeps growing. Turning that into a steady living still feels out of reach.',
+        'One good month never tells you what the next one will bring.',
       ],
     },
     fan: {
       label: 'The fan',
-      line: 'You shared it. You started the conversation. Nobody noticed.',
+      line: "You helped make that post successful. But where's your split?",
       points: [
-        'You found them early and told everyone you know.',
-        'Your comments start the conversations that keep them going.',
-        'Your recommendations bring real followers, and nobody sees it.',
+        'Your comment started the conversation that kept it going.',
+        'Your reposts and recommendations brought in people who’d never have found it.',
+        'You helped create that success, with no way to share in what it’s worth.',
       ],
     },
   },
@@ -71,39 +75,24 @@ export const HOMEPAGE_COPY = {
     status: 'approved-in-principle' as CopyStatus,
     eyebrow: 'What',
     headline: 'What if every successful post created more winners?',
-    intro: 'When a post takes off, the people who made it happen should come out ahead together.',
-    outcomes: {
-      creator: {
-        label: 'For creators',
-        points: ['See exactly who helps each post grow.', 'Thank the fans who show up, with perks you choose.', 'Grow with a community that has a reason to stay.'],
-      },
-      fan: {
-        label: 'For fans',
-        points: ['Your support is seen, not lost in a count.', 'Recognition with each creator you back.', 'Perks from the creators you help grow.'],
-      },
+    creator: {
+      label: 'For creators',
+      headline: 'Create what matters. Earn a better split.',
+      body: 'Our goal: when your posts create value, you get a fairer split of it, and a more sustainable way to keep creating the work people love.',
     },
-    /** Always shown beside each other, never hidden, and drawn differently: pilot recognition versus the future vision. */
-    now: {
-      badge: 'Now · in the pilot',
-      title: 'Recognition and perks.',
-      flows: [
-        { to: 'Priya', what: 'Supporter insights', line: 'Who helped this post grow, and who brought new followers.' },
-        { to: 'Ana and Leo', what: 'Connection Points with Priya', line: 'Recognition for meaningful support, held with Priya only.' },
-        { to: 'Ana and Leo', what: 'Perks from Priya', line: 'Noncash perks she chooses to offer, like an early look at a build.' },
-      ],
-      note: `${DISCLOSURES.noFanCash} ${DISCLOSURES.cpNoCashValue} ${DISCLOSURES.cpRules}`,
+    fan: {
+      label: 'For fans',
+      headline: "Don't just share the post. Share in its success.",
+      body: 'Our goal: when you help a post and its creator succeed, you get a split of that success too.',
     },
-    later: {
-      badge: 'Later · our vision',
-      title: 'A real share of the value.',
-      source: 'Eligible ad revenue, in our future vision',
-      flows: [
-        { to: 'The creator', line: 'Priya, who made the post.' },
-        { to: 'A fan reward pool', line: 'Shared by fans whose support was verified.' },
-        { to: 'Splitpost', line: 'To run the platform and keep it growing.' },
-      ],
-      body: "We're working toward a future where creators and fans can share in advertising revenue from the posts they create and support. Not every post would earn it, and how it would be divided hasn't been decided.",
-      note: DISCLOSURES.visionOnly,
+    /** Concise, always visible: what the pilot does today, and what is still only a vision. */
+    today: {
+      label: 'Today, in the pilot',
+      body: `Creators see who helps their posts grow. Fans earn Connection Points and perks from the creators they support. ${DISCLOSURES.noFanCash} ${DISCLOSURES.cpNoCashValue}`,
+    },
+    vision: {
+      label: 'Our vision',
+      body: `Sharing advertising revenue from eligible posts with creators and fans is our future vision. It isn't guaranteed. ${DISCLOSURES.visionOnly}`,
     },
   },
 
@@ -111,20 +100,14 @@ export const HOMEPAGE_COPY = {
     status: 'final' as CopyStatus,
     eyebrow: 'How',
     headline: 'POST. SUPPORT. SPLIT.',
-    intro: 'The same post, inside Splitpost. Concept screens with sample data, showing what we’re building for the pilot.',
-    steps: [
-      { word: 'POST.', line: 'Create something worth sharing.' },
-      { word: 'SUPPORT.', line: 'Help it reach more people.' },
-      { word: 'SPLIT.', line: 'Make meaningful contributions count.' },
-    ],
     screens: [
-      { step: 'POST.', caption: 'Priya shares her build log with her followers.' },
-      { step: 'SUPPORT.', caption: 'Ana comments. Leo recommends Priya with a referral link.' },
-      { step: 'SPLIT.', caption: 'Priya sees who helped her post grow.' },
-      { step: 'SPLIT.', caption: 'Leo’s support is recognized with Priya, and unlocks a perk she offers.' },
+      { step: 'POST.', caption: 'Priya posts her first 10K.' },
+      { step: 'SUPPORT.', caption: 'Ana comments and shares. Leo reposts it with his referral link.' },
+      { step: 'SPLIT.', caption: 'Priya sees exactly who helped her post spread.' },
+      { step: 'SPLIT.', caption: 'Leo earns Connection Points with Priya, and unlocks a perk she offers.' },
     ],
     mockupLabel: `${DISCLOSURES.concept} · ${DISCLOSURES.sampleData}`,
-    pilotNote: 'In the pilot, SPLIT means recognition and perks, not money. Sharing advertising revenue is our future vision and is not part of the pilot.',
+    pilotNote: 'In the pilot, the split is Connection Points and perks, not money. Sharing advertising revenue is our future vision and is not part of the pilot.',
     smallPrint: DISCLOSURES.noGuarantee,
   },
 
@@ -147,7 +130,7 @@ export const HOMEPAGE_COPY = {
   },
 
   /** Shown on the page so no one mistakes a model or a sample for a real member. */
-  peopleNote: 'Photos show models from stock images. Priya, Ana and Leo are sample people, and their post and numbers are illustrations.',
+  peopleNote: 'Photos show models from stock images. Priya, Ana and Leo are sample people, and their post and its numbers are sample data.',
 } as const
 
 /** Every visitor-facing string in the homepage copy, for the claim checks. */

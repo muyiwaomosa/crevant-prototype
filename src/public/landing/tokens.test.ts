@@ -29,31 +29,30 @@ describe('Splitpost design tokens', () => {
     expect(css).toMatch(/--font-sp-body:\s*'Inter'/)
   })
 
-  it('leaves the existing theme tokens as they were', () => {
-    // A sample of today's tokens: if any of these change, existing pages change.
-    expect(token('paper')).toBe('#f7f4ee')
-    expect(token('ink-900')).toBe('#13191b')
-    expect(token('brand-500')).toBe('#0e7c6b')
-    expect(token('brand-600')).toBe('#0b6a5c')
+  it('tunes the shared tokens to the Splitpost palette, so the tour and account screens match the site', () => {
+    // brand (buttons, links, focus) is midnight; spark (highlights, notes) is orange.
+    expect(token('brand-700')).toBe(token('sp-midnight-raised'))
+    expect(token('brand-900')).toBe(token('sp-midnight'))
+    expect(token('spark-400')).toBe(token('sp-orange'))
+    expect(token('spark-600')).toBe(token('sp-orange-text'))
+    expect(token('paper')).toBe(token('sp-neutral'))
     expect(css).toMatch(/--font-sans: 'Inter'/)
-    expect(css).toMatch(/--font-display: 'Bricolage Grotesque'/)
+    expect(css).toMatch(/--font-display: 'Archivo'/)
+    // No teal or amber left from the old Crevant palette.
+    expect(css).not.toMatch(/#0b6a5c|#0e7c6b|#f5a524/i)
   })
 
-  it('only the public site uses the sp- tokens, so the tour and account screens are unchanged', async () => {
-    const { readdirSync, statSync } = await import('node:fs')
-    const walk = (dir: string): string[] =>
-      readdirSync(dir).flatMap((n) => {
-        const p = join(dir, n)
-        return statSync(p).isDirectory() ? walk(p) : [p]
-      })
-    const users = walk(join(ROOT, 'src'))
-      .filter((p) => /\.(tsx?|css)$/.test(p) && !/\.test\.tsx?$/.test(p) && !p.endsWith('index.css'))
-      .filter((p) => /\bsp-(midnight|orange|neutral|ink|muted)|font-sp-/.test(readFileSync(p, 'utf8')))
-    // The public site's header and homepage opt in; the tour (src/pages,
-    // src/components) and account screens (src/public/auth) do not, until PR 8.
-    const allowed = (p: string) => p.includes(join('src', 'public', 'landing')) || p.endsWith(join('src', 'public', 'PublicLayout.tsx'))
-    expect(users.filter((p) => !allowed(p))).toEqual([])
-    expect(users.length).toBeGreaterThan(0)
+  it('keeps the shared-token pairs the tour relies on readable', () => {
+    const pairs: Array<[string, string, string]> = [
+      ['primary button: white on brand-600', '#ffffff', token('brand-600')],
+      ['links: brand-700 on white', token('brand-700'), '#ffffff'],
+      ['badges: brand-700 on brand-50', token('brand-700'), token('brand-50')],
+      ['notes: spark-700 on spark-50', token('spark-700'), token('spark-50')],
+      ['spark button: ink-900 on spark-400', token('ink-900'), token('spark-400')],
+      ['spark text on white', token('spark-600'), '#ffffff'],
+      ['body text on paper', token('ink-600'), token('paper')],
+    ]
+    for (const [what, fg, bg] of pairs) expect(contrast(fg, bg), `${what}: ${contrast(fg, bg).toFixed(2)}`).toBeGreaterThanOrEqual(4.5)
   })
 
   it('meets WCAG 2.2 AA for the pairs the design uses', () => {

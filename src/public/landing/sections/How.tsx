@@ -8,9 +8,10 @@ const copy = HOMEPAGE_COPY.how
 const SCREENS = [PostScreen, SupportScreen, InsightsScreen, RecognitionScreen]
 
 /**
- * Section 5, HOW: POST. SUPPORT. SPLIT. The same sample post moves through
- * four concept phone screens: Priya posts, Ana and Leo help it travel, Priya
- * sees who helped, and Leo's support is recognised with a perk. On phones the
+ * Section 5, HOW: POST. SUPPORT. SPLIT., shown rather than explained. The same
+ * sample post moves through four concept phone screens: Priya posts, Ana and
+ * Leo help it spread, Priya sees who helped, and Leo's support is recognised
+ * with Connection Points and a perk. On phones the
  * screens scroll sideways; from 1024px all four sit in a row.
  */
 export function How() {
@@ -24,22 +25,11 @@ export function How() {
         >
           POST. SUPPORT. <span className="text-sp-orange-text">SPLIT.</span>
         </h2>
-        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-sp-muted sm:text-xl">{copy.intro}</p>
-
-        <ol data-testid="how-steps" className="mt-12 grid gap-6 sm:grid-cols-3">
-          {copy.steps.map((s, i) => (
-            <li key={s.word} className={clsx('border-b-[3px] pb-5', i === 2 ? 'border-sp-orange' : 'border-sp-midnight')}>
-              <span className={clsx('block font-sp-display text-[2.4rem] font-black leading-none [font-stretch:110%]', i === 2 && 'text-sp-orange-text')}>{s.word}</span>
-              <span className="mt-2 block text-[17px] leading-snug text-sp-muted">{s.line}</span>
-            </li>
-          ))}
-        </ol>
-
         <div
           role="region"
           aria-label="The post, step by step (concept screens)"
           tabIndex={0}
-          className="relative -mx-4 mt-10 overflow-x-auto px-4 pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-orange-text sm:-mx-6 sm:px-6 lg:mx-0 lg:overflow-visible lg:px-0"
+          className="relative -mx-4 mt-12 overflow-x-auto px-4 pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-orange-text sm:-mx-6 sm:px-6 lg:mx-0 lg:overflow-visible lg:px-0"
         >
           <ol data-testid="how-screens" className="flex w-max snap-x snap-mandatory gap-5 lg:grid lg:w-auto lg:grid-cols-4">
             {copy.screens.map((screen, i) => {

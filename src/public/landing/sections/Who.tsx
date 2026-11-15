@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { BellOff, MessageCircle, Share2, TrendingDown, TrendingUp, UserPlus } from 'lucide-react'
+import { MessageCircle, Repeat2, Share2, SplitSquareHorizontal, TrendingDown, TrendingUp } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
 import { Photo } from '../ui/Photo'
 
@@ -35,23 +35,27 @@ function CreatorScene() {
   )
 }
 
-/** The fan: sharing, commenting and recommending, with no one noticing. */
+/**
+ * The fan: commenting, sharing and reposting the post that took off. The
+ * cut-out ends at its right edge, so it sits flush against the frame's right
+ * and bottom edges, where the crop reads as the photo's own frame.
+ */
 function FanScene() {
   return (
     <div className="relative aspect-[4/3] overflow-hidden rounded-[28px] bg-[#ffd9c7]">
-      <div aria-hidden="true" className="absolute -bottom-[30%] left-1/2 aspect-square w-[78%] -translate-x-1/2 rounded-full bg-sp-orange" />
-      <Photo id="fansTogether" className="absolute bottom-0 left-1/2 h-[96%] w-auto max-w-none -translate-x-1/2" />
-      <Chip className="left-[4%] top-[8%]">
-        <Share2 className="h-3.5 w-3.5 text-sp-orange-text" /> Shared to 3 group chats
-      </Chip>
-      <Chip className="right-[4%] top-[24%]">
+      <div aria-hidden="true" className="absolute -bottom-[34%] -right-[12%] aspect-square w-[82%] rounded-full bg-sp-orange" />
+      <Photo id="fansTogether" className="absolute bottom-0 right-0 h-[97%] w-auto max-w-none" />
+      <Chip className="left-[4%] top-[9%]">
         <MessageCircle className="h-3.5 w-3.5 text-sp-orange-text" /> First to comment
       </Chip>
-      <Chip className="bottom-[8%] left-[4%]">
-        <UserPlus className="h-3.5 w-3.5 text-sp-orange-text" /> 3 friends followed
+      <Chip className="left-[4%] top-[27%]">
+        <Share2 className="h-3.5 w-3.5 text-sp-orange-text" /> Shared to 3 group chats
       </Chip>
-      <Chip className="bottom-[8%] right-[4%] bg-sp-midnight! text-white!">
-        <BellOff className="h-3.5 w-3.5" /> No one noticed
+      <Chip className="left-[4%] top-[45%]">
+        <Repeat2 className="h-3.5 w-3.5 text-sp-orange-text" /> Reposted it
+      </Chip>
+      <Chip className="bottom-[8%] left-[4%] bg-sp-midnight! text-white!">
+        <SplitSquareHorizontal className="h-3.5 w-3.5 text-sp-orange" /> Your split?
       </Chip>
     </div>
   )

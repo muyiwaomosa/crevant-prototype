@@ -61,7 +61,7 @@ export function ConfirmPage() {
     return (
       <AuthCard
         title="Open the link from your email"
-        intro={<p>This page works with the link in your Crevant invitation or password reset email. If the link has already been used, you can ask for a new one.</p>}
+        intro={<p>This page works with the link in your Splitpost invitation or password reset email. If the link has already been used, you can ask for a new one.</p>}
       >
         <div className="flex flex-col gap-3 min-[380px]:flex-row">
           <Link to="/forgot-password" className={buttonClass('primary')}>
@@ -90,7 +90,7 @@ export function ConfirmPage() {
 
   return (
     <AuthCard
-      title={isInvite ? 'Welcome to Crevant' : 'Reset your password'}
+      title={isInvite ? 'Welcome to Splitpost' : 'Reset your password'}
       intro={
         <p>
           {isInvite

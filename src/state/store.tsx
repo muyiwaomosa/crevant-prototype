@@ -402,7 +402,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const following = [...new Set([...s.following, ...DEFAULT_FOLLOWING])]
           pushToast({
             tone: 'info',
-            title: 'Welcome to Crevant',
+            title: 'Welcome to Splitpost',
             body: `You're following ${DEFAULT_FOLLOWING.length} starter accounts so your feed isn't empty. Unfollow them any time.`,
           })
           return { ...s, following, onboarding: { status: 'skipped', at: Date.now() } }
@@ -420,7 +420,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const n = choice.length
         pushToast({
           tone: earned > 0 ? 'earn' : 'success',
-          title: n > 0 ? `Following ${n} account${n === 1 ? '' : 's'}` : 'Welcome to Crevant',
+          title: n > 0 ? `Following ${n} account${n === 1 ? '' : 's'}` : 'Welcome to Splitpost',
           body:
             earned > 0
               ? `+${EARN_RULES.follow.points} CP with each of ${earned} account${earned === 1 ? '' : 's'}. Each balance is only for that person's rewards.`

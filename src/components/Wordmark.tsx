@@ -2,15 +2,21 @@ import clsx from 'clsx'
 import { BRAND } from '../brand'
 
 /**
- * Crevant mark: an open "C" (the creator) with a spark held inside it (the fan).
- * The gap in the C faces the spark, a nod to a direct line between the two.
+ * The Splitpost mark: a rounded square cut diagonally in two, midnight and
+ * orange (the split). Matches the public site's SplitMark.
  */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
-      <rect width="64" height="64" rx="16" fill="var(--color-brand-600)" />
-      <path d="M44 20.5A16 16 0 1 0 44 43.5" fill="none" stroke="#fff" strokeWidth="7" strokeLinecap="round" />
-      <circle cx="45" cy="32" r="5.5" fill="var(--color-spark-400)" />
+      <defs>
+        <clipPath id="sp-mark-clip">
+          <rect width="64" height="64" rx="14" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#sp-mark-clip)">
+        <rect width="64" height="64" fill="#10142e" />
+        <path d="M64 0V64H0Z" fill="#ff6a2b" />
+      </g>
     </svg>
   )
 }
@@ -24,7 +30,7 @@ export function Wordmark({ className, size = 'md' }: { className?: string; size?
   return (
     <span className={clsx('inline-flex items-center gap-2', className)}>
       <LogoMark className={sizes.mark} />
-      <span aria-hidden="true" className={clsx('font-display font-extrabold tracking-[-0.03em] text-ink-900', sizes.text)}>
+      <span aria-hidden="true" className={clsx('font-sp-display font-black tracking-[-0.02em] text-sp-ink [font-stretch:108%]', sizes.text)}>
         {BRAND.wordmark}
       </span>
       <span className="sr-only">{BRAND.name}</span>

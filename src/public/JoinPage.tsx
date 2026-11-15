@@ -4,9 +4,11 @@ import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
 import { readWaitlistConfig } from './waitlist/config'
 import { WaitlistForm } from './waitlist/WaitlistForm'
+import { DISCLOSURES } from './landing/claims'
+import { HOMEPAGE_COPY } from './landing/copy'
 
 /**
- * /join: the one Crevant waitlist. Everyone can create, discover, follow,
+ * /join: the one Splitpost waitlist. Everyone can create, discover, follow,
  * engage and support, so nobody picks a side when they join.
  *
  * The form appears only when readWaitlistConfig() finds every required
@@ -21,15 +23,15 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
     <section aria-labelledby="join-title" className="px-4 py-12 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-2xl">
         <Link to="/#invitation" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-600 hover:text-ink-900">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Crevant
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Splitpost
         </Link>
         <h1 id="join-title" className="mt-6 font-display text-[2rem] font-extrabold leading-tight tracking-[-0.02em] text-ink-900 sm:text-[2.5rem]">
           Join the Waitlist
         </h1>
-        {/* Founder-approved introduction. */}
+        {/* The founder-approved introduction, with its first line updated to the Splitpost message. */}
         <div data-testid="join-intro" className="mt-4 space-y-4 text-lg leading-relaxed text-ink-600">
-          <p>Be among the first to experience a social network designed to help creators build meaningful relationships with their communities.</p>
-          <p>Whether you create content or support the people who do, there's a place for you on Crevant.</p>
+          <p>Be among the first to try Splitpost, where creators make the content, fans help it grow, and both deserve to benefit from its success.</p>
+          <p>Whether you create content or support the people who do, there's a place for you on Splitpost.</p>
           <p>We're inviting people in small groups as we build and test the platform. Joining the waitlist doesn't guarantee an invitation to the pilot.</p>
         </div>
 
@@ -45,11 +47,12 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
           </div>
         )}
 
-        <h2 className="mt-10 font-display text-xl font-bold text-ink-900">The pilot</h2>
-        <ul className="mt-3 space-y-1.5 leading-relaxed text-ink-600">
-          <li>Invitation-only, for adults 18 and older.</li>
-          <li>Features are still being developed and tested. No money changes hands on Crevant.</li>
-          <li>Participation does not guarantee earnings or rewards.</li>
+        {/* The same pilot disclosures as the homepage invitation, word for word. */}
+        <h2 className="mt-10 font-display text-xl font-bold text-ink-900">{HOMEPAGE_COPY.invitation.pilotDetailsTitle}</h2>
+        <ul data-testid="join-pilot-details" className="mt-3 space-y-1.5 leading-relaxed text-ink-600">
+          {[...HOMEPAGE_COPY.invitation.pilotDetails, DISCLOSURES.noGuarantee].map((d) => (
+            <li key={d}>{d}</li>
+          ))}
         </ul>
 
         <div className="mt-10 rounded-3xl bg-white p-6 ring-1 ring-ink-100">
@@ -57,10 +60,10 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
           <p className="mt-2 leading-relaxed text-ink-600">Try the product concept now, in a demonstration with sample data. Everything you do there stays in your own browser.</p>
           <div className="mt-5 flex flex-col gap-3 min-[420px]:flex-row">
             <a href={TOUR_BASE} className={buttonClass('primary')}>
-              Explore Crevant
+              Discover Splitpost
             </a>
             <Link to="/#invitation" className={buttonClass('secondary')}>
-              Back to Crevant
+              Back to Splitpost
             </Link>
           </div>
         </div>

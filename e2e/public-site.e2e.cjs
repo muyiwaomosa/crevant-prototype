@@ -151,12 +151,64 @@ async function newContext(browser, options = {}) {
       )
       check(`${label}: all ${photos.length} photos load`, photos.length >= 8 && photos.every((w) => w > 0), photos.join(','))
 
-      const panels = await Promise.all(['now', 'later'].map((p) => page.locator(`[data-panel="${p}"]`).isVisible()))
-      check(`${label}: the pilot and the vision are both visible`, panels.every(Boolean))
+      const disclosures = await Promise.all(['what-today', 'what-vision'].map((t) => page.getByTestId(t).isVisible()))
+      check(`${label}: what the pilot does today and the vision are both disclosed`, disclosures.every(Boolean))
 
       const scroller = page.getByRole('region', { name: /The post, step by step/ })
       const fits = await scroller.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
       check(`${label}: the HOW screens ${width < 1024 ? 'scroll sideways inside their own box' : 'all fit in one row'}`, width < 1024 ? !fits : fits)
+      await ctx.close()
+    }
+
+    // 5c. Link audit, as a first-time visitor on desktop and on a phone: follow
+    //     every link on the public pages and every tour screen. Each one must
+    //     land somewhere that works, show Splitpost (never Crevant) in its text
+    //     and title, and every #anchor must exist on the page it points to.
+    for (const [label, options] of [
+      ['desktop', { viewport: { width: 1280, height: 900 } }],
+      ['phone', { ...devices['iPhone 13'] }],
+    ]) {
+      const ctx = await newContext(browser, options)
+      const page = await ctx.newPage()
+      page.on('pageerror', (e) => problems.push(`${label} audit: ${e.message}`))
+      const TOUR = ['/tour', '/tour/welcome', '/tour/discover', '/tour/create', '/tour/rewards', '/tour/profile', '/tour/profile/tools', '/tour/creator/amara', '/tour/post/p_amara_1']
+      const queue = ['/', '/join', '/request-invite', '/privacy', ...TOUR]
+      const seen = new Set()
+      const hashes = []
+      const external = new Set()
+      const bad = []
+      while (queue.length && seen.size < 80) {
+        const p = queue.shift()
+        if (seen.has(p)) continue
+        seen.add(p)
+        const res = await page.goto(BASE + p, { waitUntil: 'networkidle' }).catch(() => null)
+        const info = await page.evaluate(() => ({
+          title: document.title,
+          text: document.body.innerText,
+          links: [...document.querySelectorAll('a[href]')].map((a) => a.getAttribute('href')),
+        }))
+        if (!res || res.status() >= 400) bad.push(`${p}: HTTP ${res ? res.status() : 'error'}`)
+        if (/Page not found/.test(info.text)) bad.push(`${p}: not found`)
+        if (/crevant/i.test(info.text) || /crevant/i.test(info.title)) bad.push(`${p}: shows Crevant`)
+        if (!/Splitpost/.test(info.title)) bad.push(`${p}: title "${info.title}"`)
+        for (const href of info.links) {
+          if (/^https?:/.test(href)) {
+            external.add(href)
+            continue
+          }
+          const u = new URL(href, BASE + p)
+          if (u.origin !== new URL(BASE).origin) continue
+          if (u.hash) hashes.push([u.pathname, u.hash.slice(1)])
+          const next = u.pathname + u.search
+          if (!seen.has(next) && !/^\/tour\/(creator|post)\//.test(next)) queue.push(next)
+        }
+      }
+      for (const [path, id] of [...new Map(hashes.map((h) => [h.join('#'), h])).values()]) {
+        await page.goto(BASE + path, { waitUntil: 'networkidle' })
+        if (!(await page.locator(`[id="${id}"]`).count())) bad.push(`${path}#${id}: no such anchor`)
+      }
+      check(`${label}: link audit of ${seen.size} pages: every link works and shows Splitpost`, bad.length === 0, bad.slice(0, 5).join(' | '))
+      check(`${label}: no links to outside sites from the public pages`, external.size === 0, [...external].join(', '))
       await ctx.close()
     }
 

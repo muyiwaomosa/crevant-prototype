@@ -2,9 +2,9 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Bricolage Grotesque', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Archivo', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-paper: #f7f4ee;
+  --color-paper: #f6f2ec;
   --color-card: #ffffff;
 
   --color-ink-50: #f4f5f5;
@@ -18,25 +18,26 @@
   --color-ink-800: #21282a;
   --color-ink-900: #13191b;
 
-  --color-brand-50: #e9f6f3;
-  --color-brand-100: #c9e9e1;
-  --color-brand-200: #9dd6c8;
-  --color-brand-300: #62baa7;
-  --color-brand-400: #2f9d88;
-  --color-brand-500: #0e7c6b;
-  --color-brand-600: #0b6a5c;
-  --color-brand-700: #0a564b;
-  --color-brand-800: #0a453d;
-  --color-brand-900: #083832;
+  /* Splitpost: the brand scale is midnight (was teal), the spark scale is orange (was amber). */
+  --color-brand-50: #eef0fa;
+  --color-brand-100: #dfe2f4;
+  --color-brand-200: #c0c6e8;
+  --color-brand-300: #939cd3;
+  --color-brand-400: #5f6ab4;
+  --color-brand-500: #3b4590;
+  --color-brand-600: #272f73;
+  --color-brand-700: #1b2152;
+  --color-brand-800: #141a42;
+  --color-brand-900: #10142e;
 
-  --color-spark-50: #fff8ea;
-  --color-spark-100: #feecc6;
-  --color-spark-200: #fcd78c;
-  --color-spark-300: #f9bf51;
-  --color-spark-400: #f5a524;
-  --color-spark-500: #df8a0b;
-  --color-spark-600: #b46a07;
-  --color-spark-700: #8a4f0b;
+  --color-spark-50: #fff1ea;
+  --color-spark-100: #ffe2d4;
+  --color-spark-200: #ffc9ae;
+  --color-spark-300: #ff9f73;
+  --color-spark-400: #ff6a2b;
+  --color-spark-500: #e85a1c;
+  --color-spark-600: #b83c14;
+  --color-spark-700: #8f2d0e;
 
   --color-heart: #e0483a;
 
@@ -46,11 +47,11 @@
 }
 
 /*
- * Splitpost design tokens (sp-). Added beside the tokens above, which are
- * unchanged; nothing uses these yet. Each surface (homepage, tour, account
- * screens) opts in in its own reviewed change, so adding them changes no
- * existing page. Contrast pairs are checked in
- * src/public/landing/tokens.test.ts. Exploratory, not a final identity.
+ * Splitpost design tokens (sp-), used by the public site. The shared tokens
+ * above (brand, spark, paper, display font) are tuned to the same palette, so
+ * the tour, account screens and waitlist look like Splitpost too. Contrast
+ * pairs are checked in src/public/landing/tokens.test.ts. Provisional, not a
+ * final identity.
  */
 @theme {
   --font-sp-display: 'Archivo', 'Arial Narrow', ui-sans-serif, system-ui, sans-serif;

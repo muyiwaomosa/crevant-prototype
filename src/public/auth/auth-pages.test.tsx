@@ -93,7 +93,7 @@ describe('email links (/auth/confirm)', () => {
     const client = makeClient()
     renderAt(`/auth/confirm#token_hash=${TOKEN}&type=invite`, client)
     expect(await screen.findByRole('button', { name: 'Continue' })).toBeTruthy()
-    expect(screen.getByText('Welcome to Crevant')).toBeTruthy()
+    expect(screen.getByText('Welcome to Splitpost')).toBeTruthy()
     await waitFor(() => expect(where).toBe('/auth/confirm'))
     await new Promise((r) => setTimeout(r, 50))
     expect(client.auth.verifyOtp).not.toHaveBeenCalled()

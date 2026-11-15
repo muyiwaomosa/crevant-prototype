@@ -28,7 +28,7 @@ export function TourBanner() {
         <span>Everything here is made up: the creators, posts and points. Nothing is a real account.</span>
         {/* A full page load: the public site is a separate app. */}
         <a href="/" className="font-semibold underline underline-offset-2 hover:text-spark-600">
-          Back to Crevant
+          Back to Splitpost
         </a>
       </div>
     </div>
