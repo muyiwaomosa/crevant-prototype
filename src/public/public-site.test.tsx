@@ -111,9 +111,7 @@ describe('hero (Splitpost)', () => {
   it('uses the approved tagline, belief and small print word for word', () => {
     const c = HOMEPAGE_COPY.hero
     expect(norm(hero().querySelector('[data-testid="hero-tagline"]'))).toBe('Every Post. A Better Split.')
-    expect(norm(hero().querySelector('[data-testid="hero-body"]'))).toBe(
-      'Every post begins with a creator. Every success has people behind it. Splitpost is where both get the opportunity to benefit.',
-    )
+    expect(norm(hero().querySelector('[data-testid="hero-body"]'))).toBe('Creators make the content. Fans help it grow. Both deserve to benefit from its success.')
     expect(norm(hero().querySelector('[data-testid="hero-small-print"]'))).toBe(c.smallPrint.join(' '))
     expect(norm(hero().querySelector('[data-testid="hero-small-print"]'))).toContain(DISCLOSURES.noFanCash)
   })

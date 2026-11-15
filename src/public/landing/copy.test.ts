@@ -7,9 +7,7 @@ describe('approved Splitpost homepage copy', () => {
     const h = HOMEPAGE_COPY.hero
     expect(h.headline).toBe('SUCCESS SHOULD BE SPLIT.')
     expect(h.tagline).toBe('Every Post. A Better Split.')
-    expect(h.body.join(' ')).toBe(
-      'Every post begins with a creator. Every success has people behind it. Splitpost is where both get the opportunity to benefit.',
-    )
+    expect(h.body.join(' ')).toBe('Creators make the content. Fans help it grow. Both deserve to benefit from its success.')
     expect([h.primaryCta, h.secondaryCta]).toEqual(['Join the Waitlist', 'Discover Splitpost'])
     expect(h.status).toBe('final')
   })

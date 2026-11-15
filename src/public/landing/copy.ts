@@ -17,11 +17,7 @@ export const HOMEPAGE_COPY = {
     status: 'final' as CopyStatus,
     headline: 'SUCCESS SHOULD BE SPLIT.',
     tagline: 'Every Post. A Better Split.',
-    body: [
-      'Every post begins with a creator.',
-      'Every success has people behind it.',
-      'Splitpost is where both get the opportunity to benefit.',
-    ],
+    body: ['Creators make the content.', 'Fans help it grow.', 'Both deserve to benefit from its success.'],
     primaryCta: 'Join the Waitlist',
     secondaryCta: 'Discover Splitpost',
     smallPrint: ['Invitation-only pilot.', DISCLOSURES.noFanCash],
