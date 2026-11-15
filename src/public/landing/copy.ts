@@ -13,7 +13,7 @@ export type CopyStatus = 'final' | 'approved-in-principle'
 export const HOMEPAGE_COPY = {
   hero: {
     status: 'final' as CopyStatus,
-    headline: 'SUCCESS SHOULD BE SPLIT.',
+    headline: 'SOCIAL MEDIA NEEDS A BETTER SPLIT.',
     tagline: 'Every Post. A Better Split.',
     body: ['Creators make the content.', 'Fans help it grow.', 'Both deserve to benefit from its success.'],
     primaryCta: 'Join the Waitlist',
@@ -37,7 +37,13 @@ export const HOMEPAGE_COPY = {
     status: 'approved-in-principle' as CopyStatus,
     eyebrow: 'Why',
     headline: "You helped build it. Where's your split?",
-    intro: 'One post goes viral. Thousands help it spread. But who gets a piece of its success?',
+    intro: {
+      lead: 'One post goes viral. Thousands help it spread. The creator makes the content. Fans make it popular.',
+      /** Shown with strong emphasis: what Splitpost is challenging. The highlight must be a phrase of the sentence. */
+      challenge: 'But too often, the platform captures the value while the people behind the success see little of it.',
+      challengeHighlight: 'the platform captures the value',
+      belief: 'We believe the people creating the value deserve a better split of it.',
+    },
     steps: [
       { title: 'Priya creates a relatable post.', line: 'Her first 10K, and the year it took to get there.' },
       { title: 'Ana comments and shares it with friends.', line: 'Her comment starts the conversation. Her group chat does the rest.' },

@@ -9,6 +9,7 @@ const copy = HOMEPAGE_COPY.why
  */
 export function Why() {
   const [statement, question] = copy.headline.split('. ')
+  const [before, after] = copy.intro.challenge.split(copy.intro.challengeHighlight)
   return (
     <section id="why" aria-labelledby="why-title" className="scroll-mt-16 bg-sp-neutral text-sp-ink">
       <div className="mx-auto max-w-6xl px-4 py-18 sm:px-6 sm:py-24 lg:py-28">
@@ -19,7 +20,19 @@ export function Why() {
         >
           <span>{statement}.</span> <span className="text-sp-orange-text">{question}</span>
         </h2>
-        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-sp-muted sm:text-xl">{copy.intro}</p>
+        <div data-testid="why-intro" className="mt-6 max-w-3xl">
+          <p className="text-lg leading-relaxed text-sp-muted sm:text-xl">{copy.intro.lead}</p>
+          {/* What Splitpost is challenging, given the most weight in the section. */}
+          <p
+            data-testid="why-challenge"
+            className="mt-6 rounded-2xl bg-sp-midnight px-5 py-5 font-sp-display text-[clamp(1.35rem,3.4vw,2rem)] font-black leading-[1.15] tracking-[-0.01em] text-white sm:px-7 sm:py-6"
+          >
+            {before}
+            <span className="text-sp-orange">{copy.intro.challengeHighlight}</span>
+            {after}
+          </p>
+          <p className="mt-6 text-lg font-semibold leading-relaxed text-sp-ink sm:text-xl">{copy.intro.belief}</p>
+        </div>
 
         <div className="mt-12 lg:mt-16">
           <PostJourney />

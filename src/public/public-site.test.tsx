@@ -40,7 +40,7 @@ const landing = () => renderAt('/').container
 const section = (id: string) => landing().querySelector(`#${id}`)!
 const SECTION_ORDER = ['hero', 'why', 'who', 'what', 'how', 'invitation']
 const HEADINGS = [
-  'SUCCESS SHOULD BE SPLIT.',
+  'SOCIAL MEDIA NEEDS A BETTER SPLIT.',
   "You helped build it. Where's your split?",
   'The creator who keeps posting. The fan who keeps sharing.',
   'What if every successful post created more winners?',
@@ -94,7 +94,7 @@ describe('HERO', () => {
   const hero = () => section('hero')
   it('shows the approved headline as three lines, with SPLIT. as the split word', () => {
     const h1 = hero().querySelector('h1')!
-    expect([...h1.querySelectorAll('span.block')].map((el) => norm(el))).toEqual(['SUCCESS', 'SHOULD BE', 'SPLIT.'])
+    expect([...h1.querySelectorAll('span.block')].map((el) => norm(el))).toEqual(['SOCIAL MEDIA', 'NEEDS A', 'BETTER SPLIT.'])
     expect(norm(hero().querySelector('[data-testid="split-word"]'))).toBe('SPLIT.')
   })
   it('uses the approved tagline, belief and small print word for word', () => {
@@ -123,7 +123,17 @@ describe('WHY', () => {
   const why = () => section('why')
   it('keeps the exact headline and uses the approved introduction', () => {
     expect(norm(why().querySelector('h2'))).toBe("You helped build it. Where's your split?")
-    expect(norm(why())).toContain('One post goes viral. Thousands help it spread. But who gets a piece of its success?')
+    const intro = why().querySelector('[data-testid="why-intro"]')!
+    expect([...intro.querySelectorAll(':scope > p')].map((p) => norm(p))).toEqual([
+      'One post goes viral. Thousands help it spread. The creator makes the content. Fans make it popular.',
+      'But too often, the platform captures the value while the people behind the success see little of it.',
+      'We believe the people creating the value deserve a better split of it.',
+    ])
+  })
+  it('gives the challenge the strongest emphasis, with its key phrase highlighted', () => {
+    const challenge = why().querySelector('[data-testid="why-challenge"]')!
+    expect(challenge.className).toMatch(/font-black/)
+    expect(norm(challenge.querySelector('span.text-sp-orange'))).toBe('the platform captures the value')
   })
   it('tells the simple four-step story, as an ordered list', () => {
     const steps = [...why().querySelectorAll('ol[data-testid="post-journey"] > li')]

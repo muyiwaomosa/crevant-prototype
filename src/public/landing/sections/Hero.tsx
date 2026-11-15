@@ -7,8 +7,8 @@ import { HeroScene } from '../ui/HeroScene'
 
 const copy = HOMEPAGE_COPY.hero
 
-/** The approved headline, set as three stacked lines: SUCCESS / SHOULD BE / SPLIT. */
-export const HEADLINE_LINES = ['SUCCESS', 'SHOULD BE', 'SPLIT.'] as const
+/** The approved headline, set as three stacked lines: SOCIAL MEDIA / NEEDS A / BETTER SPLIT. */
+export const HEADLINE_LINES = ['SOCIAL MEDIA', 'NEEDS A', 'BETTER SPLIT.'] as const
 
 const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-white'
 
@@ -30,15 +30,18 @@ export function Hero() {
         <div className="min-w-0">
           <h1
             id="hero-title"
-            className="font-sp-display text-[clamp(2.6rem,12vw,6.2rem)] font-black uppercase leading-[0.9] tracking-[-0.025em] [font-stretch:112%] lg:text-[clamp(4rem,6.6vw,5.1rem)]"
+            className="font-sp-display text-[clamp(2.1rem,10vw,5.4rem)] font-black uppercase leading-[0.92] tracking-[-0.025em] [font-stretch:108%] lg:text-[clamp(3.2rem,5vw,4rem)]"
           >
             <span className="block">{HEADLINE_LINES[0]}</span>{' '}
             <span className="block">{HEADLINE_LINES[1]}</span>{' '}
-            <span
-              data-testid="split-word"
-              className="block w-fit bg-[linear-gradient(135deg,#ffffff_0_46%,var(--color-sp-orange)_46%_100%)] bg-clip-text text-transparent forced-colors:bg-none forced-colors:text-[CanvasText]"
-            >
-              {HEADLINE_LINES[2]}
+            <span className="block">
+              {HEADLINE_LINES[2].split(' ')[0]}{' '}
+              <span
+                data-testid="split-word"
+                className="inline-block bg-[linear-gradient(135deg,#ffffff_0_46%,var(--color-sp-orange)_46%_100%)] bg-clip-text text-transparent forced-colors:bg-none forced-colors:text-[CanvasText]"
+              >
+                {HEADLINE_LINES[2].split(' ')[1]}
+              </span>
             </span>
           </h1>
 

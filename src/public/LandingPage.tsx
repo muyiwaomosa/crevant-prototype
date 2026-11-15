@@ -10,7 +10,7 @@ import { MobileWaitlistBar } from './landing/sections/MobileWaitlistBar'
 
 // The Splitpost homepage: one story, following one sample post.
 //
-//  HERO   SUCCESS SHOULD BE SPLIT.
+//  HERO   SOCIAL MEDIA NEEDS A BETTER SPLIT.
 //  WHY    You helped build it. Where's your split?
 //  WHO    The creator who keeps posting. The fan who keeps sharing.
 //  WHAT   What if every successful post created more winners?

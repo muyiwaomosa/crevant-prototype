@@ -5,7 +5,7 @@ import { allHomepageText, HOMEPAGE_COPY } from './copy'
 describe('Splitpost homepage copy', () => {
   it('the hero is exactly as approved', () => {
     const h = HOMEPAGE_COPY.hero
-    expect(h.headline).toBe('SUCCESS SHOULD BE SPLIT.')
+    expect(h.headline).toBe('SOCIAL MEDIA NEEDS A BETTER SPLIT.')
     expect(h.tagline).toBe('Every Post. A Better Split.')
     expect(h.body.join(' ')).toBe('Creators make the content. Fans help it grow. Both deserve to benefit from its success.')
     expect([h.primaryCta, h.secondaryCta]).toEqual(['Join the Waitlist', 'Discover Splitpost'])
@@ -24,7 +24,10 @@ describe('Splitpost homepage copy', () => {
 
   it('WHY uses the approved introduction, the simple story and the closing question', () => {
     const w = HOMEPAGE_COPY.why
-    expect(w.intro).toBe('One post goes viral. Thousands help it spread. But who gets a piece of its success?')
+    expect(w.intro.lead).toBe('One post goes viral. Thousands help it spread. The creator makes the content. Fans make it popular.')
+    expect(w.intro.challenge).toBe('But too often, the platform captures the value while the people behind the success see little of it.')
+    expect(w.intro.challenge).toContain(w.intro.challengeHighlight)
+    expect(w.intro.belief).toBe('We believe the people creating the value deserve a better split of it.')
     expect(w.steps.map((s) => s.title)).toEqual([
       'Priya creates a relatable post.',
       'Ana comments and shares it with friends.',
