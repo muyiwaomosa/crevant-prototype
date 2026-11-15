@@ -115,10 +115,11 @@ async function newContext(browser, options = {}) {
       await ctx.close()
     }
 
-    // 5b. Splitpost WHY and WHO (PR A), from the smallest phone to a wide
-    //     desktop: no sideways scrolling, the post journey reflows (one step
-    //     per row, then two, then four), and each concept photo loads with its
-    //     AI disclosure sitting on the image.
+    // 5b. The Splitpost homepage, from the smallest phone to a wide desktop:
+    //     every section in order, no sideways scrolling, the post journey
+    //     reflows (one step per row, then two, then four), every photo loads,
+    //     the pilot and the vision are both visible, and the HOW screens can be
+    //     scrolled on phones.
     for (const width of [320, 390, 768, 1024, 1440]) {
       const label = `${width}px`
       const ctx = await newContext(browser, { viewport: { width, height: 900 } })
@@ -128,29 +129,34 @@ async function newContext(browser, options = {}) {
       page.on('pageerror', (e) => problems.push(`${label}: ${e.message}`))
       await page.goto(`${BASE}/`)
 
+      const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
+      check(`${label}: the six sections in order`, ids === 'hero,why,who,what,how,invitation', ids)
       const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
-      check(`${label}: WHY keeps its headline`, (await page.locator('#why h2').innerText()).replace(/\s+/g, ' ') === "You helped build it. Where's your split?")
+      check(`${label}: no Crevant left on the landing page`, !/Crevant/i.test(await page.locator('body').innerText()))
 
       const rows = await page.$$eval('[data-testid="post-journey"] > li', (lis) => new Set(lis.map((li) => Math.round(li.getBoundingClientRect().top))).size)
       const expectedRows = width < 640 ? 4 : width < 1024 ? 2 : 1
       check(`${label}: the post journey shows ${expectedRows} row(s)`, rows === expectedRows, `rows=${rows}`)
 
-      const sources = await page.$$eval('#why figure[data-research] figcaption a', (as) => as.map((a) => a.getAttribute('href')))
-      check(`${label}: both research figures link to their sources`, sources.length === 2 && sources.every((h) => h.startsWith('https://')), sources.join(', '))
+      // Load every lazy photo, then check each one decoded.
+      await page.evaluate(async () => {
+        for (let y = 0; y < document.body.scrollHeight; y += 500) {
+          window.scrollTo(0, y)
+          await new Promise((r) => setTimeout(r, 30))
+        }
+      })
+      const photos = await page.$$eval('img[data-photo]', (imgs) =>
+        Promise.all(imgs.map((img) => (img.complete ? img.naturalWidth : new Promise((ok) => img.addEventListener('load', () => ok(img.naturalWidth), { once: true }))))),
+      )
+      check(`${label}: all ${photos.length} photos load`, photos.length >= 8 && photos.every((w) => w > 0), photos.join(','))
 
-      for (const id of ['creator', 'fan']) {
-        const fig = page.locator(`#who figure[data-photo="${id}"]`)
-        await fig.scrollIntoViewIfNeeded()
-        const loaded = await fig
-          .locator('img')
-          .evaluate((img) => (img.complete ? img.naturalWidth : new Promise((ok) => img.addEventListener('load', () => ok(img.naturalWidth), { once: true }))))
-          .catch(() => 0)
-        check(`${label}: the ${id} photo loads`, loaded > 0, `naturalWidth=${loaded}`)
-        const [img, tag] = await Promise.all([fig.locator('img').boundingBox(), fig.locator('figcaption').boundingBox()])
-        const inside = img && tag && tag.x >= img.x && tag.y >= img.y && tag.x + tag.width <= img.x + img.width + 0.5 && tag.y + tag.height <= img.y + img.height + 0.5
-        check(`${label}: the ${id} photo's AI disclosure is visible on the image`, Boolean(inside) && (await fig.locator('figcaption').isVisible()))
-      }
+      const panels = await Promise.all(['now', 'later'].map((p) => page.locator(`[data-panel="${p}"]`).isVisible()))
+      check(`${label}: the pilot and the vision are both visible`, panels.every(Boolean))
+
+      const scroller = page.getByRole('region', { name: /The post, step by step/ })
+      const fits = await scroller.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
+      check(`${label}: the HOW screens ${width < 1024 ? 'scroll sideways inside their own box' : 'all fit in one row'}`, width < 1024 ? !fits : fits)
       await ctx.close()
     }
 

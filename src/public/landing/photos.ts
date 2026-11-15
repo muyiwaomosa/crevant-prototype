@@ -1,63 +1,88 @@
-// Photographs used on the homepage. For the prototype these are AI-generated
-// concept images, never real people. Each one is recorded here with how it was
-// made, and is always shown with its disclosure label (tests enforce both).
-// A generated person is never presented as a user, a customer or a testimonial.
+// Photographs used on the homepage: stock images from the Canva content
+// library, exported from Splitpost's Canva account. They show models, never
+// Splitpost members, and are never presented as users or testimonials. The
+// page says so (HOMEPAGE_COPY.peopleNote and the footer).
 
-export const AI_PHOTO_LABEL = 'AI-generated concept image, not a real person'
-
-export interface ConceptPhoto {
+export interface StockPhoto {
   id: string
-  /** Files in public/media/landing, largest first. Width in pixels. */
-  sources: readonly { src: string; width: number }[]
+  src: string
   width: number
   height: number
   alt: string
-  /** How the image was made. Always 'ai-generated' in the prototype. */
-  origin: 'ai-generated'
-  generator: string
-  /** The prompt, in the founder's own words. */
-  prompt: string
-  generated: string
-  /** Edits made after generation. Cropping only: nothing blurred, painted or added. */
-  edits: string
-  label: typeof AI_PHOTO_LABEL
+  /** Where the image came from and under what terms it's used. */
+  source: 'Canva content library'
+  licence: 'Canva Content License'
+  /** Cut-outs have a transparent background and sit on a coloured panel. */
+  cutout: boolean
 }
 
-const PROMPT_LEAD = 'Use clean, high-resolution concept photos without embedded captions, dollar amounts, or blurred patches.'
+const photo = (p: Omit<StockPhoto, 'source' | 'licence'>): StockPhoto => ({ ...p, source: 'Canva content library', licence: 'Canva Content License' })
 
 export const PHOTOS = {
-  creator: {
-    id: 'creator',
-    sources: [
-      { src: '/media/landing/who-creator-1600.jpg', width: 1600 },
-      { src: '/media/landing/who-creator-800.jpg', width: 800 },
-    ],
-    width: 1600,
-    height: 1088,
-    alt: 'A creator in headphones editing a video late at night, frowning at her screens.',
-    origin: 'ai-generated',
-    generator: 'Canva AI image generation',
-    prompt: `${PROMPT_LEAD} The creator who keeps posting. Growing creators consistently producing content and building an audience, but struggling to make their work financially sustainable.`,
-    generated: '2026-11-15',
-    edits: 'Cropped to a landscape frame and resized.',
-    label: AI_PHOTO_LABEL,
-  },
-  fan: {
-    id: 'fan',
-    sources: [
-      { src: '/media/landing/who-fan-1600.jpg', width: 1600 },
-      { src: '/media/landing/who-fan-800.jpg', width: 800 },
-    ],
-    width: 1600,
-    height: 1088,
-    alt: 'A fan at her desk sharing a musician’s post from her phone, drawn as paper planes flying out of the window toward a concert stage.',
-    origin: 'ai-generated',
-    generator: 'Canva AI image generation',
-    prompt: `${PROMPT_LEAD} The fan who keeps sharing. Loyal fans who discover, share, comment, recommend and help creators grow without meaningful recognition.`,
-    generated: '2026-11-15',
-    edits: 'Cropped to a landscape frame and resized.',
-    label: AI_PHOTO_LABEL,
-  },
-} as const satisfies Record<string, ConceptPhoto>
+  creatorAtWork: photo({
+    id: 'creator-at-work',
+    src: '/media/landing/sp-creator-laptop.webp',
+    width: 785,
+    height: 1118,
+    alt: 'A smiling creator at her desk, talking to camera beside her laptop.',
+    cutout: false,
+  }),
+  creatorFrustrated: photo({
+    id: 'creator-frustrated',
+    src: '/media/landing/sp-creator-frustrated.webp',
+    width: 569,
+    height: 726,
+    alt: 'A tired creator late at night, head in her hand.',
+    cutout: true,
+  }),
+  deskAtNight: photo({
+    id: 'desk-at-night',
+    src: '/media/landing/sp-desk-night.webp',
+    width: 1200,
+    height: 1200,
+    alt: '',
+    cutout: false,
+  }),
+  ringLight: photo({
+    id: 'ring-light',
+    src: '/media/landing/sp-ring-light.webp',
+    width: 255,
+    height: 706,
+    alt: '',
+    cutout: true,
+  }),
+  fanOnPhone: photo({
+    id: 'fan-on-phone',
+    src: '/media/landing/sp-fan-phone.webp',
+    width: 511,
+    height: 648,
+    alt: 'A fan laughing at a post on his phone.',
+    cutout: true,
+  }),
+  fansTogether: photo({
+    id: 'fans-together',
+    src: '/media/landing/sp-fans-friends.webp',
+    width: 451,
+    height: 687,
+    alt: 'Two friends laughing together at something one of them is pointing to.',
+    cutout: true,
+  }),
+  fanGlasses: photo({
+    id: 'fan-glasses',
+    src: '/media/landing/sp-fan-glasses.webp',
+    width: 432,
+    height: 746,
+    alt: 'A fan in a hoodie, laughing.',
+    cutout: true,
+  }),
+  fanBraids: photo({
+    id: 'fan-braids',
+    src: '/media/landing/sp-fan-braids.webp',
+    width: 451,
+    height: 612,
+    alt: 'A fan with braids, smiling.',
+    cutout: true,
+  }),
+} as const
 
-export type PhotoId = keyof typeof PHOTOS
+export type PhotoKey = keyof typeof PHOTOS

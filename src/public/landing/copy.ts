@@ -1,11 +1,9 @@
-// The approved Splitpost homepage copy, in one place.
+// The Splitpost homepage copy, in one place. Section components and tests
+// both read from here, so the words on the page are exactly these.
 //
-// Nothing renders from this file yet: the current homepage is unchanged until
-// the section PRs (2 to 4) switch it over. Section components and tests will
-// both read from here, so the words on the page are exactly the approved ones.
-//
-// Status: the hero and section 3 are final as approved by the founder. The
-// other sections are approved in principle and may still change in review.
+// The story runs HERO, WHY, WHO, WHAT, HOW, then the invitation, and follows
+// one sample post (Priya's) the whole way. Priya, Ana and Leo are sample
+// people; the post and its numbers are illustrations, never evidence.
 // Disclosures come from claims.ts so they're written once.
 
 import { DISCLOSURES } from './claims'
@@ -21,15 +19,13 @@ export const HOMEPAGE_COPY = {
     primaryCta: 'Join the Waitlist',
     secondaryCta: 'Discover Splitpost',
     smallPrint: ['Invitation-only pilot.', DISCLOSURES.noFanCash],
-    visualLabel: DISCLOSURES.concept,
   },
 
   why: {
     status: 'approved-in-principle' as CopyStatus,
-    eyebrow: 'Why · The problem',
+    eyebrow: 'Why',
     headline: "You helped build it. Where's your split?",
     intro: 'Follow one post. See who helps it grow, and who gets a chance to benefit.',
-    samplePeople: 'Priya, Ana and Leo are sample people. The post and its numbers are illustrations.',
     steps: [
       { title: 'Priya posts.', line: 'Her fourth build log this week. Posting is the easy part. Being seen is not.' },
       { title: 'Ana joins in.', line: 'She starts the conversation and carries the post to people Priya couldn’t reach.' },
@@ -45,68 +41,90 @@ export const HOMEPAGE_COPY = {
         { name: 'Leo', line: 'Brought three new followers. Priya had no way of knowing they came through him.' },
       ],
     },
-    researchTitle: 'The bigger picture',
   },
 
   who: {
     status: 'approved-in-principle' as CopyStatus,
-    eyebrow: 'Who · Our audience',
+    eyebrow: 'Who',
     headline: ['The creator who keeps posting.', 'The fan who keeps sharing.'],
     creator: {
       label: 'The creator',
       line: 'More posts. More followers. Not more income.',
       points: [
-        'Reach rises and falls without warning.',
-        'A good month says little about the next one.',
-        'A growing audience still doesn’t add up to a steady living.',
+        'You check the numbers before you check your messages.',
+        'One post takes off, the next one disappears, and you never learn why.',
+        'Your audience keeps growing. Your income doesn’t keep up.',
       ],
     },
     fan: {
       label: 'The fan',
       line: 'You shared it. You started the conversation. Nobody noticed.',
       points: [
-        'You found them early and told your friends.',
-        'Your comments and recommendations help them grow.',
-        'Your referrals bring real followers, and go unseen.',
+        'You found them early and told everyone you know.',
+        'Your comments start the conversations that keep them going.',
+        'Your recommendations bring real followers, and nobody sees it.',
       ],
     },
-    samplePeople: 'Priya is a creator like this. Ana and Leo are fans like this. They’re sample people, here to show how Splitpost works.',
   },
 
-  solution: {
+  what: {
+    status: 'approved-in-principle' as CopyStatus,
+    eyebrow: 'What',
+    headline: 'What if every successful post created more winners?',
+    intro: 'When a post takes off, the people who made it happen should come out ahead together.',
+    outcomes: {
+      creator: {
+        label: 'For creators',
+        points: ['See exactly who helps each post grow.', 'Thank the fans who show up, with perks you choose.', 'Grow with a community that has a reason to stay.'],
+      },
+      fan: {
+        label: 'For fans',
+        points: ['Your support is seen, not lost in a count.', 'Recognition with each creator you back.', 'Perks from the creators you help grow.'],
+      },
+    },
+    /** Always shown beside each other, never hidden, and drawn differently: pilot recognition versus the future vision. */
+    now: {
+      badge: 'Now · in the pilot',
+      title: 'Recognition and perks.',
+      flows: [
+        { to: 'Priya', what: 'Supporter insights', line: 'Who helped this post grow, and who brought new followers.' },
+        { to: 'Ana and Leo', what: 'Connection Points with Priya', line: 'Recognition for meaningful support, held with Priya only.' },
+        { to: 'Ana and Leo', what: 'Perks from Priya', line: 'Noncash perks she chooses to offer, like an early look at a build.' },
+      ],
+      note: `${DISCLOSURES.noFanCash} ${DISCLOSURES.cpNoCashValue} ${DISCLOSURES.cpRules}`,
+    },
+    later: {
+      badge: 'Later · our vision',
+      title: 'A real share of the value.',
+      source: 'Eligible ad revenue, in our future vision',
+      flows: [
+        { to: 'The creator', line: 'Priya, who made the post.' },
+        { to: 'A fan reward pool', line: 'Shared by fans whose support was verified.' },
+        { to: 'Splitpost', line: 'To run the platform and keep it growing.' },
+      ],
+      body: "We're working toward a future where creators and fans can share in advertising revenue from the posts they create and support. Not every post would earn it, and how it would be divided hasn't been decided.",
+      note: DISCLOSURES.visionOnly,
+    },
+  },
+
+  how: {
     status: 'final' as CopyStatus,
+    eyebrow: 'How',
     headline: 'POST. SUPPORT. SPLIT.',
+    intro: 'The same post, inside Splitpost. Concept screens with sample data, showing what we’re building for the pilot.',
     steps: [
       { word: 'POST.', line: 'Create something worth sharing.' },
       { word: 'SUPPORT.', line: 'Help it reach more people.' },
       { word: 'SPLIT.', line: 'Make meaningful contributions count.' },
     ],
-    /** Always shown beside each other, never hidden: pilot recognition versus the future vision. */
-    now: {
-      badge: 'Now · in the pilot',
-      title: 'Recognition, not money.',
-      body: `Connection Points recognize your support for each creator and unlock perks they offer. ${DISCLOSURES.cpNoCashValue.replace('Connection Points have', 'They have')}`,
-    },
-    later: {
-      badge: 'Later · our vision',
-      title: 'A real share of the value.',
-      body: `We're working toward a future where creators and fans can share in advertising revenue from the posts they create and support. ${DISCLOSURES.visionOnly}`,
-    },
-  },
-
-  experience: {
-    status: 'approved-in-principle' as CopyStatus,
-    headline: 'Built for creators. Powered by fans.',
-    intro: "A first look at what we're building for the pilot.",
-    badge: 'Being built for the pilot',
-    mockups: [
-      { title: 'Following feed', line: 'Posts from people you follow, newest first.' },
-      { title: 'Creator insights', line: 'See who supports your work and who brings new followers.' },
-      { title: 'Fan recognition', line: 'Earn Connection Points with each creator for meaningful support.' },
-      { title: 'Perks', line: 'Unlock perks creators choose to offer.' },
+    screens: [
+      { step: 'POST.', caption: 'Priya shares her build log with her followers.' },
+      { step: 'SUPPORT.', caption: 'Ana comments. Leo recommends Priya with a referral link.' },
+      { step: 'SPLIT.', caption: 'Priya sees who helped her post grow.' },
+      { step: 'SPLIT.', caption: 'Leo’s support is recognized with Priya, and unlocks a perk she offers.' },
     ],
     mockupLabel: `${DISCLOSURES.concept} · ${DISCLOSURES.sampleData}`,
-    cta: 'Take the guided tour',
+    pilotNote: 'In the pilot, SPLIT means recognition and perks, not money. Sharing advertising revenue is our future vision and is not part of the pilot.',
     smallPrint: DISCLOSURES.noGuarantee,
   },
 
@@ -127,6 +145,9 @@ export const HOMEPAGE_COPY = {
     ],
     signOff: 'Muyiwa Omosa, Founder of Splitpost',
   },
+
+  /** Shown on the page so no one mistakes a model or a sample for a real member. */
+  peopleNote: 'Photos show models from stock images. Priya, Ana and Leo are sample people, and their post and numbers are illustrations.',
 } as const
 
 /** Every visitor-facing string in the homepage copy, for the claim checks. */

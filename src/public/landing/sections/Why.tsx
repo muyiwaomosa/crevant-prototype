@@ -1,19 +1,17 @@
 import { HOMEPAGE_COPY } from '../copy'
 import { Avatar, PostJourney } from '../ui/PostJourney'
-import { ResearchFacts } from '../ui/ResearchFacts'
 
 const copy = HOMEPAGE_COPY.why
 
 const GAP_AVATARS = {
   Priya: { initials: 'PR', tone: 'priya' },
   Ana: { initials: 'AN', tone: 'ana' },
-  Leo: { initials: 'LE', tone: 'leo' },
+  Leo: { initials: 'LE', tone: 'leo-light' },
 } as const
 
 /**
  * Section 2, WHY: the problem. One sample post travels through four steps,
  * then the gap: everyone contributed, but not everyone had a way to benefit.
- * Two cited research figures put the story in context.
  */
 export function Why() {
   const [statement, question] = copy.headline.split('. ')
@@ -56,15 +54,6 @@ export function Why() {
             })}
           </ul>
         </div>
-
-        <h3 className="mt-14 font-sp-display text-[13px] font-extrabold uppercase tracking-[0.18em] text-sp-muted">{copy.researchTitle}</h3>
-        <div className="mt-5">
-          <ResearchFacts />
-        </div>
-
-        <p data-testid="why-sample-note" className="mt-8 text-sm leading-relaxed text-sp-muted">
-          {copy.samplePeople}
-        </p>
       </div>
     </section>
   )

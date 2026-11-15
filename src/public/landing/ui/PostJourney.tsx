@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
-import { Heart, MessageCircle, Share2 } from 'lucide-react'
+import { CloudOff, Heart, MessageCircle, Share2 } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
 
 /**
@@ -13,7 +13,7 @@ import { HOMEPAGE_COPY } from '../copy'
 
 const steps = HOMEPAGE_COPY.why.steps
 
-type Tone = 'priya' | 'ana' | 'leo' | 'friend'
+type Tone = 'priya' | 'ana' | 'leo' | 'leo-light' | 'friend'
 
 export function Avatar({ initials, tone, className }: { initials: string; tone: Tone; className?: string }) {
   return (
@@ -23,6 +23,7 @@ export function Avatar({ initials, tone, className }: { initials: string; tone: 
         tone === 'priya' && 'bg-sp-orange text-sp-midnight',
         tone === 'ana' && 'bg-[#5b3a7a] text-white',
         tone === 'leo' && 'bg-sp-midnight-raised text-white',
+        tone === 'leo-light' && 'bg-white text-sp-midnight',
         tone === 'friend' && 'bg-[#e7dfd2] text-sp-ink ring-2 ring-white',
         className ?? 'h-8 w-8 text-[11px]',
       )}
@@ -32,9 +33,50 @@ export function Avatar({ initials, tone, className }: { initials: string; tone: 
   )
 }
 
-/** The sample post's image: the product's own diagonal, nothing photographic. */
+/**
+ * The sample post's attached image: a screenshot-like card of the app Priya
+ * is building (offline mode switched on), so the post reads as a real post.
+ */
 export function PostArt({ className }: { className?: string }) {
-  return <span className={clsx('block rounded-xl bg-[linear-gradient(135deg,var(--color-sp-midnight-raised)_0_58%,var(--color-sp-orange)_58%_100%)]', className)} />
+  return (
+    <span aria-hidden="true" className={clsx('relative flex overflow-hidden rounded-xl bg-sp-midnight-raised p-3 text-white', className)}>
+      <span className="absolute -right-6 -top-8 h-28 w-28 rounded-full bg-sp-orange/90" />
+      <span className="relative flex w-full flex-col justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/70">
+          <CloudOff className="h-3.5 w-3.5" /> Build 2.4
+        </span>
+        <span className="flex items-center justify-between gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold">
+          Offline mode
+          <span className="relative h-4 w-7 rounded-full bg-sp-orange">
+            <span className="absolute right-0.5 top-0.5 h-3 w-3 rounded-full bg-white" />
+          </span>
+        </span>
+      </span>
+    </span>
+  )
+}
+
+/** Priya's sample post, as it would appear in a feed. Used in the hero and the WHY story. */
+export function SamplePost({ className, compact }: { className?: string; compact?: boolean }) {
+  return (
+    <div className={clsx('rounded-2xl bg-white p-3.5 text-sp-ink shadow-[0_24px_50px_-24px_rgb(16_20_46/0.55)] ring-1 ring-sp-ink/8', className)}>
+      <div className="flex items-center gap-2.5">
+        <Avatar initials="PR" tone="priya" />
+        <div className="min-w-0 leading-tight">
+          <p className="text-[13px] font-bold">Priya Raman</p>
+          <p className="text-[11px] text-sp-muted">Indie app maker · Tue 9:12 pm</p>
+        </div>
+        <span className="ml-auto rounded-full bg-sp-neutral px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-sp-muted">Sample</span>
+      </div>
+      <p className="mt-2.5 text-sm leading-snug">Shipped the offline mode. Here’s what broke first.</p>
+      <PostArt className={compact ? 'mt-2.5 h-16' : 'mt-2.5 h-24'} />
+      <div className="mt-2.5 flex gap-4 text-[12px] font-semibold text-sp-muted">
+        <span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> 312</span>
+        <span className="inline-flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" /> 48</span>
+        <span className="inline-flex items-center gap-1"><Share2 className="h-3.5 w-3.5" /> 27</span>
+      </div>
+    </div>
+  )
 }
 
 function Card({ children, dark }: { children: ReactNode; dark?: boolean }) {
@@ -53,18 +95,9 @@ function Card({ children, dark }: { children: ReactNode; dark?: boolean }) {
 
 function PriyaPosts() {
   return (
-    <Card>
-      <div className="flex items-center gap-2.5">
-        <Avatar initials="PR" tone="priya" />
-        <div className="min-w-0 leading-tight">
-          <p className="text-[13px] font-bold">Priya Raman</p>
-          <p className="text-[11px] text-sp-muted">Indie app maker · Tue 9:12 pm</p>
-        </div>
-        <span className="ml-auto rounded-full bg-sp-neutral px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-sp-muted">Sample</span>
-      </div>
-      <p className="mt-2.5 text-sm leading-snug">Shipped the offline mode. Here’s what broke first.</p>
-      <PostArt className="mt-2.5 h-16" />
-    </Card>
+    <div aria-hidden="true">
+      <SamplePost compact />
+    </div>
   )
 }
 

@@ -1,60 +1,51 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { AI_PHOTO_LABEL, PHOTOS } from './photos'
+import { PHOTOS } from './photos'
 
 const PUBLIC = join(__dirname, '../../../public')
+const MEDIA = join(PUBLIC, 'media/landing')
 
-/** Width and height from a baseline or progressive JPEG's frame header. */
-function jpegSize(buf: Buffer): { width: number; height: number } {
-  let i = 2
-  while (i < buf.length) {
-    if (buf[i] !== 0xff) throw new Error('not a JPEG marker')
-    const marker = buf[i + 1]
-    const len = buf.readUInt16BE(i + 2)
-    if (marker >= 0xc0 && marker <= 0xc3) return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) }
-    i += 2 + len
+/** Width and height from a WebP file's VP8, VP8L or VP8X header. */
+function webpSize(buf: Buffer): { width: number; height: number } {
+  expect(buf.toString('ascii', 0, 4)).toBe('RIFF')
+  expect(buf.toString('ascii', 8, 12)).toBe('WEBP')
+  const chunk = buf.toString('ascii', 12, 16)
+  if (chunk === 'VP8X') return { width: 1 + buf.readUIntLE(24, 3), height: 1 + buf.readUIntLE(27, 3) }
+  if (chunk === 'VP8L') {
+    const b = buf.readUInt32LE(21)
+    return { width: (b & 0x3fff) + 1, height: ((b >> 14) & 0x3fff) + 1 }
   }
-  throw new Error('no frame header')
+  return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff }
 }
 
-/** True if the JPEG carries an EXIF block (camera, location or software data). */
-const hasExif = (buf: Buffer) => buf.includes(Buffer.from('Exif\0\0', 'binary'))
-
-describe('homepage concept photos', () => {
+describe('homepage photos', () => {
   const photos = Object.values(PHOTOS)
 
-  it.each(photos.map((p) => [p.id, p] as const))('%s is recorded as AI-generated, with how it was made', (_, p) => {
-    expect(p.origin).toBe('ai-generated')
-    expect(p.label).toBe(AI_PHOTO_LABEL)
-    expect(p.generator).toBeTruthy()
-    expect(p.prompt.length).toBeGreaterThan(40)
-    expect(p.generated).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-    // Cropping and resizing only: nothing blurred or painted over.
-    expect(p.edits).toMatch(/^Cropped/)
-    expect(p.edits).not.toMatch(/blur|paint|retouch|remov/i)
-    expect(p.alt.length).toBeGreaterThan(30)
+  it.each(photos.map((p) => [p.id, p] as const))('%s is a stock image with a recorded source and licence', (_, p) => {
+    expect(p.source).toBe('Canva content library')
+    expect(p.licence).toBe('Canva Content License')
+    // Decorative backgrounds have empty alt text; every person is described.
+    if (!['desk-at-night', 'ring-light'].includes(p.id)) expect(p.alt.length).toBeGreaterThan(20)
   })
 
-  it.each(photos.flatMap((p) => p.sources.map((s) => [s.src, s.width, p.width / p.height] as const)))(
-    '%s exists at %ipx, keeps its proportions, is small and has no EXIF data',
-    (src, width, ratio) => {
-      const file = join(PUBLIC, src)
-      expect(existsSync(file)).toBe(true)
-      const buf = readFileSync(file)
-      const size = jpegSize(buf)
-      expect(size.width).toBe(width)
-      expect(Math.abs(size.width / size.height - ratio)).toBeLessThan(0.01)
-      expect(hasExif(buf)).toBe(false)
-      expect(statSync(file).size).toBeLessThan(250_000)
-    },
-  )
-
-  it('offers a large version for sharp screens', () => {
-    for (const p of photos) expect(p.sources[0].width).toBeGreaterThanOrEqual(1600)
+  it.each(photos.map((p) => [p.src, p] as const))('%s exists at its recorded size, is small and carries no metadata', (_, p) => {
+    const file = join(PUBLIC, p.src)
+    expect(existsSync(file)).toBe(true)
+    const buf = readFileSync(file)
+    expect(webpSize(buf)).toEqual({ width: p.width, height: p.height })
+    expect(statSync(file).size).toBeLessThan(120_000)
+    expect(buf.includes(Buffer.from('EXIF'))).toBe(false)
   })
 
-  it('discloses that the person is not real', () => {
-    expect(AI_PHOTO_LABEL).toBe('AI-generated concept image, not a real person')
+  it('names no photo after a sample person, so a model is never presented as a member', () => {
+    for (const p of photos) expect(`${p.id} ${p.alt}`).not.toMatch(/priya|ana\b|leo\b|member|user|customer|testimonial/i)
+  })
+
+  it('ships no AI-generated or retired images', () => {
+    const files = readdirSync(MEDIA)
+    expect(files.filter((f) => /^(who-|tour-)/.test(f))).toEqual([])
+    const used = new Set(photos.map((p) => p.src.split('/').pop()))
+    for (const f of files) expect(used.has(f) || f === 'founder.jpg', `${f} is unused`).toBe(true)
   })
 })

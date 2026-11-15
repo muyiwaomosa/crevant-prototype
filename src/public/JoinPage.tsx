@@ -20,7 +20,7 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
   return (
     <section aria-labelledby="join-title" className="px-4 py-12 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-2xl">
-        <Link to="/#founding" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-600 hover:text-ink-900">
+        <Link to="/#invitation" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-600 hover:text-ink-900">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Crevant
         </Link>
         <h1 id="join-title" className="mt-6 font-display text-[2rem] font-extrabold leading-tight tracking-[-0.02em] text-ink-900 sm:text-[2.5rem]">
@@ -59,7 +59,7 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
             <a href={TOUR_BASE} className={buttonClass('primary')}>
               Explore Crevant
             </a>
-            <Link to="/#founding" className={buttonClass('secondary')}>
+            <Link to="/#invitation" className={buttonClass('secondary')}>
               Back to Crevant
             </Link>
           </div>

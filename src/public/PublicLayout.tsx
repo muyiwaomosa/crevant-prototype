@@ -1,6 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { Wordmark } from '../components/Wordmark'
 import { TOUR_BASE } from '../entry'
 import { useMemberLinks } from './member-links'
 import { useRobotsMeta } from './robots'
@@ -73,36 +72,35 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
         <Outlet />
       </main>
 
-      <footer className="border-t border-ink-100 bg-paper">
-        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 sm:px-6 md:grid-cols-[1fr_auto] md:items-start">
+      <footer className="bg-sp-midnight text-white">
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1fr_auto] md:items-start">
           <div className="max-w-md">
-            <Wordmark size="sm" />
-            <p className="mt-3 font-display text-base font-bold text-ink-800">Create value. Build connections. Grow together.</p>
-            <p className="mt-1 text-sm text-ink-500">A creator-first social network.</p>
-            <p className="mt-3 text-sm leading-relaxed text-ink-500">An invitation-only pilot for adults 18 and older.</p>
-            <p data-testid="product-images-note" className="mt-1 text-sm leading-relaxed text-ink-500">{PRODUCT_IMAGES_DISCLOSURE}</p>
+            <SplitpostWordmark />
+            <p className="mt-4 font-sp-display text-lg font-extrabold text-sp-orange">{HOMEPAGE_COPY.hero.tagline}</p>
+            <p className="mt-2 text-sm leading-relaxed text-sp-muted-on-dark">An invitation-only pilot for adults 18 and older.</p>
+            <p data-testid="product-images-note" className="mt-1 text-sm leading-relaxed text-sp-muted-on-dark">{PRODUCT_IMAGES_DISCLOSURE}</p>
           </div>
-          <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-ink-600">
-            <Link to="/#why" className="hover:text-ink-900">
-              Our Story
+          <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-white/85">
+            <Link to="/#why" className="hover:text-sp-orange">
+              Why Splitpost
             </Link>
-            <Link to="/#how" className="hover:text-ink-900">
+            <Link to="/#how" className="hover:text-sp-orange">
               How It Works
             </Link>
-            <Link to="/#founding" className="hover:text-ink-900">
-              Join the Waitlist
+            <Link to="/join" className="hover:text-sp-orange">
+              {HOMEPAGE_COPY.hero.primaryCta}
             </Link>
-            <a href={TOUR_BASE} className="hover:text-ink-900">
-              Explore Crevant
+            <a href={TOUR_BASE} className="hover:text-sp-orange">
+              {HOMEPAGE_COPY.hero.secondaryCta}
             </a>
             {import.meta.env.MODE !== 'site' && memberLinks && (
-              <Link to="/sign-in" className="hover:text-ink-900">
+              <Link to="/sign-in" className="hover:text-sp-orange">
                 Sign in
               </Link>
             )}
           </nav>
         </div>
-        <p className="mx-auto max-w-6xl px-4 pb-8 text-[13px] text-ink-400 sm:px-6">© 2026 Crevant. All rights reserved.</p>
+        <p className="mx-auto max-w-6xl border-t border-white/10 px-4 py-6 text-[13px] text-sp-muted-on-dark sm:px-6">© 2026 Splitpost. All rights reserved.</p>
       </footer>
     </div>
   )

@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { TOUR_BASE } from '../../../entry'
 import { useMemberLinks } from '../../member-links'
 import { HOMEPAGE_COPY } from '../copy'
-import { HeroVisual } from '../ui/HeroVisual'
+import { HeroScene } from '../ui/HeroScene'
 
 const copy = HOMEPAGE_COPY.hero
 
@@ -15,7 +15,7 @@ const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:o
 /**
  * Section 1: the hero. A midnight band with the headline as a poster, the
  * approved belief in three short sentences, both calls to action, and the
- * pilot small print. The visual is placeholder material (HeroVisual).
+ * pilot small print. The picture is a creator, a fan and the post between them.
  */
 export function Hero() {
   const memberLinks = useMemberLinks()
@@ -80,7 +80,7 @@ export function Hero() {
           )}
         </div>
 
-        <HeroVisual className="mx-auto w-full max-w-[460px] lg:max-w-none" />
+        <HeroScene />
       </div>
     </section>
   )
