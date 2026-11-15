@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PublicRoutes } from './PublicApp'
+import { HOMEPAGE_COPY } from './landing/copy'
+import { DISCLOSURES, findMisleadingClaims } from './landing/claims'
+import { PLACEHOLDER_LABEL } from './landing/ui/HeroVisual'
 
 const PUBLIC_PATHS = ['/', '/join', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
 // Pages that must never collect anything until the privacy notice is approved.
@@ -33,9 +36,10 @@ afterEach(() => {
 
 const norm = (el: Element | null) => (el?.textContent || '').replace(/\s+/g, ' ')
 const SECTION_ORDER = ['hero', 'story', 'problem', 'why', 'who', 'difference', 'fans', 'how', 'founding']
-// The founder-approved headings, in order.
+// The founder-approved headings, in order. The hero is the Splitpost hero
+// (PR 2); the sections after it change in PRs 3 and 4.
 const HEADINGS = [
-  'You earned the follow. You deserve the reach.',
+  HOMEPAGE_COPY.hero.headline,
   'My audience tripled. My income dropped by 60%.',
   'You can have a million followers and still struggle to make a living.',
   'What if social media worked for the people creating the value?',
@@ -71,8 +75,6 @@ describe('structure and approved copy', () => {
   it('keeps key approved passages word for word', () => {
     const t = norm(landing())
     for (const passage of [
-      'Meet Crevant. A creator-first social network built for predictability. When someone follows you, your new posts appear in their Following feed, newest first, so you can plan, build trust and grow, instead of guessing what an algorithm will do.',
-      'An invitation-only platform being built for creators and their supporters.',
       "What's the point of building an audience if you can't reliably reach the people who chose to follow you?",
       'How do you build trust when you can\'t consistently connect with your audience?',
       'When someone chooses to follow you, your content should have a reliable place in their feed.',
@@ -98,34 +100,46 @@ describe('structure and approved copy', () => {
   })
 })
 
-describe('hero', () => {
-  it('offers Join the Waitlist (to section 9) first and Explore Crevant (the sample tour) second', () => {
-    const hero = section('hero')
-    const links = [...hero.querySelectorAll('a')].map((a) => norm(a).trim())
-    expect(links.indexOf('Join the Waitlist')).toBeLessThan(links.indexOf('Explore Crevant'))
-    const join = [...hero.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Waitlist')!
-    expect(join.getAttribute('href')).toBe('#founding')
-    const tour = [...hero.querySelectorAll('a')].find((a) => norm(a).trim() === 'Explore Crevant')!
-    expect(tour.getAttribute('href')).toBe('/tour')
-    expect(norm(hero)).toContain('A demonstration with sample data')
-    expect([...hero.querySelectorAll('a')].some((a) => a.getAttribute('href') === '/sign-in')).toBe(true)
+describe('hero (Splitpost)', () => {
+  const hero = () => section('hero')
+  it('shows the approved headline as three stacked lines, with SPLIT. as the split word', () => {
+    const h1 = hero().querySelector('h1')!
+    expect(norm(h1)).toBe('SUCCESS SHOULD BE SPLIT.')
+    expect([...h1.querySelectorAll('span.block')].map((el) => norm(el))).toEqual(['SUCCESS', 'SHOULD BE', 'SPLIT.'])
+    expect(norm(hero().querySelector('[data-testid="split-word"]'))).toBe('SPLIT.')
   })
-  it('says what Crevant is, then the actions, in the same order on every screen', () => {
-    const hero = section('hero')
-    const parts = [...hero.querySelectorAll('[data-hero]')].map((el) => el.getAttribute('data-hero'))
-    expect(parts).toEqual(['product', 'preview', 'actions'])
-    expect(norm(hero)).not.toContain('You worked hard to build your audience.')
-    expect(norm(hero)).not.toContain('more than a side hustle')
-    for (const el of hero.querySelectorAll('h1, [data-hero]')) expect(el.className).not.toMatch(/\border-\d/)
+  it('uses the approved tagline, belief and small print word for word', () => {
+    const c = HOMEPAGE_COPY.hero
+    expect(norm(hero().querySelector('[data-testid="hero-tagline"]'))).toBe('Every Post. A Better Split.')
+    expect(norm(hero().querySelector('[data-testid="hero-body"]'))).toBe(
+      'Every post begins with a creator. Every success has people behind it. Splitpost is where both get the opportunity to benefit.',
+    )
+    expect(norm(hero().querySelector('[data-testid="hero-small-print"]'))).toBe(c.smallPrint.join(' '))
+    expect(norm(hero().querySelector('[data-testid="hero-small-print"]'))).toContain(DISCLOSURES.noFanCash)
   })
-  it('shows the budgeting post with its illustration', () => {
-    const fig = section('hero').querySelector('figure[data-screenshot]')!
-    expect(fig.getAttribute('data-screenshot')).toBe('hero')
-    expect(fig.querySelector('img')!.getAttribute('src')).toBe('/media/landing/tour-hero.jpg')
-    expect(norm(fig)).toContain('A post in your Following feed')
+  it('offers Join the Waitlist first and Discover Splitpost second, and Sign in in the full app', () => {
+    const actions = [...hero().querySelectorAll('[data-testid="hero-actions"] a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
+    expect(actions).toEqual([
+      ['Join the Waitlist', '/join'],
+      ['Discover Splitpost', '/tour'],
+    ])
+    expect([...hero().querySelectorAll('a')].some((a) => a.getAttribute('href') === '/sign-in')).toBe(true)
   })
-  it('qualifies the reach claim right beside it', () => {
-    expect(norm(section('hero').querySelector('[data-testid="hero-note"]'))).toContain("It isn't a promise that each post reaches each follower.")
+  it('labels the visual as placeholder material, not real people, with a concept post', () => {
+    const fig = hero().querySelector('figure[data-placeholder="hero"]')!
+    expect(norm(fig.querySelector('[data-testid="placeholder-badge"]'))).toBe(PLACEHOLDER_LABEL)
+    expect(norm(fig.querySelector('figcaption'))).toMatch(/^Placeholder imagery, not real people/)
+    expect(norm(fig)).toContain('Concept · Sample data')
+    // Shapes only: no photographs of anyone in the placeholder.
+    expect(fig.querySelectorAll('img')).toHaveLength(0)
+  })
+  it('makes no misleading financial claim (an extra safeguard, not a substitute for review)', () => {
+    const blocks = [...hero().querySelectorAll('h1, p, a, span, figcaption')].map((el) => norm(el).trim()).filter(Boolean)
+    expect(blocks.length).toBeGreaterThan(10)
+    expect(blocks.flatMap((b) => findMisleadingClaims(b))).toEqual([])
+  })
+  it('leaves no Crevant hero copy behind', () => {
+    expect(norm(hero())).not.toMatch(/Crevant|You earned the follow|creator-first|Explore Crevant/)
   })
 })
 
@@ -272,10 +286,10 @@ describe('waitlist calls to action', () => {
 })
 
 describe('product honesty', () => {
-  it('discloses sample data and fictional people discreetly: under the hero phone and in the footer', () => {
+  it('discloses sample data and fictional people discreetly: on the hero visual and in the footer', () => {
     const c = landing()
-    expect(norm(c.querySelector('#hero figure[data-screenshot="hero"] [data-testid="demo-note"]'))).toBe('Demo with sample data and fictional people.')
-    expect(c.querySelectorAll('[data-testid="demo-note"]')).toHaveLength(1)
+    expect(norm(c.querySelector('#hero figure[data-placeholder="hero"]'))).toContain('Sample data')
+    expect(c.querySelectorAll('[data-testid="demo-note"]')).toHaveLength(0)
     for (const path of PUBLIC_PATHS) {
       const { container } = renderAt(path)
       expect(norm(container.querySelector('footer [data-testid="product-images-note"]')), path).toBe(
@@ -287,8 +301,9 @@ describe('product honesty', () => {
   })
   it('uses genuine, described tour screenshots', () => {
     const figures = [...landing().querySelectorAll('figure[data-screenshot]')]
-    expect(figures.length).toBe(8)
-    expect(new Set(figures.map((f) => f.getAttribute('data-screenshot'))).size).toBe(8)
+    // The hero's screenshot gave way to the placeholder visual (PR 2).
+    expect(figures.length).toBe(7)
+    expect(new Set(figures.map((f) => f.getAttribute('data-screenshot'))).size).toBe(7)
     for (const f of figures) {
       expect(f.querySelector('img')!.getAttribute('src')).toMatch(/^\/media\/landing\/tour-[a-z-]+\.jpg$/)
       expect(f.querySelector('img')!.getAttribute('alt')!.length).toBeGreaterThan(40)
@@ -359,7 +374,7 @@ describe('explanatory visuals', () => {
   })
   it('only calls out words the tour itself shows', () => {
     const callouts = [...landing().querySelectorAll('[data-callout]')].map((el) => norm(el).trim())
-    expect(callouts).toEqual(['Newest first. No ranking.', '10 CP with Amara', 'Only CP earned with Amara counts here.'])
+    expect(callouts).toEqual(['10 CP with Amara', 'Only CP earned with Amara counts here.'])
   })
   it("shows a fan's journey in four real tour crops", () => {
     const j = section('fans').querySelector('[data-testid="fan-journey"]')!
@@ -370,14 +385,19 @@ describe('explanatory visuals', () => {
 })
 
 describe('header and footer', () => {
-  it('keeps Explore Crevant in the header and links Join the Waitlist to section 9', () => {
-    const { container } = renderAt('/')
-    const header = container.querySelector('header')!
-    expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Explore Crevant' && a.getAttribute('href') === '/tour')).toBe(true)
-    const join = [...header.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Waitlist')!
-    expect(join.getAttribute('href')).toBe('/#founding')
-    // Visible at every width: not inside a wrapper that hides it.
-    expect(join.closest('.hidden')).toBeNull()
+  it('has the Splitpost header on every page: wordmark, Discover Splitpost and Join the Waitlist', () => {
+    for (const path of PUBLIC_PATHS) {
+      const { container } = renderAt(path)
+      const header = container.querySelector('header')!
+      expect(header.querySelector('a[aria-label="Splitpost home"]'), path).toBeTruthy()
+      expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Discover Splitpost' && a.getAttribute('href') === '/tour'), path).toBe(true)
+      const join = [...header.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Waitlist')!
+      expect(join.getAttribute('href'), path).toBe('/join')
+      // Visible at every width: not inside a wrapper that hides it.
+      expect(join.closest('.hidden'), path).toBeNull()
+      expect(norm(header), path).not.toMatch(/Crevant/)
+      cleanup()
+    }
   })
   it('uses the approved footer, with no Privacy or Terms links', () => {
     const { container } = renderAt('/')
@@ -395,10 +415,13 @@ describe('header and footer', () => {
     ])
     expect(norm(footer)).not.toMatch(/privacy|terms/i)
   })
-  it('uses "Explore Crevant" for every link to the tour, on every page', () => {
+  it('names every link to the tour "Discover Splitpost" in the header and hero, and "Explore Crevant" elsewhere until PR 5', () => {
     for (const path of PUBLIC_PATHS) {
       const { container } = renderAt(path)
-      for (const a of container.querySelectorAll('a[href="/tour"]')) expect(norm(a).trim()).toBe('Explore Crevant')
+      for (const a of container.querySelectorAll('a[href="/tour"]')) {
+        const inNewParts = Boolean(a.closest('header, #hero'))
+        expect(norm(a).trim(), path).toBe(inNewParts ? 'Discover Splitpost' : 'Explore Crevant')
+      }
       expect(norm(container)).not.toMatch(/take the tour/i)
       cleanup()
     }
