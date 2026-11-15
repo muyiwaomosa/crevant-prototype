@@ -108,8 +108,10 @@ interface Rule {
   allowed?: (sentence: string, match: RegExpExecArray) => boolean
 }
 
+const CURRENCY_RULE = 'a currency amount'
+
 const RULES: Rule[] = [
-  { name: 'a currency amount', pattern: /[$€£¥₦]\s?\d|\b\d[\d,.]*\s?(usd|cad|eur|gbp|dollars?|euros?|pounds?)\b/i },
+  { name: CURRENCY_RULE, pattern: /[$€£¥₦]\s?\d|\b\d[\d,.]*\s?(usd|cad|eur|gbp|dollars?|euros?|pounds?)\b/i },
   { name: 'the provisional revenue allocation', pattern: new RegExp(ALLOCATION.map((r) => r.source).join('|'), 'i') },
   {
     name: 'a promise of money, pay or income',
@@ -143,11 +145,23 @@ export function sentences(text: string): string[] {
     .filter(Boolean)
 }
 
+export interface ClaimOptions {
+  /**
+   * Exact sentences of cited, verified research (from research.ts) that may
+   * contain a currency amount. The exception is narrow: the sentence must
+   * match one of these word for word, and only the currency rule is lifted.
+   * Every other rule still applies to it.
+   */
+  citedResearch?: readonly string[]
+}
+
 /** Every sentence that breaks a claim rule. Empty means the text is safe to publish. */
-export function findMisleadingClaims(text: string): ClaimFinding[] {
+export function findMisleadingClaims(text: string, options: ClaimOptions = {}): ClaimFinding[] {
+  const cited = new Set((options.citedResearch ?? []).flatMap((s) => sentences(s)))
   const out: ClaimFinding[] = []
   for (const sentence of sentences(text)) {
     for (const rule of RULES) {
+      if (rule.name === CURRENCY_RULE && cited.has(sentence)) continue
       const match = rule.pattern.exec(sentence)
       if (match && !rule.allowed?.(sentence, match)) out.push({ rule: rule.name, sentence })
     }

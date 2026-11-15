@@ -5,20 +5,16 @@ import { ArrowRight, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
 import { cardShadow, Section, StatusBadge, TourScreenshot } from './landing/shared'
 import { Hero } from './landing/sections/Hero'
-import { DifferenceRail, PyramidComparison } from './landing/visuals'
+import { Why } from './landing/sections/Why'
+import { Who } from './landing/sections/Who'
+import { DifferenceRail } from './landing/visuals'
 import {
-  AlgorithmNotes,
   BringYourAudience,
   EarlyDoor,
-  EarningsContrast,
   FanJourney,
-  FeedComparison,
-  FollowersVsViews,
-  FollowToFeed,
   PlannedPanel,
   RightThousand,
   ShapeSketch,
-  YearGrid,
 } from './landing/illustrations'
 
 export { StatusBadge } from './landing/shared'
@@ -116,200 +112,8 @@ function MobileWaitlistBar() {
 }
 
 // ---- 1. Hero: src/public/landing/sections/Hero.tsx (Splitpost, PR 2) ----------
-
-// ---- 2. Founder story -------------------------------------------------------
-
-function Story() {
-  return (
-    <Section id="story" eyebrow="Why we started Crevant" title="My audience tripled. My income dropped by 60%." className="bg-white">
-      <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start lg:gap-12">
-        <div className="flex flex-col gap-3 lg:col-start-1 lg:row-start-1">
-          <img
-            src="/media/landing/founder.jpg"
-            alt="Portrait of Crevant's founder"
-            width={640}
-            height={640}
-            loading="lazy"
-            decoding="async"
-            className="aspect-[4/3] w-full max-w-[360px] rounded-[28px] object-cover object-[50%_30%] lg:aspect-[4/5]"
-          />
-          <p className="text-sm font-semibold text-ink-700">From Crevant's founder</p>
-        </div>
-        <div className="min-w-0 lg:col-start-2 lg:row-start-1">
-          <div className="space-y-4 text-[17px] leading-relaxed text-ink-600">
-            <p>Two years ago, I made my wife a promise. I told her she'd be able to retire by her 40th birthday.</p>
-            <p>There was just one problem. I had no idea how I was going to make that happen.</p>
-          </div>
-          <div className="mt-6">
-            <YearGrid />
-          </div>
-          <details data-testid="full-story" className="group mt-5 rounded-3xl bg-paper ring-1 ring-ink-100 [&_summary::-webkit-details-marker]:hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold text-ink-900">
-              Read the full story
-              <span aria-hidden="true" className="text-xl leading-none text-ink-400 transition group-open:rotate-45 motion-reduce:transition-none">
-                +
-              </span>
-            </summary>
-            <div className="space-y-4 px-5 pb-5 text-[17px] leading-relaxed text-ink-600">
-              <p>So I decided to do something I'd been too afraid to try.</p>
-              <p>I'd heard that consistency was the secret to success on YouTube. I made a commitment to post one video every single day for 365 days.</p>
-              <p>For five months, almost nothing happened.</p>
-              <p>Then suddenly, things changed.</p>
-              <p>I reached 12,000 subscribers and finally got monetized. My first earnings were about $500.</p>
-              <p>The following month, my subscribers tripled to 36,000.</p>
-              <p>But instead of earning more, I earned about $200.</p>
-              <p className="font-semibold text-ink-900">My audience had grown by 200%. My income had fallen by 60%.</p>
-              <p>And that unpredictability continued.</p>
-              <p>That's when I started asking myself a question:</p>
-              <p className="font-semibold text-ink-900">What's the point of building an audience if you can't reliably reach the people who chose to follow you?</p>
-              <p>I had done what creators are encouraged to do. I'd shown up consistently. I'd created content. I'd grown an audience.</p>
-              <p>
-                But I was beginning to realize that building an audience and having a reliable connection with that audience were two very different
-                things.
-              </p>
-              <p>And I wasn't the only one experiencing this.</p>
-            </div>
-          </details>
-        </div>
-        <div className="min-w-0 lg:col-span-2 lg:row-start-2">
-          <EarningsContrast />
-        </div>
-      </div>
-    </Section>
-  )
-}
-
-// ---- 3. The problem ---------------------------------------------------------
-
-function Problem() {
-  return (
-    <Section id="problem" eyebrow="The problem" title="You can have a million followers and still struggle to make a living.">
-      <p className="max-w-2xl text-[17px] leading-relaxed text-ink-600">I started paying closer attention to other creators.</p>
-      {/* Desktop: the two short cards share the first row, and the long third
-          card runs full width below with its drawing beside the text, so no
-          card is stretched around empty space. */}
-      <ul className="mt-6 grid gap-4 md:grid-cols-3 lg:grid-cols-2">
-        <li className={clsx('space-y-4 rounded-3xl bg-card p-5 leading-relaxed text-ink-600 lg:grid lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-5 lg:space-y-0', cardShadow)}>
-          <FollowersVsViews />
-          <p className="px-1">
-            I saw accounts with hundreds of thousands, even millions, of followers whose latest videos were getting a fraction of that number in views.
-          </p>
-        </li>
-        <li data-card="day-job" className={clsx('rounded-3xl bg-card p-6 leading-relaxed text-ink-600 lg:flex lg:items-center', cardShadow)}>
-          I came across creators talking about having to return to regular jobs because they couldn't depend on their income from content creation.
-        </li>
-        <li className={clsx('space-y-3 rounded-3xl bg-card p-5 leading-relaxed text-ink-600 lg:col-span-2 lg:grid lg:grid-cols-[0.75fr_1.25fr] lg:items-center lg:gap-8 lg:space-y-0', cardShadow)}>
-          <AlgorithmNotes />
-          <div className="space-y-3">
-            <p>Creators who started out sharing what they genuinely cared about were sometimes changing what they created just to stay visible.</p>
-            <p className="font-semibold text-ink-800">Following trends. Copying what worked for others. Creating controversy to attract attention.</p>
-            <p>Not necessarily because that's what they wanted to create, but because they felt that's what the algorithm would reward.</p>
-          </div>
-        </li>
-      </ul>
-      <div className="mt-12 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
-        {/* Desktop: the text stays beside the comparison while it scrolls past. */}
-        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600 lg:sticky lg:top-24">
-          <p className="font-display text-xl font-bold text-ink-900">Think about that.</p>
-          <p data-testid="problem-lead">
-            You worked hard to build your audience. But what good is having thousands of followers if you can't consistently reach them?
-          </p>
-          <div data-testid="problem-questions" className="space-y-3 rounded-3xl border-l-4 border-spark-400 bg-spark-50 px-5 py-4">
-            <p className="font-semibold text-ink-900">How do you build trust when you can't consistently connect with your audience?</p>
-            <p className="font-semibold text-ink-900">How do you build a sustainable income when you can't predict whether the people who value your work will see it?</p>
-          </div>
-          <p className="font-semibold text-ink-900">We believe creators deserve a better opportunity.</p>
-        </div>
-        <FeedComparison />
-      </div>
-    </Section>
-  )
-}
-
-// ---- 4. Why Crevant exists ---------------------------------------------------
-
-function Why() {
-  return (
-    <Section id="why" eyebrow="Why Crevant exists" title="What if social media worked for the people creating the value?" className="bg-white">
-      {/* Phones: What ifs, the belief, its diagram, then the rest. Desktop: the
-          diagram sits under the What ifs so both columns end together. */}
-      <div className="grid gap-x-10 gap-y-6 lg:grid-cols-[1fr_1fr]">
-        <ul className="space-y-3 lg:col-start-1 lg:row-span-2 lg:row-start-1">
-          {[
-            'What if you didn\'t have to constantly fight for the attention of people who already chose to follow you?',
-            'What if creating something valuable mattered more than creating something controversial?',
-            'What if you could focus on building genuine relationships instead of constantly chasing the next viral video?',
-            'And what if those relationships could help you build a more predictable livelihood?',
-          ].map((q) => (
-            <li key={q} className="rounded-2xl bg-paper px-5 py-4 font-display text-lg font-bold leading-snug text-ink-800 ring-1 ring-ink-100">
-              {q}
-            </li>
-          ))}
-        </ul>
-        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600 lg:col-start-2 lg:row-start-1">
-          <p className="font-semibold text-ink-900">That's the future we're building with Crevant.</p>
-          <p>A creator-first social network designed around a simple belief:</p>
-          <blockquote className="rounded-3xl bg-brand-700 px-6 py-5 font-display text-xl font-bold leading-snug text-white">
-            When someone chooses to follow you, your content should have a reliable place in their feed.
-          </blockquote>
-        </div>
-        <div className="lg:col-start-1 lg:row-start-3">
-          <FollowToFeed />
-        </div>
-        <div className="space-y-4 text-[17px] leading-relaxed text-ink-600 lg:col-start-2 lg:row-span-2 lg:row-start-2">
-          <p>
-            We're building Crevant to help creators connect with their audiences, strengthen trust, recognize loyal supporters and develop
-            opportunities to earn from the value they create.
-          </p>
-          <p>Not by promising everyone fame or overnight success.</p>
-          <p>But by creating a system where the work you put into building relationships has a better opportunity to compound over time.</p>
-        </div>
-      </div>
-      <div className="mt-12">
-        <PyramidComparison />
-      </div>
-    </Section>
-  )
-}
-
-// ---- 5. Who it's for ----------------------------------------------------------
-
-const WHO: Array<{ title: string; body: string }> = [
-  {
-    title: "You've built an audience, but struggle to reach them.",
-    body: 'You have people who chose to follow you, yet you never know how many will see your next post.',
-  },
-  {
-    title: "You're creating valuable content, but the income doesn't reflect your effort.",
-    body: "You spend hours researching, recording, editing and publishing, but you're still struggling to make content creation financially sustainable.",
-  },
-  {
-    title: "You're tired of creating for the algorithm instead of your audience.",
-    body: 'You want the freedom to be yourself, share what you believe in and create content that genuinely matters to the people following you.',
-  },
-  {
-    title: 'You want to turn your side hustle into your profession.',
-    body: "Maybe you're already earning something. Maybe you're just starting out. But your goal is to build something that can eventually support you and your family.",
-  },
-]
-
-function Who() {
-  return (
-    <Section id="who" eyebrow="Who Crevant is for" title="For creators who want more than views.">
-      <ul className="grid gap-4 sm:grid-cols-2">
-        {WHO.map((w) => (
-          <li key={w.title} className={clsx('rounded-3xl bg-card p-6', cardShadow)}>
-            <h3 className="font-display text-lg font-bold leading-snug text-ink-900">{w.title}</h3>
-            <p className="mt-2 leading-relaxed text-ink-600">{w.body}</p>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-8 font-display text-xl font-bold text-ink-900">If any of these sound familiar, we're building Crevant with people like you in mind.</p>
-    </Section>
-  )
-}
-
-// ---- 6. The Crevant difference -------------------------------------------------
+// ---- 2. WHY and 3. WHO: src/public/landing/sections (Splitpost, PR A) ---------
+// ---- The older sections below are replaced in PRs B and C. ---------------------
 
 function DifferenceBlock({
   n,
@@ -612,8 +416,6 @@ export function LandingPage() {
   return (
     <>
       <Hero />
-      <Story />
-      <Problem />
       <Why />
       <Who />
       <Difference />

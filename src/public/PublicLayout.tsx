@@ -83,7 +83,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             <p data-testid="product-images-note" className="mt-1 text-sm leading-relaxed text-ink-500">{PRODUCT_IMAGES_DISCLOSURE}</p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-ink-600">
-            <Link to="/#story" className="hover:text-ink-900">
+            <Link to="/#why" className="hover:text-ink-900">
               Our Story
             </Link>
             <Link to="/#how" className="hover:text-ink-900">

@@ -115,6 +115,45 @@ async function newContext(browser, options = {}) {
       await ctx.close()
     }
 
+    // 5b. Splitpost WHY and WHO (PR A), from the smallest phone to a wide
+    //     desktop: no sideways scrolling, the post journey reflows (one step
+    //     per row, then two, then four), and each concept photo loads with its
+    //     AI disclosure sitting on the image.
+    for (const width of [320, 390, 768, 1024, 1440]) {
+      const label = `${width}px`
+      const ctx = await newContext(browser, { viewport: { width, height: 900 } })
+      const page = await ctx.newPage()
+      page.on('request', (r) => requests.push(r.url()))
+      page.on('console', (m) => m.type() === 'error' && problems.push(`${label}: ${m.text()}`))
+      page.on('pageerror', (e) => problems.push(`${label}: ${e.message}`))
+      await page.goto(`${BASE}/`)
+
+      const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
+      check(`${label}: WHY keeps its headline`, (await page.locator('#why h2').innerText()).replace(/\s+/g, ' ') === "You helped build it. Where's your split?")
+
+      const rows = await page.$$eval('[data-testid="post-journey"] > li', (lis) => new Set(lis.map((li) => Math.round(li.getBoundingClientRect().top))).size)
+      const expectedRows = width < 640 ? 4 : width < 1024 ? 2 : 1
+      check(`${label}: the post journey shows ${expectedRows} row(s)`, rows === expectedRows, `rows=${rows}`)
+
+      const sources = await page.$$eval('#why figure[data-research] figcaption a', (as) => as.map((a) => a.getAttribute('href')))
+      check(`${label}: both research figures link to their sources`, sources.length === 2 && sources.every((h) => h.startsWith('https://')), sources.join(', '))
+
+      for (const id of ['creator', 'fan']) {
+        const fig = page.locator(`#who figure[data-photo="${id}"]`)
+        await fig.scrollIntoViewIfNeeded()
+        const loaded = await fig
+          .locator('img')
+          .evaluate((img) => (img.complete ? img.naturalWidth : new Promise((ok) => img.addEventListener('load', () => ok(img.naturalWidth), { once: true }))))
+          .catch(() => 0)
+        check(`${label}: the ${id} photo loads`, loaded > 0, `naturalWidth=${loaded}`)
+        const [img, tag] = await Promise.all([fig.locator('img').boundingBox(), fig.locator('figcaption').boundingBox()])
+        const inside = img && tag && tag.x >= img.x && tag.y >= img.y && tag.x + tag.width <= img.x + img.width + 0.5 && tag.y + tag.height <= img.y + img.height + 0.5
+        check(`${label}: the ${id} photo's AI disclosure is visible on the image`, Boolean(inside) && (await fig.locator('figcaption').isVisible()))
+      }
+      await ctx.close()
+    }
+
     // 6. Nothing reached Supabase or any other outside service.
     const outside = [...new Set(requests.map((u) => new URL(u).hostname))].filter((h) => h !== new URL(BASE).hostname && !ALLOWED_THIRD_PARTY.includes(h))
     check('no request left this site (fonts aside)', outside.length === 0, outside.join(', '))

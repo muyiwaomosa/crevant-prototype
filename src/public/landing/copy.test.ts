@@ -12,6 +12,25 @@ describe('approved Splitpost homepage copy', () => {
     expect(h.status).toBe('final')
   })
 
+  it('WHY keeps the approved headline and states the gap accurately', () => {
+    const w = HOMEPAGE_COPY.why
+    expect(w.headline).toBe("You helped build it. Where's your split?")
+    expect(w.steps.map((s) => s.title)).toEqual(['Priya posts.', 'Ana joins in.', 'Leo recommends it.', 'The post takes off.'])
+    expect(w.gap.headline).toBe('They all helped it grow. Not all of them had a way to benefit.')
+    // No absolute claims that nobody benefits, and no money in the story itself.
+    const story = allHomepageText(w).join(' ')
+    expect(story).not.toMatch(/\bnobody (shared|benefit)|\bno one (shared|benefit)|everyone helped/i)
+    expect(story).not.toMatch(/[$€£¥]|\bad(vertising)? revenue\b/i)
+  })
+
+  it('WHO names the creator and the fan, three recognisable points each', () => {
+    const w = HOMEPAGE_COPY.who
+    expect(w.headline).toEqual(['The creator who keeps posting.', 'The fan who keeps sharing.'])
+    expect(w.creator.points).toHaveLength(3)
+    expect(w.fan.points).toHaveLength(3)
+    expect(w.samplePeople).toMatch(/sample people/)
+  })
+
   it('POST. SUPPORT. SPLIT. is exactly as approved', () => {
     const s = HOMEPAGE_COPY.solution
     expect(s.headline).toBe('POST. SUPPORT. SPLIT.')

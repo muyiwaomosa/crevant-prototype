@@ -24,19 +24,53 @@ export const HOMEPAGE_COPY = {
     visualLabel: DISCLOSURES.concept,
   },
 
-  problem: {
+  why: {
     status: 'approved-in-principle' as CopyStatus,
+    eyebrow: 'Why · The problem',
     headline: "You helped build it. Where's your split?",
+    intro: 'Follow one post. See who helps it grow, and who gets a chance to benefit.',
+    samplePeople: 'Priya, Ana and Leo are sample people. The post and its numbers are illustrations.',
+    steps: [
+      { title: 'Priya posts.', line: 'Her fourth build log this week. Posting is the easy part. Being seen is not.' },
+      { title: 'Ana joins in.', line: 'She starts the conversation and carries the post to people Priya couldn’t reach.' },
+      { title: 'Leo recommends it.', line: 'A recommendation from a friend. Three new followers who might never have found her.' },
+      { title: 'The post takes off.', line: 'It grew because people helped it grow.' },
+    ],
+    gap: {
+      kicker: 'And then?',
+      headline: 'They all helped it grow. Not all of them had a way to benefit.',
+      people: [
+        { name: 'Priya', line: 'Reach went up this week. Her income didn’t follow, and the next post could reach far fewer people.' },
+        { name: 'Ana', line: 'Started the conversation and shared it with her team. Her part went unrecognized.' },
+        { name: 'Leo', line: 'Brought three new followers. Priya had no way of knowing they came through him.' },
+      ],
+    },
+    researchTitle: 'The bigger picture',
+  },
+
+  who: {
+    status: 'approved-in-principle' as CopyStatus,
+    eyebrow: 'Who · Our audience',
+    headline: ['The creator who keeps posting.', 'The fan who keeps sharing.'],
     creator: {
-      label: 'The creator.',
+      label: 'The creator',
       line: 'More posts. More followers. Not more income.',
-      chips: ['Posted 5 times this week', 'Followers up again'],
+      points: [
+        'Reach rises and falls without warning.',
+        'A good month says little about the next one.',
+        'A growing audience still doesn’t add up to a steady living.',
+      ],
     },
     fan: {
-      label: 'The fan.',
+      label: 'The fan',
       line: 'You shared it. You started the conversation. Nobody noticed.',
-      chips: ['Shared it with 3 friends', 'First to comment'],
+      points: [
+        'You found them early and told your friends.',
+        'Your comments and recommendations help them grow.',
+        'Your referrals bring real followers, and go unseen.',
+      ],
     },
+    samplePeople: 'Priya is a creator like this. Ana and Leo are fans like this. They’re sample people, here to show how Splitpost works.',
   },
 
   solution: {
