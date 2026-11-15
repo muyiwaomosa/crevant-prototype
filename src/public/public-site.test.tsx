@@ -110,12 +110,21 @@ describe('HERO', () => {
     ])
     expect([...hero().querySelectorAll('a')].some((a) => a.getAttribute('href') === '/sign-in')).toBe(true)
   })
-  it('pictures a creator, a fan and a recognisable post between them', () => {
+  it('pictures one recognisable post, split into what the creator made and what fans added', () => {
     const scene = hero().querySelector('[data-testid="hero-scene"]')!
-    expect([...scene.querySelectorAll('img')].map((i) => i.getAttribute('data-photo'))).toEqual(['studio-room', 'ring-light', 'creator-smiling', 'fan-on-phone'])
     expect(norm(scene)).toContain('Priya Raman')
     expect(norm(scene)).toContain('Sample')
-    expect(norm(scene.querySelector('figcaption'))).toContain('stock images')
+    expect(norm(scene)).toContain('Priya made it')
+    expect(norm(scene)).toContain('Fans grew it')
+    expect(scene.querySelectorAll('img')).toHaveLength(0)
+    expect(norm(scene.querySelector('figcaption'))).toMatch(/split into two pieces/)
+    expect(norm(scene)).not.toMatch(/[$£€%]|earn|cash|payout/i)
+  })
+  it('puts the picture straight after the headline, before the tagline and actions', () => {
+    const order = [...hero().querySelectorAll('h1, [data-testid="hero-scene"], [data-testid="hero-tagline"], [data-testid="hero-actions"], [data-testid="hero-small-print"]')].map(
+      (el) => el.getAttribute('data-testid') ?? el.tagName,
+    )
+    expect(order).toEqual(['H1', 'hero-scene', 'hero-tagline', 'hero-actions', 'hero-small-print'])
   })
 })
 

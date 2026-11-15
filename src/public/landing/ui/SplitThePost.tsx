@@ -1,12 +1,12 @@
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import { Heart, MessageCircle, Repeat2, Send } from 'lucide-react'
-import { HOMEPAGE_COPY } from '../../copy'
-import { Avatar, PostArt } from '../PostJourney'
-import { SplitMark } from '../SplitpostWordmark'
+import { HOMEPAGE_COPY } from '../copy'
+import { Avatar, PostArt } from './PostJourney'
+import { SplitMark } from './SplitpostWordmark'
 
 /**
- * HERO CONCEPT A, "Split the post" (for review, not live).
+ * The hero picture, "Split the post" (approved concept A).
  *
  * Priya's sample post, cut once on the diagonal of the Splitpost mark. The
  * white piece is what the creator made (her words and photo); the orange piece
@@ -21,7 +21,7 @@ const CUT = 46
 
 export function SplitThePost({ className }: { className?: string }) {
   return (
-    <figure data-testid="hero-concept-a" className={clsx('relative m-0 mx-auto w-full max-w-[25rem] lg:max-w-[28rem]', className)}>
+    <figure data-testid="hero-scene" className={clsx('relative m-0 mx-auto w-full max-w-[25rem] lg:max-w-[28rem]', className)}>
       <div aria-hidden="true" className="relative">
         {/* The creator's piece: her post, as she made it. */}
         <div className="relative -rotate-[1.5deg] [filter:drop-shadow(0_28px_36px_rgb(0_0_0/0.45))]">

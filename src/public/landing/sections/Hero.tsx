@@ -1,10 +1,9 @@
-import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { TOUR_BASE } from '../../../entry'
 import { useMemberLinks } from '../../member-links'
 import { HOMEPAGE_COPY } from '../copy'
-import { HeroScene } from '../ui/HeroScene'
+import { SplitThePost } from '../ui/SplitThePost'
 
 const copy = HOMEPAGE_COPY.hero
 
@@ -16,11 +15,14 @@ const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:o
 /**
  * Section 1: the hero. A midnight band with the headline as a poster, the
  * approved belief in three short sentences, both calls to action, and the
- * pilot small print. The picture is a creator, a fan and the post between them.
+ * pilot small print. The picture is one post split in two: what the creator
+ * made and what fans added.
+ *
+ * Phones: headline, picture, then the words, actions and small print, so the
+ * picture shows in the first screen. From lg up: text left, picture right.
  */
-export function Hero({ scene, sceneUnderHeadline = false }: { scene?: ReactNode; sceneUnderHeadline?: boolean } = {}) {
+export function Hero() {
   const memberLinks = useMemberLinks()
-  const picture = scene ?? <HeroScene />
   const headline = (
     <h1
       id="hero-title"
@@ -86,23 +88,13 @@ export function Hero({ scene, sceneUnderHeadline = false }: { scene?: ReactNode;
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(118deg,transparent_0_62%,rgb(255_255_255/0.035)_62%_100%)]"
       />
-      {sceneUnderHeadline ? (
-        // Phones and tablets: headline, picture, then the words and actions.
-        // From lg up: the same two columns as before (text left, picture right).
-        <div className="mx-auto grid max-w-6xl px-4 pb-12 pt-5 [grid-template-areas:'title'_'scene'_'rest'] sm:px-6 sm:pb-20 sm:pt-10 lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[1fr_auto_auto_1fr] lg:gap-x-14 lg:pb-24 lg:pt-16 lg:[grid-template-areas:'top_scene'_'title_scene'_'rest_scene'_'end_scene']">
-          <div className="min-w-0 [grid-area:title]">{headline}</div>
-          <div className="mt-5 min-w-0 [grid-area:scene] sm:mt-8 lg:mt-0 lg:self-center">{picture}</div>
-          <div className="mt-1 min-w-0 [grid-area:rest] lg:mt-0">{rest}</div>
+      <div className="mx-auto grid max-w-6xl px-4 pb-12 pt-5 [grid-template-areas:'title'_'scene'_'rest'] sm:px-6 sm:pb-20 sm:pt-10 lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[1fr_auto_auto_1fr] lg:gap-x-14 lg:pb-24 lg:pt-16 lg:[grid-template-areas:'top_scene'_'title_scene'_'rest_scene'_'end_scene']">
+        <div className="min-w-0 [grid-area:title]">{headline}</div>
+        <div className="mt-5 min-w-0 [grid-area:scene] sm:mt-8 lg:mt-0 lg:self-center">
+          <SplitThePost />
         </div>
-      ) : (
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-14 pt-6 sm:px-6 sm:pb-20 sm:pt-12 lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:gap-14 lg:pb-24 lg:pt-16">
-          <div className="min-w-0">
-            {headline}
-            {rest}
-          </div>
-          {picture}
-        </div>
-      )}
+        <div className="mt-1 min-w-0 [grid-area:rest] lg:mt-0">{rest}</div>
+      </div>
     </section>
   )
 }
