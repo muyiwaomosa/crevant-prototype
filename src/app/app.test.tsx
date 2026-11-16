@@ -334,15 +334,19 @@ describe('feed and posting', () => {
     seedPost('c1', 'A post to like')
     follows.add(key('me', 'c1'))
     renderApp('/app', api)
-    const like = await screen.findByRole('button', { name: 'Like (0 likes)' })
-    fireEvent.click(like)
-    expect(await screen.findByRole('button', { name: 'Unlike (1 likes)' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Unlike (1 likes)' }))
-    expect(await screen.findByRole('button', { name: 'Like (0 likes)' })).toBeTruthy()
+    // The button is disabled while a request is in flight: wait for it to be ready before each click.
+    const ready = async (name: string) => {
+      const btn = (await screen.findByRole('button', { name })) as HTMLButtonElement
+      await waitFor(() => expect(btn.disabled).toBe(false))
+      return btn
+    }
+    fireEvent.click(await ready('Like (0 likes)'))
+    fireEvent.click(await ready('Unlike (1 likes)'))
+    await ready('Like (0 likes)')
     failures.like = new AppApiError('not_found')
-    fireEvent.click(screen.getByRole('button', { name: 'Like (0 likes)' }))
+    fireEvent.click(await ready('Like (0 likes)'))
     expect((await screen.findByRole('alert')).textContent).toMatch(/no longer available/)
-    expect(screen.getByRole('button', { name: 'Like (0 likes)' })).toBeTruthy()
+    expect(await ready('Like (0 likes)')).toBeTruthy()
   })
 })
 
