@@ -12,12 +12,14 @@ import { SignInPage } from './auth/SignInPage'
 import { ForgotPasswordPage } from './auth/ForgotPasswordPage'
 import { ConfirmPage } from './auth/ConfirmPage'
 import { SetPasswordPage } from './auth/SetPasswordPage'
-import { AppHomePage } from './auth/AppHomePage'
 import { AccountPage } from './auth/AccountPage'
 import { RequireAuth } from './auth/AuthUi'
+import { MemberArea } from '../app/MemberArea'
+import { AppNotFound, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from '../app/pages'
 
 /**
- * The public site and invited members' account pages. There is no sign-up
+ * The public site, invited members' account pages and the members area
+ * (/app: posts, follows, the Clique, likes and comments). There is no sign-up
  * page: accounts are created by invitation only. The invitation request form
  * stays closed until the privacy notice is approved.
  */
@@ -48,9 +50,19 @@ export function PublicRoutes() {
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />
         <Route path="auth/set-password" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />
-        <Route path="app" element={<RequireAuth><AppHomePage /></RequireAuth>} />
         <Route path="app/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
         <Route path="*" element={<PublicNotFound />} />
+        </Route>
+        {/* The members area (Release 1: the social core), with its own layout. */}
+        <Route path="app" element={<RequireAuth><MemberArea /></RequireAuth>}>
+          <Route index element={<FeedPage />} />
+          <Route path="discover" element={<DiscoverPage />} />
+          <Route path="new" element={<ComposePage />} />
+          <Route path="post/:id" element={<PostPage />} />
+          <Route path="u/:username" element={<MemberPage />} />
+          <Route path="clique" element={<CliquePage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="*" element={<AppNotFound />} />
         </Route>
       </Routes>
     </MemberLinksContext.Provider>
