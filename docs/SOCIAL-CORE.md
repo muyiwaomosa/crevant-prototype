@@ -62,9 +62,12 @@ append-only triggers let those cascades through and refuse any direct edit.
 mode, needing the phrase `DELETE THE STAGING SOCIAL CORE`. It removes exactly
 the 34-item inventory above and the migration record, never by cascade, and
 refuses if any member data exists, if a later migration is recorded, or if
-anything unexpected is present. Because this migration comes after the
-waitlist, `scripts/db/rollback-test.sh` now tests and runs this rollback
-first, and proves the waitlist rollback refuses until it has run.
+anything unexpected is present. This migration is the newest, after the
+waitlist and creator acquisition (20261116000000), and each rollback refuses
+while a later migration is recorded, so on staging they run newest first:
+social core, then creator acquisition, then the waitlist.
+`scripts/db/rollback-test.sh` tests that whole chain and proves each earlier
+rollback refuses until the later ones have run.
 
 Wiring this rollback into the "Waitlist rollback (staging)" workflow as a
 target is a follow-up that needs its own approval (as it did for creator
@@ -86,6 +89,7 @@ acquisition).
 1. Founder review of this document and the migration.
 2. Founder approval of the migration checksum, in its own reviewed commit
    (`sha256sum supabase/migrations/20261117000000_social_core.sql`).
-3. The PR merged into `main` (staging workflows run from `main` only), after
-   PR #31.
+3. The PR merged into `main` (staging workflows run from `main` only). PRs
+   #31 and #32 are already merged, so creator acquisition reaches staging
+   first, as its earlier date requires.
 4. Staging deploy in `plan` mode, then `apply`, then `check`.

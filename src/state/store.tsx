@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Comment, Creator, PersistedState, Post, PostMedia, Redemption, Reward, RewardKind } from '../types'
+import type { Category, Comment, Creator, Intent, PersistedState, Post, PostMedia, Redemption, Reward, RewardKind, TourInvite } from '../types'
 import {
   CREATORS,
   DEFAULT_FOLLOWING,
@@ -33,6 +33,14 @@ import { clearState, createInitialState, loadState, saveState } from './storage'
 
 // ---------------------------------------------------------------------------
 // Toasts (ephemeral, not persisted)
+
+/** What onboarding collected. Stored for Discover; never follows anyone by itself. */
+export interface OnboardingSetup {
+  intent: Intent | null
+  interests: Category[]
+  creatorCategories: Category[]
+  invite: Omit<TourInvite, 'decidedAt'> | null
+}
 
 export type ToastTone = 'earn' | 'info' | 'success' | 'warn'
 export interface Toast {
@@ -100,7 +108,7 @@ interface Store {
    * Finish the welcome flow. Pass the accounts the person chose to follow,
    * or 'skip' to follow the starter accounts so the feed is not empty.
    */
-  completeOnboarding: (choice: string[] | 'skip') => void
+  completeOnboarding: (choice: string[] | 'skip', setup?: OnboardingSetup) => void
   dismissUnifiedNotice: () => void
   publishPost: (input: { text: string; media?: PostMedia }) => Post | null
   deletePost: (postId: string) => void
@@ -395,8 +403,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const completeOnboarding = useCallback(
-    (choice: string[] | 'skip') => {
-      commit((s) => {
+    (choice: string[] | 'skip', setup?: OnboardingSetup) => {
+      commit((prev) => {
+        // Preferences and the invitation decision are stored whatever was chosen.
+        // Neither follows anyone: only the explicit choice list does.
+        let s = prev
+        if (setup) {
+          s = {
+            ...s,
+            intent: setup.intent,
+            interests: [...new Set(setup.interests)],
+            creatorCategories: setup.intent === 'discover' ? [] : [...new Set(setup.creatorCategories)].slice(0, 3),
+            invite: setup.invite
+              ? { ...setup.invite, decidedAt: setup.invite.decision === 'pending' ? null : Date.now() }
+              : s.invite,
+          }
+        }
         if (choice === 'skip') {
           // Starter follows are chosen by the demo, not the person, so they do not hold a follow bonus.
           const following = [...new Set([...s.following, ...DEFAULT_FOLLOWING])]

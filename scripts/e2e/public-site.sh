@@ -22,6 +22,9 @@ for _ in $(seq 1 60); do
 done
 
 node e2e/public-site.e2e.cjs "http://127.0.0.1:$APP_PORT"
+# Follow and "Not now" in the tour's invitation onboarding stay accurate across
+# refreshes, navigation and repeated taps, and following earns only the normal bonus.
+node e2e/invite-follow-state.e2e.cjs "http://127.0.0.1:$APP_PORT"
 # At the production address, a build without Production approval must still
 # show the demo, and be noindex with robots.txt disallowing everything.
 node e2e/public-site-launch.e2e.cjs "$APP_PORT" unapproved

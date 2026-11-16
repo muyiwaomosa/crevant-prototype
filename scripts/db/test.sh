@@ -62,7 +62,7 @@ done
 # must then fail with a "FAIL:" message, proving they would catch it. (Only
 # those checks files are replayed here: the Phase 0 file manages its own
 # transactions, which would end the wrapper's transaction early.)
-CHECKS=(supabase/tests/002_profiles_and_ops.sql supabase/tests/003_waitlist.sql supabase/tests/005_social_core.sql)
+CHECKS=(supabase/tests/002_profiles_and_ops.sql supabase/tests/003_waitlist.sql supabase/tests/004_acquisition.sql supabase/tests/005_social_core.sql)
 for v in supabase/tests-local/violations/*.sql; do
   [ -e "$v" ] || continue
   wrapper="$(mktemp)"

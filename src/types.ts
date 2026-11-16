@@ -128,6 +128,21 @@ export interface Redemption {
 }
 
 /** First run welcome flow. Returning users are never sent through it again. */
+/** How someone plans to use Splitpost. Shapes onboarding only: never a role, never limits what anyone can do. */
+export type Intent = 'create' | 'discover' | 'both'
+
+/**
+ * An invitation from an accepted creator's link. Attribution only: the
+ * follow is the visitor's own decision, and the invitation earns nothing
+ * for anyone.
+ */
+export interface TourInvite {
+  code: string
+  creatorId: string
+  decision: 'pending' | 'followed' | 'declined'
+  decidedAt: number | null
+}
+
 export interface OnboardingState {
   status: 'pending' | 'completed' | 'skipped'
   at: number | null
@@ -161,6 +176,14 @@ export interface PersistedState {
   unifiedNotice: 'none' | 'pending' | 'dismissed'
   profile: Profile
   following: string[]
+  /** How the visitor plans to use Splitpost (onboarding only). */
+  intent: Intent | null
+  /** Topics the visitor enjoys. Orders Discover suggestions; never follows anyone. */
+  interests: Category[]
+  /** What the visitor plans to post about, at most three. */
+  creatorCategories: Category[]
+  /** The creator invitation they arrived with, if it was valid. */
+  invite: TourInvite | null
   liked: Record<string, true>
   saved: Record<string, number>
   /** Posts the visitor published. */

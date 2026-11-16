@@ -110,11 +110,18 @@ declare
 begin
   foreach r in array array['waitlist_writer', 'waitlist_admin'] loop
     allowed := case r
-      when 'waitlist_writer' then array['waitlist_api.submit']
+      -- Creator acquisition: submit_v2 adds optional attribution fields to the
+      -- same submission; invite_preview answers only whether a link is usable
+      -- and its creator's agreed public name.
+      when 'waitlist_writer' then array['waitlist_api.submit', 'waitlist_api.submit_v2', 'waitlist_api.invite_preview']
       else array['waitlist_api.admin_summary', 'waitlist_api.admin_status', 'waitlist_api.admin_delete', 'waitlist_api.admin_purge',
                  'waitlist_api.admin_set_notice_version', 'waitlist_api.admin_open', 'waitlist_api.admin_close',
                  'waitlist_api.admin_wave_preview', 'waitlist_api.admin_wave_select', 'waitlist_api.admin_wave_summary',
-                 'waitlist_api.admin_wave_clear']
+                 'waitlist_api.admin_wave_clear', 'waitlist_api.admin_acquisition_summary',
+                 -- Creator acquisition: the founder/admin issues and revokes pilot links.
+                 'waitlist_api.admin_accept_creator', 'waitlist_api.admin_set_creator_status',
+                 'waitlist_api.admin_set_creator_public_name', 'waitlist_api.admin_issue_creator_link',
+                 'waitlist_api.admin_revoke_creator_link', 'waitlist_api.admin_purge_acquisition_events']
     end;
 
     select string_agg(n.nspname || '.' || c.relname, ', ') into bad
@@ -226,6 +233,10 @@ begin
     select 1 from pg_attribute
     where attrelid = 'ops.waitlist'::regclass and attnum > 0 and not attisdropped
       and attname ~* '(^ip|_ip$|address|role|account_type|creator|supporter|password|link|url|campaign|marketing|name|phone|birth)'
+      -- Approved for creator acquisition (founder, 2026-11): whether a creator
+      -- introduced someone (yes / no, naming nobody) and a server-resolved
+      -- invitation link. Exactly these two; a typed creator name is NOT allowed.
+      and attname not in ('introduced_by_creator', 'creator_link_id')
   ) then
     raise exception 'FAIL: ops.waitlist has a column it should not (role, IP, link, campaign, marketing or other personal data)';
   end if;
@@ -257,6 +268,19 @@ begin
        where tgrelid = 'ops.waitlist_selections'::regclass and tgname = 'waitlist_selections_require_verified' and tgenabled <> 'D'
      ) then
     raise exception 'FAIL: unverified entries can be selected for an invitation wave';
+  end if;
+  -- Creator acquisition: intent is a fixed list, and the verified link points
+  -- at the links table.
+  if to_regclass('ops.creator_links') is not null then
+    foreach c in array array['waitlist_intent_allowed'] loop
+      if not exists (select 1 from pg_constraint where conrelid = 'ops.waitlist'::regclass and conname = c) then
+        raise exception 'FAIL: ops.waitlist is missing constraint %', c;
+      end if;
+    end loop;
+    if not exists (select 1 from pg_constraint where conrelid = 'ops.waitlist'::regclass and contype = 'f'
+                   and confrelid = 'ops.creator_links'::regclass) then
+      raise exception 'FAIL: ops.waitlist.creator_link_id is not a reference to a creator link';
+    end if;
   end if;
   raise notice 'PASS: required fields, minimal data and verification rules are enforced';
 end $$;

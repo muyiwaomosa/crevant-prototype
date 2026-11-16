@@ -4,6 +4,8 @@ Status: **infrastructure only, switched off.** Nothing here collects data until 
 
 One unified waitlist, no roles. People give an email, confirm they are 18 or older, and agree to be contacted about the pilot. A few research questions are optional. Joining does not create an account or secure a place in the pilot.
 
+Creator acquisition (intent, "did a creator introduce you?", accepted-creator invitation links and hourly acquisition counts with no identifier) extends this same waitlist: see [ACQUISITION.md](ACQUISITION.md).
+
 ## How it fits together
 
 1. **Form** (`src/public/waitlist/`). Rendered on `/join` only when the frontend switch is on, in the full app and in the public site build. It posts JSON straight to the server function, with **no Supabase key**. It loads Cloudflare Turnstile (action `join`) only when switched on, and has a hidden honeypot field.
@@ -29,12 +31,13 @@ One unified waitlist, no roles. People give an email, confirm they are 18 or old
 | Joined at, verified at, last verified confirmation | Retention and verification |
 | Participant groups (worked out from the answers above, not asked) | Analysis: who joined |
 | Status, invitation link, selection reasons per wave (fixed list) | Internal, for invitations later |
+| Intent (create / discover / both), "a creator introduced me" (yes / no), a verified creator link (creator acquisition, not yet approved) | Optional; see `docs/ACQUISITION.md` and the draft notice `docs/PRIVACY-NOTICE-ACQUISITION-DRAFT.md` |
 
 **Not stored:**
 * public links
 * campaign labels
 * marketing consent
-* names
+* names (including a creator's name or handle: the form doesn't ask for one)
 * IP addresses
 * roles
 * free text notes

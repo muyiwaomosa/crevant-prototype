@@ -16,6 +16,10 @@ export function createInitialState(now = Date.now()): PersistedState {
     profile: { ...DEFAULT_PROFILE },
     // New participants choose who to follow during onboarding.
     following: [],
+    intent: null,
+    interests: [],
+    creatorCategories: [],
+    invite: null,
     liked: {},
     saved: {},
     myPosts: [],
