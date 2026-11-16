@@ -4,7 +4,7 @@ import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PublicRoutes } from './PublicApp'
 import { HOMEPAGE_COPY } from './landing/copy'
-import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation, PROVISIONAL_LABEL } from './landing/claims'
+import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation, PROVISIONAL_CP_RULES, PROVISIONAL_LABEL } from './landing/claims'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 
 const PUBLIC_PATHS = ['/', '/join', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
@@ -174,11 +174,21 @@ describe("WHAT WE'RE BUILDING", () => {
     expect(goal.textContent).toBe('we want to create a platform that generates sustainable pay for content creators who have something valuable to say')
     expect(goal.closest('blockquote')).toBeTruthy()
   })
-  it('shows the Following feed, interest-based discovery and creator insights as labelled concept screens', () => {
-    const items = [...sec().querySelectorAll('[data-testid="building-screens"] > li')]
-    expect(items.map((li) => norm(li.querySelector('h3')))).toEqual(['Following feed', 'Discover by interests', 'Creator insights'])
+  it('tells two benefits with labelled concept illustrations: followers can find your posts, and understand your community', () => {
+    const cards = [...sec().querySelectorAll('[data-testid="building-illustrations"] > figure')]
+    expect(cards.map((f) => norm(f.querySelector('h3')))).toEqual(['Your followers can find your posts.', "Understand the community you're building."])
+    for (const f of cards) {
+      expect(norm(f.querySelector('[data-testid="concept-tag"]'))).toBe('Concept illustration · Sample data')
+      expect(f.querySelector('[data-testid="mockup-label"]')).toBeTruthy()
+      expect(f.querySelectorAll('[data-testid="callouts"] > li')).toHaveLength(3)
+    }
     expect(norm(sec().querySelector('[data-testid="building-note"]'))).toBe(`${DISCLOSURES.stillTesting} ${DISCLOSURES.noGuarantee}`)
+    expect(norm(sec())).toContain('Who looks is still up to your followers.')
     expect(norm(sec())).not.toMatch(/every follower (will )?see|see every post/i)
+  })
+  it('shows no views, likes or earnings figures in the community illustration', () => {
+    const t = norm(sec().querySelector('[data-testid="illustration-community"]'))
+    expect(t).not.toMatch(/\bviews?\b|\blikes?\b|\$|€|£|\bearn/i)
   })
 })
 
@@ -204,10 +214,24 @@ describe('A BETTER SPLIT', () => {
       'Future revenue sharing depends on eligibility, verification and legal and financial requirements.',
     ])
   })
-  it('illustrates creator, post and community, and uses only the approved pilot rules', () => {
-    expect(sec().querySelector('[data-testid="split-diagram"]')).toBeTruthy()
-    expect(norm(sec())).toContain('Sharing alone earns nothing.')
-    expect(norm(sec())).toContain(PROVISIONAL_LABEL)
+  it('walks through one qualified referral, using only the approved pilot rules', () => {
+    const fig = sec().querySelector('[data-testid="illustration-referral"]')!
+    expect(norm(fig.querySelector('h3'))).toBe('Your supporters can help you grow.')
+    expect(norm(fig.querySelector('[data-testid="concept-tag"]'))).toBe('Concept illustration · Sample data')
+    const steps = [...fig.querySelectorAll('[data-testid="referral-steps"] > li p:first-child')].map((p) => norm(p))
+    expect(steps).toEqual([
+      'Leo shares Priya’s post with a friend.',
+      'Sam creates a verified account.',
+      'Sam follows Priya.',
+      'Leo receives Connection Points with Priya.',
+    ])
+    const t = norm(fig)
+    expect(t).toContain('Sharing on its own earns nothing.')
+    expect(t).toContain('No cash value.')
+    expect(t).toContain('only once the new follow is verified')
+    expect(t).toContain(PROVISIONAL_LABEL)
+    expect(t).toContain(`+${PROVISIONAL_CP_RULES.find((r) => r.action === 'verified_referral')!.points}`)
+    expect(t).not.toMatch(/\$|€|£|cash reward|paid|payout/i)
   })
 })
 

@@ -91,7 +91,6 @@ export const HOMEPAGE_COPY = {
     goalIntro: 'And our goal is simple:',
     /** The founder's goal statement, verbatim (lowercase, no full stop). Do not edit. */
     goal: 'we want to create a platform that generates sustainable pay for content creators who have something valuable to say',
-    screens: ['Following feed', 'Discover by interests', 'Creator insights'],
     /** Beside the screens: what they are, and what they don't promise. */
     note: `${DISCLOSURES.stillTesting} ${DISCLOSURES.noGuarantee}`,
     mockupLabel: `${DISCLOSURES.concept} · ${DISCLOSURES.sampleData}`,
@@ -184,6 +183,46 @@ export const HOMEPAGE_COPY = {
   },
 
   /** Shown on the page so no one mistakes a sample for a real member. */
+  /**
+   * The three product illustrations (concept, sample data), one benefit each,
+   * told from the creator's side. Headlines are the founder's own wording.
+   */
+  illustrations: {
+    tag: `${DISCLOSURES.concept} illustration · ${DISCLOSURES.sampleData}`,
+    following: {
+      title: 'Your followers can find your posts.',
+      callouts: [
+        'A Following feed with only the people each follower chose.',
+        'Newest first, every time. No algorithm reorders the posts people follow.',
+        'Your latest post is waiting where your followers already look.',
+      ],
+      note: 'Following gives your posts a place to be found. Who looks is still up to your followers.',
+    },
+    community: {
+      title: "Understand the community you're building.",
+      callouts: [
+        "See who's new, who keeps coming back and who's always there.",
+        'Know the supporters behind your community, by name.',
+        'Learn what brings people back, not just what got clicks.',
+      ],
+      note: 'A concept for creator insights. What the pilot will show is still being designed.',
+    },
+    referral: {
+      title: 'Your supporters can help you grow.',
+      steps: [
+        { title: 'Leo shares Priya’s post with a friend.', detail: 'Sharing on its own earns nothing.' },
+        { title: 'Sam creates a verified account.', detail: 'One real person, one account.' },
+        { title: 'Sam follows Priya.', detail: 'Because Sam likes what she makes.' },
+        { title: 'Leo receives Connection Points with Priya.', detail: 'No cash value. Only for perks Priya offers, during the pilot.' },
+      ],
+      outcomes: [
+        { who: 'Priya', gets: 'A new follower who chose her.' },
+        { who: 'Sam', gets: 'A creator worth following.' },
+        { who: 'Leo', gets: 'Recognized for helping her grow.' },
+      ],
+      rule: 'Points count only once the new follow is verified, with daily and monthly caps and fraud review.',
+    },
+  },
   peopleNote: 'All people and posts in product screens are samples, and their numbers are sample data.',
   /** Shown on every photo placeholder until the founder approves the shortlist. */
   photoPending: 'Photo pending approval',

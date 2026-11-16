@@ -1,15 +1,15 @@
 import { HOMEPAGE_COPY } from '../copy'
-import { DiscoverScreen, FollowingScreen, InsightsScreen } from '../ui/PhoneScreens'
+import { CommunityIllustration, FollowingIllustration } from '../ui/ValueIllustrations'
 import { Eyebrow } from '../ui/Story'
 
 const copy = HOMEPAGE_COPY.building
-const SCREENS = [FollowingScreen, DiscoverScreen, InsightsScreen]
 
 /**
  * Section 3, WHAT WE'RE BUILDING: three questions, the answer, and the
- * founder's goal statement (verbatim), then three concept screens. The note
- * beside the screens says they are still being built and that nothing is
- * guaranteed.
+ * founder's goal statement (verbatim), then two product illustrations, each
+ * telling one benefit: followers can find your posts, and you can understand
+ * the community you're building. The note below says features are still
+ * being built and that nothing is guaranteed.
  */
 export function Building() {
   return (
@@ -43,23 +43,9 @@ export function Building() {
           </figure>
         </div>
 
-        <div
-          role="region"
-          aria-label="What we're building (concept screens)"
-          tabIndex={0}
-          className="relative -mx-4 mt-14 overflow-x-auto px-4 pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-secondary-on-dark sm:-mx-6 sm:px-6 lg:mx-0 lg:overflow-visible lg:px-0"
-        >
-          <ol data-testid="building-screens" className="flex w-max snap-x snap-mandatory gap-6 lg:grid lg:w-auto lg:grid-cols-3 lg:gap-10">
-            {copy.screens.map((title, i) => {
-              const Screen = SCREENS[i]
-              return (
-                <li key={title} className="w-[250px] shrink-0 snap-start lg:w-auto">
-                  <Screen />
-                  <h3 className="mt-5 text-center font-sp-display text-lg font-extrabold">{title}</h3>
-                </li>
-              )
-            })}
-          </ol>
+        <div data-testid="building-illustrations" className="mt-14 grid gap-6 lg:grid-cols-2 lg:gap-8">
+          <FollowingIllustration />
+          <CommunityIllustration />
         </div>
         <p data-testid="building-note" className="mt-6 text-sm text-sp-muted-on-dark">
           {copy.note}

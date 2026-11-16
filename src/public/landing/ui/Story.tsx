@@ -1,12 +1,13 @@
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
 import { Camera } from 'lucide-react'
+import { SplitpostLogo } from '../../../logo/SplitpostLogo'
 import { HOMEPAGE_COPY } from '../copy'
 
 /**
  * Shared pieces that keep the seven sections reading as one story: the
- * eyebrow, the split "seam" where one section hands over to the next (the
- * same two-piece post as the hero, in miniature), and the photo placeholder
+ * eyebrow, the Splitpost logo on each "seam" where one section hands over to
+ * the next, and the photo placeholder
  * used until the founder approves the photography shortlist.
  */
 
@@ -23,18 +24,11 @@ export function Eyebrow({ children, tone = 'light' }: { children: ReactNode; ton
   )
 }
 
-/** The split post in miniature, in a round badge sitting on the boundary between two sections. */
+/** The Splitpost logo sitting on the boundary between two sections, so the seven sections read as one story. */
 export function Seam() {
   return (
-    <div aria-hidden="true" data-testid="seam" className="pointer-events-none relative z-20 -my-6 flex justify-center">
-      <span className="grid h-12 w-12 place-items-center rounded-full bg-sp-primary shadow-[0_10px_24px_-10px_rgb(0_0_0/0.55)] ring-4 ring-sp-bg">
-        <span className="relative flex w-6 flex-col">
-          {/* The accent behind both pieces: it shows only in the gap. */}
-          <span className="absolute left-[-3px] right-[-3px] top-1/2 h-[3px] -translate-y-1/2 -rotate-[14deg] rounded-full bg-sp-accent" />
-          <span className="relative h-[9px] rounded-t-[3px] bg-sp-bg [clip-path:polygon(0_0,100%_0,100%_55%,0_100%)]" />
-          <span className="relative mt-[3px] h-[9px] rounded-b-[3px] bg-sp-secondary [clip-path:polygon(0_45%,100%_0,100%_100%,0_100%)]" />
-        </span>
-      </span>
+    <div aria-hidden="true" data-testid="seam" className="pointer-events-none relative z-20 -my-7 flex justify-center">
+      <SplitpostLogo className="h-14 w-14 shadow-[0_10px_24px_-10px_rgb(0_0_0/0.55)]" />
     </div>
   )
 }

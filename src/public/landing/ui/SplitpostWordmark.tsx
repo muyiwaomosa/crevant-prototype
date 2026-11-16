@@ -1,29 +1,15 @@
 import clsx from 'clsx'
+import { SplitpostLogo } from '../../../logo/SplitpostLogo'
 
 /**
-  * The Splitpost wordmark: "splitpost" set in Archivo beside a square cut
- * diagonally in two (the split mark), in the Modern Disruptor colours. The
- * tour and account screens use the same mark (src/components/Wordmark.tsx).
+ * The Splitpost lockup for the public site: the official logo (one shared
+ * file, see src/logo/SplitpostLogo.tsx) beside "splitpost" set in Archivo.
+ * `dark` sits on cobalt, `light` on ivory or white.
  */
-export function SplitMark({ tone = 'dark', className }: { tone?: 'dark' | 'light'; className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={clsx(
-        'inline-block shrink-0 rounded-[7px]',
-        tone === 'dark'
-          ? 'bg-[linear-gradient(135deg,var(--color-sp-bg)_0_50%,var(--color-sp-secondary)_50%_100%)]'
-          : 'bg-[linear-gradient(135deg,var(--color-sp-primary)_0_50%,var(--color-sp-secondary)_50%_100%)]',
-        className,
-      )}
-    />
-  )
-}
-
 export function SplitpostWordmark({ tone = 'dark', className }: { tone?: 'dark' | 'light'; className?: string }) {
   return (
-    <span className={clsx('inline-flex items-center gap-2', className)}>
-      <SplitMark tone={tone} className="h-6 w-6" />
+    <span className={clsx('inline-flex items-center gap-2.5', className)}>
+      <SplitpostLogo className="h-9 w-9" />
       <span
         aria-hidden="true"
         className={clsx(

@@ -164,9 +164,53 @@ async function newContext(browser, options = {}) {
       const disclosures = await Promise.all(['hero-small-print', 'building-note', 'split-disclosures', 'vision-disclosure', 'pilot-details'].map((t) => page.getByTestId(t).isVisible()))
       check(`${label}: each limitation is visible beside its claim, and the full pilot details near signup`, disclosures.every(Boolean))
 
-      const scroller = page.getByRole('region', { name: /concept screens/ })
-      const fits = await scroller.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
-      check(`${label}: the concept screens ${width < 1024 ? 'scroll sideways inside their own box' : 'all fit in one row'}`, width < 1024 ? !fits : fits)
+      // The three product illustrations: each fits the screen, its tag and headline show,
+      // and every numbered marker on the picture sits inside the visible phone screen.
+      const ills = await page.$$eval('[data-testid^="illustration-"]', (figs) =>
+        figs.map((f) => {
+          const r = f.getBoundingClientRect()
+          const screen = f.querySelector('.aspect-\\[9\\/18\\.5\\]')
+          const sr = screen && screen.getBoundingClientRect()
+          const markers = [...f.querySelectorAll('span[aria-hidden="true"].bg-sp-accent.absolute')].map((m) => m.getBoundingClientRect())
+          return {
+            id: f.getAttribute('data-testid'),
+            fits: r.left >= 0 && r.right <= document.documentElement.clientWidth + 0.5,
+            tagged: !!f.querySelector('[data-testid="concept-tag"]') && !!f.querySelector('h3'),
+            markers: markers.length,
+            markersInside: !sr || markers.every((m) => m.left >= sr.left - 1 && m.right <= sr.right + 1 && m.top >= sr.top - 1 && m.bottom <= sr.bottom + 1),
+          }
+        }),
+      )
+      check(`${label}: the three product illustrations are on the page`, ills.map((i) => i.id).join() === 'illustration-following,illustration-community,illustration-referral', ills.map((i) => i.id).join())
+      check(`${label}: each illustration fits the screen and carries its concept tag and headline`, ills.every((i) => i.fits && i.tagged), JSON.stringify(ills))
+      check(`${label}: every numbered marker sits inside its phone screen`, ills.filter((i) => i.id !== 'illustration-referral').every((i) => i.markers === 3 && i.markersInside), JSON.stringify(ills))
+
+      // The official logo, the same file everywhere: header, footer and the six seams.
+      const logos = await page.$$eval('img[data-testid="splitpost-logo"]', (els) => els.map((e) => ({ src: e.getAttribute('src'), w: e.naturalWidth, box: Math.round(e.getBoundingClientRect().width), ratio: e.getBoundingClientRect().width / e.getBoundingClientRect().height })))
+      check(`${label}: one logo file, used in the header, footer and every seam`, logos.length >= 8 && new Set(logos.map((l) => l.src)).size === 1 && logos.every((l) => l.w > 0), `${logos.length} logos, ${new Set(logos.map((l) => l.src)).size} sources`)
+      check(`${label}: the logo keeps its proportions everywhere`, logos.every((l) => Math.abs(l.ratio - 1) < 0.02), logos.map((l) => l.ratio.toFixed(2)).join())
+      await ctx.close()
+    }
+
+    // 5b2. The logo's derivatives are served as real files (not the app shell), with image types.
+    {
+      const ctx = await newContext(browser, { viewport: { width: 390, height: 844 } })
+      const page = await ctx.newPage()
+      for (const [path, type] of [
+        ['/favicon.svg', 'image/svg+xml'],
+        ['/favicon.ico', 'image/'],
+        ['/media/brand/apple-touch-icon.png', 'image/png'],
+        ['/media/brand/icon-192.png', 'image/png'],
+        ['/media/brand/icon-512.png', 'image/png'],
+        ['/media/brand/icon-maskable-512.png', 'image/png'],
+        ['/media/brand/og-image.png', 'image/png'],
+      ]) {
+        const res = await page.request.get(`${BASE}${path}`)
+        const ct = res.headers()['content-type'] || ''
+        check(`logo file ${path} is served as an image`, res.ok() && ct.startsWith(type), `${res.status()} ${ct}`)
+      }
+      const manifest = await page.request.get(`${BASE}/media/brand/site.webmanifest`)
+      check('the web manifest is served and names Splitpost', manifest.ok() && (await manifest.text()).includes('"Splitpost"'), String(manifest.status()))
       await ctx.close()
     }
 
@@ -252,7 +296,8 @@ async function newContext(browser, options = {}) {
         )
         for (const r of rows) {
           if (!r.ok) issues.push(`${path}: ${r.src} did not load`)
-          else if (r.shown && r.upscale > 1.25) issues.push(`${path}: ${r.src} upscaled ${r.upscale.toFixed(2)}x`)
+          // Vector images (the SVG logo) stay sharp at any size, so only raster images are checked for upscaling.
+          else if (r.shown && !/^data:image\/svg|\.svg(\?|$)/.test(r.src || '') && r.upscale > 1.25) issues.push(`${path}: ${r.src} upscaled ${r.upscale.toFixed(2)}x`)
         }
       }
       check(`${label}: every image loads and stays sharp on a high-density screen`, issues.length === 0, issues.slice(0, 5).join(' | '))
