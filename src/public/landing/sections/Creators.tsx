@@ -1,13 +1,13 @@
 import { HOMEPAGE_COPY } from '../copy'
-import { Eyebrow, PhotoSlot } from '../ui/Story'
+import { CREATOR_GROUP_PHOTOS } from '../photos'
+import { Photo } from '../ui/Photo'
+import { Eyebrow } from '../ui/Story'
 
 const copy = HOMEPAGE_COPY.creators
 
 /**
- * Section 4, WHO WE'RE BUILDING FOR: three creator groups, each with a photo
- * of a creator actually doing something. Until the founder approves the
- * licensed shortlist, each photo is a labelled placeholder describing the
- * planned shot.
+ * Section 4, WHO WE'RE BUILDING FOR: three creator groups, each with a
+ * licensed photo of someone actually creating (see photos.ts).
  */
 export function Creators() {
   return (
@@ -20,7 +20,7 @@ export function Creators() {
         <ol data-testid="creator-groups" className="mt-12 grid gap-6 md:grid-cols-3">
           {copy.groups.map((g, i) => (
             <li key={g.title} className="flex flex-col overflow-hidden rounded-[28px] bg-white ring-1 ring-sp-ink/8">
-              <PhotoSlot shot={g.photo} className="aspect-[4/3] rounded-none border-x-0 border-t-0" />
+              <Photo id={CREATOR_GROUP_PHOTOS[i]} sizes="(min-width: 1152px) 360px, (min-width: 768px) 31vw, calc(100vw - 2rem)" className="aspect-[4/3]" />
               <div className="p-6">
                 <p className="font-sp-display text-sm font-black text-sp-accent-text">{i + 1}</p>
                 <h3 className="mt-1 font-sp-display text-2xl font-extrabold leading-tight">{g.title}</h3>

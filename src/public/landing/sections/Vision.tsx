@@ -1,5 +1,6 @@
 import { HOMEPAGE_COPY } from '../copy'
-import { Eyebrow, PhotoSlot } from '../ui/Story'
+import { Photo } from '../ui/Photo'
+import { Eyebrow } from '../ui/Story'
 
 const copy = HOMEPAGE_COPY.vision
 
@@ -12,7 +13,9 @@ export function Vision() {
   return (
     <section id="vision" aria-labelledby="vision-title" className="scroll-mt-16 bg-sp-secondary-tint text-sp-ink">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-4 pb-18 pt-20 sm:px-6 sm:pb-24 sm:pt-24 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-16 lg:pb-28 lg:pt-28">
-        <PhotoSlot shot={copy.photo} className="aspect-[4/5] w-full max-w-[30rem] justify-self-center bg-white/60 lg:order-2" />
+        <figure className="m-0 w-full max-w-[30rem] justify-self-center overflow-hidden rounded-[28px] shadow-[0_30px_60px_-34px_rgb(0_0_0/0.45)] lg:order-2">
+          <Photo id="filmmaker" sizes="(min-width: 1024px) 480px, min(100vw - 2rem, 480px)" className="aspect-[4/5]" />
+        </figure>
         <div className="min-w-0 lg:order-1">
           <Eyebrow>{copy.eyebrow}</Eyebrow>
           <h2 id="vision-title" className="mt-4 text-balance font-sp-display text-[clamp(2.2rem,7vw,4rem)] font-black leading-[0.98] tracking-[-0.02em] [font-stretch:108%]">

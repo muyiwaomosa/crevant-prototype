@@ -194,10 +194,10 @@ describe("WHAT WE'RE BUILDING", () => {
 
 describe("WHO WE'RE BUILDING FOR", () => {
   const sec = () => section('creators')
-  it('shows the three approved creator groups, each with a photo slot of a creator at work', () => {
+  it('shows the three approved creator groups, each with a licensed photo of a creator at work', () => {
     const groups = [...sec().querySelectorAll('[data-testid="creator-groups"] > li')]
     expect(groups.map((g) => norm(g.querySelector('h3')))).toEqual(HOMEPAGE_COPY.creators.groups.map((g) => g.title))
-    for (const g of groups) expect(g.querySelector('[data-testid="photo-slot"]')).toBeTruthy()
+    expect(groups.map((g) => g.querySelector('img[data-photo]')?.getAttribute('data-photo'))).toEqual(['creator-editing', 'teacher-recording', 'metalworker'])
   })
 })
 
@@ -240,7 +240,7 @@ describe('OUR BIGGER VISION', () => {
   it('uses the approved copy, labelled as a long-term vision, not a promise of income', () => {
     expect([...sec().querySelectorAll('[data-testid="vision-copy"] p')].map((p) => norm(p))).toEqual([...HOMEPAGE_COPY.vision.body])
     expect(norm(sec().querySelector('[data-testid="vision-disclosure"]'))).toBe('This is our long-term vision, not a promise of income during the pilot.')
-    expect(sec().querySelector('[data-testid="photo-slot"]')).toBeTruthy()
+    expect(sec().querySelector('img[data-photo="filmmaker"]')).toBeTruthy()
   })
 })
 
@@ -269,11 +269,18 @@ describe('THE INVITATION', () => {
 })
 
 describe('photos', () => {
-  it('reserves a labelled slot for each photo until the founder approves the licensed shortlist', () => {
-    const slots = [...landing().querySelectorAll('[data-testid="photo-slot"]')]
-    expect(slots).toHaveLength(4)
-    for (const s of slots) expect(norm(s)).toContain(HOMEPAGE_COPY.photoPending)
-    expect(landing().querySelectorAll('img[data-photo]')).toHaveLength(0)
+  it('shows the four licensed photos, lazy-loaded at responsive sizes, with no placeholders left', () => {
+    const imgs = [...landing().querySelectorAll('img[data-photo]')]
+    expect(imgs.map((i) => i.getAttribute('data-photo'))).toEqual(['creator-editing', 'teacher-recording', 'metalworker', 'filmmaker'])
+    for (const i of imgs) {
+      expect(i.getAttribute('srcset')).toMatch(/\.webp \d+w, .+\.webp \d+w/)
+      expect(i.getAttribute('sizes')).toBeTruthy()
+      expect(i.getAttribute('loading')).toBe('lazy')
+      expect(i.getAttribute('alt')!.length).toBeGreaterThan(30)
+    }
+    expect(landing().querySelectorAll('[data-testid="photo-slot"]')).toHaveLength(0)
+    // The page says the people pictured are models, not members.
+    expect(norm(landing())).toContain(HOMEPAGE_COPY.peopleNote)
   })
   it('never presents a person as a member or a testimonial', () => {
     expect(norm(landing())).not.toMatch(/testimonial|[“”]|\b(said|says):/i)

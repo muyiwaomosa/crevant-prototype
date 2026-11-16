@@ -289,6 +289,14 @@ async function newContext(browser, options = {}) {
           imgs.map((i) => {
             const r = i.getBoundingClientRect()
             const fit = getComputedStyle(i).objectFit
+            // With a srcset, naturalWidth is density-adjusted; use the chosen file's real pixel width instead.
+            const chosen = (i.getAttribute('srcset') || '').split(',').map((c) => c.trim().split(/\s+/)).find(([u]) => i.currentSrc.endsWith(u))
+            if (chosen && /^\d+w$/.test(chosen[1] || '')) {
+              const fileW = parseInt(chosen[1], 10)
+              const fileH = (fileW * i.naturalHeight) / i.naturalWidth
+              const s = fit === 'cover' ? Math.max(r.width / fileW, r.height / fileH) : r.width / fileW
+              return { src: i.currentSrc, ok: i.complete && i.naturalWidth > 0, upscale: s * 2, shown: r.width > 0 }
+            }
             const scale =
               fit === 'cover' ? Math.max(r.width / i.naturalWidth, r.height / i.naturalHeight) : fit === 'contain' ? Math.min(r.width / i.naturalWidth, r.height / i.naturalHeight) : r.width / i.naturalWidth
             return { src: i.getAttribute('src'), ok: i.complete && i.naturalWidth > 0, upscale: scale * 2, shown: r.width > 0 }

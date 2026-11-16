@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { PHOTOS } from './photos'
+import { CREATOR_GROUP_PHOTOS, PHOTOS } from './photos'
+import { HOMEPAGE_COPY } from './copy'
 
 const PUBLIC = join(__dirname, '../../../public')
 const MEDIA = join(PUBLIC, 'media/landing')
@@ -22,30 +23,45 @@ function webpSize(buf: Buffer): { width: number; height: number } {
 describe('homepage photos', () => {
   const photos = Object.values(PHOTOS)
 
-  it.each(photos.map((p) => [p.id, p] as const))('%s is a stock image with a recorded source and licence', (_, p) => {
-    expect(p.source).toBe('Canva content library')
-    expect(p.licence).toBe('Canva Content License')
-    // Decorative backgrounds have empty alt text; every person is described.
-    if (!['desk-at-night', 'ring-light', 'studio-room'].includes(p.id)) expect(p.alt.length).toBeGreaterThan(20)
+  it('has exactly the four approved slots: three creator groups and the vision', () => {
+    expect(photos.map((p) => p.id)).toEqual(['creator-editing', 'teacher-recording', 'metalworker', 'filmmaker'])
+    expect(CREATOR_GROUP_PHOTOS).toHaveLength(HOMEPAGE_COPY.creators.groups.length)
   })
 
-  it.each(photos.map((p) => [p.src, p] as const))('%s exists at its recorded size, is small and carries no metadata', (_, p) => {
-    const file = join(PUBLIC, p.src)
-    expect(existsSync(file)).toBe(true)
-    const buf = readFileSync(file)
-    expect(webpSize(buf)).toEqual({ width: p.width, height: p.height })
-    expect(statSync(file).size).toBeLessThan(120_000)
-    expect(buf.includes(Buffer.from('EXIF'))).toBe(false)
+  it.each(photos.map((p) => [p.id, p] as const))('%s records its Pexels source, credit and licence, and describes the activity', (_, p) => {
+    expect(p.source).toBe('Pexels')
+    expect(p.licence).toBe('Pexels License')
+    expect(p.licenceUrl).toBe('https://www.pexels.com/license/')
+    expect(p.sourceUrl).toMatch(/^https:\/\/www\.pexels\.com\/photo\/[a-z0-9-]+-\d+\/$/)
+    expect(p.photographer.length).toBeGreaterThan(2)
+    expect(p.alt.length).toBeGreaterThan(30)
   })
 
-  it('names no photo after a sample person, so a model is never presented as a member', () => {
-    for (const p of photos) expect(`${p.id} ${p.alt}`).not.toMatch(/priya|ana\b|leo\b|member|user|customer|testimonial/i)
+  it.each(photos.flatMap((p) => p.widths.map((w) => [`${p.base}-${w}.webp`, p, w] as const)))(
+    '%s exists at its size and shape, is small and carries no metadata',
+    (src, p, w) => {
+      const file = join(PUBLIC, src)
+      expect(existsSync(file)).toBe(true)
+      const buf = readFileSync(file)
+      const [rw, rh] = p.ratio.split('/').map(Number)
+      expect(webpSize(buf)).toEqual({ width: w, height: Math.round((w * rh) / rw) })
+      expect(statSync(file).size).toBeLessThan(120_000)
+      expect(buf.includes(Buffer.from('EXIF'))).toBe(false)
+      expect(buf.includes(Buffer.from('XMP '))).toBe(false)
+    },
+  )
+
+  it('never names a model as a member, user or sample person, and never guesses who they are', () => {
+    for (const p of photos) {
+      expect(`${p.id} ${p.alt}`).not.toMatch(/priya|ana\b|leo\b|member|user|customer|testimonial|splitpost/i)
+      // Alt text describes the activity, not ethnicity, nationality or age.
+      expect(p.alt).not.toMatch(/\b(black|white|asian|african|latin[ao]?|european|indian|arab|old|elderly|young)\b/i)
+    }
   })
 
-  it('ships no AI-generated or retired images', () => {
-    const files = readdirSync(MEDIA)
-    expect(files.filter((f) => /^(who-|tour-)/.test(f))).toEqual([])
-    const used = new Set(photos.map((p) => p.src.split('/').pop()))
-    for (const f of files) expect(used.has(f) || f === 'founder.jpg', `${f} is unused`).toBe(true)
+  it('ships no unused, retired or AI-generated images', () => {
+    const used = new Set(photos.flatMap((p) => p.widths.map((w) => `${p.base.split('/').pop()}-${w}.webp`)))
+    for (const f of readdirSync(join(MEDIA, 'photos'))) expect(used.has(f), `${f} is unused`).toBe(true)
+    for (const f of readdirSync(MEDIA)) expect(f === 'photos' || f === 'founder.jpg', `${f} is unused`).toBe(true)
   })
 })
