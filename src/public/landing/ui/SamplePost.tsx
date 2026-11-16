@@ -1,9 +1,8 @@
 import clsx from 'clsx'
-import { useId } from 'react'
 
 /**
- * Pieces of Priya's sample post, shared by the hero illustration and the
- * concept phone screens. Everything here is sample data and says so where it
+ * Pieces of the sample posts, shared by the hero illustration and the
+ * product illustrations. Everything here is sample data and says so where it
  * appears; the drawings are hidden from screen readers because the text
  * around them carries the meaning.
  */
@@ -28,38 +27,31 @@ export function Avatar({ initials, tone, className }: { initials: string; tone: 
   )
 }
 
-/** The image in Priya's post, drawn: a 60-second calf drill in three steps, over a running track. */
-export function PostArt({ className }: { className?: string }) {
-  const track = useId()
-  const steps = ['Heel raises', 'Toe walks', 'Ankle circles']
+/**
+ * The graphic inside Priya's post: her followers as a field of dots, with only
+ * a few lit, beside the two numbers from her post. Illustrative numbers from a
+ * sample post, never Splitpost data.
+ */
+export function ReachArt({ followers, followersLabel, seen, seenLabel, className }: { followers: string; followersLabel: string; seen: string; seenLabel: string; className?: string }) {
+  const lit = new Set([3, 14, 20])
   return (
-    <svg viewBox="0 0 360 112" aria-hidden="true" preserveAspectRatio="xMidYMid slice" className={clsx('block w-full rounded-xl', className)}>
-      <defs>
-        <linearGradient id={track} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--color-sp-primary-raised)" />
-          <stop offset="1" stopColor="var(--color-sp-primary)" />
-        </linearGradient>
-      </defs>
-      <rect width="360" height="112" fill={`url(#${track})`} />
-      <path d="M-20 120 C80 92 170 82 380 78" fill="none" stroke="var(--color-sp-secondary)" strokeOpacity="0.5" strokeWidth="2" />
-      <path d="M-20 104 C90 80 180 70 380 66" fill="none" stroke="var(--color-sp-secondary)" strokeOpacity="0.3" strokeWidth="2" />
-      <text x="26" y="30" fontFamily="Archivo, sans-serif" fontWeight="900" fontSize="14" letterSpacing="1.2" fill="var(--color-sp-bg)">
-        60-SECOND CALF DRILL
-      </text>
-      <rect x="26" y="37" width="38" height="3" rx="1.5" fill="var(--color-sp-accent)" />
-      {steps.map((label, i) => (
-        <g key={label} transform={`translate(${26 + i * 104} 50)`}>
-          <rect width="96" height="48" rx="9" fill="var(--color-sp-bg)" />
-          <circle cx="15" cy="15" r="9" fill="var(--color-sp-secondary)" />
-          <text x="15" y="19.2" textAnchor="middle" fontFamily="Archivo, sans-serif" fontWeight="900" fontSize="11" fill="var(--color-sp-ink)">
-            {i + 1}
-          </text>
-          <text x="9" y="39" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="10.5" fill="var(--color-sp-ink)">
-            {label}
-          </text>
-        </g>
-      ))}
-    </svg>
+    <div aria-hidden="true" className={clsx('flex items-center gap-3 overflow-hidden rounded-xl bg-sp-primary p-3 text-sp-bg sm:gap-4 sm:p-3.5', className)}>
+      <div className="grid shrink-0 grid-cols-6 gap-[3px] min-[400px]:grid-cols-8 sm:gap-1">
+        {Array.from({ length: 32 }, (_, i) => (
+          <span key={i} className={clsx('h-[7px] w-[7px] rounded-full sm:h-2 sm:w-2', lit.has(i) ? 'bg-sp-accent' : 'bg-sp-bg/25', i >= 24 && 'max-[399px]:hidden')} />
+        ))}
+      </div>
+      <div className="grid min-w-0 gap-2 leading-none min-[400px]:gap-1.5">
+        <p className="flex flex-col gap-0.5 min-[400px]:flex-row min-[400px]:items-baseline min-[400px]:gap-1.5">
+          <span className="whitespace-nowrap font-sp-display text-[1.3rem] font-black tracking-[-0.01em] sm:text-2xl">{followers}</span>
+          <span className="whitespace-nowrap text-[11px] font-semibold text-sp-muted-on-dark sm:text-xs">{followersLabel}</span>
+        </p>
+        <p className="flex flex-col gap-0.5 min-[400px]:flex-row min-[400px]:items-baseline min-[400px]:gap-1.5">
+          <span className="whitespace-nowrap font-sp-display text-[1.05rem] font-black text-sp-accent sm:text-lg">{seen}</span>
+          <span className="whitespace-nowrap text-[11px] font-semibold text-sp-muted-on-dark sm:text-xs">{seenLabel}</span>
+        </p>
+      </div>
+    </div>
   )
 }
 

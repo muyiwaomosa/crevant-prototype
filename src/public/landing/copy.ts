@@ -32,14 +32,22 @@ export const HOMEPAGE_COPY = {
     smallPrint: ['Invitation-only pilot.', DISCLOSURES.noGuarantee, DISCLOSURES.noFanCash],
   },
 
-  /** The hero's sample post: a fitness coach demonstrating a simple exercise. */
+  /**
+   * The hero's sample post: a fictional creator frustrated by unpredictable
+   * reach. Labelled SAMPLE; the follower numbers are illustrative, not
+   * Splitpost data. The community half (likes, comments, reposts and the
+   * community line) is unchanged.
+   */
   post: {
     author: 'Priya Raman',
-    handle: '@priyaruns',
-    role: 'Fitness coach',
+    role: 'Content creator',
     time: '2h',
-    text: 'Shin splints on every run? Try this 60-second calf drill before you head out: slow heel raises, toe walks, then ankle circles. Save it for your next run.',
-    imageAlt: 'Illustrated card: a 60-second calf drill in three steps',
+    paragraphs: [
+      'I have 10,000 followers. So why do only a few hundred people see my posts?',
+      'I spend hours creating content, but I never know if the people who followed me will even see it. One post reaches thousands. The next barely reaches anyone.',
+    ],
+    /** The graphic inside the post: the gap between followers and the people who saw it. Illustrative numbers. */
+    reach: { followers: '10,000', followersLabel: 'followers', seen: 'A few hundred', seenLabel: 'saw this post' },
     likes: '1.2K',
     comments: '86',
     reposts: '214',

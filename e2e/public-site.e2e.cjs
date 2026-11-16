@@ -192,6 +192,30 @@ async function newContext(browser, options = {}) {
       await ctx.close()
     }
 
+    // 5b1. The hero's split post on phones: both pieces upright, fully on screen with a margin on each
+    //      side, a clear gap between them, and the apricot line kept within the pieces.
+    for (const width of [320, 360, 390, 430]) {
+      const ctx = await newContext(browser, { viewport: { width, height: 900 } })
+      const page = await ctx.newPage()
+      await page.goto(`${BASE}/`)
+      const r = await page.evaluate(() => {
+        const vw = document.documentElement.clientWidth
+        const scene = document.querySelector('[data-testid="hero-scene"]')
+        const box = (el) => el.getBoundingClientRect()
+        const creator = box(scene.querySelector('[data-testid="split-creator-piece"]'))
+        const community = box(scene.querySelector('[data-testid="split-community-piece"]'))
+        const line = [...scene.querySelectorAll('[data-testid="gold-seam"] line')].find((l) => getComputedStyle(l).display !== 'none')
+        const lb = box(line)
+        const tilted = [...scene.querySelectorAll('*')].some((el) => { const t = getComputedStyle(el).transform; return t !== 'none' && !/^matrix\(1, 0, 0, 1,/.test(t) })
+        const outside = [...scene.querySelectorAll('*')].filter((el) => { const b = box(el); return b.width > 0 && (b.left < 0 || b.right > vw) }).length
+        return { vw, tilted, outside, left: Math.round(Math.min(creator.left, community.left)), right: Math.round(vw - Math.max(creator.right, community.right)), line: [Math.round(lb.left), Math.round(lb.right)], pieces: [Math.round(Math.min(creator.left, community.left)), Math.round(Math.max(creator.right, community.right))] }
+      })
+      check(`${width}px: the hero's two post pieces stay upright`, !r.tilted, JSON.stringify(r))
+      check(`${width}px: the hero's pieces fit on screen with a margin on both sides`, r.outside === 0 && r.left >= 16 && r.right >= 16, JSON.stringify(r))
+      check(`${width}px: the apricot line stays within the pieces`, r.line[0] >= r.pieces[0] && r.line[1] <= r.pieces[1], JSON.stringify(r))
+      await ctx.close()
+    }
+
     // 5b2. The logo's derivatives are served as real files (not the app shell), with image types.
     {
       const ctx = await newContext(browser, { viewport: { width: 390, height: 844 } })

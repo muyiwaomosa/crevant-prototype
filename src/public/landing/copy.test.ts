@@ -33,7 +33,7 @@ describe('Splitpost homepage copy', () => {
 
   it('uses everyday sample posts, each a practical topic', () => {
     expect(HOMEPAGE_COPY.samplePosts.map((p) => p.role)).toEqual(['Math teacher', 'Home cook', 'Leather maker', 'Tech reviewer'])
-    expect(HOMEPAGE_COPY.post.role).toBe('Fitness coach')
+    expect(HOMEPAGE_COPY.post.role).toBe('Content creator')
   })
 
   it('keeps each limitation beside the claim it qualifies', () => {

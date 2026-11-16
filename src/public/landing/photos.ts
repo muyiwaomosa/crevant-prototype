@@ -75,3 +75,21 @@ export type PhotoKey = keyof typeof PHOTOS
 
 /** Which photo goes with each creator group in WHO WE'RE BUILDING FOR, in order. */
 export const CREATOR_GROUP_PHOTOS: readonly PhotoKey[] = ['creatorEditing', 'teacherRecording', 'metalworker']
+
+/**
+ * The profile photo on the hero's sample post. Priya Raman is a fictional
+ * sample creator: this is a stock photo of a model, who is not Priya, not a
+ * Splitpost member and does not endorse Splitpost. Shown small and circular,
+ * decorative (the post is labelled SAMPLE and the figure caption says so).
+ */
+export const SAMPLE_AVATAR = {
+  id: 'priya-avatar',
+  src: '/media/landing/photos/priya-avatar-160.webp',
+  size: 160,
+  source: 'Pexels',
+  sourceUrl: 'https://www.pexels.com/photo/1239291/',
+  /** To be confirmed by the founder on the Pexels listing, as with the four photos above. */
+  photographer: 'Credit to be verified on the Pexels listing',
+  licence: 'Pexels License',
+  licenceUrl: 'https://www.pexels.com/license/',
+} as const

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { CREATOR_GROUP_PHOTOS, PHOTOS } from './photos'
+import { CREATOR_GROUP_PHOTOS, PHOTOS, SAMPLE_AVATAR } from './photos'
 import { HOMEPAGE_COPY } from './copy'
 
 const PUBLIC = join(__dirname, '../../../public')
@@ -70,8 +70,18 @@ describe('homepage photos', () => {
   })
 
   it('ships no unused, retired or AI-generated images', () => {
-    const used = new Set(photos.flatMap((p) => p.widths.map((w) => `${p.base.split('/').pop()}-${w}.webp`)))
+    const used = new Set([...photos.flatMap((p) => p.widths.map((w) => `${p.base.split('/').pop()}-${w}.webp`)), SAMPLE_AVATAR.src.split('/').pop()])
     for (const f of readdirSync(join(MEDIA, 'photos'))) expect(used.has(f), `${f} is unused`).toBe(true)
     for (const f of readdirSync(MEDIA)) expect(f === 'photos' || f === 'founder.jpg', `${f} is unused`).toBe(true)
+  })
+
+  it("records the sample creator's profile photo: licensed, small, square and never presented as Priya", () => {
+    expect(SAMPLE_AVATAR.source).toBe('Pexels')
+    expect(SAMPLE_AVATAR.licence).toBe('Pexels License')
+    expect(SAMPLE_AVATAR.sourceUrl).toBe('https://www.pexels.com/photo/1239291/')
+    const buf = readFileSync(join(PUBLIC, SAMPLE_AVATAR.src))
+    expect(webpSize(buf)).toEqual({ width: SAMPLE_AVATAR.size, height: SAMPLE_AVATAR.size })
+    expect(buf.length).toBeLessThan(10_000)
+    expect(buf.includes(Buffer.from('EXIF'))).toBe(false)
   })
 })

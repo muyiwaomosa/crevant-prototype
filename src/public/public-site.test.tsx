@@ -134,9 +134,27 @@ describe('HERO', () => {
     // The accent line sits behind the pieces (never inside either piece) and is drawn under them.
     expect(creator.contains(seam) || community.contains(seam)).toBe(false)
     expect(seam.getAttribute('class')).toContain('-z-10')
-    expect(scene.querySelectorAll('img')).toHaveLength(0)
+    // The only image is the sample creator's small profile photo, decorative, in the creator piece and its tag.
+    const imgs = [...scene.querySelectorAll('img')]
+    expect(new Set(imgs.map((i) => i.getAttribute('data-photo')))).toEqual(new Set(['priya-avatar']))
+    for (const i of imgs) expect(i.getAttribute('alt')).toBe('')
     expect(norm(scene.querySelector('figcaption'))).toMatch(/two separate pieces with a gap/)
+    expect(norm(scene.querySelector('figcaption'))).toContain('Priya is a fictional sample creator; her profile photo is a stock image of a model')
     expect(norm(scene)).not.toMatch(/[$£€%]|earn|cash|payout/i)
+  })
+  it("shows Priya's post about unpredictable reach, labelled SAMPLE, and keeps the community piece as it was", () => {
+    const scene = hero().querySelector('[data-testid="hero-scene"]')!
+    const creator = scene.querySelector('[data-testid="split-creator-piece"]')!
+    expect(norm(creator)).toContain('Priya Raman')
+    expect(norm(creator)).toContain('Content creator · 2h')
+    expect(norm(creator)).toContain('Sample')
+    expect([...creator.querySelectorAll('[data-testid="hero-post-text"] p')].map((p) => norm(p))).toEqual([
+      'I have 10,000 followers. So why do only a few hundred people see my posts?',
+      'I spend hours creating content, but I never know if the people who followed me will even see it. One post reaches thousands. The next barely reaches anyone.',
+    ])
+    expect(norm(creator)).not.toMatch(/calf drill|shin splints/i)
+    const community = norm(scene.querySelector('[data-testid="split-community-piece"]'))
+    for (const t of ['1.2K', '86', '214', 'Ana tried the drill. Leo shared it with his running club.', 'Grown by her community']) expect(community).toContain(t)
   })
   it('puts the picture straight after the headline, before the copy and actions', () => {
     const order = [...hero().querySelectorAll('h1, [data-testid="hero-scene"], [data-testid="hero-body"], [data-testid="hero-actions"], [data-testid="hero-small-print"]')].map(
@@ -271,8 +289,8 @@ describe('THE INVITATION', () => {
 describe('photos', () => {
   it('shows the four licensed photos, lazy-loaded at responsive sizes, with no placeholders left', () => {
     const imgs = [...landing().querySelectorAll('img[data-photo]')]
-    expect(imgs.map((i) => i.getAttribute('data-photo'))).toEqual(['creator-editing', 'teacher-recording', 'metalworker', 'filmmaker'])
-    for (const i of imgs) {
+    expect(imgs.map((i) => i.getAttribute('data-photo')).filter((id) => id !== 'priya-avatar')).toEqual(['creator-editing', 'teacher-recording', 'metalworker', 'filmmaker'])
+    for (const i of imgs.filter((i) => i.getAttribute('data-photo') !== 'priya-avatar')) {
       expect(i.getAttribute('srcset')).toMatch(/\.webp \d+w, .+\.webp \d+w/)
       expect(i.getAttribute('sizes')).toBeTruthy()
       expect(i.getAttribute('loading')).toBe('lazy')
