@@ -15,7 +15,7 @@ export function Eyebrow({ children, tone = 'light' }: { children: ReactNode; ton
     <p
       className={clsx(
         'font-sp-display text-[13px] font-extrabold uppercase tracking-[0.18em]',
-        tone === 'dark' ? 'text-sp-green-on-dark' : 'text-sp-green-text',
+        tone === 'dark' ? 'text-sp-secondary-on-dark' : 'text-sp-link',
       )}
     >
       {children}
@@ -27,12 +27,12 @@ export function Eyebrow({ children, tone = 'light' }: { children: ReactNode; ton
 export function Seam() {
   return (
     <div aria-hidden="true" data-testid="seam" className="pointer-events-none relative z-20 -my-6 flex justify-center">
-      <span className="grid h-12 w-12 place-items-center rounded-full bg-sp-teal shadow-[0_10px_24px_-10px_rgb(0_0_0/0.55)] ring-4 ring-sp-cream">
+      <span className="grid h-12 w-12 place-items-center rounded-full bg-sp-primary shadow-[0_10px_24px_-10px_rgb(0_0_0/0.55)] ring-4 ring-sp-bg">
         <span className="relative flex w-6 flex-col">
-          {/* Gold behind both pieces: it shows only in the gap. */}
-          <span className="absolute left-[-3px] right-[-3px] top-1/2 h-[3px] -translate-y-1/2 -rotate-[14deg] rounded-full bg-sp-gold" />
-          <span className="relative h-[9px] rounded-t-[3px] bg-sp-cream [clip-path:polygon(0_0,100%_0,100%_55%,0_100%)]" />
-          <span className="relative mt-[3px] h-[9px] rounded-b-[3px] bg-sp-green [clip-path:polygon(0_45%,100%_0,100%_100%,0_100%)]" />
+          {/* The accent behind both pieces: it shows only in the gap. */}
+          <span className="absolute left-[-3px] right-[-3px] top-1/2 h-[3px] -translate-y-1/2 -rotate-[14deg] rounded-full bg-sp-accent" />
+          <span className="relative h-[9px] rounded-t-[3px] bg-sp-bg [clip-path:polygon(0_0,100%_0,100%_55%,0_100%)]" />
+          <span className="relative mt-[3px] h-[9px] rounded-b-[3px] bg-sp-secondary [clip-path:polygon(0_45%,100%_0,100%_100%,0_100%)]" />
         </span>
       </span>
     </div>

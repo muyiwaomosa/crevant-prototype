@@ -15,9 +15,9 @@ export function Avatar({ initials, tone, className }: { initials: string; tone: 
     <span
       className={clsx(
         'grid shrink-0 place-items-center rounded-full font-sp-display font-black',
-        tone === 'priya' && 'bg-sp-green text-sp-ink',
-        tone === 'ana' && 'bg-sp-gold text-sp-ink',
-        tone === 'leo' && 'bg-sp-teal-raised text-sp-cream',
+        tone === 'priya' && 'bg-sp-secondary text-sp-ink',
+        tone === 'ana' && 'bg-sp-accent text-sp-ink',
+        tone === 'leo' && 'bg-sp-primary-raised text-sp-bg',
         tone === 'friend' && 'bg-[#e6dfd0] text-sp-ink ring-2 ring-white',
         tone === 'neutral' && 'bg-[#e8e6e1] text-[#2b2f33]',
         className ?? 'h-8 w-8 text-[11px]',
@@ -36,21 +36,21 @@ export function PostArt({ className }: { className?: string }) {
     <svg viewBox="0 0 360 112" aria-hidden="true" preserveAspectRatio="xMidYMid slice" className={clsx('block w-full rounded-xl', className)}>
       <defs>
         <linearGradient id={track} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--color-sp-teal-raised)" />
-          <stop offset="1" stopColor="var(--color-sp-teal)" />
+          <stop offset="0" stopColor="var(--color-sp-primary-raised)" />
+          <stop offset="1" stopColor="var(--color-sp-primary)" />
         </linearGradient>
       </defs>
       <rect width="360" height="112" fill={`url(#${track})`} />
-      <path d="M-20 120 C80 92 170 82 380 78" fill="none" stroke="var(--color-sp-green)" strokeOpacity="0.5" strokeWidth="2" />
-      <path d="M-20 104 C90 80 180 70 380 66" fill="none" stroke="var(--color-sp-green)" strokeOpacity="0.3" strokeWidth="2" />
-      <text x="26" y="30" fontFamily="Archivo, sans-serif" fontWeight="900" fontSize="14" letterSpacing="1.2" fill="var(--color-sp-cream)">
+      <path d="M-20 120 C80 92 170 82 380 78" fill="none" stroke="var(--color-sp-secondary)" strokeOpacity="0.5" strokeWidth="2" />
+      <path d="M-20 104 C90 80 180 70 380 66" fill="none" stroke="var(--color-sp-secondary)" strokeOpacity="0.3" strokeWidth="2" />
+      <text x="26" y="30" fontFamily="Archivo, sans-serif" fontWeight="900" fontSize="14" letterSpacing="1.2" fill="var(--color-sp-bg)">
         60-SECOND CALF DRILL
       </text>
-      <rect x="26" y="37" width="38" height="3" rx="1.5" fill="var(--color-sp-gold)" />
+      <rect x="26" y="37" width="38" height="3" rx="1.5" fill="var(--color-sp-accent)" />
       {steps.map((label, i) => (
         <g key={label} transform={`translate(${26 + i * 104} 50)`}>
-          <rect width="96" height="48" rx="9" fill="var(--color-sp-cream)" />
-          <circle cx="15" cy="15" r="9" fill="var(--color-sp-green)" />
+          <rect width="96" height="48" rx="9" fill="var(--color-sp-bg)" />
+          <circle cx="15" cy="15" r="9" fill="var(--color-sp-secondary)" />
           <text x="15" y="19.2" textAnchor="middle" fontFamily="Archivo, sans-serif" fontWeight="900" fontSize="11" fill="var(--color-sp-ink)">
             {i + 1}
           </text>
@@ -65,7 +65,7 @@ export function PostArt({ className }: { className?: string }) {
 
 export function SampleTag({ dark }: { dark?: boolean }) {
   return (
-    <span className={clsx('rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.08em]', dark ? 'bg-white/12 text-white/80' : 'bg-sp-cream text-sp-muted')}>
+    <span className={clsx('rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.08em]', dark ? 'bg-white/12 text-white/80' : 'bg-sp-bg text-sp-muted')}>
       Sample data
     </span>
   )

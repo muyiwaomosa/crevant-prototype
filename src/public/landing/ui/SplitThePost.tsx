@@ -12,7 +12,7 @@ import { Avatar, PostArt } from './SamplePost'
  * the lower piece is what her community added. The separation reads without
  * colour: a real gap, the lower piece offset, and a label on each piece.
  *
- * The gold detail sits BEHIND both pieces, so it only shows in the gap (and
+ * The accent detail sits BEHIND both pieces, so it only shows in the gap (and
  * as two small marks just past each end). It never crosses the content.
  * No money, no amounts, no percentages: only the post and the people.
  */
@@ -31,7 +31,7 @@ export function SplitThePost({ className }: { className?: string }) {
         {/* Upper piece: the creator's content. */}
         <div data-testid="split-creator-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(0_0_0/0.4))]">
           <div
-            className="rounded-[22px] bg-sp-cream px-4 pt-7 text-sp-ink sm:px-5 sm:pt-8"
+            className="rounded-[22px] bg-sp-bg px-4 pt-7 text-sp-ink sm:px-5 sm:pt-8"
             style={{ clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${CUT}px), 0 100%)`, paddingBottom: CUT + 8 }}
           >
             <div className="flex items-center gap-2.5">
@@ -47,14 +47,14 @@ export function SplitThePost({ className }: { className?: string }) {
             <p className="mt-2.5 text-[0.875rem] leading-snug sm:mt-3 sm:text-[0.95rem]">{post.text}</p>
             <PostArt className="mt-2.5 h-[5.5rem] min-[400px]:h-28 sm:mt-3 sm:h-32" />
           </div>
-          <Tag className="absolute -left-1 -top-4 bg-sp-teal text-sp-cream ring-1 ring-sp-cream/30 sm:-left-4">
+          <Tag className="absolute -left-1 -top-4 bg-sp-primary text-sp-bg ring-1 ring-sp-bg/30 sm:-left-4">
             <Avatar initials="PR" tone="priya" className="h-5 w-5 text-[8px]" /> {split.creatorTag}
           </Tag>
         </div>
 
         {/* Lower piece: the community's contribution, offset so the split reads without colour. */}
         <div className="relative translate-x-2.5 sm:translate-x-4" style={{ marginTop: -CUT + GAP }}>
-          {/* The gold detail, behind both pieces: visible only in the gap and just past each end. */}
+          {/* The accent detail, behind both pieces: visible only in the gap and just past each end. */}
           <svg
             data-testid="gold-seam"
             aria-hidden="true"
@@ -63,14 +63,14 @@ export function SplitThePost({ className }: { className?: string }) {
             className="pointer-events-none absolute inset-x-0 -z-10 w-full overflow-visible"
             style={{ top: -GAP / 2, height: CUT }}
           >
-            <line x1="0" y1="10" x2="100" y2="0" stroke="var(--color-sp-gold)" strokeWidth="5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            <line x1="0" y1="10" x2="100" y2="0" stroke="var(--color-sp-accent)" strokeWidth="5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
           </svg>
-          <span aria-hidden="true" className="absolute -left-2.5 h-2.5 w-2.5 rounded-full bg-sp-gold sm:-left-4" style={{ top: CUT - GAP / 2 - 5 }} />
-          <span aria-hidden="true" className="absolute -right-2.5 h-2.5 w-2.5 rounded-full bg-sp-gold sm:-right-4" style={{ top: -GAP / 2 - 5 }} />
+          <span aria-hidden="true" className="absolute -left-2.5 h-2.5 w-2.5 rounded-full bg-sp-accent sm:-left-4" style={{ top: CUT - GAP / 2 - 5 }} />
+          <span aria-hidden="true" className="absolute -right-2.5 h-2.5 w-2.5 rounded-full bg-sp-accent sm:-right-4" style={{ top: -GAP / 2 - 5 }} />
 
           <div data-testid="split-community-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(0_0_0/0.4))]">
             <div
-              className="rounded-[22px] bg-sp-green px-4 pb-4 text-sp-ink sm:px-5 sm:pb-5"
+              className="rounded-[22px] bg-sp-secondary px-4 pb-4 text-sp-ink sm:px-5 sm:pb-5"
               style={{ clipPath: `polygon(0 ${CUT}px, 100% 0, 100% 100%, 0 100%)`, paddingTop: CUT + 10 }}
             >
               <div className="flex items-center gap-4 text-sm font-extrabold">
@@ -87,22 +87,22 @@ export function SplitThePost({ className }: { className?: string }) {
               </div>
               <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-white/25 p-2">
                 <span className="flex">
-                  <Avatar initials="AN" tone="ana" className="h-8 w-8 text-[10px] ring-2 ring-sp-green" />
-                  <Avatar initials="LE" tone="leo" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-green" />
-                  <Avatar initials="JK" tone="friend" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-green" />
+                  <Avatar initials="AN" tone="ana" className="h-8 w-8 text-[10px] ring-2 ring-sp-secondary" />
+                  <Avatar initials="LE" tone="leo" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-secondary" />
+                  <Avatar initials="JK" tone="friend" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-secondary" />
                 </span>
                 <p className="min-w-0 text-[13px] font-semibold leading-snug">{split.communityLine}</p>
               </div>
             </div>
-            <Tag className="absolute -bottom-3.5 right-2 bg-sp-cream text-sp-teal sm:-right-3">
-              <Repeat2 className="h-3.5 w-3.5 text-sp-green-text" /> {split.communityTag}
+            <Tag className="absolute -bottom-3.5 right-2 bg-sp-bg text-sp-primary sm:-right-3">
+              <Repeat2 className="h-3.5 w-3.5 text-sp-link" /> {split.communityTag}
             </Tag>
           </div>
         </div>
       </div>
       <figcaption className="sr-only">
         A sample post from a fitness coach, split into two separate pieces with a gap between them: the upper piece is what Priya created, her lesson;
-        the lower piece is what her community grew, their likes, comments and reposts. A gold line marks the space between them.
+        the lower piece is what her community grew, their likes, comments and reposts. An apricot line marks the space between them.
       </figcaption>
     </figure>
   )

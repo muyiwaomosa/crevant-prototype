@@ -2,7 +2,7 @@ import clsx from 'clsx'
 
 /**
   * The Splitpost wordmark: "splitpost" set in Archivo beside a square cut
- * diagonally in two (the split mark), in the Connected Growth colours. The
+ * diagonally in two (the split mark), in the Modern Disruptor colours. The
  * tour and account screens use the same mark (src/components/Wordmark.tsx).
  */
 export function SplitMark({ tone = 'dark', className }: { tone?: 'dark' | 'light'; className?: string }) {
@@ -12,8 +12,8 @@ export function SplitMark({ tone = 'dark', className }: { tone?: 'dark' | 'light
       className={clsx(
         'inline-block shrink-0 rounded-[7px]',
         tone === 'dark'
-          ? 'bg-[linear-gradient(135deg,var(--color-sp-cream)_0_50%,var(--color-sp-green)_50%_100%)]'
-          : 'bg-[linear-gradient(135deg,var(--color-sp-teal)_0_50%,var(--color-sp-green)_50%_100%)]',
+          ? 'bg-[linear-gradient(135deg,var(--color-sp-bg)_0_50%,var(--color-sp-secondary)_50%_100%)]'
+          : 'bg-[linear-gradient(135deg,var(--color-sp-primary)_0_50%,var(--color-sp-secondary)_50%_100%)]',
         className,
       )}
     />
@@ -28,7 +28,7 @@ export function SplitpostWordmark({ tone = 'dark', className }: { tone?: 'dark' 
         aria-hidden="true"
         className={clsx(
           'font-sp-display text-[1.35rem] font-black lowercase leading-none tracking-[-0.02em] [font-stretch:108%]',
-          tone === 'dark' ? 'text-sp-cream' : 'text-sp-ink',
+          tone === 'dark' ? 'text-sp-bg' : 'text-sp-ink',
         )}
       >
         splitpost

@@ -26,10 +26,10 @@ export function BetterSplit() {
               <p key={p}>{p}</p>
             ))}
           </div>
-          <ul data-testid="split-disclosures" className="mt-7 space-y-2 rounded-2xl bg-sp-cream p-5 text-[15px] font-semibold leading-snug">
+          <ul data-testid="split-disclosures" className="mt-7 space-y-2 rounded-2xl bg-sp-bg p-5 text-[15px] font-semibold leading-snug">
             {copy.disclosures.map((d) => (
               <li key={d} className="flex gap-2.5">
-                <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-sp-gold-text" />
+                <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-sp-accent-text" />
                 {d}
               </li>
             ))}
@@ -54,7 +54,7 @@ export function BetterSplit() {
 function Relationship() {
   const d = copy.diagram
   return (
-    <figure data-testid="split-diagram" className="m-0 min-w-0 rounded-[28px] bg-sp-teal px-3 py-6 text-sp-cream sm:p-8">
+    <figure data-testid="split-diagram" className="m-0 min-w-0 rounded-[28px] bg-sp-primary px-3 py-6 text-sp-bg sm:p-8">
       <div aria-hidden="true" className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-1 text-center sm:gap-2">
         <div>
           <Avatar initials="PR" tone="priya" className="mx-auto h-11 w-11 text-sm sm:h-14 sm:w-14 sm:text-base" />
@@ -63,26 +63,26 @@ function Relationship() {
         <Arrow label={d.creates} />
         <div>
           <span className="mx-auto block h-12 w-10 sm:h-14 sm:w-12">
-            <span className="block h-[22px] rounded-t-[8px] bg-sp-cream [clip-path:polygon(0_0,100%_0,100%_70%,0_100%)]" />
-            <span className="mx-auto my-[3px] block h-[3px] w-full -rotate-[6deg] rounded-full bg-sp-gold" />
-            <span className="block h-[22px] rounded-b-[8px] bg-sp-green [clip-path:polygon(0_30%,100%_0,100%_100%,0_100%)]" />
+            <span className="block h-[22px] rounded-t-[8px] bg-sp-bg [clip-path:polygon(0_0,100%_0,100%_70%,0_100%)]" />
+            <span className="mx-auto my-[3px] block h-[3px] w-full -rotate-[6deg] rounded-full bg-sp-accent" />
+            <span className="block h-[22px] rounded-b-[8px] bg-sp-secondary [clip-path:polygon(0_30%,100%_0,100%_100%,0_100%)]" />
           </span>
           <p className="mt-2 font-sp-display text-sm font-extrabold">{d.post}</p>
         </div>
         <Arrow label={d.grows} />
         <div>
           <span className="flex justify-center">
-            <Avatar initials="AN" tone="ana" className="h-8 w-8 text-[9px] ring-2 ring-sp-teal sm:h-9 sm:w-9 sm:text-[10px]" />
-            <Avatar initials="LE" tone="leo" className="-ml-2.5 h-8 w-8 text-[9px] ring-2 ring-sp-teal sm:-ml-2 sm:h-9 sm:w-9 sm:text-[10px]" />
-            <Avatar initials="JK" tone="friend" className="-ml-2.5 h-8 w-8 text-[9px] ring-sp-teal sm:-ml-2 sm:h-9 sm:w-9 sm:text-[10px]" />
+            <Avatar initials="AN" tone="ana" className="h-8 w-8 text-[9px] ring-2 ring-sp-primary sm:h-9 sm:w-9 sm:text-[10px]" />
+            <Avatar initials="LE" tone="leo" className="-ml-2.5 h-8 w-8 text-[9px] ring-2 ring-sp-primary sm:-ml-2 sm:h-9 sm:w-9 sm:text-[10px]" />
+            <Avatar initials="JK" tone="friend" className="-ml-2.5 h-8 w-8 text-[9px] ring-sp-primary sm:-ml-2 sm:h-9 sm:w-9 sm:text-[10px]" />
           </span>
           <p className="mt-3 font-sp-display text-sm font-extrabold">{d.community}</p>
         </div>
       </div>
-      <div aria-hidden="true" className="mt-5 flex items-center gap-2 text-[12px] font-bold text-sp-gold">
-        <span className="h-px flex-1 bg-sp-gold/60" />
+      <div aria-hidden="true" className="mt-5 flex items-center gap-2 text-[12px] font-bold text-sp-accent">
+        <span className="h-px flex-1 bg-sp-accent/60" />
         {d.recognizes}
-        <span className="h-px flex-1 bg-sp-gold/60" />
+        <span className="h-px flex-1 bg-sp-accent/60" />
       </div>
       <figcaption className="sr-only">
         A creator creates a post, the community helps it grow, and the creator recognizes the community in return.
@@ -93,7 +93,7 @@ function Relationship() {
 
 function Arrow({ label }: { label: string }) {
   return (
-    <span className="flex flex-col items-center text-[10px] font-bold text-sp-green-on-dark sm:text-[11px]">
+    <span className="flex flex-col items-center text-[10px] font-bold text-sp-secondary-on-dark sm:text-[11px]">
       {label}
       <svg viewBox="0 0 40 10" className="mt-1 h-2.5 w-7 sm:w-10" aria-hidden="true">
         <path d="M0 5 H34 M30 1 L36 5 L30 9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

@@ -132,7 +132,7 @@ export function InsightsScreen() {
         </div>
         <div aria-hidden="true" className="mt-2 flex h-14 items-end gap-1.5">
           {bars.map((h, i) => (
-            <span key={i} className={clsx('flex-1 rounded-t', i === bars.length - 1 ? 'bg-sp-green' : 'bg-[#d9d7d1]')} style={{ height: `${h}%` }} />
+            <span key={i} className={clsx('flex-1 rounded-t', i === bars.length - 1 ? 'bg-sp-secondary' : 'bg-[#d9d7d1]')} style={{ height: `${h}%` }} />
           ))}
         </div>
         <p className={clsx('mt-1.5 text-[10px]', muted)}>Last five posts</p>
@@ -165,7 +165,7 @@ export function RecognitionScreen() {
   return (
     <PhoneFrame title="Leo · with Priya">
       <div className={clsx(card, 'flex items-center gap-2.5')}>
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-sp-gold">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-sp-accent">
           <span className="grid h-9 w-9 place-items-center rounded-full bg-white font-sp-display text-[13px] font-black">{total}</span>
         </span>
         <div className="leading-tight">

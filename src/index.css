@@ -4,7 +4,7 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Archivo', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-paper: #f5f1e8;
+  --color-paper: #faf7f1;
   --color-card: #ffffff;
 
   --color-ink-50: #f4f5f5;
@@ -18,27 +18,28 @@
   --color-ink-800: #21282a;
   --color-ink-900: #13191b;
 
-  /* Splitpost "Connected Growth": the brand scale is Deep Teal, the spark
-     scale is Growth Green (500 and up are the darker text greens). */
-  --color-brand-50: #eef5f3;
-  --color-brand-100: #dcebe7;
-  --color-brand-200: #b7d6ce;
-  --color-brand-300: #86b9ad;
-  --color-brand-400: #4f9585;
-  --color-brand-500: #2e7466;
-  --color-brand-600: #225d53;
-  --color-brand-700: #1f4f4a;
-  --color-brand-800: #1a453f;
-  --color-brand-900: #163d3a;
+  /* Splitpost "Modern Disruptor": the brand scale is Cobalt (600 is the
+     primary), the spark scale is Apricot (500 and up are the darker text
+     variants). Shared by the tour, /join and account pages. */
+  --color-brand-50: #eef2fb;
+  --color-brand-100: #dce4f6;
+  --color-brand-200: #b8c8ec;
+  --color-brand-300: #8aa4dd;
+  --color-brand-400: #5a7dcb;
+  --color-brand-500: #3156b5;
+  --color-brand-600: #2447a6;
+  --color-brand-700: #1d3a8a;
+  --color-brand-800: #172f70;
+  --color-brand-900: #12255a;
 
-  --color-spark-50: #eaf7f2;
-  --color-spark-100: #d3efe5;
-  --color-spark-200: #a8dfcb;
-  --color-spark-300: #6fc7a8;
-  --color-spark-400: #38a88a;
-  --color-spark-500: #2c9177;
-  --color-spark-600: #23775f;
-  --color-spark-700: #1a5c49;
+  --color-spark-50: #fef4ec;
+  --color-spark-100: #fde6d3;
+  --color-spark-200: #fad0ae;
+  --color-spark-300: #f6b888;
+  --color-spark-400: #f6b888;
+  --color-spark-500: #b35a22;
+  --color-spark-600: #94481a;
+  --color-spark-700: #7a3a12;
 
   --color-heart: #e0483a;
 
@@ -48,37 +49,40 @@
 }
 
 /*
- * Splitpost "Connected Growth" design tokens (sp-), used by the public site.
- * The shared tokens above (brand, spark, paper, display font) are tuned to the
- * same palette, so the tour, account screens and waitlist match.
+ * Splitpost "Modern Disruptor" design tokens (sp-), chosen by the founder
+ * (2026-11-16). Named by role, so the code stays true if a colour changes.
+ * The shared tokens above (brand, spark, paper, display font) are tuned to
+ * the same palette, so the tour, account screens and waitlist match.
  *
- *   teal   #163D3A  credibility: dark bands, body text on cream
- *   green  #38A88A  connection and growth: fills, illustrations, large text
- *                   on teal (4.05:1). NOT for text on cream or white (2.6:1):
- *                   use green-text #23775F there, and green-on-dark #6FC7A8
- *                   for small text on teal (5.9:1). Text on a green fill is
- *                   ink #12302D (4.8:1)
- *   cream  #F5F1E8  warmth: page background, text on teal
- *   gold   #D6A14A  shared value, sparingly (the split seam, Connection
- *                   Points). Text on cream uses gold-text #8A5F1A
+ *   primary    #2447A6  Cobalt: dark bands, links and eyebrows on light
+ *   secondary  #A8D9CF  Seafoam: fills, buttons, the community piece. Text on
+ *                       it is ink (10.1:1); small seafoam text on cobalt 5.3:1
+ *   accent     #F6B888  Apricot, refined from #F2A66B so small text on cobalt
+ *                       passes (4.8:1): the headline highlight, the split
+ *                       seam, Connection Points. Text on ivory uses
+ *                       accent-text #94481A (6.1:1)
+ *   bg         #FAF7F1  Ivory: page background, text on cobalt (7.8:1)
+ *   ink        #1B2430  Text (14.6:1 on ivory)
  *
- * Contrast pairs are checked in src/public/landing/tokens.test.ts.
+ * Product screens stay neutral; brand colours mark key interactions and
+ * recognition only. Contrast pairs are checked in src/public/landing/tokens.test.ts.
  */
 @theme {
   --font-sp-display: 'Archivo', 'Arial Narrow', ui-sans-serif, system-ui, sans-serif;
   --font-sp-body: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --color-sp-teal: #163d3a;
-  --color-sp-teal-raised: #1f4f4a;
-  --color-sp-green: #38a88a;
-  --color-sp-green-text: #23775f;
-  --color-sp-green-on-dark: #6fc7a8;
-  --color-sp-cream: #f5f1e8;
-  --color-sp-gold: #d6a14a;
-  --color-sp-gold-text: #8a5f1a;
-  --color-sp-ink: #12302d;
-  --color-sp-muted: #4a5f5b;
-  --color-sp-muted-on-dark: #b5cbc5;
+  --color-sp-primary: #2447a6;
+  --color-sp-primary-raised: #3156b5;
+  --color-sp-secondary: #a8d9cf;
+  --color-sp-secondary-tint: #e7f4f1;
+  --color-sp-secondary-on-dark: #a8d9cf;
+  --color-sp-link: #2447a6;
+  --color-sp-accent: #f6b888;
+  --color-sp-accent-text: #94481a;
+  --color-sp-bg: #faf7f1;
+  --color-sp-ink: #1b2430;
+  --color-sp-muted: #4e5a68;
+  --color-sp-muted-on-dark: #d3def3;
 }
 
 @keyframes pop {

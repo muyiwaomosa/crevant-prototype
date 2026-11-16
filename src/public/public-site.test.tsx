@@ -102,14 +102,14 @@ describe('one Splitpost story, top to bottom', () => {
 
 describe('HERO', () => {
   const hero = () => section('hero')
-  it('shows the approved headline exactly, as two lines, with "You Deserve a Split." in gold', () => {
+  it('shows the approved headline exactly, as two lines, with "You Deserve a Split." in the apricot accent', () => {
     const h1 = hero().querySelector('h1')!
     expect(norm(h1)).toBe('You Create The Post. You Deserve a Split.')
     const lines = [...h1.querySelectorAll('span.block')]
     expect(lines.map((el) => norm(el))).toEqual(['You Create The Post.', 'You Deserve a Split.'])
     // Each sentence is kept whole on one line on phones and tablets.
     for (const line of lines) expect(line.className).toMatch(/(^| )whitespace-nowrap( |$)/)
-    expect(hero().querySelector('[data-testid="headline-emphasis"]')!.className).toContain('text-sp-gold')
+    expect(hero().querySelector('[data-testid="headline-emphasis"]')!.className).toContain('text-sp-accent')
   })
   it('uses the approved supporting copy, and says beside it that nothing is guaranteed', () => {
     expect([...hero().querySelectorAll('[data-testid="hero-body"] p')].map((p) => norm(p))).toEqual([
@@ -123,7 +123,7 @@ describe('HERO', () => {
     expect(actions[0]).toEqual(['Join the Waitlist', '/join'])
     expect([...hero().querySelectorAll('a')].some((a) => a.getAttribute('href') === '/sign-in')).toBe(true)
   })
-  it('pictures one post in two separate pieces, with the gold only in the gap between them', () => {
+  it('pictures one post in two separate pieces, with the accent only in the gap between them', () => {
     const scene = hero().querySelector('[data-testid="hero-scene"]')!
     expect(norm(scene)).toContain('Created by Priya')
     expect(norm(scene)).toContain('Grown by her community')
@@ -131,7 +131,7 @@ describe('HERO', () => {
     const creator = scene.querySelector('[data-testid="split-creator-piece"]')!
     const community = scene.querySelector('[data-testid="split-community-piece"]')!
     const seam = scene.querySelector('[data-testid="gold-seam"]')!
-    // The gold sits behind the pieces (never inside either piece) and is drawn under them.
+    // The accent line sits behind the pieces (never inside either piece) and is drawn under them.
     expect(creator.contains(seam) || community.contains(seam)).toBe(false)
     expect(seam.getAttribute('class')).toContain('-z-10')
     expect(scene.querySelectorAll('img')).toHaveLength(0)

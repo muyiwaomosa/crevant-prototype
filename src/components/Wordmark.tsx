@@ -2,8 +2,8 @@ import clsx from 'clsx'
 import { BRAND } from '../brand'
 
 /**
- * The Splitpost mark: a rounded square cut diagonally in two, Deep Teal and
- * Growth Green (the split). Matches the public site's SplitMark.
+ * The Splitpost mark: a rounded square cut diagonally in two, Cobalt and
+ * Seafoam (the split). Matches the public site's SplitMark.
  */
 export function LogoMark({ className }: { className?: string }) {
   return (
@@ -14,8 +14,8 @@ export function LogoMark({ className }: { className?: string }) {
         </clipPath>
       </defs>
       <g clipPath="url(#sp-mark-clip)">
-        <rect width="64" height="64" fill="#163d3a" />
-        <path d="M64 0V64H0Z" fill="#38a88a" />
+        <rect width="64" height="64" fill="#2447a6" />
+        <path d="M64 0V64H0Z" fill="#a8d9cf" />
       </g>
     </svg>
   )

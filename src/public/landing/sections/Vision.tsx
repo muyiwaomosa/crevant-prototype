@@ -10,7 +10,7 @@ const copy = HOMEPAGE_COPY.vision
  */
 export function Vision() {
   return (
-    <section id="vision" aria-labelledby="vision-title" className="scroll-mt-16 bg-spark-50 text-sp-ink">
+    <section id="vision" aria-labelledby="vision-title" className="scroll-mt-16 bg-sp-secondary-tint text-sp-ink">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-4 pb-18 pt-20 sm:px-6 sm:pb-24 sm:pt-24 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-16 lg:pb-28 lg:pt-28">
         <PhotoSlot shot={copy.photo} className="aspect-[4/5] w-full max-w-[30rem] justify-self-center bg-white/60 lg:order-2" />
         <div className="min-w-0 lg:order-1">
@@ -26,7 +26,7 @@ export function Vision() {
             ))}
           </div>
           <p data-testid="vision-disclosure" className="mt-7 flex items-center gap-3 rounded-2xl bg-white p-4 text-[15px] font-semibold leading-snug ring-1 ring-sp-ink/8">
-            <span aria-hidden="true" className="h-2 w-6 shrink-0 rounded-full bg-sp-gold" />
+            <span aria-hidden="true" className="h-2 w-6 shrink-0 rounded-full bg-sp-accent" />
             {copy.disclosure}
           </p>
         </div>
