@@ -53,6 +53,17 @@ async function post(payload, { origin = ORIGIN, xff = '198.51.100.7', url = EDGE
   const data = await res.json().catch(() => ({}))
   return { status: res.status, state: data.status }
 }
+// An invitation preview: the full answer, not just its status.
+async function preview(code, { xff = '198.51.100.70', url = EDGE_URL } = {}) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: ORIGIN, 'X-Forwarded-For': xff },
+    body: JSON.stringify({ action: 'invite_preview', code }),
+  })
+  return { status: res.status, data: await res.json().catch(() => ({})) }
+}
+const E2E_CREATOR = '00000000-0000-0000-0000-0000000e2ec1'
+
 // Sends separate header lines for one name (fetch would join them first),
 // as a client can on the wire.
 function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
@@ -122,7 +133,11 @@ function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
     const first = await rowOf('maya@e2e.test')
     check('it is stored, unverified, with the approved notice version',
       first && first.verified === false && first.email_verified_at === null && first.waitlist_consent_version === NOTICE && first.platform === 'youtube')
-    check('no link, campaign or marketing field exists to store', first && !Object.keys(first).some((k) => /link|campaign|marketing/.test(k)))
+    // creator_link_id (creator acquisition) is the one approved exception: it is
+    // set only by the server resolving ?ref=, never from what the browser sends.
+    check('no link, campaign or marketing field exists to store',
+      first && !Object.keys(first).some((k) => /link|campaign|marketing/.test(k) && k !== 'creator_link_id'))
+    check('a link sent by the browser is never stored as attribution', first && first.creator_link_id === null)
     const consents = await owner`select count(*)::int as n from ops.waitlist_consents c join ops.waitlist w on w.id = c.waitlist_id where w.email = 'maya@e2e.test'`
     check('one consent record', consents[0].n === 1)
 
@@ -247,9 +262,38 @@ function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
     check('the admin summary has no addresses', !/@/.test(JSON.stringify(summary)))
     check('the admin summary counts unverified entries apart', summary.unverified >= 12 && summary.verified === 0, JSON.stringify({ total: summary.total, unverified: summary.unverified }))
 
+    // 11b. Creator invitation links (creator acquisition): issued by the admin
+    // login only, previewed by the function as the restricted login, showing
+    // only the agreed public name, with visits (estimates) counted apart.
+    await owner`insert into auth.users (id, email, email_confirmed_at) values (${E2E_CREATOR}, 'creator@e2e.test', now()) on conflict do nothing`
+    check('waitlist_writer cannot issue a creator link', await denied(() => writer`select waitlist_api.admin_issue_creator_link(${E2E_CREATOR})`))
+    check('the admin login accepts a creator', (await admin`select waitlist_api.admin_accept_creator(${E2E_CREATOR}, '{fitness}') as r`)[0].r === 'accepted')
+    const code = (await admin`select waitlist_api.admin_issue_creator_link(${E2E_CREATOR}) as c`)[0].c
+    check('the admin login issues a 90 day link by default', /^[0-9a-f]{20}$/.test(code) &&
+      (await owner`select (expires_at::date - created_at::date) as d from ops.creator_links where code = ${code}`)[0].d === 90)
+    const nameless = await preview(code)
+    check('a valid link without an agreed name previews as valid, nameless', JSON.stringify(nameless.data) === '{"name":null,"status":"ok","invite":"valid"}' ||
+      (nameless.data.invite === 'valid' && nameless.data.name === null && Object.keys(nameless.data).length === 3), JSON.stringify(nameless.data))
+    await admin`select waitlist_api.admin_set_creator_public_name(${E2E_CREATOR}, 'Priya Raman')`
+    const named = await preview(code.toUpperCase(), { xff: '198.51.100.71' })
+    check('a valid link shows only the agreed public name', named.status === 200 && named.data.name === 'Priya Raman' && Object.keys(named.data).sort().join() === 'invite,name,status', JSON.stringify(named.data))
+    check('the preview says nothing private about the creator', !/e2e\.test|e2ec1|fitness|accepted/.test(JSON.stringify(named.data)))
+    const unknown = await preview('ffffffffffffffffffff')
+    check('an unknown link previews as unavailable, and nothing more', JSON.stringify(unknown.data) === '{"status":"ok","invite":"unavailable"}', JSON.stringify(unknown.data))
+    await preview(code)
+    await preview(code)
+    const visits = (await owner`select count(*)::int as n from ops.acquisition_events e join ops.creator_links l on l.id = e.creator_link_id
+                                where l.code = ${code} and e.event = 'creator_link_visit'`)[0].n
+    check('visits count once per visitor per link per day (two visitors, four previews)', visits === 2, String(visits))
+    const pbuckets = await owner`select bucket from ops.invite_preview_limits`
+    check('the preview keeps only salted hashes', pbuckets.length > 0 && pbuckets.every((b) => /^(preview|client:[0-9a-f]{64}|visit:[0-9a-f]{64})$/.test(b.bucket)))
+    check('the admin login revokes the link', (await admin`select waitlist_api.admin_revoke_creator_link(${code}) as r`)[0].r === 'revoked')
+    check('a revoked link previews exactly like an unknown one', JSON.stringify((await preview(code, { xff: '198.51.100.72' })).data) === JSON.stringify(unknown.data))
+
     // 12. Closing is immediate.
     await admin`select waitlist_api.admin_close()`
     check('closing stops submissions at once', (await post(body({ email: 'late@e2e.test' }), { xff: '203.0.113.52' })).state === 'closed')
+    check('closing stops invitation previews at once', (await preview('ffffffffffffffffffff', { xff: '198.51.100.73' })).data.status === 'closed')
 
     // 13. Health check: a GET proves the restricted login connects, and says nothing else.
     const h = await fetch(EDGE_URL)
@@ -281,6 +325,11 @@ function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
     await owner`update ops.settings set enabled = false, value = null, updated_at = now() where key in ('waitlist_submissions', 'waitlist_notice_version')`
     await owner`delete from ops.waitlist where email like '%@e2e.test'`
     await owner`delete from ops.waitlist_rate_limits`
+    await owner`delete from ops.acquisition_events where creator_link_id in (select id from ops.creator_links where creator_id = ${E2E_CREATOR})`
+    await owner`delete from ops.creator_links where creator_id = ${E2E_CREATOR}`
+    await owner`delete from ops.pilot_creators where user_id = ${E2E_CREATOR}`
+    await owner`delete from auth.users where id = ${E2E_CREATOR}`
+    await owner`delete from ops.invite_preview_limits`
     await Promise.all([owner.end(), writer.end(), admin.end()])
   }
   console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nALL CHECKS PASSED')

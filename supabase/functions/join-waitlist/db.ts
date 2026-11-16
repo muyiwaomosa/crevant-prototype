@@ -3,7 +3,7 @@
 // client from these options and passes it in.
 //
 // The function connects as the dedicated waitlist_writer login, which can
-// call waitlist_api.submit and nothing else. It never uses the Supabase
+// call waitlist_api.submit, submit_v2 and invite_preview, and nothing else. It never uses the Supabase
 // service role key or the platform's own database URL.
 
 import type { SubmitPayload, SubmitResult } from './handler.ts'
@@ -150,15 +150,25 @@ export function databaseOptions(rawUrl: string, opts: { caCert?: string; localPl
 
 const RESULTS: SubmitResult[] = ['ok', 'closed', 'invalid', 'notice_changed', 'rate_limited']
 
-/** Calls waitlist_api.submit with bound parameters (never string building). */
+/** Calls waitlist_api.submit_v2 with bound parameters (never string building). */
 export async function submitWithDatabase(sql: Sql, p: SubmitPayload): Promise<SubmitResult> {
-  const rows = await sql`select waitlist_api.submit(
+  const rows = await sql`select waitlist_api.submit_v2(
     ${p.email}, ${p.interests}::text[], ${p.sharesContent}, ${p.platform}, ${p.audienceBand}, ${p.source},
-    ${p.ageConfirmed}, ${p.waitlistConsent}, ${p.noticeVersion}, ${p.emailKey}, ${p.clientKey}
+    ${p.ageConfirmed}, ${p.waitlistConsent}, ${p.noticeVersion}, ${p.emailKey}, ${p.clientKey},
+    ${p.intent}, ${p.introducedByCreator}::boolean, ${p.creatorRef}
   ) as result`
   const out = rows[0]?.result
   if (typeof out === 'string' && (RESULTS as string[]).includes(out)) return out as SubmitResult
-  throw new Error('unexpected result from waitlist_api.submit')
+  throw new Error('unexpected result from waitlist_api.submit_v2')
+}
+
+/**
+ * Calls waitlist_api.invite_preview with bound parameters. The caller
+ * (handler.ts, checkPreview) checks the answer's shape before using it.
+ */
+export async function previewWithDatabase(sql: Sql, code: string, clientKey: string): Promise<unknown> {
+  const rows = await sql`select waitlist_api.invite_preview(${code}, ${clientKey}) as result`
+  return rows[0]?.result
 }
 
 /** The health check: proves the waitlist_writer login can connect. Reads no data. */

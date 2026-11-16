@@ -23,6 +23,22 @@ name: Waitlist admin (staging)
 #   wave-summary        counts for one wave
 #   wave-clear          undo a wave
 #
+# Creator acquisition (only once migration 20261116000000 is approved and
+# applied; until then these actions fail harmlessly):
+#   accept-creator      accept a creator into the pilot by account id
+#   creator-status      accept, pause or remove a creator (pausing stops
+#                       their links at once)
+#   creator-public-name the name shown on their links, only after they agreed;
+#                       empty withdraws it
+#   issue-link          a new link (90 days unless set otherwise); prints the
+#                       code once. Codes are meant to be shared publicly by
+#                       the creator, so the run log holding one is accepted.
+#   revoke-link         revoke a link for good
+#   acquisition-summary counts only; visits are estimates
+#   purge-acquisition-events  delete hourly acquisition counts older than N
+#                       days (proposed 90, pending privacy/legal approval).
+#                       By hand only; nothing schedules it.
+#
 # Retention runs only when someone starts "purge" by hand. There is no
 # scheduled deletion (docs/WAITLIST-OPERATIONS.md explains the options for
 # automating it after launch, which need a separate decision).
@@ -50,6 +66,13 @@ on:
           - wave-select
           - wave-summary
           - wave-clear
+          - accept-creator
+          - creator-status
+          - creator-public-name
+          - issue-link
+          - revoke-link
+          - acquisition-summary
+          - purge-acquisition-events
         default: summary
         required: true
       waitlist_id:
@@ -90,6 +113,44 @@ on:
         description: "For wave-select: how many to pick (1 to 100)."
         type: string
         default: '10'
+        required: false
+      creator_user_id:
+        description: "For creator actions: the creator's account id (UUID) from the Supabase dashboard. Never an email address."
+        type: string
+        required: false
+      categories:
+        description: "For accept-creator: up to three of food, money, travel, tech, music, art, fitness, books, wellness, comma separated."
+        type: string
+        required: false
+      creator_status:
+        description: "For creator-status."
+        type: choice
+        options:
+          - accepted
+          - paused
+          - removed
+        default: paused
+      public_name:
+        description: "For creator-public-name: only a name the creator has agreed to show. Leave empty to withdraw it."
+        type: string
+        required: false
+      link_days:
+        description: "For issue-link: days until it expires (1 to 365)."
+        type: string
+        default: '90'
+        required: false
+      campaign:
+        description: "For issue-link: an optional label, e.g. pilot_wave_1."
+        type: string
+        required: false
+      link_code:
+        description: "For revoke-link: the 20 character code."
+        type: string
+        required: false
+      acq_retention_days:
+        description: "For purge-acquisition-events: days of hourly counts to keep (30 to 400; proposed 90, pending approval)."
+        type: string
+        default: '90'
         required: false
       confirm_project_ref:
         description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
@@ -136,6 +197,14 @@ jobs:
           GROUP: ${{ inputs.group }}
           REASONS: ${{ inputs.reasons }}
           COUNT: ${{ inputs.count }}
+          CREATOR_USER_ID: ${{ inputs.creator_user_id }}
+          CATEGORIES: ${{ inputs.categories }}
+          CREATOR_STATUS: ${{ inputs.creator_status }}
+          PUBLIC_NAME: ${{ inputs.public_name }}
+          LINK_DAYS: ${{ inputs.link_days }}
+          CAMPAIGN: ${{ inputs.campaign }}
+          LINK_CODE: ${{ inputs.link_code }}
+          ACQ_RETENTION_DAYS: ${{ inputs.acq_retention_days }}
           PGSSLMODE: require
           PGCONNECT_TIMEOUT: '15'
         run: scripts/db/waitlist-admin.sh

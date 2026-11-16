@@ -49,8 +49,19 @@ export function readWaitlistConfig(env: Record<string, unknown>, notice: Approve
   return { endpoint, turnstileSiteKey, noticeUrl, noticeVersion }
 }
 
-/** Where someone came from, from ?src= in the link, if well formed. */
-export function readAcquisition(search: string): { source: string | null } {
-  const s = (new URLSearchParams(search).get('src') ?? '').trim().toLowerCase()
-  return { source: /^[a-z0-9_-]{1,40}$/.test(s) ? s : null }
+/**
+ * Where someone came from, from the link:
+ *   ?src=  the acquisition channel label (for example ig_bio)
+ *   ?ref=  a creator invitation code, kept separate from the channel. It is
+ *          only a claim until the server resolves it against an accepted
+ *          creator's active link; an unknown code is simply ignored there.
+ */
+export function readAcquisition(search: string): { source: string | null; creatorRef: string | null } {
+  const params = new URLSearchParams(search)
+  const s = (params.get('src') ?? '').trim().toLowerCase()
+  const r = (params.get('ref') ?? '').trim().toLowerCase()
+  return {
+    source: /^[a-z0-9_-]{1,40}$/.test(s) ? s : null,
+    creatorRef: /^[0-9a-f]{20}$/.test(r) ? r : null,
+  }
 }

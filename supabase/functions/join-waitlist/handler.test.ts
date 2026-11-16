@@ -27,6 +27,7 @@ function deps(over: Partial<JoinDeps> = {}): JoinDeps {
     verifyTurnstile: vi.fn(async () => ({ success: true, hostname: 'crevant.example', action: 'join' })),
     rateKeys: vi.fn(async () => KEYS),
     submit: vi.fn(async () => 'ok' as const),
+    previewInvite: vi.fn(async () => ({ status: 'ok', invite: 'valid', name: 'Priya Raman' })),
     databaseReachable: vi.fn(async () => true),
     ...over,
   }
@@ -58,8 +59,37 @@ describe('join-waitlist handler', () => {
       ageConfirmed: true,
       waitlistConsent: true,
       noticeVersion: 'notice-2026-11',
+      intent: null,
+      introducedByCreator: null,
+      creatorRef: null,
       ...KEYS,
     })
+  })
+
+  it('passes the optional acquisition answers through, trimmed, for the database to validate', async () => {
+    const d = deps()
+    await handleJoin(post({ ...valid, intent: 'both', introducedByCreator: true, creatorRef: ' 0123456789ABCDEF0123 ' }), d)
+    expect(d.submit).toHaveBeenCalledWith(expect.objectContaining({ intent: 'both', introducedByCreator: true, creatorRef: '0123456789abcdef0123' }))
+  })
+
+  it('never passes on a typed creator name, even if a browser sends one', async () => {
+    const d = deps()
+    await handleJoin(post({ ...valid, introducedByCreator: true, introducerReported: '@priyaruns', creatorName: 'Priya' }), d)
+    const sent = (d.submit as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(Object.keys(sent)).not.toContain('introducerReported')
+    expect(JSON.stringify(sent)).not.toMatch(/priya/i)
+  })
+
+  it('rejects wrongly shaped acquisition answers before reaching the database', async () => {
+    for (const bad of [
+      { ...valid, introducedByCreator: 'yes' },
+      { ...valid, creatorRef: 'x'.repeat(41) },
+      { ...valid, intent: ['create'] },
+    ]) {
+      const d = deps()
+      expect(state(await handleJoin(post(bad), d))).toBe('invalid')
+      expect(d.submit).not.toHaveBeenCalled()
+    }
   })
 
   it('is closed when the function switch is off, before any check or call', async () => {
@@ -350,7 +380,7 @@ describe('database connection', () => {
     }
   })
 
-  it('calls only waitlist_api.submit, with bound parameters', async () => {
+  it('calls only waitlist_api.submit_v2, with bound parameters', async () => {
     const calls: Array<{ text: string; values: unknown[] }> = []
     const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
       calls.push({ text: strings.join('$'), values })
@@ -358,9 +388,9 @@ describe('database connection', () => {
     }) as Sql
     const payload = toPayload(valid, KEYS)
     expect(await submitWithDatabase(sql, payload)).toBe('ok')
-    expect(calls[0].text).toMatch(/^select waitlist_api\.submit\(/)
+    expect(calls[0].text).toMatch(/^select waitlist_api\.submit_v2\(/)
     expect(calls[0].text).not.toMatch(/maya/i)
-    expect(calls[0].values).toEqual(['maya@example.com', ['reach_followers'], 'yes', 'youtube', '1k_10k', 'instagram', true, true, 'notice-2026-11', KEYS.emailKey, KEYS.clientKey])
+    expect(calls[0].values).toEqual(['maya@example.com', ['reach_followers'], 'yes', 'youtube', '1k_10k', 'instagram', true, true, 'notice-2026-11', KEYS.emailKey, KEYS.clientKey, null, null, null])
     const odd = (async () => [{ result: 'something else' }]) as unknown as Sql
     await expect(submitWithDatabase(odd, payload)).rejects.toThrow()
   })
@@ -416,5 +446,48 @@ describe('health check reveals nothing', () => {
         expect(JSON.stringify(out)).not.toMatch(/waitlist_writer|pooler|kpudeppgokpjhvaqrprn|password|203\.0|x@y/)
       }
     }
+  })
+})
+
+describe('invitation preview', () => {
+  it('answers with only the validity and the agreed public name, without Turnstile', async () => {
+    const d = deps()
+    const out = await handleJoin(post({ action: 'invite_preview', code: '7C1E94A2B05D3F68E1A9' }), d)
+    expect(out.status).toBe(200)
+    expect(JSON.parse(out.body)).toEqual({ status: 'ok', invite: 'valid', name: 'Priya Raman' })
+    expect(d.previewInvite).toHaveBeenCalledWith('7c1e94a2b05d3f68e1a9', KEYS.clientKey)
+    expect(d.verifyTurnstile).not.toHaveBeenCalled()
+    expect(d.submit).not.toHaveBeenCalled()
+  })
+
+  it('never asks the database about a malformed code', async () => {
+    const d = deps()
+    for (const code of ['', 'nope', '7c1e94a2b05d3f68e1a', 'https://x.example', 42]) {
+      const out = await handleJoin(post({ action: 'invite_preview', code }), d)
+      expect(JSON.parse(out.body)).toEqual({ status: 'ok', invite: 'unavailable' })
+    }
+    expect(d.previewInvite).not.toHaveBeenCalled()
+  })
+
+  it('passes on nothing the database adds beyond the agreed shape', async () => {
+    for (const raw of [
+      { status: 'ok', invite: 'valid', name: 'Priya', creator_id: 'x' },
+      { status: 'ok', invite: 'valid', name: 'x'.repeat(41) },
+      { status: 'ok', invite: 'unavailable', reason: 'revoked' },
+      null,
+    ]) {
+      const out = await handleJoin(post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), deps({ previewInvite: vi.fn(async () => raw) }))
+      expect(out.status).toBe(500)
+      expect(out.body).not.toMatch(/Priya|creator_id|revoked/)
+    }
+  })
+
+  it('keeps the function switch, the origin check and the database switches', async () => {
+    expect((await handleJoin(post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), deps({ enabled: false }))).status).toBe(503)
+    expect((await handleJoin({ ...post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), origin: 'https://evil.example' }, deps())).status).toBe(403)
+    const closed = await handleJoin(post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), deps({ previewInvite: vi.fn(async () => ({ status: 'closed' })) }))
+    expect([closed.status, JSON.parse(closed.body)]).toEqual([503, { status: 'closed' }])
+    const limited = await handleJoin(post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), deps({ previewInvite: vi.fn(async () => ({ status: 'rate_limited' })) }))
+    expect(limited.status).toBe(429)
   })
 })
