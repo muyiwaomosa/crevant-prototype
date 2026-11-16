@@ -1,13 +1,14 @@
 // The Splitpost homepage copy, in one place. Section components and tests
 // both read from here, so the words on the page are exactly these.
 //
-// The story leads with the creator (founder-approved outline, 2026-11-15):
-// HERO, the creator's PROBLEM, the ALTERNATIVE (connection, not attention),
-// the fan CONNECTION (recognition that strengthens relationships), the
-// VISION (a respected, more sustainable profession), then the invitation.
-// Priya, Ana and Leo are sample people; the post and its numbers are
-// illustrations, never evidence. Disclosures come from claims.ts so they're
-// written once, and each limitation sits beside the claim it qualifies.
+// Seven sections, founder-approved copy (2026-11-16), one continuous story
+// around "You Create The Post. You Deserve a Split.":
+//   HERO, THE PROBLEM, WHAT WE'RE BUILDING, WHO WE'RE BUILDING FOR,
+//   A BETTER SPLIT, OUR BIGGER VISION, THE INVITATION.
+// Do not rewrite this copy without the founder's approval. Sample people and
+// posts are labelled SAMPLE wherever they appear and carry no real results.
+// Disclosures come from claims.ts or are the founder's own wording, and sit
+// beside the claims they qualify.
 
 import { DISCLOSURES } from './claims'
 
@@ -16,37 +17,32 @@ export type CopyStatus = 'final' | 'approved-in-principle'
 export const HOMEPAGE_COPY = {
   hero: {
     status: 'final' as CopyStatus,
-    /**
-     * Founder-approved headline (2026-11-16), exactly as written. It states
-     * what creators deserve; it is not a promise of earnings, which the small
-     * print beside it makes clear.
-     */
+    /** States what creators deserve; not a promise of earnings (see the small print). */
     headline: 'You Create The Post. You Deserve a Split.',
-    /** Set as two lines; the second is highlighted in gold. */
+    /** Exactly two lines on every screen, one sentence each; the second in gold. */
     headlineLines: ['You Create The Post.', 'You Deserve a Split.'],
     /** The brand line, used in the footer. */
     tagline: 'Every Post. A Better Split.',
-    /** Plain enough for a 12-year-old: the problem, then what we're building. */
     body: [
-      "You work hard to make content. You grow your followers. But that doesn't always mean you get paid.",
-      "We're building a better way to help you connect with your audience and earn from the value you create.",
+      "You put in the work. You grow your followers. But the money doesn't always follow.",
+      "We're building a social platform where your content can help you earn, and your followers can become a real community.",
     ],
     primaryCta: 'Join the Waitlist',
     secondaryCta: 'Discover Splitpost',
     smallPrint: ['Invitation-only pilot.', DISCLOSURES.noGuarantee, DISCLOSURES.noFanCash],
   },
 
-  /** The one sample post the page follows: Priya, a running coach, teaching. Labelled as sample data wherever it appears. */
+  /** The hero's sample post: a fitness coach demonstrating a simple exercise. */
   post: {
     author: 'Priya Raman',
     handle: '@priyaruns',
-    role: 'Running coach',
+    role: 'Fitness coach',
     time: '2h',
     text: 'Shin splints on every run? Try this 60-second calf drill before you head out: slow heel raises, toe walks, then ankle circles. Save it for your next run.',
     imageAlt: 'Illustrated card: a 60-second calf drill in three steps',
-    likes: '12.4K',
-    comments: '1.8K',
-    reposts: '3.2K',
+    likes: '1.2K',
+    comments: '86',
+    reposts: '214',
   },
 
   /** Tags on the split-post illustration. */
@@ -56,70 +52,123 @@ export const HOMEPAGE_COPY = {
     communityLine: 'Ana tried the drill. Leo shared it with his running club.',
   },
 
+  /** Everyday sample posts for the product screens. All labelled SAMPLE. */
+  samplePosts: [
+    { author: 'Mr. Daniel Osei', role: 'Math teacher', text: 'Fractions keep tripping up my class, so here is the trick that finally worked: turn both into the same-size pieces first.' },
+    { author: 'Rosa Jiménez', role: 'Home cook', text: 'Feeding four for under an hour: one-pan rice and beans with whatever vegetables you have left.' },
+    { author: 'Kwame Asante', role: 'Leather maker', text: 'From one hide to a wallet: how I cut, stitch and finish every piece by hand in my small workshop.' },
+    { author: 'Mei Lin', role: 'Tech reviewer', text: 'I tested five free note-taking apps for a month. This is the one I kept, and why.' },
+  ],
+
   problem: {
     status: 'final' as CopyStatus,
     eyebrow: 'The problem',
-    headline: 'You create the value. The algorithm decides who sees it.',
+    headline: 'You Do the Work. Who Gets the Reward?',
     body: [
-      'You can have thousands of followers and still struggle to reach them. You can create content that changes lives and still struggle to earn a living from it.',
-      'Because when attention determines who gets seen, building trust, community and a sustainable career becomes harder than it should be.',
+      'Every day, creators make the videos, stories and posts that keep people coming back to social media.',
+      'Platforms earn money when people spend time watching.',
+      'But many creators who help build those platforms earn little or nothing.',
     ],
-    points: [
-      { title: 'Reach you can’t predict', line: 'The same post can reach many people one day and almost no one the next.' },
-      { title: 'Attention over connection', line: 'Feeds reward what grabs attention, not what builds trust.' },
-      { title: 'Followers, not a community', line: 'A big following doesn’t mean you can reach the people who chose you.' },
-      { title: 'Earnings that don’t reflect the work', line: 'Income stays unpredictable, however valuable the content.' },
+    turn: "And there's another problem.",
+    body2: [
+      "The apps decide which posts people see. They often reward content that grabs attention, even if it doesn't help creators build lasting relationships.",
+      'So one post gets thousands of views. The next barely reaches your followers.',
     ],
+    closing: "You can't plan your future around something you can't predict.",
   },
 
-  alternative: {
+  building: {
     status: 'final' as CopyStatus,
-    eyebrow: 'The alternative',
-    headline: 'A social platform built around connection, not just attention.',
-    body: 'Splitpost is designed to help the people who value your work keep seeing it, and to help you get to know them.',
-    pillars: [
-      { title: 'A Following feed you can count on', line: 'Posts from the people you chose to follow, newest first.' },
-      { title: 'Discovery by shared interests', line: 'People find you through what you teach and share, not engagement bait.' },
-      { title: 'Know your community', line: 'See who engages with your work and who helps it reach new people.' },
+    eyebrow: "What we're building",
+    headline: 'A Better Split Starts With a Better Connection.',
+    questions: [
+      'What if you could spend less time chasing views and more time creating something valuable?',
+      'What if the people who chose to follow you could easily find your posts?',
+      'What if you could build a community that keeps coming back?',
     ],
-    pilotLabel: 'Being built for the pilot',
-    note: DISCLOSURES.stillTesting,
+    answer: "That's what we're building at Splitpost.",
+    body: 'We want to help you reach your followers, build trust and create more ways to earn from your content.',
+    goalIntro: 'And our goal is simple:',
+    /** The founder's goal statement, verbatim (lowercase, no full stop). Do not edit. */
+    goal: 'we want to create a platform that generates sustainable pay for content creators who have something valuable to say',
+    screens: ['Following feed', 'Discover by interests', 'Creator insights'],
+    /** Beside the screens: what they are, and what they don't promise. */
+    note: `${DISCLOSURES.stillTesting} ${DISCLOSURES.noGuarantee}`,
     mockupLabel: `${DISCLOSURES.concept} · ${DISCLOSURES.sampleData}`,
   },
 
-  connection: {
+  creators: {
     status: 'final' as CopyStatus,
-    eyebrow: 'The fan connection',
-    headline: 'When your community helps you grow, they’re recognized too.',
-    body: 'Eligible fans who follow, take part thoughtfully or bring new people to a creator earn Connection Points with that creator. Creators can thank them with perks. Recognition strengthens the relationship. It isn’t a payment.',
-    steps: [
-      { title: 'A fan takes part', line: 'Ana tries Priya’s drill and leaves a thoughtful comment.' },
-      { title: 'A fan brings people in', line: 'Leo shares it with his running club, and new runners follow Priya.' },
-      { title: 'The creator says thanks', line: 'They earn Connection Points with Priya, and she offers a perk.' },
+    eyebrow: "Who we're building for",
+    headline: 'Different Creators. The Same Problem.',
+    groups: [
+      {
+        title: "You're growing, but not earning.",
+        body: "Your followers keep growing. You spend hours making content. But you still can't see much reward for your work.",
+        photo: 'A creator editing a video late at night, phone analytics beside the laptop.',
+      },
+      {
+        title: 'You have something worth sharing.',
+        body: "You teach, cook, create or share what you know. You don't need to be famous. You just want your work to reach people who value it.",
+        photo: 'An older teacher filming a lesson at a whiteboard, or a cook recording in a home kitchen.',
+      },
+      {
+        title: 'You want to make this your career.',
+        body: "You dream of creating full-time. But it's hard to leave your job when you don't know what you'll earn next month.",
+        photo: 'A maker in a small workshop, recording how a product is made.',
+      },
     ],
-    /** Shown right beside the claim it qualifies. */
-    disclosure: `${DISCLOSURES.cpNoCashValue} ${DISCLOSURES.noFanCash}`,
+  },
+
+  betterSplit: {
+    status: 'final' as CopyStatus,
+    eyebrow: 'A better split',
+    headline: 'More Connection. More Ways to Earn.',
+    body: [
+      'Imagine opening Splitpost and seeing posts from the people you chose to follow, starting with the newest.',
+      'Imagine being a creator and knowing your followers have a place to find your latest work, without needing every post to go viral.',
+      'Now imagine your biggest supporters being recognized too.',
+      'The person who introduces a friend to your content. The person who keeps showing up. The people who help your community grow.',
+      'On Splitpost, we want those relationships to matter.',
+      'During the pilot, eligible fans can earn Connection Points and receive noncash recognition or perks. In the future, we want eligible fans to share in the money that qualifying content earns.',
+    ],
+    closing: 'You create the post. Your community helps it grow. A better split gives more people a reason to succeed together.',
+    /** The founder's three pilot disclosures, word for word. */
+    disclosures: [
+      'Connection Points have no cash value.',
+      'Fans will not receive cash rewards during the pilot.',
+      'Future revenue sharing depends on eligibility, verification and legal and financial requirements.',
+    ],
+    diagram: { creator: 'Creator', post: 'Post', community: 'Community', creates: 'creates', grows: 'grows', recognizes: 'recognizes' },
   },
 
   vision: {
     status: 'final' as CopyStatus,
-    eyebrow: 'Our vision',
-    headline: 'Content creation deserves to be a respected profession.',
-    /** The founder's goal statement, verbatim (lowercase, no full stop). Do not edit. */
-    goal: 'we want to create a platform that generates sustainable pay for content creators who have something valuable to say',
-    goalLabel: 'Our goal',
-    body: 'Whether you create now and then, part-time or as your job, valuable content deserves recognition.',
-    stages: ['Now and then', 'Part-time', 'As your job'],
-    longTerm: 'In the long term, we want creators and the fans who help them grow to share in the value their posts create.',
-    /** Shown right beside the vision it qualifies. */
-    disclosure: `${DISCLOSURES.visionOnly} ${DISCLOSURES.noGuarantee}`,
+    eyebrow: 'Our bigger vision',
+    headline: 'What If Creating Content Could Be a Real Career?',
+    body: [
+      'Imagine a world where someone who teaches, entertains or shares something useful can build a business around it.',
+      "Where creators don't need millions of followers before their work can start to matter.",
+      'Where making content is respected as real work.',
+      'Some people will create part-time. Others will make it their full-time career.',
+      'We want Splitpost to help make both possible.',
+    ],
+    /** Required: this is a long-term vision, not a promise of income during the pilot. */
+    disclosure: 'This is our long-term vision, not a promise of income during the pilot.',
+    photo: 'A creator doing meaningful work: a tailor teaching a sewing class on camera, or a woodworker filming a tutorial.',
   },
 
   invitation: {
-    status: 'approved-in-principle' as CopyStatus,
-    headline: 'Be part of a better split.',
-    body: "We're opening Splitpost to a small group of creators and fans for a 60-day pilot. One waitlist, for everyone.",
-    audience: 'For creators just starting out, creating part-time or building a full-time career, and the people who support them.',
+    status: 'final' as CopyStatus,
+    headline: 'Help Us Build a Better Split.',
+    body: [
+      'Social media can be better.',
+      'Better for people who create.',
+      'Better for people who support them.',
+      'And better for everyone who believes valuable content deserves more than just views.',
+    ],
+    shape: "We're building Splitpost, and we'd love you to help shape it.",
+    close: 'Join the waitlist. Be part of a better split.',
     cta: 'Join the Waitlist',
     pilotDetailsTitle: 'Pilot details',
     pilotDetails: [
@@ -135,7 +184,9 @@ export const HOMEPAGE_COPY = {
   },
 
   /** Shown on the page so no one mistakes a sample for a real member. */
-  peopleNote: 'Priya, Ana and Leo are sample people, and their post and its numbers are sample data.',
+  peopleNote: 'All people and posts in product screens are samples, and their numbers are sample data.',
+  /** Shown on every photo placeholder until the founder approves the shortlist. */
+  photoPending: 'Photo pending approval',
 } as const
 
 /** Every visitor-facing string in the homepage copy, for the claim checks. */

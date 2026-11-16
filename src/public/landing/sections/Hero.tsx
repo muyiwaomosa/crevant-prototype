@@ -25,11 +25,17 @@ export function Hero() {
   const headline = (
     <h1
       id="hero-title"
-      className="text-balance font-sp-display text-[clamp(2.3rem,10.5vw,5.4rem)] font-black leading-[0.95] tracking-[-0.025em] [font-stretch:108%] lg:text-[clamp(3.3rem,5.2vw,4.4rem)]"
+      // Phones and tablets: exactly two lines, one sentence each. Each line is
+      // kept whole and the size follows the screen width (the longer sentence
+      // is 10.1em wide at 95% width), so it never wraps or overflows. From lg
+      // up it sits beside the picture at the larger desktop size.
+      className="font-sp-display text-[length:min(calc((100vw_-_2rem)/10.3),4.75rem)] font-black leading-[1.02] tracking-[-0.025em] [font-stretch:95%] sm:text-[length:min(calc((100vw_-_3rem)/10.3),5.25rem)] lg:text-[length:clamp(3.3rem,5.2vw,4.4rem)] lg:leading-[0.95] lg:[font-stretch:108%]"
     >
-      <span className="block">{copy.headlineLines[0]}</span>{' '}
+      <span data-testid="headline-line" className="block whitespace-nowrap lg:whitespace-normal">
+        {copy.headlineLines[0]}
+      </span>{' '}
       {/* The approved highlight: gold on Deep Teal (5.1:1). */}
-      <span data-testid="headline-emphasis" className="block text-sp-gold">
+      <span data-testid="headline-emphasis" className="block whitespace-nowrap text-sp-gold lg:whitespace-normal">
         {copy.headlineLines[1]}
       </span>
     </h1>

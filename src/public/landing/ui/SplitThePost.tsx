@@ -3,32 +3,36 @@ import type { ReactNode } from 'react'
 import { Heart, MessageCircle, Repeat2, Send } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
 import { Avatar, PostArt } from './SamplePost'
-import { SplitMark } from './SplitpostWordmark'
 
 /**
- * The hero picture, "Split the post" (approved concept A, Connected Growth).
+ * The hero picture, "Split the post".
  *
- * Priya's sample post, a running coach teaching a drill, cut once on the
- * diagonal of the Splitpost mark. The cream piece is what the creator made
- * (her lesson); the green piece is what her community added (likes, comments,
- * reposts, the people who shared it). A gold seam joins them: the shared
- * value. No money, no amounts, no percentages: only the post and the people.
+ * One sample post (a fitness coach teaching a drill) in two separate pieces
+ * with a visible gap between them. The upper piece is what the creator made;
+ * the lower piece is what her community added. The separation reads without
+ * colour: a real gap, the lower piece offset, and a label on each piece.
+ *
+ * The gold detail sits BEHIND both pieces, so it only shows in the gap (and
+ * as two small marks just past each end). It never crosses the content.
+ * No money, no amounts, no percentages: only the post and the people.
  */
 
 const post = HOMEPAGE_COPY.post
 const split = HOMEPAGE_COPY.split
-/** How far the cut climbs across the card, in px. The fans' piece uses the same value so the edges match. */
-const CUT = 46
+/** How far the cut climbs across the card, in px. Both pieces use it, so the edges stay parallel. */
+const CUT = 40
+/** The vertical gap between the pieces, in px. */
+const GAP = 18
 
 export function SplitThePost({ className }: { className?: string }) {
   return (
     <figure data-testid="hero-scene" className={clsx('relative m-0 mx-auto w-full max-w-[25rem] lg:max-w-[28rem]', className)}>
-      <div aria-hidden="true" className="relative">
-        {/* The creator's piece: her post, as she made it. */}
-        <div className="relative -rotate-[1.5deg] [filter:drop-shadow(0_28px_36px_rgb(0_0_0/0.45))]">
+      <div aria-hidden="true" className="relative -rotate-[1.5deg]">
+        {/* Upper piece: the creator's content. */}
+        <div data-testid="split-creator-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(0_0_0/0.4))]">
           <div
-            className="rounded-[24px] bg-sp-cream px-4 pt-7 text-sp-ink sm:px-5 sm:pt-8"
-            style={{ clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${CUT}px), 0 100%)`, paddingBottom: CUT + 10 }}
+            className="rounded-[22px] bg-sp-cream px-4 pt-7 text-sp-ink sm:px-5 sm:pt-8"
+            style={{ clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${CUT}px), 0 100%)`, paddingBottom: CUT + 8 }}
           >
             <div className="flex items-center gap-2.5">
               <Avatar initials="PR" tone="priya" className="h-9 w-9 text-xs" />
@@ -48,62 +52,57 @@ export function SplitThePost({ className }: { className?: string }) {
           </Tag>
         </div>
 
-        {/* The fans' piece: everything they added to the same post. */}
-        <div className="relative translate-x-2.5 rotate-[1.5deg] [filter:drop-shadow(0_28px_36px_rgb(0_0_0/0.45))] sm:translate-x-4" style={{ marginTop: -CUT + 10 }}>
-          <div
-            className="rounded-[24px] bg-sp-green px-4 pb-4 text-sp-ink sm:px-5 sm:pb-5"
-            style={{ clipPath: `polygon(0 ${CUT}px, 100% 0, 100% 100%, 0 100%)`, paddingTop: CUT + 12 }}
-          >
-            <div className="flex items-center gap-4 text-sm font-extrabold">
-              <span className="inline-flex items-center gap-1.5">
-                <Heart className="h-4 w-4 fill-sp-teal" /> {post.likes}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <MessageCircle className="h-4 w-4" /> {post.comments}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Repeat2 className="h-4 w-4" /> {post.reposts}
-              </span>
-              <Send className="ml-auto h-4 w-4" />
-            </div>
-            <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-sp-teal/10 p-2">
-              <span className="flex">
-                <Avatar initials="AN" tone="ana" className="h-8 w-8 text-[10px] ring-2 ring-sp-green" />
-                <Avatar initials="LE" tone="leo" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-green" />
-                <Avatar initials="JK" tone="friend" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-green" />
-              </span>
-              <p className="min-w-0 text-[13px] font-semibold leading-snug">
-                {split.communityLine}
-              </p>
-            </div>
-          </div>
-          {/* The gold seam along the cut: the value the creator and her community share. */}
+        {/* Lower piece: the community's contribution, offset so the split reads without colour. */}
+        <div className="relative translate-x-2.5 sm:translate-x-4" style={{ marginTop: -CUT + GAP }}>
+          {/* The gold detail, behind both pieces: visible only in the gap and just past each end. */}
           <svg
             data-testid="gold-seam"
             aria-hidden="true"
             viewBox="0 0 100 10"
             preserveAspectRatio="none"
-            className="pointer-events-none absolute inset-x-0 w-full overflow-visible"
-            style={{ top: -5, height: CUT }}
+            className="pointer-events-none absolute inset-x-0 -z-10 w-full overflow-visible"
+            style={{ top: -GAP / 2, height: CUT }}
           >
-            <line x1="0" y1="10" x2="100" y2="0" stroke="var(--color-sp-gold)" strokeWidth="4" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            <line x1="0" y1="10" x2="100" y2="0" stroke="var(--color-sp-gold)" strokeWidth="5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
           </svg>
-          {/* The join: the Splitpost mark sits on the seam, so the two pieces read as one post. */}
-          <span
-            className="absolute left-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-sp-teal shadow-[0_10px_24px_-8px_rgb(0_0_0/0.7)] ring-[3px] ring-sp-gold"
-            style={{ top: CUT / 2 - 5 }}
-          >
-            <SplitMark tone="dark" className="h-5 w-5" />
-          </span>
-          <Tag className="absolute -bottom-3.5 -right-1 bg-sp-cream text-sp-teal sm:-right-3">
-            <Repeat2 className="h-3.5 w-3.5 text-sp-green-text" /> {split.communityTag}
-          </Tag>
-        </div>
+          <span aria-hidden="true" className="absolute -left-2.5 h-2.5 w-2.5 rounded-full bg-sp-gold sm:-left-4" style={{ top: CUT - GAP / 2 - 5 }} />
+          <span aria-hidden="true" className="absolute -right-2.5 h-2.5 w-2.5 rounded-full bg-sp-gold sm:-right-4" style={{ top: -GAP / 2 - 5 }} />
 
+          <div data-testid="split-community-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(0_0_0/0.4))]">
+            <div
+              className="rounded-[22px] bg-sp-green px-4 pb-4 text-sp-ink sm:px-5 sm:pb-5"
+              style={{ clipPath: `polygon(0 ${CUT}px, 100% 0, 100% 100%, 0 100%)`, paddingTop: CUT + 10 }}
+            >
+              <div className="flex items-center gap-4 text-sm font-extrabold">
+                <span className="inline-flex items-center gap-1.5">
+                  <Heart className="h-4 w-4 fill-sp-ink" /> {post.likes}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <MessageCircle className="h-4 w-4" /> {post.comments}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Repeat2 className="h-4 w-4" /> {post.reposts}
+                </span>
+                <Send className="ml-auto h-4 w-4" />
+              </div>
+              <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-white/25 p-2">
+                <span className="flex">
+                  <Avatar initials="AN" tone="ana" className="h-8 w-8 text-[10px] ring-2 ring-sp-green" />
+                  <Avatar initials="LE" tone="leo" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-green" />
+                  <Avatar initials="JK" tone="friend" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-green" />
+                </span>
+                <p className="min-w-0 text-[13px] font-semibold leading-snug">{split.communityLine}</p>
+              </div>
+            </div>
+            <Tag className="absolute -bottom-3.5 right-2 bg-sp-cream text-sp-teal sm:-right-3">
+              <Repeat2 className="h-3.5 w-3.5 text-sp-green-text" /> {split.communityTag}
+            </Tag>
+          </div>
+        </div>
       </div>
       <figcaption className="sr-only">
-        Priya’s sample post, a running coach sharing a 60-second calf drill, split into two pieces that fit together along a gold seam: the part Priya
-        created, her lesson, and the part her community grew, their likes, comments and reposts. One post, created and grown together.
+        A sample post from a fitness coach, split into two separate pieces with a gap between them: the upper piece is what Priya created, her lesson;
+        the lower piece is what her community grew, their likes, comments and reposts. A gold line marks the space between them.
       </figcaption>
     </figure>
   )

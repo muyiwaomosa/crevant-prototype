@@ -27,11 +27,16 @@ export function Invitation() {
           >
             {copy.headline}
           </h2>
-          <p data-testid="invitation-body" className="mt-5 max-w-xl text-[1.1rem] leading-relaxed text-sp-muted-on-dark sm:text-xl">
-            {copy.body}
-          </p>
-          <p data-testid="invitation-audience" className="mt-3 max-w-xl text-[1.02rem] font-semibold leading-relaxed text-sp-cream">
-            {copy.audience}
+          <div data-testid="invitation-body" className="mt-6 max-w-xl space-y-1.5 text-[1.12rem] leading-relaxed sm:text-xl">
+            {copy.body.map((line, i) => (
+              <p key={line} className={i === 0 ? 'font-semibold text-sp-cream' : 'text-sp-muted-on-dark'}>
+                {line}
+              </p>
+            ))}
+          </div>
+          <p className="mt-5 max-w-xl text-[1.05rem] leading-relaxed text-sp-cream">{copy.shape}</p>
+          <p data-testid="invitation-close" className="mt-2 font-sp-display text-xl font-extrabold text-sp-gold">
+            {copy.close}
           </p>
           <Link
             to="/join"

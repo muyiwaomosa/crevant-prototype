@@ -130,14 +130,24 @@ async function newContext(browser, options = {}) {
       await page.goto(`${BASE}/`)
 
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check(`${label}: the six sections in order`, ids === 'hero,problem,alternative,connection,vision,invitation', ids)
+      check(`${label}: the six sections in order`, ids === 'hero,problem,building,creators,split,vision,invitation', ids)
       const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
       check(`${label}: no Crevant left on the landing page`, !/Crevant/i.test(await page.locator('body').innerText()))
 
-      const rows = await page.$$eval('[data-testid="problem-points"] > li', (lis) => new Set(lis.map((li) => Math.round(li.getBoundingClientRect().top))).size)
-      const expectedRows = width < 640 ? 4 : width < 1024 ? 2 : 4
-      check(`${label}: the problem points show ${expectedRows} row(s)`, rows === expectedRows, `rows=${rows}`)
+      const rows = await page.$$eval('[data-testid="creator-groups"] > li', (lis) => new Set(lis.map((li) => Math.round(li.getBoundingClientRect().top))).size)
+      const expectedRows = width < 768 ? 3 : 1
+      check(`${label}: the creator groups show ${expectedRows} row(s)`, rows === expectedRows, `rows=${rows}`)
+
+      // The hero headline is exactly two lines, one sentence each, below 1024px.
+      if (width < 1024) {
+        const lines = await page.evaluate(() => {
+          const h1 = document.querySelector('h1')
+          const lh = parseFloat(getComputedStyle(h1).lineHeight)
+          return [...h1.querySelectorAll('span.block')].map((s) => Math.round(s.getBoundingClientRect().height / lh))
+        })
+        check(`${label}: the hero headline is exactly two lines`, lines.join() === '1,1', lines.join())
+      }
 
       // Load every lazy image, then check each one decoded.
       await page.evaluate(async () => {
@@ -151,7 +161,7 @@ async function newContext(browser, options = {}) {
       )
       check(`${label}: every image loads (the founder photo; no stock photos until approved)`, imgs.length >= 1 && imgs.every((w) => w > 0), imgs.join(','))
 
-      const disclosures = await Promise.all(['alternative-note', 'connection-disclosure', 'vision-disclosure', 'pilot-details'].map((t) => page.getByTestId(t).isVisible()))
+      const disclosures = await Promise.all(['hero-small-print', 'building-note', 'split-disclosures', 'vision-disclosure', 'pilot-details'].map((t) => page.getByTestId(t).isVisible()))
       check(`${label}: each limitation is visible beside its claim, and the full pilot details near signup`, disclosures.every(Boolean))
 
       const scroller = page.getByRole('region', { name: /concept screens/ })

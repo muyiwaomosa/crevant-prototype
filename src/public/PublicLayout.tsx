@@ -84,7 +84,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             <Link to="/#problem" className="hover:text-sp-green-on-dark">
               Why Splitpost
             </Link>
-            <Link to="/#alternative" className="hover:text-sp-green-on-dark">
+            <Link to="/#building" className="hover:text-sp-green-on-dark">
               How It Works
             </Link>
             <Link to="/join" className="hover:text-sp-green-on-dark">
