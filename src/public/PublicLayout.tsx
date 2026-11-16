@@ -1,11 +1,15 @@
 import { useEffect, type ReactNode } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Wordmark } from '../components/Wordmark'
-import { buttonClass } from '../components/ui'
 import { TOUR_BASE } from '../entry'
 import { useMemberLinks } from './member-links'
 import { useRobotsMeta } from './robots'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
+import { HOMEPAGE_COPY } from './landing/copy'
+import { SplitpostWordmark } from './landing/ui/SplitpostWordmark'
+
+const HEADER_LINK =
+  'inline-flex h-9 items-center rounded-full text-sm font-semibold text-white transition-[background-color,color,box-shadow,transform] hover:bg-white/10 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none'
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -34,24 +38,32 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
         Skip to content
       </a>
 
-      <header className="sticky top-0 z-40 border-b border-ink-100/80 bg-paper/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
+      {/* Splitpost header (PR 2). The footer below changes in PR 5. */}
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-sp-midnight/95 pt-[env(safe-area-inset-top)] text-white backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-          <Link to="/" aria-label="Crevant home" className="shrink-0">
-            <Wordmark />
+          <Link
+            to="/"
+            aria-label="Splitpost home"
+            className="shrink-0 rounded-md focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-white"
+          >
+            <SplitpostWordmark />
           </Link>
           <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2">
             {/* The tour is a separate app, so it needs a full page load. */}
-            {/* Wrappers control visibility: the button classes set their own display. */}
-            {/* Phones: logo, Sign in and Join the Waitlist; Explore Crevant stays in the hero and footer. */}
+            {/* Phones: logo, Sign in and Join the Waitlist; Discover Splitpost stays in the hero. */}
             <span className="hidden sm:contents">
-              <a href={TOUR_BASE} className={buttonClass('ghost', 'sm')}>
-                Explore Crevant
+              <a href={TOUR_BASE} className={`${HEADER_LINK} px-3.5`}>
+                {HOMEPAGE_COPY.hero.secondaryCta}
               </a>
             </span>
             {/* Below 420px only the logo and Join the Waitlist fit; Sign in stays in the hero and footer. */}
-            {account && <span className="hidden min-[420px]:contents">{account}</span>}
-            <Link to="/#founding" className={buttonClass('primary', 'sm')}>
-              Join the Waitlist
+            {/* The account link is shared with the account pages, so it's restyled here rather than changed. */}
+            {account && <span className="hidden min-[420px]:contents [&_a]:text-white [&_a:hover]:bg-white/10">{account}</span>}
+            <Link
+              to="/join"
+              className="inline-flex h-9 items-center rounded-full bg-sp-orange px-4 text-sm font-bold text-sp-midnight transition-[background-color,color,box-shadow,transform] hover:bg-[#ff7e45] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+            >
+              {HOMEPAGE_COPY.hero.primaryCta}
             </Link>
           </nav>
         </div>
