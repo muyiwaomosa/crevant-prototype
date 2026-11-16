@@ -142,7 +142,7 @@ describe('HERO', () => {
     expect(norm(scene.querySelector('figcaption'))).toContain('Priya is a fictional sample creator; her profile photo is a stock image of a model')
     expect(norm(scene)).not.toMatch(/[$£€%]|earn|cash|payout/i)
   })
-  it("shows Priya's post about unpredictable reach, labelled SAMPLE, and keeps the community piece as it was", () => {
+  it("shows Priya's post about unpredictable reach, labelled SAMPLE, and keeps the community piece's figures", () => {
     const scene = hero().querySelector('[data-testid="hero-scene"]')!
     const creator = scene.querySelector('[data-testid="split-creator-piece"]')!
     expect(norm(creator)).toContain('Priya Raman')
@@ -154,7 +154,8 @@ describe('HERO', () => {
     ])
     expect(norm(creator)).not.toMatch(/calf drill|shin splints/i)
     const community = norm(scene.querySelector('[data-testid="split-community-piece"]'))
-    for (const t of ['1.2K', '86', '214', 'Ana tried the drill. Leo shared it with his running club.', 'Grown by her community']) expect(community).toContain(t)
+    for (const t of ['1.2K', '86', '214', 'Grown by her community']) expect(community).toContain(t)
+    expect(norm(scene.querySelector('[data-testid="hero-community-comment"]'))).toBe("Ana Oh wow, I was wondering why I hadn't been seeing your content. I thought you stopped posting!")
   })
   it('puts the picture straight after the headline, before the copy and actions', () => {
     const order = [...hero().querySelectorAll('h1, [data-testid="hero-scene"], [data-testid="hero-body"], [data-testid="hero-actions"], [data-testid="hero-small-print"]')].map(

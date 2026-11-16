@@ -101,7 +101,9 @@ export function SplitThePost({ className }: { className?: string }) {
                   <Avatar initials="LE" tone="leo" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-secondary" />
                   <Avatar initials="JK" tone="friend" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-secondary" />
                 </span>
-                <p className="min-w-0 text-[13px] font-semibold leading-snug">{split.communityLine}</p>
+                <p data-testid="hero-community-comment" className="min-w-0 text-[13px] font-medium leading-snug">
+                  <span className="font-extrabold">{split.communityComment.name}</span> {split.communityComment.text}
+                </p>
               </div>
             </div>
             <Tag className="absolute -bottom-3.5 right-2 bg-sp-bg text-sp-primary sm:-right-3">

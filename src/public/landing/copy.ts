@@ -57,7 +57,8 @@ export const HOMEPAGE_COPY = {
   split: {
     creatorTag: 'Created by Priya',
     communityTag: 'Grown by her community',
-    communityLine: 'Ana tried the drill. Leo shared it with his running club.',
+    /** A comment from Priya's community, replying to her post about reach. Sample person. */
+    communityComment: { name: 'Ana', text: "Oh wow, I was wondering why I hadn't been seeing your content. I thought you stopped posting!" },
   },
 
   /** Everyday sample posts for the product screens. All labelled SAMPLE. */
