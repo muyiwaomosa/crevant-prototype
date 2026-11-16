@@ -7,15 +7,14 @@ import { SplitThePost } from '../ui/SplitThePost'
 
 const copy = HOMEPAGE_COPY.hero
 
-/** The approved headline, set as three stacked lines: SOCIAL MEDIA / NEEDS A / BETTER SPLIT. */
-export const HEADLINE_LINES = ['SOCIAL MEDIA', 'NEEDS A', 'BETTER SPLIT.'] as const
 
 const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-white'
 
 /**
- * Section 1: the hero. A Deep Teal band with the headline as a poster, the
- * core belief and the positioning, both calls to action, and the pilot small
- * print. The picture is one post split in two along a gold seam: what the
+ * Section 1: the hero. A Deep Teal band with the founder-approved headline
+ * ("You Deserve a Split." in gold), two plain sentences, both calls to
+ * action, and the pilot small print, which says plainly that nothing is
+ * guaranteed. The picture is one post split in two along a gold seam: what the
  * creator made and what her community grew.
  *
  * Phones: headline, picture, then the words, actions and small print, so the
@@ -26,33 +25,21 @@ export function Hero() {
   const headline = (
     <h1
       id="hero-title"
-      className="font-sp-display text-[clamp(2.1rem,10vw,5.4rem)] font-black uppercase leading-[0.92] tracking-[-0.025em] [font-stretch:108%] lg:text-[clamp(3.2rem,5vw,4rem)]"
+      className="text-balance font-sp-display text-[clamp(2.3rem,10.5vw,5.4rem)] font-black leading-[0.95] tracking-[-0.025em] [font-stretch:108%] lg:text-[clamp(3.3rem,5.2vw,4.4rem)]"
     >
-      <span className="block">{HEADLINE_LINES[0]}</span>{' '}
-      <span className="block">{HEADLINE_LINES[1]}</span>{' '}
-      <span className="block">
-        {HEADLINE_LINES[2].split(' ')[0]}{' '}
-        <span
-          data-testid="split-word"
-          className="inline-block bg-[linear-gradient(135deg,var(--color-sp-cream)_0_46%,var(--color-sp-green)_46%_100%)] bg-clip-text text-transparent forced-colors:bg-none forced-colors:text-[CanvasText]"
-        >
-          {HEADLINE_LINES[2].split(' ')[1]}
-        </span>
+      <span className="block">{copy.headlineLines[0]}</span>{' '}
+      {/* The approved highlight: gold on Deep Teal (5.1:1). */}
+      <span data-testid="headline-emphasis" className="block text-sp-gold">
+        {copy.headlineLines[1]}
       </span>
     </h1>
   )
   const rest = (
     <>
-      <p data-testid="hero-tagline" className="mt-5 font-sp-display text-xl font-extrabold tracking-[-0.01em] text-sp-green [font-stretch:110%] sm:text-2xl">
-        {copy.tagline}
-      </p>
-
-      <p data-testid="hero-body" className="mt-4 max-w-[34rem] text-[1.08rem] font-semibold leading-relaxed text-sp-cream sm:text-lg">
-        {copy.body.join(' ')}
-      </p>
-      <p data-testid="hero-positioning" className="mt-3 max-w-[34rem] text-[1.02rem] leading-relaxed text-sp-muted-on-dark sm:text-[1.05rem]">
-        {copy.positioning}
-      </p>
+      <div data-testid="hero-body" className="mt-6 max-w-[34rem] space-y-3 text-[1.1rem] leading-relaxed sm:text-lg">
+        <p className="text-sp-muted-on-dark">{copy.body[0]}</p>
+        <p className="font-semibold text-sp-cream">{copy.body[1]}</p>
+      </div>
 
       <div data-testid="hero-actions" className="mt-7 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:flex-wrap">
         <Link

@@ -39,7 +39,7 @@ const landing = () => renderAt('/').container
 const section = (id: string) => landing().querySelector(`#${id}`)!
 const SECTION_ORDER = ['hero', 'problem', 'alternative', 'connection', 'vision', 'invitation']
 const HEADINGS = [
-  'SOCIAL MEDIA NEEDS A BETTER SPLIT.',
+  'You Create The Post. You Deserve a Split.',
   'You create the value. The algorithm decides who sees it.',
   'A social platform built around connection, not just attention.',
   'When your community helps you grow, they’re recognized too.',
@@ -54,6 +54,9 @@ const APPROVED_GUARANTEE_SENTENCES = [
   "Joining the waitlist doesn't guarantee an invitation to the pilot.",
   'Participation does not guarantee earnings or rewards.',
 ]
+// The hero's plain statement of today's problem, approved by the founder. It
+// describes what happens on other platforms; it is not a promise.
+const APPROVED_PROBLEM_SENTENCES = ["You work hard to make content. You grow your followers. But that doesn't always mean you get paid."]
 /** Every block of visible text in an element, for the claims checker. */
 const blocks = (el: Element) => [...el.querySelectorAll('h1, h2, h3, p, li, span, a, figcaption')].map((e) => norm(e).trim()).filter(Boolean)
 
@@ -94,16 +97,18 @@ describe('one Splitpost story, top to bottom', () => {
 
 describe('HERO', () => {
   const hero = () => section('hero')
-  it('shows the approved headline as three lines, with SPLIT. as the split word', () => {
+  it('shows the approved headline exactly, with "You Deserve a Split." highlighted in gold', () => {
     const h1 = hero().querySelector('h1')!
-    expect([...h1.querySelectorAll('span.block')].map((el) => norm(el))).toEqual(['SOCIAL MEDIA', 'NEEDS A', 'BETTER SPLIT.'])
-    expect(norm(hero().querySelector('[data-testid="split-word"]'))).toBe('SPLIT.')
+    expect(norm(h1)).toBe('You Create The Post. You Deserve a Split.')
+    expect([...h1.querySelectorAll('span.block')].map((el) => norm(el))).toEqual(['You Create The Post.', 'You Deserve a Split.'])
+    const emphasis = hero().querySelector('[data-testid="headline-emphasis"]')!
+    expect(norm(emphasis)).toBe('You Deserve a Split.')
+    expect(emphasis.className).toContain('text-sp-gold')
+    expect(h1.className).not.toContain('uppercase')
   })
-  it('uses the approved tagline, core belief, positioning and small print word for word', () => {
-    expect(norm(hero().querySelector('[data-testid="hero-tagline"]'))).toBe('Every Post. A Better Split.')
-    expect(norm(hero().querySelector('[data-testid="hero-body"]'))).toBe("Creating content isn't just a hobby. It's creating value, and value deserves recognition.")
-    expect(norm(hero().querySelector('[data-testid="hero-positioning"]'))).toBe('Splitpost is a social platform built around connection, not just attention.')
-    expect(norm(hero().querySelector('[data-testid="hero-small-print"]'))).toBe(`Invitation-only pilot. ${DISCLOSURES.noFanCash}`)
+  it('uses the approved supporting copy, and says beside it that nothing is guaranteed', () => {
+    expect([...hero().querySelectorAll('[data-testid="hero-body"] p')].map((p) => norm(p))).toEqual([...HOMEPAGE_COPY.hero.body])
+    expect(norm(hero().querySelector('[data-testid="hero-small-print"]'))).toBe(`Invitation-only pilot. ${DISCLOSURES.noGuarantee} ${DISCLOSURES.noFanCash}`)
   })
   it('offers Join the Waitlist first and Discover Splitpost second, and Sign in in the full app', () => {
     const actions = [...hero().querySelectorAll('[data-testid="hero-actions"] a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
@@ -126,10 +131,10 @@ describe('HERO', () => {
     expect(norm(scene)).not.toMatch(/[$£€%]|earn|cash|payout/i)
   })
   it('puts the picture straight after the headline, before the tagline and actions', () => {
-    const order = [...hero().querySelectorAll('h1, [data-testid="hero-scene"], [data-testid="hero-tagline"], [data-testid="hero-actions"], [data-testid="hero-small-print"]')].map(
+    const order = [...hero().querySelectorAll('h1, [data-testid="hero-scene"], [data-testid="hero-body"], [data-testid="hero-actions"], [data-testid="hero-small-print"]')].map(
       (el) => el.getAttribute('data-testid') ?? el.tagName,
     )
-    expect(order).toEqual(['H1', 'hero-scene', 'hero-tagline', 'hero-actions', 'hero-small-print'])
+    expect(order).toEqual(['H1', 'hero-scene', 'hero-body', 'hero-actions', 'hero-small-print'])
   })
 })
 
@@ -184,6 +189,12 @@ describe('CONNECTION', () => {
 
 describe('VISION', () => {
   const vision = () => section('vision')
+  it('gives the founder’s goal statement a prominent place, verbatim', () => {
+    const goal = vision().querySelector('[data-testid="vision-goal-text"]')!
+    expect(goal.textContent).toBe('we want to create a platform that generates sustainable pay for content creators who have something valuable to say')
+    expect(goal.closest('blockquote')).toBeTruthy()
+    expect(goal.className).not.toMatch(/uppercase|capitalize/)
+  })
   it('uses the approved headline and covers every stage of the creator journey', () => {
     expect(norm(vision().querySelector('[data-testid="vision-body"]'))).toBe(HOMEPAGE_COPY.vision.body)
     expect([...vision().querySelectorAll('[data-testid="vision-stages"] li')].map((li) => norm(li))).toEqual([...HOMEPAGE_COPY.vision.stages])
@@ -328,7 +339,7 @@ describe('copy rules', () => {
   const checkedText = (path: string) => {
     const { container } = renderAt(path)
     let text = norm(container)
-    for (const s of APPROVED_GUARANTEE_SENTENCES) text = text.split(s).join(' ')
+    for (const s of [...APPROVED_GUARANTEE_SENTENCES, ...APPROVED_PROBLEM_SENTENCES]) text = text.split(s).join(' ')
     cleanup()
     return text
   }

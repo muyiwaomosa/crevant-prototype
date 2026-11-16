@@ -16,14 +16,24 @@ export type CopyStatus = 'final' | 'approved-in-principle'
 export const HOMEPAGE_COPY = {
   hero: {
     status: 'final' as CopyStatus,
-    headline: 'SOCIAL MEDIA NEEDS A BETTER SPLIT.',
+    /**
+     * Founder-approved headline (2026-11-16), exactly as written. It states
+     * what creators deserve; it is not a promise of earnings, which the small
+     * print beside it makes clear.
+     */
+    headline: 'You Create The Post. You Deserve a Split.',
+    /** Set as two lines; the second is highlighted in gold. */
+    headlineLines: ['You Create The Post.', 'You Deserve a Split.'],
+    /** The brand line, used in the footer. */
     tagline: 'Every Post. A Better Split.',
-    /** The core belief, then the positioning. */
-    body: ["Creating content isn't just a hobby. It's creating value, and value deserves recognition."],
-    positioning: 'Splitpost is a social platform built around connection, not just attention.',
+    /** Plain enough for a 12-year-old: the problem, then what we're building. */
+    body: [
+      "You work hard to make content. You grow your followers. But that doesn't always mean you get paid.",
+      "We're building a better way to help you connect with your audience and earn from the value you create.",
+    ],
     primaryCta: 'Join the Waitlist',
     secondaryCta: 'Discover Splitpost',
-    smallPrint: ['Invitation-only pilot.', DISCLOSURES.noFanCash],
+    smallPrint: ['Invitation-only pilot.', DISCLOSURES.noGuarantee, DISCLOSURES.noFanCash],
   },
 
   /** The one sample post the page follows: Priya, a running coach, teaching. Labelled as sample data wherever it appears. */
@@ -95,8 +105,11 @@ export const HOMEPAGE_COPY = {
     status: 'final' as CopyStatus,
     eyebrow: 'Our vision',
     headline: 'Content creation deserves to be a respected profession.',
-    body: 'Whether you create occasionally, part-time or professionally, valuable content deserves recognition. We’re building Splitpost to help make creating it more financially sustainable.',
-    stages: ['Creating occasionally', 'Creating part-time', 'Creating professionally'],
+    /** The founder's goal statement, verbatim (lowercase, no full stop). Do not edit. */
+    goal: 'we want to create a platform that generates sustainable pay for content creators who have something valuable to say',
+    goalLabel: 'Our goal',
+    body: 'Whether you create now and then, part-time or as your job, valuable content deserves recognition.',
+    stages: ['Now and then', 'Part-time', 'As your job'],
     longTerm: 'In the long term, we want creators and the fans who help them grow to share in the value their posts create.',
     /** Shown right beside the vision it qualifies. */
     disclosure: `${DISCLOSURES.visionOnly} ${DISCLOSURES.noGuarantee}`,

@@ -3,13 +3,24 @@ import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation } from
 import { allHomepageText, HOMEPAGE_COPY } from './copy'
 
 describe('Splitpost homepage copy', () => {
-  it('the hero keeps the headline and tagline, with the core belief and positioning', () => {
+  it('the hero uses the founder-approved headline and supporting copy exactly', () => {
     const h = HOMEPAGE_COPY.hero
-    expect(h.headline).toBe('SOCIAL MEDIA NEEDS A BETTER SPLIT.')
-    expect(h.tagline).toBe('Every Post. A Better Split.')
-    expect(h.body.join(' ')).toBe("Creating content isn't just a hobby. It's creating value, and value deserves recognition.")
-    expect(h.positioning).toBe('Splitpost is a social platform built around connection, not just attention.')
+    expect(h.headline).toBe('You Create The Post. You Deserve a Split.')
+    expect(h.headlineLines.join(' ')).toBe(h.headline)
+    expect(h.body).toEqual([
+      "You work hard to make content. You grow your followers. But that doesn't always mean you get paid.",
+      "We're building a better way to help you connect with your audience and earn from the value you create.",
+    ])
     expect([h.primaryCta, h.secondaryCta]).toEqual(['Join the Waitlist', 'Discover Splitpost'])
+  })
+
+  it('makes clear, beside the headline, that the headline is not a promise of earnings', () => {
+    expect(HOMEPAGE_COPY.hero.smallPrint).toContain(DISCLOSURES.noGuarantee)
+    expect(HOMEPAGE_COPY.hero.smallPrint).toContain(DISCLOSURES.noFanCash)
+  })
+
+  it('keeps the founder’s goal statement verbatim in the vision', () => {
+    expect(HOMEPAGE_COPY.vision.goal).toBe('we want to create a platform that generates sustainable pay for content creators who have something valuable to say')
   })
 
   it('follows the approved, creator-led narrative, in order', () => {
@@ -49,8 +60,10 @@ describe('Splitpost homepage copy', () => {
 
   it('never promises income or a full-time living', () => {
     const text = allHomepageText().join(' ')
-    expect(text).not.toMatch(/guaranteed income|full-time income|make a living|quit your job|replace your income|get paid/i)
-    expect(HOMEPAGE_COPY.vision.body).toMatch(/help make creating it more financially sustainable/)
+    // "get paid" appears once, in the hero's description of today's problem, never as a promise.
+    expect(text).not.toMatch(/guaranteed income|full-time income|make a living|quit your job|replace your income|you will (earn|get paid)/i)
+    expect(text.match(/get paid/gi)).toHaveLength(1)
+    expect(HOMEPAGE_COPY.hero.body[0]).toMatch(/doesn't always mean you get paid/)
   })
 
   it('carries every required pilot disclosure in the invitation, near signup', () => {

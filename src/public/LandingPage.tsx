@@ -10,7 +10,7 @@ import { MobileWaitlistBar } from './landing/sections/MobileWaitlistBar'
 
 // The Splitpost homepage: one story, led by the creator's experience.
 //
-//  HERO         SOCIAL MEDIA NEEDS A BETTER SPLIT.
+//  HERO         You Create The Post. You Deserve a Split.
 //  PROBLEM      You create the value. The algorithm decides who sees it.
 //  ALTERNATIVE  A social platform built around connection, not just attention.
 //  CONNECTION   When your community helps you grow, they're recognized too.
