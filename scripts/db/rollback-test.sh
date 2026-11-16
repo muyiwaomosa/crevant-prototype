@@ -16,11 +16,13 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# The creator acquisition migration (20261116000000) comes after the waitlist
-# migrations, so this rollback refuses while it is recorded. When it is
-# applied, its own rollback is tested and run first
-# (scripts/db/rollback-acquisition-test.sh), and after reapplying, this test
-# proves the order holds: the waitlist rollback refuses until the acquisition
+# Two later migrations build on the waitlist: creator acquisition
+# (20261116000000) and the Release 1 social core (20261117000000). Each
+# rollback refuses while a later migration is recorded, so they run newest
+# first: social core (scripts/db/rollback-social-test.sh), then creator
+# acquisition (scripts/db/rollback-acquisition-test.sh), then this one. After
+# reapplying, this test proves the order holds: each rollback refuses until
+# the later ones have run.
 # rollback has run.
 #
 # Requires: psql, and the Supabase CLI on PATH for step 4.
@@ -89,8 +91,25 @@ refuses() {
 "${PSQL[@]}" -c "delete from ops.waitlist where email like '%@e2e.test'; delete from ops.waitlist_rate_limits;
   update ops.settings set enabled = false, value = null where key in ('waitlist_submissions', 'waitlist_notice_version')" >/dev/null
 
-# Creator acquisition first, if applied: it is later, so it must be removed first.
+# Later migrations first, newest first: each refuses while a later one is
+# recorded. The social core (20261117000000), then creator acquisition
+# (20261116000000).
+SOCIAL_APPLIED=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261117000000')")
 ACQ=$("${PSQL[@]}" -c "select count(*) from supabase_migrations.schema_migrations where version = '20261116000000'")
+if [ "$SOCIAL_APPLIED" = t ]; then
+  refuses "the social core migration is still recorded (it must be removed first)" "later migration" "select 1" "select 1"
+  if [ "$ACQ" = 1 ]; then
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-acquisition.sql 2>&1); code=$?
+    [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+      && ok "the acquisition rollback refuses while the social core is recorded" \
+      || bad "the acquisition rollback did not refuse while the social core is recorded (exit $code)"
+  fi
+  if DB_URL="$DB_URL" bash scripts/db/rollback-social-test.sh; then
+    ok "the social core rollback refuses safely and removes exactly its own objects"
+  else
+    bad "the social core rollback tests failed"
+  fi
+fi
 if [ "$ACQ" = 1 ]; then
   if DB_URL="$DB_URL" bash scripts/db/rollback-acquisition-test.sh; then
     ok "the creator acquisition rollback refuses safely and removes exactly its own objects"
@@ -191,16 +210,30 @@ if out=$(for f in supabase/tests/*.sql; do psql "$DB_URL" -X -q -v ON_ERROR_STOP
 else
   bad "database checks after reapplying: $(tail -3 <<<"$out" | tr '\n' ' ')"
 fi
-if [ "$ACQ" = 1 ]; then
-  # Both are back: the waitlist rollback must refuse until acquisition is removed.
+if [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
+  # Everything is back: the waitlist rollback must refuse until the later ones are removed.
   out=$(rollback check ""); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
-    && ok "after reapplying, the waitlist rollback refuses while creator acquisition is recorded" \
-    || bad "the waitlist rollback did not refuse while creator acquisition is recorded (exit $code)"
-  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-acquisition.sql 2>&1); code=$?
-  [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-    && ok "after reapplying, the acquisition rollback check passes again" \
-    || bad "acquisition check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    && ok "after reapplying, the waitlist rollback refuses while a later migration is recorded" \
+    || bad "the waitlist rollback did not refuse while a later migration is recorded (exit $code)"
+  if [ "$SOCIAL_APPLIED" = t ]; then
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-social.sql 2>&1); code=$?
+    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+      && ok "after reapplying, the social core rollback check passes again" \
+      || bad "social core rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+  fi
+  if [ "$ACQ" = 1 ]; then
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-acquisition.sql 2>&1); code=$?
+    if [ "$SOCIAL_APPLIED" = t ]; then
+      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+        && ok "after reapplying, the acquisition rollback refuses while the social core is recorded" \
+        || bad "the acquisition rollback did not refuse after reapply while the social core is recorded (exit $code)"
+    else
+      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+        && ok "after reapplying, the acquisition rollback check passes again" \
+        || bad "acquisition check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    fi
+  fi
 else
   out=$(rollback check ""); code=$?
   [ $code -eq 0 ] && ok "after reapplying, a new check run passes again" || bad "check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
