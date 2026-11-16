@@ -19,7 +19,7 @@ export interface StockPhoto {
   alt: string
   source: 'Pexels'
   sourceUrl: string
-  /** The photographer as credited on the Pexels page. */
+  /** The photographer as credited on the Pexels page (verified by the founder on each listing). */
   photographer: string
   licence: 'Pexels License'
   licenceUrl: 'https://www.pexels.com/license/'
@@ -32,9 +32,6 @@ const pexels = (p: Omit<StockPhoto, 'source' | 'licence' | 'licenceUrl'>): Stock
   licenceUrl: 'https://www.pexels.com/license/',
 })
 
-/** Credit still to be copied from the Pexels page (its pages refuse automated reads). */
-export const CREDIT_PENDING = 'Credit pending: see source page'
-
 export const PHOTOS = {
   creatorEditing: pexels({
     id: 'creator-editing',
@@ -43,7 +40,7 @@ export const PHOTOS = {
     ratio: '4/3',
     alt: 'A creator editing photos on a laptop at a bright desk at home, a camera on the table beside it.',
     sourceUrl: 'https://www.pexels.com/photo/focused-female-freelancer-editing-photos-on-laptop-7014401/',
-    photographer: CREDIT_PENDING,
+    photographer: 'George Milton',
   }),
   teacherRecording: pexels({
     id: 'teacher-recording',
@@ -52,7 +49,7 @@ export const PHOTOS = {
     ratio: '4/3',
     alt: 'A teacher recording a lesson to a camera on a tripod, notebook in hand.',
     sourceUrl: 'https://www.pexels.com/photo/teacher-recording-herself-teaching-9040544/',
-    photographer: CREDIT_PENDING,
+    photographer: 'Alena Darmel',
   }),
   metalworker: pexels({
     id: 'metalworker',
@@ -61,7 +58,7 @@ export const PHOTOS = {
     ratio: '4/3',
     alt: 'A metalworker grinding a piece of steel in a crowded workshop, sparks flying.',
     sourceUrl: 'https://www.pexels.com/photo/man-sitting-and-working-at-workshop-23638660/',
-    photographer: CREDIT_PENDING,
+    photographer: 'Yunus Tuğ',
   }),
   filmmaker: pexels({
     id: 'filmmaker',
@@ -70,7 +67,7 @@ export const PHOTOS = {
     ratio: '4/5',
     alt: 'A filmmaker framing a shot with a cinema camera on a tripod, outdoors.',
     sourceUrl: 'https://www.pexels.com/photo/young-filmmaker-operating-a-professional-camera-36181988/',
-    photographer: CREDIT_PENDING,
+    photographer: 'Director Chenchi',
   }),
 } as const
 

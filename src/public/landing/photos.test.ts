@@ -34,6 +34,7 @@ describe('homepage photos', () => {
     expect(p.licenceUrl).toBe('https://www.pexels.com/license/')
     expect(p.sourceUrl).toMatch(/^https:\/\/www\.pexels\.com\/photo\/[a-z0-9-]+-\d+\/$/)
     expect(p.photographer.length).toBeGreaterThan(2)
+    expect(p.photographer).not.toMatch(/pending/i)
     expect(p.alt.length).toBeGreaterThan(30)
   })
 
@@ -50,6 +51,15 @@ describe('homepage photos', () => {
       expect(buf.includes(Buffer.from('XMP '))).toBe(false)
     },
   )
+
+  it('credits the verified photographer for each photo', () => {
+    expect(photos.map((p) => [p.sourceUrl.match(/-(\d+)\/$/)![1], p.photographer])).toEqual([
+      ['7014401', 'George Milton'],
+      ['9040544', 'Alena Darmel'],
+      ['23638660', 'Yunus Tuğ'],
+      ['36181988', 'Director Chenchi'],
+    ])
+  })
 
   it('never names a model as a member, user or sample person, and never guesses who they are', () => {
     for (const p of photos) {
