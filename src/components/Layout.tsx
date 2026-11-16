@@ -47,7 +47,7 @@ export function Layout() {
 
       {/* Sidebar for tablets and desktop */}
       <aside className="sticky top-0 hidden h-dvh w-[88px] shrink-0 flex-col border-r border-ink-100 bg-paper px-3 py-6 md:flex lg:w-64 lg:px-5">
-        <Link to="/" className="mb-8 flex justify-center lg:justify-start" aria-label="Crevant home">
+        <Link to="/" className="mb-8 flex justify-center lg:justify-start" aria-label="Splitpost home">
           <span className="lg:hidden">
             <Wordmark size="sm" className="[&>span:nth-child(2)]:hidden" />
           </span>
@@ -106,7 +106,7 @@ export function Layout() {
             <p className="mt-2 text-[11px] leading-snug text-ink-300">Each balance only works for that person's rewards. No cash value.</p>
           </Link>
           <p className="hidden text-[11px] leading-snug text-ink-500 lg:block">
-            Crevant prototype. All people, posts, points, and rewards are simulated and stay in this browser.
+            Splitpost prototype. All people, posts, points, and rewards are simulated and stay in this browser.
           </p>
         </div>
       </aside>
@@ -116,7 +116,7 @@ export function Layout() {
         {/* Top bar for phones */}
         <header className="sticky top-0 z-40 border-b border-ink-100/80 bg-paper/90 pt-[env(safe-area-inset-top)] backdrop-blur-md md:hidden">
           <div className="flex h-14 items-center justify-between gap-3 px-4">
-            <Link to="/" aria-label="Crevant home">
+            <Link to="/" aria-label="Splitpost home">
               <Wordmark size="sm" />
             </Link>
             <Link

@@ -75,10 +75,10 @@ export function Unavailable() {
   return (
     <AuthCard
       title="Sign-in isn't available here"
-      intro={<p>This version of the site isn't connected to Crevant accounts. If you were invited, use the link in your invitation email.</p>}
+      intro={<p>This version of the site isn't connected to Splitpost accounts. If you were invited, use the link in your invitation email.</p>}
     >
       <Link to="/" className="font-semibold text-brand-700 underline underline-offset-2">
-        Back to Crevant
+        Back to Splitpost
       </Link>
     </AuthCard>
   )

@@ -2,61 +2,69 @@ import { describe, expect, it } from 'vitest'
 import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation } from './claims'
 import { allHomepageText, HOMEPAGE_COPY } from './copy'
 
-describe('approved Splitpost homepage copy', () => {
-  it('the hero is exactly as approved', () => {
+describe('Splitpost homepage copy', () => {
+  it('the hero uses the founder-approved headline and supporting copy exactly', () => {
     const h = HOMEPAGE_COPY.hero
-    expect(h.headline).toBe('SUCCESS SHOULD BE SPLIT.')
-    expect(h.tagline).toBe('Every Post. A Better Split.')
-    expect(h.body.join(' ')).toBe('Creators make the content. Fans help it grow. Both deserve to benefit from its success.')
-    expect([h.primaryCta, h.secondaryCta]).toEqual(['Join the Waitlist', 'Discover Splitpost'])
-    expect(h.status).toBe('final')
-  })
-
-  it('POST. SUPPORT. SPLIT. is exactly as approved', () => {
-    const s = HOMEPAGE_COPY.solution
-    expect(s.headline).toBe('POST. SUPPORT. SPLIT.')
-    expect(s.steps.map((x) => `${x.word} ${x.line}`)).toEqual([
-      'POST. Create something worth sharing.',
-      'SUPPORT. Help it reach more people.',
-      'SPLIT. Make meaningful contributions count.',
+    expect(h.headline).toBe('You Create The Post. You Deserve a Split.')
+    expect(h.headlineLines.join(' ')).toBe(h.headline)
+    expect(h.body).toEqual([
+      "You put in the work. You grow your followers. But the money doesn't always follow.",
+      "We're building a social platform where your content can help you earn, and your followers can become a real community.",
     ])
-    expect(s.status).toBe('final')
+    expect(h.primaryCta).toBe('Join the Waitlist')
+    expect(h.smallPrint).toContain(DISCLOSURES.noGuarantee)
   })
 
-  it('keeps pilot recognition and the future vision clearly apart', () => {
-    const { now, later } = HOMEPAGE_COPY.solution
-    expect(now.badge).toMatch(/pilot/i)
-    expect(now.body).toMatch(/no cash value/)
-    expect(later.badge).toMatch(/vision/i)
-    expect(later.body).toMatch(/working toward a future/)
-    expect(later.body).toContain(DISCLOSURES.visionOnly)
-    // The vision has no numbers, dates or currency at all.
-    expect(later.body).not.toMatch(/\d|[$€£¥%]/)
+  it('follows the seven approved sections, in order', () => {
+    const c = HOMEPAGE_COPY
+    expect([c.problem.headline, c.building.headline, c.creators.headline, c.betterSplit.headline, c.vision.headline, c.invitation.headline]).toEqual([
+      'You Do the Work. Who Gets the Reward?',
+      'A Better Split Starts With a Better Connection.',
+      'Different Creators. The Same Problem.',
+      'More Connection. More Ways to Earn.',
+      'What If Creating Content Could Be a Real Career?',
+      'Help Us Build a Better Split.',
+    ])
   })
 
-  it('carries every required pilot disclosure in the invitation', () => {
+  it('keeps the founder’s goal statement verbatim', () => {
+    expect(HOMEPAGE_COPY.building.goal).toBe('we want to create a platform that generates sustainable pay for content creators who have something valuable to say')
+  })
+
+  it('uses everyday sample posts, each a practical topic', () => {
+    expect(HOMEPAGE_COPY.samplePosts.map((p) => p.role)).toEqual(['Math teacher', 'Home cook', 'Leather maker', 'Tech reviewer'])
+    expect(HOMEPAGE_COPY.post.role).toBe('Content creator')
+  })
+
+  it('keeps each limitation beside the claim it qualifies', () => {
+    expect(HOMEPAGE_COPY.building.note).toContain(DISCLOSURES.noGuarantee)
+    expect(HOMEPAGE_COPY.betterSplit.disclosures).toHaveLength(3)
+    expect(HOMEPAGE_COPY.vision.disclosure).toBe('This is our long-term vision, not a promise of income during the pilot.')
+  })
+
+  it('carries every required pilot disclosure in the invitation, near signup', () => {
     const details = HOMEPAGE_COPY.invitation.pilotDetails.join(' ')
     for (const k of ['invitationOnly', 'stillTesting', 'noFanCash', 'cpNoCashValue', 'cpRules', 'creatorSupportTest', 'adsAreDemos', 'pilotStart'] as const) {
       expect(details, k).toContain(DISCLOSURES[k])
     }
-    expect(HOMEPAGE_COPY.hero.smallPrint).toContain(DISCLOSURES.noFanCash)
-    expect(HOMEPAGE_COPY.experience.smallPrint).toBe(DISCLOSURES.noGuarantee)
   })
 
   it('no sentence anywhere in the copy makes a misleading claim', () => {
     const text = allHomepageText()
-    expect(text.length).toBeGreaterThan(30)
+    expect(text.length).toBeGreaterThan(40)
     expect(text.flatMap((t) => findMisleadingClaims(t))).toEqual([])
   })
 
-  it('never publishes the provisional allocation', () => {
-    expect(allHomepageText().some((t) => mentionsProvisionalAllocation(t))).toBe(false)
+  it('never publishes the provisional allocation, a statistic or a currency amount', () => {
+    const all = allHomepageText()
+    expect(all.some((t) => mentionsProvisionalAllocation(t))).toBe(false)
+    // "millions of followers" is the founder's vision copy (no one needs them), not a statistic.
+    expect(all.join(' ').replace("don't need millions of followers", '')).not.toMatch(/[$€£¥]|\d+(\.\d+)?\s?%|per ?cent|million|billion/i)
   })
 
-  it('uses the new brand only, and not the retired headline', () => {
+  it('uses the new brand only', () => {
     const text = allHomepageText().join(' ')
     expect(text).not.toMatch(/crevant/i)
-    expect(text).not.toMatch(/success should be shared/i)
     expect(text).toMatch(/Splitpost/)
   })
 

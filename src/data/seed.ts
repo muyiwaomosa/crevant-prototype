@@ -49,8 +49,8 @@ export const CREATORS: Creator[] = [
   },
   {
     id: 'priya',
-    name: 'Priya Raman',
-    handle: 'priyabuilds',
+    name: 'Meera Raman',
+    handle: 'meerabuilds',
     category: 'Tech',
     bio: 'Indie developer building a habit tracker in public. Weekly numbers, wins, and mistakes.',
     location: 'Bengaluru, India',

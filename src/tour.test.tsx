@@ -23,7 +23,7 @@ describe('the sample tour', () => {
   it.each(TOUR_PATHS)('%s shows the sample data banner', (path) => {
     go(path)
     const { getByRole } = render(<App basename={TOUR_BASE} banner />)
-    const banner = getByRole('note', { name: 'Sample tour' })
+    const banner = getByRole('complementary', { name: 'Sample tour' })
     expect(banner.textContent).toContain('Everything here is made up')
     expect(banner.querySelector('a')?.getAttribute('href')).toBe('/')
   })
@@ -47,7 +47,7 @@ describe('production fallback rendering', () => {
   it('renders the prototype at the root with no banner and no public site', () => {
     go('/discover')
     const { container, queryByRole } = render(<App />)
-    expect(queryByRole('note', { name: 'Sample tour' })).toBeNull()
+    expect(queryByRole('complementary', { name: 'Sample tour' })).toBeNull()
     expect(container.textContent).not.toContain("You need the right 1,000")
     expect(container.textContent).not.toContain('Request an invitation')
   })

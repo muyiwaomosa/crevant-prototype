@@ -49,7 +49,7 @@ export function SetPasswordPage() {
   return (
     <AuthCard
       title={reason === 'recovery' ? 'Choose a new password' : 'Choose your password'}
-      intro={<p>You will use it with your email address to sign in to Crevant.</p>}
+      intro={<p>You will use it with your email address to sign in to Splitpost.</p>}
     >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {error && <Message tone="error">{error}</Message>}

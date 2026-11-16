@@ -99,7 +99,7 @@ describe('waitlist form', () => {
   const fillRequired = () => {
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'maya@example.com' } })
     fireEvent.click(screen.getByLabelText("I'm 18 or older."))
-    fireEvent.click(screen.getByLabelText(/I agree that Crevant can store these details/))
+    fireEvent.click(screen.getByLabelText(/I agree that Splitpost can store these details/))
   }
   const submit = () => fireEvent.click(screen.getByRole('button', { name: 'Join the Waitlist' }))
   // Let the (fake) security check hand over its token.
@@ -117,7 +117,7 @@ describe('waitlist form', () => {
 
   it('offers no marketing consent until email addresses can be verified', () => {
     setup()
-    expect(screen.queryByLabelText(/updates about Crevant/)).toBeNull()
+    expect(screen.queryByLabelText(/updates about Splitpost/)).toBeNull()
     expect(screen.getAllByRole('checkbox').map((c) => c.closest('label')?.textContent)).not.toContainEqual(expect.stringMatching(/market|updates|news/i))
     expect(screen.getByRole('link', { name: 'privacy notice' }).getAttribute('href')).toBe('/privacy')
   })

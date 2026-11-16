@@ -24,7 +24,7 @@ export function ForgotPasswordPage() {
     e.preventDefault()
     if (!client || busy) return
     if (!/^[^@\s]+@[^@\s]+$/.test(email.trim())) {
-      setError('Enter the email address you use for Crevant.')
+      setError('Enter the email address you use for Splitpost.')
       return
     }
     setBusy(true)
@@ -39,7 +39,7 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <AuthCard title="Reset your password" intro={<p>Enter the email address you use for Crevant.</p>}>
+    <AuthCard title="Reset your password" intro={<p>Enter the email address you use for Splitpost.</p>}>
       {sent ? (
         <div className="space-y-4">
           <Message tone="success">{RESET_SENT_MESSAGE}</Message>

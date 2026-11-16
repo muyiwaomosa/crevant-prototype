@@ -223,7 +223,7 @@ export function ProfilePage() {
           <p className="flex gap-2">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-ink-500" />
             <span>
-              This is an early Crevant prototype. There are no accounts and no server: every person, post, comment, point, and reward is sample
+              This is an early Splitpost prototype. There are no accounts and no server: every person, post, comment, point, and reward is sample
               data stored only in this browser. Connection Points have no monetary value.
             </span>
           </p>

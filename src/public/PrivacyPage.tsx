@@ -14,7 +14,7 @@ export function PrivacyPage({ notice = APPROVED_NOTICE }: { notice?: ApprovedNot
     <section aria-labelledby="privacy-title" className="px-4 py-12 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-2xl">
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-600 hover:text-ink-900">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Crevant
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Splitpost
         </Link>
         <h1 id="privacy-title" className="mt-6 font-display text-[2rem] font-extrabold leading-tight tracking-[-0.02em] text-ink-900 sm:text-[2.5rem]">
           Privacy Notice
@@ -33,7 +33,7 @@ export function PrivacyPage({ notice = APPROVED_NOTICE }: { notice?: ApprovedNot
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-spark-700" aria-hidden="true" />
             {/* Founder-approved wording. */}
             <div className="space-y-2">
-              <p className="font-semibold text-ink-900">We're preparing Crevant for its first members.</p>
+              <p className="font-semibold text-ink-900">We're preparing Splitpost for its first members.</p>
               <p>Our privacy notice will be published before waitlist registration opens. We're not collecting waitlist registrations yet.</p>
             </div>
           </div>

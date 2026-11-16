@@ -46,7 +46,7 @@ export function SignInPage() {
   return (
     <AuthCard
       title="Sign in"
-      intro={<p>For invited participants. Crevant is invitation-only during the pilot, so there's no public sign-up.</p>}
+      intro={<p>For invited participants. Splitpost is invitation-only during the pilot, so there's no public sign-up.</p>}
     >
       {status === 'loading' ? (
         <Spinner label="Checking your sign-in…" />

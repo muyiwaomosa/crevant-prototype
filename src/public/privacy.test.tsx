@@ -28,7 +28,7 @@ describe('/privacy before a notice is approved', () => {
     )
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Privacy Notice')
     const box = screen.getByTestId('privacy-not-published')
-    expect(box.querySelectorAll('p')[0].textContent).toBe("We're preparing Crevant for its first members.")
+    expect(box.querySelectorAll('p')[0].textContent).toBe("We're preparing Splitpost for its first members.")
     expect(box.querySelectorAll('p')[1].textContent).toBe(
       "Our privacy notice will be published before waitlist registration opens. We're not collecting waitlist registrations yet.",
     )

@@ -183,7 +183,7 @@ export function OnboardingPage() {
               </div>
               <div className="mt-auto pt-6">
                 <Button size="lg" className="w-full" onClick={() => finish(picked)}>
-                  {replay ? 'Back to Crevant' : 'Go to my feed'}
+                  {replay ? 'Back to Splitpost' : 'Go to my feed'}
                 </Button>
               </div>
             </>

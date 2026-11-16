@@ -2,9 +2,9 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Bricolage Grotesque', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Archivo', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-paper: #f7f4ee;
+  --color-paper: #faf7f1;
   --color-card: #ffffff;
 
   --color-ink-50: #f4f5f5;
@@ -18,25 +18,28 @@
   --color-ink-800: #21282a;
   --color-ink-900: #13191b;
 
-  --color-brand-50: #e9f6f3;
-  --color-brand-100: #c9e9e1;
-  --color-brand-200: #9dd6c8;
-  --color-brand-300: #62baa7;
-  --color-brand-400: #2f9d88;
-  --color-brand-500: #0e7c6b;
-  --color-brand-600: #0b6a5c;
-  --color-brand-700: #0a564b;
-  --color-brand-800: #0a453d;
-  --color-brand-900: #083832;
+  /* Splitpost "Modern Disruptor": the brand scale is Cobalt (600 is the
+     primary), the spark scale is Apricot (500 and up are the darker text
+     variants). Shared by the tour, /join and account pages. */
+  --color-brand-50: #eef2fb;
+  --color-brand-100: #dce4f6;
+  --color-brand-200: #b8c8ec;
+  --color-brand-300: #8aa4dd;
+  --color-brand-400: #5a7dcb;
+  --color-brand-500: #3156b5;
+  --color-brand-600: #2447a6;
+  --color-brand-700: #1d3a8a;
+  --color-brand-800: #172f70;
+  --color-brand-900: #12255a;
 
-  --color-spark-50: #fff8ea;
-  --color-spark-100: #feecc6;
-  --color-spark-200: #fcd78c;
-  --color-spark-300: #f9bf51;
-  --color-spark-400: #f5a524;
-  --color-spark-500: #df8a0b;
-  --color-spark-600: #b46a07;
-  --color-spark-700: #8a4f0b;
+  --color-spark-50: #fef4ec;
+  --color-spark-100: #fde6d3;
+  --color-spark-200: #fad0ae;
+  --color-spark-300: #f6b888;
+  --color-spark-400: #f6b888;
+  --color-spark-500: #b35a22;
+  --color-spark-600: #94481a;
+  --color-spark-700: #7a3a12;
 
   --color-heart: #e0483a;
 
@@ -46,24 +49,40 @@
 }
 
 /*
- * Splitpost design tokens (sp-). Added beside the tokens above, which are
- * unchanged; nothing uses these yet. Each surface (homepage, tour, account
- * screens) opts in in its own reviewed change, so adding them changes no
- * existing page. Contrast pairs are checked in
- * src/public/landing/tokens.test.ts. Exploratory, not a final identity.
+ * Splitpost "Modern Disruptor" design tokens (sp-), chosen by the founder
+ * (2026-11-16). Named by role, so the code stays true if a colour changes.
+ * The shared tokens above (brand, spark, paper, display font) are tuned to
+ * the same palette, so the tour, account screens and waitlist match.
+ *
+ *   primary    #2447A6  Cobalt: dark bands, links and eyebrows on light
+ *   secondary  #A8D9CF  Seafoam: fills, buttons, the community piece. Text on
+ *                       it is ink (10.1:1); small seafoam text on cobalt 5.3:1
+ *   accent     #F6B888  Apricot, refined from #F2A66B so small text on cobalt
+ *                       passes (4.8:1): the headline highlight, the split
+ *                       seam, Connection Points. Text on ivory uses
+ *                       accent-text #94481A (6.1:1)
+ *   bg         #FAF7F1  Ivory: page background, text on cobalt (7.8:1)
+ *   ink        #1B2430  Text (14.6:1 on ivory)
+ *
+ * Product screens stay neutral; brand colours mark key interactions and
+ * recognition only. Contrast pairs are checked in src/public/landing/tokens.test.ts.
  */
 @theme {
   --font-sp-display: 'Archivo', 'Arial Narrow', ui-sans-serif, system-ui, sans-serif;
   --font-sp-body: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --color-sp-midnight: #10142e;
-  --color-sp-midnight-raised: #1b2152;
-  --color-sp-orange: #ff6a2b;
-  --color-sp-orange-text: #b83c14;
-  --color-sp-neutral: #f6f2ec;
-  --color-sp-ink: #141833;
-  --color-sp-muted: #545b78;
-  --color-sp-muted-on-dark: #b7bad0;
+  --color-sp-primary: #2447a6;
+  --color-sp-primary-raised: #3156b5;
+  --color-sp-secondary: #a8d9cf;
+  --color-sp-secondary-tint: #e7f4f1;
+  --color-sp-secondary-on-dark: #a8d9cf;
+  --color-sp-link: #2447a6;
+  --color-sp-accent: #f6b888;
+  --color-sp-accent-text: #94481a;
+  --color-sp-bg: #faf7f1;
+  --color-sp-ink: #1b2430;
+  --color-sp-muted: #4e5a68;
+  --color-sp-muted-on-dark: #d3def3;
 }
 
 @keyframes pop {

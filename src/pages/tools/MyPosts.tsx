@@ -30,7 +30,7 @@ export function MyPosts() {
         <EmptyState
           icon={<PenSquare className="h-7 w-7" />}
           title="Nothing published yet"
-          body="Anyone can post on Crevant. Your first post goes to the people who follow you, in time order."
+          body="Anyone can post on Splitpost. Your first post goes to the people who follow you, in time order."
           action={
             <Link to="/create" className={buttonClass('primary')}>
               Write a post

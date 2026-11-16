@@ -186,7 +186,7 @@ export function WaitlistForm({
 
       <fieldset>
         <legend className="font-semibold text-ink-900">
-          What interests you most about Crevant? <span className="font-normal text-ink-500">Optional, choose any</span>
+          What interests you most about Splitpost? <span className="font-normal text-ink-500">Optional, choose any</span>
         </legend>
         <div className="mt-2 flex flex-wrap gap-2">
           {INTERESTS.map(([value, label]) => {
@@ -270,7 +270,7 @@ export function WaitlistForm({
         <label className="flex gap-3 text-ink-700">
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} aria-invalid={!!errors.consent} className="mt-1 h-5 w-5 shrink-0 accent-brand-600" />
           <span>
-            I agree that Crevant can store these details and email me about the pilot, as described in the{' '}
+            I agree that Splitpost can store these details and email me about the pilot, as described in the{' '}
             <a href={config.noticeUrl} className="font-semibold text-brand-700 underline underline-offset-2">
               privacy notice
             </a>

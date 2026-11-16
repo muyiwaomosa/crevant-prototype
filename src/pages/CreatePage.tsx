@@ -59,7 +59,7 @@ export function CreatePage() {
 
   return (
     <div>
-      <PageHeader title="Create a post" subtitle="Anyone on Crevant can post. It goes to the people who follow you, newest first." />
+      <PageHeader title="Create a post" subtitle="Anyone on Splitpost can post. It goes to the people who follow you, newest first." />
 
       <Card className="p-4 sm:p-5">
         <div className="flex gap-3">
