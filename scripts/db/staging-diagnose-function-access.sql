@@ -35,6 +35,35 @@ where n.nspname in ('public', 'ops', 'waitlist_api', 'social', 'intent', 'sim', 
   and not (r in ('waitlist_writer', 'waitlist_admin') and n.nspname = 'waitlist_api')
 order by 1, 2;
 
+-- 3b. Tables and views in the application schemas that a member or waitlist
+--     login may use. Expect exactly one row: authenticated, public.profiles,
+--     select (members read their own profile under row level security).
+select r as role, n.nspname || '.' || c.relname as object, c.relkind as kind, c.relrowsecurity as rls,
+       concat_ws(',', case when has_table_privilege(r, c.oid, 'SELECT') then 'select' end,
+                      case when has_table_privilege(r, c.oid, 'INSERT') then 'insert' end,
+                      case when has_table_privilege(r, c.oid, 'UPDATE') then 'update' end,
+                      case when has_table_privilege(r, c.oid, 'DELETE') then 'delete' end,
+                      case when has_table_privilege(r, c.oid, 'TRUNCATE,REFERENCES,TRIGGER') then 'other' end) as privileges
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+cross join unnest(array['anon', 'authenticated', 'waitlist_writer', 'waitlist_admin']) r
+where c.relkind in ('r', 'v', 'm', 'p', 'f')
+  and n.nspname in ('public', 'ops', 'waitlist_api', 'social', 'intent', 'sim', 'analytics')
+  and exists (select 1 from pg_roles where rolname = r)
+  and has_schema_privilege(r, n.oid, 'USAGE')
+  and has_table_privilege(r, c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+order by 1, 2;
+
+-- 3c. Schemas the waitlist logins may use. Expect public and waitlist_api
+--     only, for each login.
+select r as role, string_agg(n.nspname, ', ' order by n.nspname) as schemas
+from pg_namespace n
+cross join unnest(array['waitlist_writer', 'waitlist_admin']) r
+where n.nspname not in ('pg_catalog', 'information_schema') and n.nspname not like 'pg_toast%' and n.nspname not like 'pg_temp%'
+  and exists (select 1 from pg_roles where rolname = r)
+  and has_schema_privilege(r, n.oid, 'USAGE')
+group by r order by r;
+
 -- 4. Event triggers on the project.
 select evtname, evtevent, evtfoid::regproc as function, pg_get_userbyid(evtowner) as owner, evtenabled, evttags
 from pg_event_trigger order by 1;
