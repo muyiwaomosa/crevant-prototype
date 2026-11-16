@@ -22,24 +22,34 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05)
 }
 
-describe('Splitpost design tokens', () => {
-  it('defines the sp- palette and type tokens', () => {
-    for (const n of ['sp-midnight', 'sp-midnight-raised', 'sp-orange', 'sp-orange-text', 'sp-neutral', 'sp-ink', 'sp-muted', 'sp-muted-on-dark']) token(n)
+describe('Splitpost design tokens (Modern Disruptor)', () => {
+  it('defines the chosen palette exactly, with the accessible variants from contrast testing', () => {
+    expect(token('sp-primary').toLowerCase()).toBe('#2447a6')
+    expect(token('sp-accent').toLowerCase()).toBe('#f6b888')
+    expect(token('sp-secondary').toLowerCase()).toBe('#a8d9cf')
+    expect(token('sp-bg').toLowerCase()).toBe('#faf7f1')
+    expect(token('sp-ink').toLowerCase()).toBe('#1b2430')
+    expect(token('sp-accent-text').toLowerCase()).toBe('#94481a')
+    for (const n of ['sp-primary-raised', 'sp-secondary-tint', 'sp-secondary-on-dark', 'sp-link', 'sp-muted', 'sp-muted-on-dark']) token(n)
     expect(css).toMatch(/--font-sp-display:\s*'Archivo'/)
     expect(css).toMatch(/--font-sp-body:\s*'Inter'/)
   })
 
-  it('tunes the shared tokens to the Splitpost palette, so the tour and account screens match the site', () => {
-    // brand (buttons, links, focus) is midnight; spark (highlights, notes) is orange.
-    expect(token('brand-700')).toBe(token('sp-midnight-raised'))
-    expect(token('brand-900')).toBe(token('sp-midnight'))
-    expect(token('spark-400')).toBe(token('sp-orange'))
-    expect(token('spark-600')).toBe(token('sp-orange-text'))
-    expect(token('paper')).toBe(token('sp-neutral'))
+  it('tunes the shared tokens to the same palette, so the tour, /join and account screens match', () => {
+    expect(token('brand-600')).toBe(token('sp-primary'))
+    expect(token('brand-500')).toBe(token('sp-primary-raised'))
+    expect(token('spark-400')).toBe(token('sp-accent'))
+    expect(token('spark-600')).toBe(token('sp-accent-text'))
+    expect(token('paper')).toBe(token('sp-bg'))
     expect(css).toMatch(/--font-sans: 'Inter'/)
     expect(css).toMatch(/--font-display: 'Archivo'/)
-    // No teal or amber left from the old Crevant palette.
-    expect(css).not.toMatch(/#0b6a5c|#0e7c6b|#f5a524/i)
+  })
+
+  it('retires the earlier palettes everywhere: no orange, midnight, teal, green or gold', () => {
+    expect(css).not.toMatch(/#ff6a2b|#b83c14|#10142e|#1b2152|#163d3a|#38a88a|#d6a14a|#f5f1e8|sp-(orange|midnight|teal|green|gold|cream)\b/i)
+    const sources = [readFileSync(join(ROOT, 'public', 'favicon.svg'), 'utf8'), readFileSync(join(ROOT, 'src', 'components', 'Wordmark.tsx'), 'utf8')]
+    for (const src of sources) expect(src).not.toMatch(/#ff6a2b|#10142e|#163d3a|#38a88a/i)
+    expect(html).toMatch(/<meta name="theme-color" content="#faf7f1" \/>/)
   })
 
   it('keeps the shared-token pairs the tour relies on readable', () => {
@@ -57,18 +67,27 @@ describe('Splitpost design tokens', () => {
 
   it('meets WCAG 2.2 AA for the pairs the design uses', () => {
     const pairs: Array<[string, string, string, number]> = [
-      ['button text: midnight on orange', 'sp-midnight', 'sp-orange', 4.5],
-      ['body text: ink on warm neutral', 'sp-ink', 'sp-neutral', 4.5],
-      ['links: orange text on warm neutral', 'sp-orange-text', 'sp-neutral', 4.5],
-      ['muted text on warm neutral', 'sp-muted', 'sp-neutral', 4.5],
-      ['muted text on midnight', 'sp-muted-on-dark', 'sp-midnight', 4.5],
-      ['headline accent: orange on midnight (large text)', 'sp-orange', 'sp-midnight', 3],
+      ['buttons and fills: ink on seafoam', 'sp-ink', 'sp-secondary', 4.5],
+      ['body text: ink on ivory', 'sp-ink', 'sp-bg', 4.5],
+      ['text on cobalt: ivory on cobalt', 'sp-bg', 'sp-primary', 4.5],
+      ['links and eyebrows on ivory', 'sp-link', 'sp-bg', 4.5],
+      ['small seafoam text on cobalt', 'sp-secondary-on-dark', 'sp-primary', 4.5],
+      ['apricot text on ivory', 'sp-accent-text', 'sp-bg', 4.5],
+      ['apricot on cobalt (headline highlight, small labels)', 'sp-accent', 'sp-primary', 4.5],
+      ['ink on apricot (avatar initials)', 'sp-ink', 'sp-accent', 4.5],
+      ['muted text on ivory', 'sp-muted', 'sp-bg', 4.5],
+      ['muted text on cobalt', 'sp-muted-on-dark', 'sp-primary', 4.5],
+      ['muted text on raised cobalt', 'sp-muted-on-dark', 'sp-primary-raised', 4.5],
+      ['ink on the seafoam tint', 'sp-ink', 'sp-secondary-tint', 4.5],
+      ['links on the seafoam tint', 'sp-link', 'sp-secondary-tint', 4.5],
     ]
     for (const [what, fg, bg, min] of pairs) {
       expect(contrast(token(fg), token(bg)), `${what}: ${contrast(token(fg), token(bg)).toFixed(2)}`).toBeGreaterThanOrEqual(min)
     }
-    // White on orange fails for text, which is why buttons use midnight text.
-    expect(contrast('#ffffff', token('sp-orange'))).toBeLessThan(4.5)
+    // The unrefined apricot would fail for small text on cobalt; that's why it was lifted.
+    expect(contrast('#f2a66b', token('sp-primary'))).toBeLessThan(4.5)
+    // Apricot and seafoam can't carry text on ivory, which is why the darker text variants exist.
+    expect(contrast(token('sp-accent'), token('sp-bg'))).toBeLessThan(3)
   })
 
   it('loads Archivo on its own link, leaving the existing font request exactly as it was', () => {

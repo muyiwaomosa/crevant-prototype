@@ -19,7 +19,7 @@ export function TourBannerSlot() {
 /** Shown on every /tour screen so nobody mistakes sample data for real accounts. */
 export function TourBanner() {
   return (
-    <div role="note" aria-label="Sample tour" className="border-b border-spark-200 bg-spark-50 text-spark-700">
+    <aside aria-label="Sample tour" className="border-b border-spark-200 bg-spark-50 text-spark-700">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-[13px] leading-snug">
         <span className="inline-flex items-center gap-1.5">
           <FlaskConical className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -31,6 +31,6 @@ export function TourBanner() {
           Back to Splitpost
         </a>
       </div>
-    </div>
+    </aside>
   )
 }

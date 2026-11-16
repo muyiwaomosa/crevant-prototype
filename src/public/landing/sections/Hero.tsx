@@ -7,16 +7,15 @@ import { SplitThePost } from '../ui/SplitThePost'
 
 const copy = HOMEPAGE_COPY.hero
 
-/** The approved headline, set as three stacked lines: SOCIAL MEDIA / NEEDS A / BETTER SPLIT. */
-export const HEADLINE_LINES = ['SOCIAL MEDIA', 'NEEDS A', 'BETTER SPLIT.'] as const
 
 const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-white'
 
 /**
- * Section 1: the hero. A midnight band with the headline as a poster, the
- * approved belief in three short sentences, both calls to action, and the
- * pilot small print. The picture is one post split in two: what the creator
- * made and what fans added.
+ * Section 1: the hero. A Cobalt band with the founder-approved headline
+ * ("You Deserve a Split." in apricot), two plain sentences, both calls to
+ * action, and the pilot small print, which says plainly that nothing is
+ * guaranteed. The picture is one post split in two, with an apricot line in the gap: what the
+ * creator made and what her community grew.
  *
  * Phones: headline, picture, then the words, actions and small print, so the
  * picture shows in the first screen. From lg up: text left, picture right.
@@ -26,35 +25,32 @@ export function Hero() {
   const headline = (
     <h1
       id="hero-title"
-      className="font-sp-display text-[clamp(2.1rem,10vw,5.4rem)] font-black uppercase leading-[0.92] tracking-[-0.025em] [font-stretch:108%] lg:text-[clamp(3.2rem,5vw,4rem)]"
+      // Phones and tablets: exactly two lines, one sentence each. Each line is
+      // kept whole and the size follows the screen width (the longer sentence
+      // is 10.1em wide at 95% width), so it never wraps or overflows. From lg
+      // up it sits beside the picture at the larger desktop size.
+      className="font-sp-display text-[length:min(calc((100vw_-_2rem)/10.3),4.75rem)] font-black leading-[1.02] tracking-[-0.025em] [font-stretch:95%] sm:text-[length:min(calc((100vw_-_3rem)/10.3),5.25rem)] lg:text-[length:clamp(3.3rem,5.2vw,4.4rem)] lg:leading-[0.95] lg:[font-stretch:108%]"
     >
-      <span className="block">{HEADLINE_LINES[0]}</span>{' '}
-      <span className="block">{HEADLINE_LINES[1]}</span>{' '}
-      <span className="block">
-        {HEADLINE_LINES[2].split(' ')[0]}{' '}
-        <span
-          data-testid="split-word"
-          className="inline-block bg-[linear-gradient(135deg,#ffffff_0_46%,var(--color-sp-orange)_46%_100%)] bg-clip-text text-transparent forced-colors:bg-none forced-colors:text-[CanvasText]"
-        >
-          {HEADLINE_LINES[2].split(' ')[1]}
-        </span>
+      <span data-testid="headline-line" className="block whitespace-nowrap lg:whitespace-normal lg:[text-wrap:balance]">
+        {copy.headlineLines[0]}
+      </span>{' '}
+      {/* The approved highlight: apricot on Cobalt (4.8:1). */}
+      <span data-testid="headline-emphasis" className="block whitespace-nowrap text-sp-accent lg:whitespace-normal lg:[text-wrap:balance]">
+        {copy.headlineLines[1]}
       </span>
     </h1>
   )
   const rest = (
     <>
-      <p data-testid="hero-tagline" className="mt-5 font-sp-display text-xl font-extrabold tracking-[-0.01em] text-sp-orange [font-stretch:110%] sm:text-2xl">
-        {copy.tagline}
-      </p>
-
-      <p data-testid="hero-body" className="mt-4 max-w-[34rem] text-[1.05rem] leading-relaxed text-sp-muted-on-dark sm:text-lg">
-        {copy.body.join(' ')}
-      </p>
+      <div data-testid="hero-body" className="mt-6 max-w-[34rem] space-y-3 text-[1.1rem] leading-relaxed sm:text-lg">
+        <p className="text-sp-muted-on-dark">{copy.body[0]}</p>
+        <p className="font-semibold text-sp-bg">{copy.body[1]}</p>
+      </div>
 
       <div data-testid="hero-actions" className="mt-7 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:flex-wrap">
         <Link
           to="/join"
-          className={`inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-sp-orange px-7 text-base font-bold text-sp-midnight transition-[background-color,color,box-shadow,transform] hover:bg-[#ff7e45] active:scale-[0.98] motion-reduce:transition-none ${focusRing}`}
+          className={`inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-sp-secondary px-7 text-base font-bold text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#bde3db] active:scale-[0.98] motion-reduce:transition-none ${focusRing}`}
         >
           {copy.primaryCta} <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </Link>
@@ -74,7 +70,7 @@ export function Hero() {
       {import.meta.env.MODE !== 'site' && memberLinks && (
         <p className="mt-2 text-sm text-sp-muted-on-dark">
           Already invited?{' '}
-          <Link to="/sign-in" className={`font-semibold text-white underline underline-offset-4 hover:text-sp-orange ${focusRing}`}>
+          <Link to="/sign-in" className={`font-semibold text-white underline underline-offset-4 hover:text-sp-secondary-on-dark ${focusRing}`}>
             Sign in
           </Link>
         </p>
@@ -82,7 +78,7 @@ export function Hero() {
     </>
   )
   return (
-    <section id="hero" aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-sp-midnight text-white">
+    <section id="hero" aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-sp-primary text-sp-bg">
       {/* The split: one diagonal cut across the whole band. */}
       <div
         aria-hidden="true"

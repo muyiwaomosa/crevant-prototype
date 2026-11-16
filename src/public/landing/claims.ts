@@ -114,7 +114,8 @@ const RULES: Rule[] = [
   {
     name: 'a promise of money, pay or income',
     pattern: /\b(earn|earns|earning|make|makes|get|gets|receive|receives|win|wins)\b[^.]{0,30}\b(money|cash|paid|income|payouts?|dollars?)\b|\bget paid\b|\bpaid out\b|\bpayouts?\b/i,
-    allowed: denied,
+    // Also allowed: a sentence about how platforms make money today ("Platforms earn money when…"), which promises nothing to anyone.
+    allowed: (s, m) => denied(s, m) || /^Platforms\b/.test(s),
   },
   {
     name: 'a guarantee of earnings, reach or rewards',

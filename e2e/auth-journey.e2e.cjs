@@ -349,9 +349,9 @@ async function shows(locator, timeout = 5000) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await page.goto(`${APP}/`)
-      check('landing page loads', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ').includes('SOCIAL MEDIA NEEDS A BETTER SPLIT.'))
+      check('landing page loads', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ').includes('You Create The Post. You Deserve a Split.'))
       await page.goto(`${APP}/tour/discover`)
-      check('sample tour loads', await shows(page.getByRole('note', { name: 'Sample tour' })))
+      check('sample tour loads', await shows(page.getByRole('complementary', { name: 'Sample tour' })))
       await collectCsp(page)
       await ctx.close()
     }
