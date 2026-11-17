@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Heart, MessageCircle, Trash2, Users } from 'lucide-react'
 import { Avatar, Card, buttonClass } from '../components/ui'
@@ -179,13 +179,17 @@ export function TextComposer({
   const id = useId()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  // `busy` only changes on the next render, so two submits in the same tick
+  // (a double click, Enter plus click) would both see false. The ref doesn't wait.
+  const sending = useRef(false)
   const [error, setError] = useState<unknown>(null)
   const length = [...text.trim()].length
   const over = length > max
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (busy || length === 0 || over) return
+    if (sending.current || length === 0 || over) return
+    sending.current = true
     setBusy(true)
     setError(null)
     try {
@@ -194,6 +198,7 @@ export function TextComposer({
     } catch (err) {
       setError(err)
     } finally {
+      sending.current = false
       setBusy(false)
     }
   }
