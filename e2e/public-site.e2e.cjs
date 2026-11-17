@@ -290,6 +290,49 @@ async function newContext(browser, options = {}) {
       await ctx.close()
     }
 
+    // 5c2. Every "Join the Waitlist" button, on desktop and on a phone
+    //      (including the phone's sticky bar), opens /join on this same site,
+    //      so a Preview never sends visitors to another deployment.
+    for (const [label, options] of [
+      ['desktop', { viewport: { width: 1280, height: 900 } }],
+      ['phone', { ...devices['iPhone 13'] }],
+    ]) {
+      const ctx = await newContext(browser, options)
+      const page = await ctx.newPage()
+      await page.goto(`${BASE}/`, { waitUntil: 'networkidle' })
+      const ctas = page.getByRole('link', { name: /join the waitlist/i, includeHidden: true })
+      const total = await ctas.count()
+      const hrefs = await ctas.evaluateAll((as) => as.map((a) => a.href))
+      const wrong = hrefs.filter((h) => h !== `${new URL(BASE).origin}/join`)
+      check(`${label}: all ${total} Join the Waitlist links point to /join on this site`, total >= 4 && wrong.length === 0, wrong.join(', '))
+      const failed = []
+      let clicked = 0
+      for (let i = 0; i < total; i++) {
+        await page.goto(`${BASE}/`, { waitUntil: 'networkidle' })
+        const link = page.getByRole('link', { name: /join the waitlist/i, includeHidden: true }).nth(i)
+        // The phone's sticky bar slides in (and becomes focusable) only once
+        // the hero has scrolled away; until then it is off screen.
+        if ((await link.getAttribute('tabindex')) === '-1') {
+          if (label !== 'phone') continue
+          await page.mouse.wheel(0, 1400)
+          await page.waitForFunction((el) => el.getAttribute('tabindex') === '0', await link.elementHandle(), { timeout: 3000 }).catch(() => {})
+          if ((await link.getAttribute('tabindex')) !== '0') { failed.push(`link ${i + 1} (sticky bar) never appeared`); continue }
+          await page.waitForTimeout(400)
+        } else {
+          await link.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {})
+        }
+        if (!(await link.isVisible())) continue
+        clicked++
+        await link.click()
+        await page.waitForURL(`${BASE}/join`, { timeout: 5000 }).catch(() => {})
+        const here = page.url()
+        const heading = await shows(page.getByRole('heading', { level: 1, name: 'Join the Waitlist' }), 3000)
+        if (here !== `${BASE}/join` || !heading) failed.push(`link ${i + 1} went to ${here}`)
+      }
+      check(`${label}: clicking each of the ${clicked} visible Join the Waitlist buttons opens this site's /join page`, clicked >= 4 && failed.length === 0, failed.join(' | '))
+      await ctx.close()
+    }
+
     // 5d. Image quality on high-density screens: every image on the homepage
     //     and tour loads, and none is shown more than 1.25x larger than its
     //     real pixels (which is when photos start to look soft or blurry).
