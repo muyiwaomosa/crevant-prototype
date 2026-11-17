@@ -20,7 +20,8 @@ export function NoticeBody() {
   return (
     <div data-testid="privacy-notice-body">
       <P>
-        Splitpost is a brand of <strong>1000859123 ONTARIO INC.</strong>, a corporation in Ontario, Canada (&ldquo;we&rdquo;, &ldquo;us&rdquo;).
+        Splitpost is a brand operated by <strong>1000859123 ONTARIO INC.</strong>, a corporation in Ontario, Canada (&ldquo;we&rdquo;,
+        &ldquo;us&rdquo;).
         This notice explains what we collect when you join the Splitpost waitlist at www.splitpost.ca, why, how long we keep it, and the
         choices you have. It covers the website and the waitlist only. If you&rsquo;re invited to the Splitpost pilot, we&rsquo;ll tell you
         how your pilot account works before you create it.
@@ -57,7 +58,8 @@ export function NoticeBody() {
       </P>
       <P>
         Your optional answers never decide what you can do on Splitpost, and leaving them blank doesn&rsquo;t affect your place on the
-        waitlist. If you join again with the same email address, nothing changes. To change your answers, email us.
+        waitlist. If you join again with the same email address, nothing changes. To change your answers, email us: we&rsquo;ll delete
+        your entry so you can join again with new ones.
       </P>
 
       <H2>How we use it</H2>
@@ -73,8 +75,8 @@ export function NoticeBody() {
         <li>
           <strong>To keep the waitlist working and safe:</strong> the form uses Cloudflare Turnstile to tell people from automated programs.
           Cloudflare processes information from your browser to do this, under its own privacy policy. To slow down abuse, we also keep
-          short-lived counters made from a one-way, keyed code of your email address, which can&rsquo;t be turned back into the address. We
-          delete them after two days.
+          short-lived counters made from a one-way, keyed code of your email address, which can&rsquo;t be turned back into the address.
+          They expire after two days and are cleared out automatically.
         </li>
       </UL>
       <P>We don&rsquo;t sell your information, use it for advertising, or send you marketing.</P>
@@ -102,25 +104,25 @@ export function NoticeBody() {
       <H2>How long we keep it</H2>
       <UL>
         <li>
-          <strong>Your waitlist entry,</strong> including your answers and consent record: 12 months after you joined or last confirmed your
-          place, then we delete it. Joining again with the same address doesn&rsquo;t extend this.
+          <strong>Your waitlist entry,</strong> including your answers and consent record: 12 months from when you joined. We remove
+          entries older than that in a monthly clean-up. Joining again with the same address doesn&rsquo;t extend this.
         </li>
         <li>
-          <strong>The hourly counts:</strong> 90 days.
+          <strong>The hourly counts:</strong> 90 days, also removed in the monthly clean-up.
         </li>
         <li>
-          <strong>The rate limit counters:</strong> two days.
+          <strong>The rate limit counters:</strong> two days, cleared out automatically.
         </li>
       </UL>
 
       <H2>Leaving the waitlist and your other rights</H2>
       <P>
         To leave the waitlist, email <Mail /> from the address you joined with. We&rsquo;ll delete your entry, your answers, your consent
-        record and any invitation not yet accepted, and reply to confirm. If you write from a different address, we may ask you to confirm
-        the address is yours first.
+        record and any invitation not yet accepted, and reply to confirm. The hourly counts don&rsquo;t include your email address, so they
+        aren&rsquo;t affected. If you write from a different address, we may ask you to confirm the address is yours first.
       </P>
       <P>
-        You can also email <Mail /> to see or correct the information we hold about you, to withdraw your consent (we do this by deleting your
+        You can also email <Mail /> to see the information we hold about you or have it corrected, to withdraw your consent (we do this by deleting your
         entry), or with any question about this notice. We&rsquo;ll reply within 30 days. If you&rsquo;re not satisfied with our answer, you
         can contact the Office of the Privacy Commissioner of Canada.
       </P>
@@ -136,7 +138,7 @@ export function NoticeBody() {
 
       <H2>Contact</H2>
       <P>
-        1000859123 ONTARIO INC. (Splitpost)
+        1000859123 ONTARIO INC., operator of Splitpost
         <br />
         1890 Marconi Boulevard, London, Ontario N5V 4T5, Canada
         <br />

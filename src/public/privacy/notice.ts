@@ -5,8 +5,8 @@ import { NoticeBody } from './NoticeBody'
 /** The approved privacy notice: its version, effective date and text. */
 export type ApprovedNotice = { version: string; effectiveDate: string; Body: ComponentType }
 
-// Version 1.0, approved by the founder (docs/PRIVACY-NOTICE-DRAFT.md). Its
-// version and effective date are in approved-notice.json.
+// Version 1.0. Founder decisions confirmed 2026-11-17; professional privacy
+// review is planned later. Version and effective date: approved-notice.json.
 const Body = NoticeBody as ComponentType | null
 
 const version = (approved as { version: unknown }).version

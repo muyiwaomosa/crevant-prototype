@@ -1,5 +1,5 @@
 {
-  "_comment": "The approved privacy notice's version and effective date, with its text in NoticeBody.tsx. A new version needs a reviewed pull request, a new version string here and in VITE_PRIVACY_NOTICE_VERSION, and admin set-notice-version, so earlier consents stay tied to the version they saw.",
+  "_comment": "Version 1.0 of the privacy notice (text in NoticeBody.tsx). Founder decisions confirmed 2026-11-17; professional privacy review planned later. effectiveDate is the publication date. A new version needs a reviewed pull request, a new version string here and in VITE_PRIVACY_NOTICE_VERSION, and admin set-notice-version, so earlier consents stay tied to the version they saw.",
   "version": "1.0",
-  "effectiveDate": "2026-11-18"
+  "effectiveDate": "2026-11-17"
 }
