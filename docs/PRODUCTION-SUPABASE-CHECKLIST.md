@@ -32,7 +32,7 @@ it runs. Nothing below has been created in Production.
 | E | Deletion and purge tools (admin workflow, staging); emergency close (`scripts/db/emergency-close.sql`) | ✅ staging only | |
 | **1. Decisions** | | | |
 | 1.1 | Domain `splitpost.ca` registered and connected to the `splitpost` Vercel project (live 2026-11-17) | ✅ | |
-| 1.1a | The privacy@splitpost.ca mailbox (MX, SPF, DKIM, DMARC), tested both ways | 🔑 | You |
+| 1.1a | The privacy@splitpost.ca mailbox (created 2026-11-17). Before publication: send and receive a test message, and check SPF, DKIM and DMARC pass | ✅ created, test pending | You |
 | 1.1b | One canonical address: `www.splitpost.ca` (as configured: `splitpost.ca` redirects to it). The waitlist origin, Turnstile and Auth use it | ✅ (as configured) | |
 | 1.2 | Supabase: a separate organisation and a paid plan with backups | 🧭🔑 | You |
 | 1.3 | Region: Canada (Central), `ca-central-1` | 🧭 (working decision) | You |

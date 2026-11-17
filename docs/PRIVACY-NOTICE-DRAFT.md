@@ -26,7 +26,7 @@ already asks those questions.
 | --- | --- | --- |
 | Website | https://splitpost.ca (canonical address www.splitpost.ca) | Live since 2026-11-17 with the waitlist closed. **[confirm]** the domain is registered to the operator. |
 | Operator | 1000859123 Ontario Inc. | **[confirm]** the exact registered name, the registered business name "Splitpost" if used, and a mailing address. |
-| Privacy contact | privacy@splitpost.ca | **[confirm]** the mailbox receives and sends mail. |
+| Privacy contact | privacy@splitpost.ca (created 2026-11-17) | **[confirm]** a test message is received and answered. |
 | Retention | 12 months for inactive waitlist records, removed by the monthly purge | Documented deletion policy: `docs/WAITLIST-OPERATIONS.md` (monthly purge, delete on request). **[legal]** confirm the period. |
 | Audience | Potentially international. No Canada-only restriction is implemented (the form doesn't ask for a country). | **[legal]** what the notice must add for people outside Canada (see "Open questions", item 8). |
 | Hosting | A Canadian region where practical | **[confirm]** the Production Supabase project's region once created. Other providers (Vercel, Cloudflare) may process data outside Canada. |
@@ -73,8 +73,8 @@ already asks those questions.
    splitpost.ca.
 
 **Operational dependencies**
-1. The splitpost.ca domain, registered to the operator, and the
-   privacy@splitpost.ca mailbox.
+1. ✅ The splitpost.ca domain (live) and the privacy@splitpost.ca mailbox
+   (created; send and receive test pending).
 2. ~~Self-hosted fonts~~ ✅ done (PR #38).
 3. The Production Supabase project in a Canadian region
    (`docs/PRODUCTION-SUPABASE-CHECKLIST.md`).
