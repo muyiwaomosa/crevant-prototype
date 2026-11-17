@@ -1,0 +1,8 @@
+# The staging-safe, read-only checks run against Production, for the
+# migrations in supabase/production-migrations.txt. 005_social_core.sql is
+# left out until the social core is deployed there.
+001_schema_separation.sql
+002_profiles_and_ops.sql
+003_waitlist.sql
+004_acquisition.sql
+006_platform_functions.sql

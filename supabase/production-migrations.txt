@@ -1,0 +1,28 @@
+# The migrations Production may receive, in order (reviewed PRs only). Each
+# must also be on supabase/approved-migrations.sha256 with a matching
+# checksum. Production gets the waitlist and its dependencies only:
+#
+#   20261106000000  foundations: the private schemas (ops, intent, sim, analytics)
+#   20261107000000  profiles and ops: ops.invitations (the waitlist removes a
+#                   person's pending invitation with their entry; acquisition
+#                   links invitations to creator links). It also creates
+#                   public.profiles and its sign-up trigger, unused until
+#                   members exist (one approved migration; not split)
+#   20261110000000  the waitlist
+#   20261111000000  the waitlist admin tools (summary, waves)
+#   20261116000000  creator acquisition: submit_v2 and invite_preview, which
+#                   the join-waitlist function calls
+#   20261118000000  platform function access (members and waitlist logins
+#                   can't run Supabase's rls_auto_enable)
+#
+# Not listed, so never pushed to Production by the workflow:
+#   20261117000000  the Release 1 social core. Nothing above depends on it.
+#                   When the social app launches, a reviewed PR adds it here
+#                   and the workflow applies it with --include-all (it is
+#                   older than 20261118000000).
+20261106000000_foundations.sql
+20261107000000_profiles_and_ops.sql
+20261110000000_waitlist.sql
+20261111000000_waitlist_admin_tools.sql
+20261116000000_creator_acquisition.sql
+20261118000000_platform_function_access.sql

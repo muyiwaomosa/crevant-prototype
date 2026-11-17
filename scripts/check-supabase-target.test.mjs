@@ -58,21 +58,23 @@ const STAGING_FN = `${STAGING_SUPABASE_URL}/functions/v1/join-waitlist`
 const FAKE_PROD = 'abcdefghijabcdefghij'
 const PROD_FN = `https://${FAKE_PROD}.supabase.co/functions/v1/join-waitlist`
 const withProd = { refs: { staging: 'kpudeppgokpjhvaqrprn', production: FAKE_PROD } }
+const unset = { refs: { staging: 'kpudeppgokpjhvaqrprn', production: null } }
 
-test('the Production project reference is unset in this repository, and staging is the known project', () => {
-  assert.equal(PROJECTS.production, null)
+test('the Production and staging project references are the known, separate projects', () => {
+  assert.equal(PROJECTS.production, 'hmrliwoychnqrbbydorg')
+  assert.notEqual(PROJECTS.production, PROJECTS.staging)
   assert.equal(PROJECTS.staging, 'kpudeppgokpjhvaqrprn')
   assert.equal(STAGING_SUPABASE_URL, 'https://kpudeppgokpjhvaqrprn.supabase.co')
 })
 
 test('while the Production project is unset, a Production build with any waitlist address fails closed', () => {
   for (const endpoint of [STAGING_FN, PROD_FN, 'http://127.0.0.1:54321/functions/v1/join-waitlist']) {
-    const r = checkSupabaseTarget({ VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: endpoint }, { mode: 'site' })
+    const r = checkSupabaseTarget({ VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: endpoint }, { mode: 'site', ...unset })
     assert.equal(r.ok, false, endpoint)
   }
-  assert.match(checkSupabaseTarget({ VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: PROD_FN }, { mode: 'site' }).message, /not configured/)
+  assert.match(checkSupabaseTarget({ VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: PROD_FN }, { mode: 'site', ...unset }).message, /not configured/)
   // No address: fine (the form simply stays off).
-  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'production' }, { mode: 'site' }).ok, true)
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'production' }, { mode: 'site', ...unset }).ok, true)
 })
 
 test('once configured, Production may use only the Production function, and never staging', () => {
@@ -96,4 +98,11 @@ test('the public site build on a Preview needs no Supabase values, but still ref
   assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'preview', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_abcdefghijklmnop' }, { mode: 'site' }).ok, false)
   // The full app on a Preview still needs the staging project.
   assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'preview' }, { mode: 'app' }).ok, false)
+})
+
+test('with the real configuration, Production may use only the Production function, and Previews never may', () => {
+  const real = `https://${PROJECTS.production}.supabase.co/functions/v1/join-waitlist`
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: real }, { mode: 'site' }).ok, true)
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: STAGING_FN }, { mode: 'site' }).ok, false)
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'preview', VITE_WAITLIST_ENDPOINT: real }, { mode: 'site' }).ok, false)
 })
