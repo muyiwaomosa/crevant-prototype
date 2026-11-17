@@ -40,14 +40,14 @@ const landing = (page) => page.getByRole('heading', { level: 1, name: /You Creat
       await page.goto(`${BASE}/join`)
       await page.waitForTimeout(300)
       check('/join may be indexed', (await robots(page)) === 'index, follow', await robots(page))
-      check('/join has no form (no approved privacy notice)', (await page.locator('form, input').count()) === 0)
+      check('/join has no form (the form settings are off)', (await page.locator('form, input').count()) === 0)
       for (const p of ['/privacy', '/tour', '/sign-in', '/no-such-page']) {
         await page.goto(`${BASE}${p}`)
         await page.waitForTimeout(300)
         check(`${p} is noindex`, (await robots(page)) === 'noindex', await robots(page))
       }
       await page.goto(`${BASE}/privacy`)
-      check('/privacy shows the approved wording', ((await page.getByTestId('privacy-not-published').textContent()) || '').includes('Our privacy notice will be published before waitlist registration opens.'))
+      check('/privacy shows the approved notice', ((await page.getByTestId('privacy-notice').textContent()) || '').includes('1000859123 ONTARIO INC.'))
     }
 
     // The rule without JavaScript: the robots tag in the INITIAL HTML the server

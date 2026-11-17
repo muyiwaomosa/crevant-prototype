@@ -117,12 +117,12 @@ async function newContext(browser, options = {}) {
         check(`${label}: ${p} is not found, with nothing to type into`, notFound && inputs === 0, `inputs=${inputs}`)
       }
 
-      // 4b. /privacy says plainly that no notice is published; nothing is indexable.
+      // 4b. /privacy shows the approved notice; nothing to type into, not indexable.
       await page.goto(`${BASE}/privacy`)
       check(
-        `${label}: /privacy shows the approved wording`,
-        (await shows(page.getByTestId('privacy-not-published'))) &&
-          (await page.getByTestId('privacy-not-published').textContent()).includes("We're not collecting waitlist registrations yet."),
+        `${label}: /privacy shows the approved notice, version 1.0`,
+        (await shows(page.getByTestId('privacy-notice'))) &&
+          (await page.getByTestId('privacy-notice').textContent()).includes('Version 1.0, effective'),
       )
       check(`${label}: /privacy has nothing to type into`, (await page.locator('form, input, select, textarea').count()) === 0)
       check(`${label}: /privacy is noindex`, (await page.locator('meta[name="robots"]').getAttribute('content')) === 'noindex')

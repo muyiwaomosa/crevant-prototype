@@ -1,13 +1,13 @@
 import type { ComponentType } from 'react'
 import approved from './approved-notice.json'
+import { NoticeBody } from './NoticeBody'
 
 /** The approved privacy notice: its version, effective date and text. */
 export type ApprovedNotice = { version: string; effectiveDate: string; Body: ComponentType }
 
-// The reviewed pull request that adds the approved notice sets the version and
-// effective date in approved-notice.json and replaces `null` here with the
-// component holding the approved text. Until then there is no notice.
-const Body = null as ComponentType | null
+// Version 1.0, approved by the founder (docs/PRIVACY-NOTICE-DRAFT.md). Its
+// version and effective date are in approved-notice.json.
+const Body = NoticeBody as ComponentType | null
 
 const version = (approved as { version: unknown }).version
 const effectiveDate = (approved as { effectiveDate: unknown }).effectiveDate

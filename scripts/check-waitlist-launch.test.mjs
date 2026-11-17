@@ -9,10 +9,10 @@ const APPROVED = { version: 'notice-2027-01', effectiveDate: '2027-01-15' }
 const PROD = { VERCEL_ENV: 'production', CREVANT_PRODUCTION_SITE_APPROVED: 'true' }
 const FORM = { VITE_WAITLIST_FORM_ENABLED: 'true', VITE_PRIVACY_NOTICE_URL: '/privacy', VITE_PRIVACY_NOTICE_VERSION: 'notice-2027-01' }
 
-test('no privacy notice is approved in this repository yet', () => {
+test('the approved privacy notice is version 1.0, with an effective date', () => {
   const approved = JSON.parse(readFileSync(new URL('../src/public/privacy/approved-notice.json', import.meta.url), 'utf8'))
-  assert.equal(approved.version, null)
-  assert.equal(approved.effectiveDate, null)
+  assert.equal(approved.version, '1.0')
+  assert.match(approved.effectiveDate, /^\d{4}-\d{2}-\d{2}$/)
 })
 
 test('a Production build with the form on needs the approved notice, its version, and /privacy', () => {
