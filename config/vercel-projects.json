@@ -1,0 +1,6 @@
+{
+  "_comment": "Vercel project identities (not secrets). The public site may build for Vercel Production only in publicSite, from main of repository, and never in demo. Changing these requires a reviewed pull request. publicSite.projectId stays null until confirmed from the splitpost project's Settings, General, Project ID; while null, every Production build of main fails closed.",
+  "repository": { "owner": "muyiwaomosa", "slug": "crevant-prototype", "productionBranch": "main" },
+  "demo": { "name": "crevant-prototype", "projectId": "prj_kHLgZpZPCD5QMegqwCwISuV37hge" },
+  "publicSite": { "name": "splitpost", "projectId": null }
+}

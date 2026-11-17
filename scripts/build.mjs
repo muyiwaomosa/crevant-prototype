@@ -2,7 +2,10 @@
 // The one build entry point (npm run build). Chooses what to build:
 //
 //   Vercel Production          always the public site build (and only once
-//                              approved: see scripts/guard-build-target.mjs)
+//                              approved, in the splitpost project, from main:
+//                              see scripts/guard-build-target.mjs)
+//   the splitpost project      always the public site build, Previews too:
+//                              that project serves only the landing page
 //   CREVANT_BUILD=site         the public site build (e.g. one Preview branch)
 //   --site                     the public site build (npm run build:site)
 //   anything else              the full app, exactly as before
@@ -16,10 +19,12 @@
 // never runs this file.
 
 import { spawnSync } from 'node:child_process'
+import { VERCEL_PROJECTS, identifyProject } from './vercel-project.mjs'
 
-export function planBuild(env, argv = []) {
+export function planBuild(env, argv = [], projects = VERCEL_PROJECTS) {
   const target = (env.VERCEL_ENV || '').trim().toLowerCase()
-  const site = argv.includes('--site') || target === 'production' || (env.CREVANT_BUILD || '').trim() === 'site'
+  const site =
+    argv.includes('--site') || target === 'production' || (env.CREVANT_BUILD || '').trim() === 'site' || identifyProject(env, projects) === 'publicSite'
   const steps = site
     ? [
         ['node', 'scripts/guard-build-target.mjs'],
