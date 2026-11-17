@@ -5,8 +5,8 @@
 // stand-in), storing in a LOCAL Supabase database as the restricted
 // waitlist_writer login. Run by scripts/e2e/waitlist-journey.sh.
 //
-// Covers, on desktop and on a phone: validation, consent, a creator and a fan
-// signing up, what is stored, a repeat signup, a failed bot check, the
+// Covers, on desktop and on a phone: one form for everyone (nobody chooses
+// creator or fan), validation, consent, two people signing up, what is stored, a repeat signup, a failed bot check, the
 // waitlist closed, a channel label, a creator's invitation link (and an
 // unknown one), the rate limit, deletion on request, the success screen's way
 // to leave, layout on a phone, and accessibility (axe-core, WCAG 2.2 AA).
@@ -95,8 +95,12 @@ async function axe(page) {
     // 1. Validation: nothing is sent until the required answers are given.
     await open(page)
     check('the form offers email, the optional questions, the 18+ and consent boxes, and links the privacy notice',
-      (await page.getByLabel('Email address').count()) === 1 && (await page.getByText('How do you plan to use Splitpost?').count()) === 1 &&
+      (await page.getByLabel('Email address').count()) === 1 && (await page.getByTestId('waitlist-sharing').count()) === 1 &&
       (await page.getByRole('link', { name: 'privacy notice' }).getAttribute('href')) === '/privacy')
+    const formText = await page.getByTestId('waitlist-form').innerText()
+    check('one form for everyone: nobody is asked to choose creator or fan',
+      !/How do you plan to use Splitpost|Create content|Discover and support creators|account type|creator or (a )?fan/i.test(formText) &&
+      (await page.locator('input[name="wl-intent"]').count()) === 0)
     let sent = 0
     page.on('request', (r) => r.method() === 'POST' && r.url().startsWith(env('ENDPOINT')) && !r.postData()?.includes('invite_preview') && sent++)
     await submit(page)
@@ -111,9 +115,8 @@ async function axe(page) {
     check('without consent nothing is sent', sent === 0 && (await page.locator('[aria-invalid="true"]').count()) >= 1)
     check('nothing was stored by the refused attempts', count('creator@journey.test') === 0)
 
-    // 2. A creator signs up, with every optional answer.
+    // 2. Someone who already shares content signs up, with every optional answer.
     await open(page)
-    await choose(page, 'Create content')
     await choose(page, 'Reaching the people who follow me')
     await choose(page, 'Earning more sustainably from my work')
     await choose(page.getByTestId('waitlist-sharing'), 'Yes')
@@ -122,34 +125,33 @@ async function axe(page) {
     await choose(page.getByTestId('waitlist-introduced'), 'Yes')
     await fillRequired(page, 'Creator@Journey.test')
     await submit(page)
-    check('a creator signs up and sees the success screen', (await outcome(page)) === 'ok')
+    check('someone who shares content signs up and sees the success screen', (await outcome(page)) === 'ok')
     const leave = page.getByTestId('waitlist-leave')
     check('the success screen says how to leave: email privacy@splitpost.ca',
       (await leave.innerText()).includes('privacy@splitpost.ca') && (await leave.getByRole('link').getAttribute('href')) === 'mailto:privacy@splitpost.ca')
-    const c = row('creator@journey.test', "concat_ws('|', intent, array_to_string(interests, ','), shares_content, platform, audience_band, introduced_by_creator, age_confirmed, waitlist_consent_version, email_verified_at is null, creator_link_id is null)")
-    check('stored as the creator answered, lower-cased, unverified, with the notice version shown', c === 'create|reach_followers,sustainable_income|yes|youtube|1k_10k|t|t|e2e-notice-1|t|t', c)
+    const c = row('creator@journey.test', "concat_ws('|', coalesce(intent, 'none'), array_to_string(interests, ','), shares_content, platform, audience_band, introduced_by_creator, age_confirmed, waitlist_consent_version, email_verified_at is null, creator_link_id is null)")
+    check('stored as answered (no creator or fan choice), lower-cased, unverified, with the notice version shown', c === 'none|reach_followers,sustainable_income|yes|youtube|1k_10k|t|t|e2e-notice-1|t|t', c)
     check('one consent record, for the notice version shown',
       sql("select count(*) || '|' || string_agg(notice_version, ',') from ops.waitlist_consents k join ops.waitlist w on w.id = k.waitlist_id where w.email = 'creator@journey.test' and k.granted") === '1|e2e-notice-1')
 
-    // 3. A fan signs up: the sharing questions don't apply, so they're hidden.
+    // 3. Someone who mostly wants to discover and support creators signs up
+    // through the very same form, skipping the questions that don't apply.
     await open(page)
-    await choose(page, 'Discover and support creators')
-    check('choosing "Discover and support creators" hides the sharing questions', (await page.getByTestId('waitlist-sharing').count()) === 0)
     await choose(page, 'Supporting creators I care about')
     await fillRequired(page, 'fan@journey.test')
     await submit(page)
-    check('a fan signs up and sees the success screen', (await outcome(page)) === 'ok')
-    const f = row('fan@journey.test', "concat_ws('|', intent, array_to_string(interests, ','), coalesce(shares_content, 'none'), coalesce(platform, 'none'))")
-    check('stored as the fan answered, with no sharing answers', f === 'discover|support_creators|none|none', f)
+    check('someone who skips the sharing questions signs up the same way', (await outcome(page)) === 'ok')
+    const f = row('fan@journey.test', "concat_ws('|', coalesce(intent, 'none'), array_to_string(interests, ','), coalesce(shares_content, 'none'), coalesce(platform, 'none'))")
+    check('stored as answered, with the skipped questions empty', f === 'none|support_creators|none|none', f)
 
     // 4. The same address again: the visitor sees success; nothing changes.
-    const before = row('fan@journey.test', "concat_ws('|', id, intent, joined_at)")
+    const before = row('fan@journey.test', "concat_ws('|', id, array_to_string(interests, ','), joined_at)")
     await open(page)
-    await choose(page, 'Both')
+    await choose(page, 'Discovering new creators')
     await fillRequired(page, 'fan@journey.test')
     await submit(page)
     check('a repeat signup shows the same success screen (nobody can tell who has joined)', (await outcome(page)) === 'ok')
-    check('a repeat signup changes nothing: one entry, the first answers kept', count('fan@journey.test') === 1 && row('fan@journey.test', "concat_ws('|', id, intent, joined_at)") === before)
+    check('a repeat signup changes nothing: one entry, the first answers kept', count('fan@journey.test') === 1 && row('fan@journey.test', "concat_ws('|', id, array_to_string(interests, ','), joined_at)") === before)
 
     // 5. A failed bot check.
     await open(page, '?turnstile=fail')
@@ -237,7 +239,7 @@ async function axe(page) {
     })
     check('phone: no sideways scrolling', layout.over <= 0, `${layout.over}px`)
     check('phone: the button and email field are easy to tap (at least 44px tall)', layout.button >= 44 && layout.email >= 44, JSON.stringify(layout))
-    await choose(page, 'Both')
+    await choose(page.getByTestId('waitlist-sharing'), 'Not yet')
     await fillRequired(page, 'phone@journey.test')
     await submit(page)
     check('phone: a signup works and shows the success screen', (await outcome(page)) === 'ok' && count('phone@journey.test') === 1)

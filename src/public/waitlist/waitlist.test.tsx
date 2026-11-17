@@ -171,7 +171,6 @@ describe('waitlist form', () => {
       ageConfirmed: true,
       waitlistConsent: true,
       noticeVersion: 'notice-2026-11',
-      intent: null,
       introducedByCreator: null,
       creatorRef: null,
       turnstileToken: 'turnstile-token',
@@ -180,13 +179,18 @@ describe('waitlist form', () => {
     expect(screen.getByText("Thanks, you're on the waitlist.")).toBeTruthy()
   })
 
-  it('keeps signup short for people who only want to discover: no creator questions', () => {
-    setup()
+  it('is one form for everyone: nobody is asked to choose creator or fan, and everyone sees the same questions', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <WaitlistForm config={readWaitlistConfig(ENV, NOTICE)!} mount={async () => ({ reset() {}, remove() {} })} fetchImpl={vi.fn()} search="" />
+      </MemoryRouter>,
+    )
+    const text = container.textContent ?? ''
+    expect(text).not.toMatch(/How do you plan to use Splitpost|Create content|Discover and support creators|account type|creator or (a )?fan|as a (creator|fan|supporter)/i)
+    expect(container.querySelector('input[name="wl-intent"]')).toBeNull()
+    // The optional questions are the same for everyone, always shown.
     expect(screen.getByTestId('waitlist-sharing')).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Discover and support creators'))
-    expect(screen.queryByTestId('waitlist-sharing')).toBeNull()
-    fireEvent.click(screen.getByLabelText('Both'))
-    expect(screen.getByTestId('waitlist-sharing')).toBeTruthy()
+    expect(screen.getByTestId('waitlist-introduced')).toBeTruthy()
   })
 
   it('asks only yes or no about a creator introduction, never for a name or handle', () => {
@@ -198,10 +202,9 @@ describe('waitlist form', () => {
     expect(q.textContent).toContain("It names nobody and doesn't follow anyone.")
   })
 
-  it('sends intent, the self-reported introduction and the creator code as separate fields', async () => {
+  it('sends the self-reported introduction and the creator code as separate fields, and no creator or fan choice', async () => {
     const f = setup(respond('ok'), '?src=ig_bio&ref=0123456789abcdef0123')
     fillRequired()
-    fireEvent.click(screen.getByLabelText('Discover and support creators'))
     fireEvent.click(within(screen.getByTestId('waitlist-introduced')).getByLabelText('Yes'))
     await tokenReady()
     submit()
@@ -209,26 +212,26 @@ describe('waitlist form', () => {
     const body = JSON.parse((f.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
     expect(body).toMatchObject({
       source: 'ig_bio',
-      intent: 'discover',
       sharesContent: null,
       platform: null,
       introducedByCreator: true,
       creatorRef: '0123456789abcdef0123',
     })
     expect(Object.keys(body)).not.toContain('introducerReported')
+    expect(Object.keys(body)).not.toContain('intent')
   })
 
-  it('drops the sharing answers if someone switches to discovering only', async () => {
+  it('drops the platform and audience if someone changes "Yes" to "Not yet"', async () => {
     const f = setup()
     fillRequired()
     fireEvent.click(within(screen.getByTestId('waitlist-sharing')).getByLabelText('Yes'))
     fireEvent.change(screen.getByLabelText(/Where\?/), { target: { value: 'youtube' } })
-    fireEvent.click(screen.getByLabelText('Discover and support creators'))
+    fireEvent.click(within(screen.getByTestId('waitlist-sharing')).getByLabelText('Not yet'))
     await tokenReady()
     submit()
     await waitFor(() => expect(screen.getByTestId('waitlist-success')).toBeTruthy())
     const body = JSON.parse((f.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
-    expect([body.sharesContent, body.platform, body.audienceBand]).toEqual([null, null, null])
+    expect([body.sharesContent, body.platform, body.audienceBand]).toEqual(['not_yet', null, null])
   })
 
   it('shows clear messages for closed, rate limited and failed checks, and resets the check', async () => {
