@@ -75,3 +75,31 @@ database and runs those checks.
    the Production SQL editor (read-only; it works on any project).
 
 Each job approves through the `production` environment gate.
+
+## Running the Production waitlist
+
+**Waitlist admin (Production)** (`.github/workflows/waitlist-admin-production.yml`),
+on `main`, approved through the `production` environment every run, as the
+restricted `waitlist_admin` login only:
+
+| Action | Use |
+| --- | --- |
+| `status` | Whether registrations are open, and the recorded notice version |
+| `summary` | Counts only |
+| `set-notice-version` | Record the published notice version (`1.0`) before opening |
+| `open` / `close` | Open or close registrations at once |
+| `delete` | Delete one entry on request, by its id from the dashboard (never an email address) |
+| `purge` | The monthly retention purge (`retention_months` 12) |
+
+It needs a second secret in the `production` environment,
+`WAITLIST_ADMIN_DATABASE_URL`: the session pooler string for the login
+`waitlist_admin.hmrliwoychnqrbbydorg` (port 5432), set after that login's
+password. Invitation waves and creator links stay staging-only until approved
+for Production. If GitHub is unavailable, `scripts/db/emergency-close.sql` in
+the Supabase SQL editor closes registrations at once.
+
+**Waitlist health check (Production)** (`waitlist-health-production.yml`) uses
+no secrets, only repository variables `PRODUCTION_WAITLIST_FUNCTION_URL`,
+`PRODUCTION_WAITLIST_SITE_ORIGIN` (`https://www.splitpost.ca`) and
+`PRODUCTION_WAITLIST_EXPECTED_STATE`. Its daily run starts when
+`PRODUCTION_WAITLIST_HEALTH_ENABLED` is `true`.

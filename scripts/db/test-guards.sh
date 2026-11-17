@@ -231,8 +231,10 @@ guard "production workflow: the subset is tested on its own, and Production chec
   "grep -q 'run: |' $pw && grep -q 'scripts/db/production-subset.sh test' $pw && grep -q 'supabase/production-checks.txt' $pw && ! grep -q 'for f in supabase/tests/\*.sql' $pw"
 guard "the Production subset verifies: approved, in order, and without the social core or its check" \
   "scripts/db/production-subset.sh verify >/dev/null 2>&1 && ! grep -qE '^20261117000000' supabase/production-migrations.txt && ! grep -qE '^005_' supabase/production-checks.txt"
-guard "no rollback or admin workflow can reach Production" \
-  "! grep -l 'PRODUCTION_DATABASE_URL\|hmrliwoychnqrbbydorg' .github/workflows/*.yml | grep -vq '^$pw\$'"
+guard "only the three Production workflows name Production; no staging, rollback or CI workflow does" \
+  "[ \"\$(grep -lE 'PRODUCTION_DATABASE_URL|hmrliwoychnqrbbydorg' .github/workflows/*.yml | sort | paste -sd,)\" = '.github/workflows/deploy-db-production.yml,.github/workflows/waitlist-admin-production.yml,.github/workflows/waitlist-health-production.yml' ]"
+guard "the Production admin and health workflows never name the staging project" \
+  "! grep -q 'kpudeppgokpjhvaqrprn' .github/workflows/waitlist-admin-production.yml .github/workflows/waitlist-health-production.yml"
 
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]
