@@ -87,17 +87,25 @@ Then store the `waitlist_writer` password only where it's used: the function sec
 
 Step B already connected with `sslmode=verify-full`, so the right certificate and host name were verified. These checks prove that the wrong ones are refused.
 
-1. **Wrong host name.** Look up one of the pooler's addresses, then connect to the address instead of the name. The certificate is issued to the name, so this must fail:
+1. **Wrong host name.** Connecting to a bare address can time out (it may be stale, or the front end may need the server name), which proves nothing. Instead, keep the working route with `hostaddr` and change only the name psql checks with `host`. First find the address the working connection uses (`TcpTestSucceeded` must be `True`):
 
    ```powershell
-   Resolve-DnsName <pooler host> -Type A
+   Test-NetConnection <pooler host> -Port 6543
    ```
+
+   Control, the real name on that address. Expected: the password prompt (press Ctrl+C):
 
    ```powershell
-   psql "host=<one of the addresses shown> port=6543 dbname=postgres user=waitlist_writer.kpudeppgokpjhvaqrprn sslmode=verify-full sslrootcert=C:\crevant\supabase-ca.crt"
+   psql "host=<pooler host> hostaddr=<RemoteAddress> port=6543 connect_timeout=10 dbname=postgres user=waitlist_writer.kpudeppgokpjhvaqrprn sslmode=verify-full sslrootcert=C:\crevant\supabase-ca.crt"
    ```
 
-   Expected: an error saying the server certificate doesn't match the host name, **before** any password prompt.
+   Test, a wrong name on the same address:
+
+   ```powershell
+   psql "host=wrong-name.invalid hostaddr=<RemoteAddress> port=6543 connect_timeout=10 dbname=postgres user=waitlist_writer.kpudeppgokpjhvaqrprn sslmode=verify-full sslrootcert=C:\crevant\supabase-ca.crt"
+   ```
+
+   Expected: `server certificate for "*.pooler.supabase.com" does not match host name "wrong-name.invalid"`, **before** any password prompt. If the control times out too, the address route doesn't work from that network: don't count it either way.
 2. **Wrong certificate authority.** Make a throwaway certificate authority with Windows' own tools, use it, then delete it:
 
    ```powershell
