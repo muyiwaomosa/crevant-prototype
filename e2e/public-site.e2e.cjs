@@ -13,7 +13,8 @@ const path = require('node:path')
 const { chromium, devices } = require('playwright')
 
 const BASE = (process.argv[2] || 'http://localhost:4176').replace(/\/$/, '')
-const ALLOWED_THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com']
+// Fonts are self-hosted: no third party is allowed on the public pages.
+const ALLOWED_THIRD_PARTY = []
 const vercel = JSON.parse(readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'))
 const SECURITY_HEADERS = Object.fromEntries(vercel.headers.find((h) => h.source === '/(.*)').headers.map((h) => [h.key.toLowerCase(), h.value]))
 
@@ -36,10 +37,20 @@ async function newContext(browser, options = {}) {
   // Apply the production security headers to every page, so a CSP problem
   // shows up here exactly as it would on Vercel.
   await ctx.route(`${BASE}/**`, async (route) => {
-    const res = await route.fetch()
-    const headers = { ...res.headers() }
-    if ((headers['content-type'] || '').includes('text/html')) Object.assign(headers, SECURITY_HEADERS)
-    await route.fulfill({ response: res, headers })
+    // A request can outlive its page (the test moves on while a font is still
+    // downloading). Then there's nothing left to answer, so it's ignored
+    // rather than crashing the run.
+    // Only pages need the headers; scripts, styles, images and fonts pass
+    // straight through, so they're never fetched twice.
+    if (route.request().resourceType() !== 'document') return route.continue()
+    try {
+      const res = await route.fetch()
+      const headers = { ...res.headers() }
+      if ((headers['content-type'] || '').includes('text/html')) Object.assign(headers, SECURITY_HEADERS)
+      await route.fulfill({ response: res, headers })
+    } catch (e) {
+      if (!/disposed|closed|Target page|Route is already handled/i.test(String(e && e.message))) throw e
+    }
   })
   return ctx
 }
@@ -74,6 +85,14 @@ async function newContext(browser, options = {}) {
       })
       check(`${label}: the security headers are applied (an inline script is blocked)`, inlineRan === false)
       check(`${label}: the page is the public site build`, (await page.locator('meta[name="crevant-build"]').getAttribute('content')) === 'public-site')
+      // The typefaces come from this site, and the headline really uses them.
+      const fonts = await page.evaluate(async () => {
+        await document.fonts.ready
+        const loaded = [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/"/g, ''))
+        const h1 = getComputedStyle(document.querySelector('h1')).fontFamily
+        return { loaded: [...new Set(loaded)], h1, archivo: document.fonts.check('900 40px "Archivo Variable"'), inter: document.fonts.check('400 16px "Inter Variable"') }
+      })
+      check(`${label}: the self-hosted Archivo and Inter load, and the headline uses Archivo`, fonts.archivo && fonts.inter && fonts.loaded.includes('Archivo Variable') && fonts.loaded.includes('Inter Variable') && /Archivo Variable/.test(fonts.h1), JSON.stringify(fonts))
       check(`${label}: the page names the commit it was built from`, /^([0-9a-f]{7}|local)$/.test((await page.locator('meta[name="splitpost-commit"]').getAttribute('content')) || ''))
       check(`${label}: the landing page renders`, await shows(page.getByRole('heading', { level: 1 })))
       // While registration is closed the buttons say so (they switch to "Join the Waitlist" when it opens).

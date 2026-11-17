@@ -1,5 +1,11 @@
 import { StrictMode, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
+// Typefaces served from this site (Fontsource, SIL Open Font License), not
+// Google Fonts, so visitors' browsers contact no third party for them. Each
+// family is split by script, so a page downloads only the subsets it shows.
+import '@fontsource-variable/inter'
+import '@fontsource-variable/archivo/wdth.css'
+import '@fontsource-variable/bricolage-grotesque/opsz.css'
 import './index.css'
 import App from './App'
 import { TOUR_BASE, resolveEntry } from './entry'
