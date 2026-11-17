@@ -5,6 +5,7 @@ import { useMemberLinks } from './member-links'
 import { useRobotsMeta } from './robots'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 import { HOMEPAGE_COPY } from './landing/copy'
+import { waitlistCta } from './waitlist/status'
 import { SplitpostWordmark } from './landing/ui/SplitpostWordmark'
 
 const HEADER_LINK =
@@ -61,7 +62,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
               to="/join"
               className="inline-flex h-9 items-center whitespace-nowrap rounded-full bg-sp-secondary px-3 text-[13px] font-bold min-[360px]:px-4 min-[360px]:text-sm text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#bde3db] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
             >
-              {HOMEPAGE_COPY.hero.primaryCta}
+              {waitlistCta()}
             </Link>
           </nav>
         </div>
@@ -87,7 +88,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
               How It Works
             </Link>
             <Link to="/join" className="hover:text-sp-secondary-on-dark">
-              {HOMEPAGE_COPY.hero.primaryCta}
+              {waitlistCta()}
             </Link>
             {import.meta.env.MODE !== 'site' && memberLinks && (
               <Link to="/sign-in" className="hover:text-sp-secondary-on-dark">

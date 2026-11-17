@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { DISCOVER_PATH } from '../../../entry'
 import { useMemberLinks } from '../../member-links'
 import { HOMEPAGE_COPY } from '../copy'
+import { waitlistCta } from '../../waitlist/status'
 import { SplitThePost } from '../ui/SplitThePost'
 
 const copy = HOMEPAGE_COPY.hero
@@ -52,7 +53,7 @@ export function Hero() {
           to="/join"
           className={`inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-sp-secondary px-7 text-base font-bold text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#bde3db] active:scale-[0.98] motion-reduce:transition-none ${focusRing}`}
         >
-          {copy.primaryCta} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          {waitlistCta()} <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </Link>
         {/* The homepage's introduction to Splitpost, which leads on to Join the Waitlist. */}
         <Link
