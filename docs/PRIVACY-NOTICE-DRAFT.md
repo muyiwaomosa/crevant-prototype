@@ -2,7 +2,7 @@
 
 **Status (2026-11-17): final draft, ready for counsel. Not approved, not
 published, not wired into the site.** Only the items under "What blocks
-publication" remain.** The waitlist form cannot appear
+publication" remain. The waitlist form cannot appear
 until an approved notice exists in `src/public/privacy/notice.ts` with a
 matching version (`src/public/waitlist/config.ts`). Publishing is a separate
 reviewed pull request.
