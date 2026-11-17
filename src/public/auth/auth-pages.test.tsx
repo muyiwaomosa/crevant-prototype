@@ -282,7 +282,7 @@ describe('there is no way to register', () => {
   it('/join is the waitlist information page: no form, no password, no account creation', async () => {
     const client = makeClient()
     const { container } = renderAt('/join', client)
-    expect(await screen.findByRole('heading', { level: 1, name: 'Join the Waitlist' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: 'The Waitlist Opens Soon' })).toBeTruthy()
     expect(container.querySelector('form, input, textarea, select, [type="password"]')).toBeNull()
     expect(client.auth.signUp).not.toHaveBeenCalled()
     cleanup()

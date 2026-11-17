@@ -120,7 +120,7 @@ describe('HERO', () => {
   })
   it('offers Join the Waitlist first, and Sign in in the full app', () => {
     const actions = [...hero().querySelectorAll('[data-testid="hero-actions"] a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
-    expect(actions[0]).toEqual(['Join the Waitlist', '/join'])
+    expect(actions[0]).toEqual(['Waitlist Opens Soon', '/join'])
     expect([...hero().querySelectorAll('a')].some((a) => a.getAttribute('href') === '/sign-in')).toBe(true)
   })
   it('pictures one post in two separate pieces, with the accent only in the gap between them', () => {
@@ -267,9 +267,9 @@ describe('THE INVITATION', () => {
   const inv = () => section('invitation')
   it('uses the approved copy, and keeps the one waitlist with every pilot disclosure beside it', () => {
     expect([...inv().querySelectorAll('[data-testid="invitation-body"] p')].map((p) => norm(p))).toEqual([...HOMEPAGE_COPY.invitation.body])
-    expect(norm(inv().querySelector('[data-testid="invitation-close"]'))).toBe('Join the waitlist. Be part of a better split.')
+    expect(norm(inv().querySelector('[data-testid="invitation-close"]'))).toBe('The waitlist opens soon. Be part of a better split.')
     const links = [...inv().querySelectorAll('a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
-    expect(links).toEqual([['Join the Waitlist', '/join']])
+    expect(links).toEqual([['Waitlist Opens Soon', '/join']])
     const d = inv().querySelector('[data-testid="pilot-details"]')!
     expect(d.closest('details')).toBeNull()
     expect([...d.querySelectorAll('li')].map((li) => norm(li).trim())).toEqual([...HOMEPAGE_COPY.invitation.pilotDetails])
@@ -334,7 +334,7 @@ describe('header and footer', () => {
       const header = container.querySelector('header')!
       expect(header.querySelector('a[aria-label="Splitpost home"]'), path).toBeTruthy()
       expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Discover Splitpost' && a.getAttribute('href') === '/#building'), path).toBe(true)
-      const join = [...header.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Waitlist')!
+      const join = [...header.querySelectorAll('a')].find((a) => a.getAttribute('aria-label') === 'Waitlist Opens Soon')!
       expect(join.getAttribute('href'), path).toBe('/join')
       expect(join.closest('.hidden'), path).toBeNull()
       expect(norm(header), path).not.toMatch(/Crevant/)
@@ -356,7 +356,7 @@ describe('header and footer', () => {
     expect(links).toEqual([
       ['Why Splitpost', '/#problem'],
       ['How It Works', '/#building'],
-      ['Join the Waitlist', '/join'],
+      ['Waitlist Opens Soon', '/join'],
       ['Sign in', '/sign-in'],
     ])
   })
@@ -431,12 +431,13 @@ describe('the waitlist page', () => {
   ]
   it.each(['/join', '/join/creator', '/join/supporter'])('%s shows the one waitlist, says it is not open, and links back and to how Splitpost works', (path) => {
     const { container } = renderAt(path)
-    expect(norm(container.querySelector('h1'))).toBe('Join the Waitlist')
+    expect(norm(container.querySelector('h1'))).toBe('The Waitlist Opens Soon')
     expect([...container.querySelectorAll('[data-testid="join-intro"] p')].map((p) => norm(p))).toEqual(INTRO)
-    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('The waitlist opens once our privacy notice is published.')
+    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain("You can't sign up just yet.")
+    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('as soon as our privacy notice is published')
     expect(norm(container)).not.toMatch(/as a creator|as a supporter/i)
     expect(container.querySelector('form, input, textarea, select')).toBeNull()
-    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('This page collects nothing.')
+    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain("Until then, this page doesn't collect anything.")
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
     expect(hrefs).toContain('/#building')
     expect(hrefs).not.toContain('/tour')
