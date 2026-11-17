@@ -64,6 +64,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
+    # Full certificate and host name verification for every hosted database
+    # connection in this job (psql and the Supabase CLI both read these), against
+    # Supabase's public root CA committed at config/certs. REQUIRE_VERIFY_FULL
+    # makes the target check refuse a URL that would override them.
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +101,5 @@ jobs:
           RETENTION_MONTHS: ${{ inputs.retention_months }}
           WAITLIST_ID: ${{ inputs.waitlist_id }}
           NOTICE_VERSION: ${{ inputs.notice_version }}
-          PGSSLMODE: require
           PGCONNECT_TIMEOUT: '15'
         run: scripts/db/waitlist-admin.sh
