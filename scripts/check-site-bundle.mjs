@@ -28,6 +28,9 @@ export const FORBIDDEN = [
   // form posts to it with no key. Anything else on a project is refused.
   ['a Supabase project address', /[a-z0-9]{20}\.supabase\.(co|com)(?!\/functions\/v1\/join-waitlist(?![\w/-]))/],
   ['a Supabase key', /sb_(publishable|secret)_[A-Za-z0-9_-]{8,}/],
+  // A database connection string, or Supabase's database pooler host: the
+  // browser never connects to a database, so either can only be a leak.
+  ['a database connection string', /postgres(ql)?:\/\/[^\s"'`]*@|pooler\.supabase\.(com|co)/],
   ['a JSON Web Token', /eyJhbGciOi[A-Za-z0-9_-]{10,}\./],
   ['a secret', /service_role|sk_(live|test)_[A-Za-z0-9]|whsec_[A-Za-z0-9]|-----BEGIN [A-Z ]*PRIVATE KEY-----/],
   // Test-only code that must never ship (the isolated test harness)

@@ -95,3 +95,31 @@ test('test-only code is refused', () => {
     assert.match(checkSiteBundle(bundle({ js: `${CLEAN_JS};${js}` })).join('\n'), /test-only code/, js)
   }
 })
+
+// The failure seen on the splitpost Preview builds of PRs #41 and #43: the
+// browser code passed the whole import.meta.env object, so Vite copied every
+// VITE_ variable of the build environment into the bundle, including one
+// holding the Production project's address. The check must keep refusing it.
+test('a copied environment object carrying a project address, a database URL or a key is refused', () => {
+  const leaked = [
+    'const e={BASE_URL:`/`,MODE:`site`,VITE_SOME_SETTING:`https://hmrliwoychnqrbbydorg.supabase.co`}',
+    'const e={VITE_OTHER:`https://kpudeppgokpjhvaqrprn.supabase.co`}',
+    'const e={VITE_DB:`postgresql://postgres.hmrliwoychnqrbbydorg:pw@aws-0-us-west-2.pooler.supabase.com:5432/postgres`}',
+    'const e={VITE_KEY:`sb_publishable_abcdefghijklmnop`}',
+  ]
+  for (const js of leaked) assert.notDeepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};${js}` })), [], js)
+})
+
+test('only the waitlist function itself is allowed, and only for the right build', () => {
+  const projects = { staging: { ref: 'kpudeppgokpjhvaqrprn' }, production: { ref: 'hmrliwoychnqrbbydorg' } }
+  const prodFn = 'fetch(`https://hmrliwoychnqrbbydorg.supabase.co/functions/v1/join-waitlist`)'
+  const stagingFn = 'fetch(`https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist`)'
+  // Production: its own function only.
+  assert.deepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};${prodFn}` }), { forbiddenRefs: forbiddenProjectRefs({ VERCEL_ENV: 'production' }, projects) }), [])
+  assert.notDeepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};${stagingFn}` }), { forbiddenRefs: forbiddenProjectRefs({ VERCEL_ENV: 'production' }, projects) }), [])
+  // A Preview: never the Production project, not even its function.
+  assert.notDeepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};${prodFn}` }), { forbiddenRefs: forbiddenProjectRefs({ VERCEL_ENV: 'preview' }, projects) }), [])
+  // Any other path on a project, even with the function name later on the line, is refused.
+  assert.notDeepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};fetch("https://hmrliwoychnqrbbydorg.supabase.co/rest/v1/x")` })), [])
+  assert.notDeepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};fetch("https://hmrliwoychnqrbbydorg.supabase.co/functions/v1/join-waitlist-admin")` })), [])
+})
