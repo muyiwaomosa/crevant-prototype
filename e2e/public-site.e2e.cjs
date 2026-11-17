@@ -333,6 +333,43 @@ async function newContext(browser, options = {}) {
       await ctx.close()
     }
 
+    // 5c3. Every "Discover Splitpost" button, on desktop and on a phone, from
+    //      the homepage and from /join, opens the homepage introduction
+    //      ("What we're building") on this site, never the old sample tour.
+    for (const [label, options] of [
+      ['desktop', { viewport: { width: 1280, height: 900 } }],
+      ['phone', { ...devices['iPhone 13'] }],
+    ]) {
+      const ctx = await newContext(browser, options)
+      const page = await ctx.newPage()
+      const failed = []
+      let clicked = 0
+      for (const start of ['/', '/join']) {
+        await page.goto(`${BASE}${start}`, { waitUntil: 'networkidle' })
+        const total = await page.getByRole('link', { name: 'Discover Splitpost', exact: true, includeHidden: true }).count()
+        for (let i = 0; i < total; i++) {
+          await page.goto(`${BASE}${start}`, { waitUntil: 'networkidle' })
+          const link = page.getByRole('link', { name: 'Discover Splitpost', exact: true, includeHidden: true }).nth(i)
+          const href = await link.evaluate((a) => a.href)
+          if (href !== `${new URL(BASE).origin}/#building`) failed.push(`${start} link ${i + 1} points to ${href}`)
+          await link.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {})
+          if (!(await link.isVisible())) continue
+          clicked++
+          await link.click()
+          await page.waitForURL(`${BASE}/#building`, { timeout: 5000 }).catch(() => {})
+          const heading = page.locator('#building-title')
+          await page.waitForTimeout(800)
+          const box = await heading.boundingBox()
+          const vh = page.viewportSize().height
+          const inView = !!box && box.y < vh && box.y + box.height > 0
+          const tour = await page.getByText('Sample tour.').count()
+          if (page.url() !== `${BASE}/#building` || !inView || tour) failed.push(`${start} link ${i + 1}: ${page.url()}${inView ? '' : ', introduction not on screen'}${tour ? ', showed the sample tour' : ''}`)
+        }
+      }
+      check(`${label}: each of the ${clicked} visible Discover Splitpost buttons (homepage and /join) opens the introduction on this site`, clicked >= (label === 'phone' ? 2 : 3) && failed.length === 0, failed.join(' | '))
+      await ctx.close()
+    }
+
     // 5d. Image quality on high-density screens: every image on the homepage
     //     and tour loads, and none is shown more than 1.25x larger than its
     //     real pixels (which is when photos start to look soft or blurry).

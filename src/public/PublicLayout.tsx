@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { TOUR_BASE } from '../entry'
+import { DISCOVER_PATH } from '../entry'
 import { useMemberLinks } from './member-links'
 import { useRobotsMeta } from './robots'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
@@ -48,12 +48,11 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             <SplitpostWordmark />
           </Link>
           <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2">
-            {/* The tour is a separate app, so it needs a full page load. */}
             {/* Phones: logo, Sign in and Join the Waitlist; Discover Splitpost stays in the hero. */}
             <span className="hidden sm:contents">
-              <a href={TOUR_BASE} className={`${HEADER_LINK} px-3.5`}>
+              <Link to={DISCOVER_PATH} className={`${HEADER_LINK} px-3.5`}>
                 {HOMEPAGE_COPY.hero.secondaryCta}
-              </a>
+              </Link>
             </span>
             {/* Below 420px only the logo and Join the Waitlist fit; Sign in stays in the hero and footer. */}
             {/* The account link is shared with the account pages, so it's restyled here rather than changed. */}
@@ -90,9 +89,6 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             <Link to="/join" className="hover:text-sp-secondary-on-dark">
               {HOMEPAGE_COPY.hero.primaryCta}
             </Link>
-            <a href={TOUR_BASE} className="hover:text-sp-secondary-on-dark">
-              {HOMEPAGE_COPY.hero.secondaryCta}
-            </a>
             {import.meta.env.MODE !== 'site' && memberLinks && (
               <Link to="/sign-in" className="hover:text-sp-secondary-on-dark">
                 Sign in

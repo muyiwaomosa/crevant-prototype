@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { buttonClass } from '../components/ui'
-import { TOUR_BASE } from '../entry'
+import { DISCOVER_PATH } from '../entry'
 
 /**
  * Deliberately has no form. Invitation requests stay closed until the privacy
@@ -37,9 +37,9 @@ export function PlaceholderPage({ title, body }: { title: string; body: ReactNod
         </h1>
         <div className="mt-3 space-y-3 leading-relaxed text-ink-600">{body}</div>
         <div className="mt-7 flex flex-col justify-center gap-3 min-[400px]:flex-row">
-          <a href={TOUR_BASE} className={buttonClass('primary')}>
+          <Link to={DISCOVER_PATH} className={buttonClass('primary')}>
             Discover Splitpost
-          </a>
+          </Link>
           <Link to="/" className={buttonClass('secondary')}>
             Back to Splitpost
           </Link>

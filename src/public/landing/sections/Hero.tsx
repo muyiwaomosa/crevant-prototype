@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { TOUR_BASE } from '../../../entry'
+import { DISCOVER_PATH } from '../../../entry'
 import { useMemberLinks } from '../../member-links'
 import { HOMEPAGE_COPY } from '../copy'
 import { SplitThePost } from '../ui/SplitThePost'
@@ -54,13 +54,13 @@ export function Hero() {
         >
           {copy.primaryCta} <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </Link>
-        {/* The tour is a separate app, so it needs a full page load. */}
-        <a
-          href={TOUR_BASE}
+        {/* The homepage's introduction to Splitpost, which leads on to Join the Waitlist. */}
+        <Link
+          to={DISCOVER_PATH}
           className={`inline-flex min-h-13 items-center justify-center rounded-full px-7 text-base font-semibold text-white ring-1 ring-white/35 transition-[background-color,color,box-shadow,transform] hover:bg-white/10 hover:ring-white/60 motion-reduce:transition-none ${focusRing}`}
         >
           {copy.secondaryCta}
-        </a>
+        </Link>
       </div>
 
       <p data-testid="hero-small-print" className="mt-5 text-sm leading-relaxed text-sp-muted-on-dark">
