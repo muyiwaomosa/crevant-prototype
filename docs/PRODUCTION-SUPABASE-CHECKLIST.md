@@ -9,15 +9,59 @@ database at all).
 The waitlist launch order around it is in `docs/LAUNCH-RUNBOOK.md` and
 `docs/WAITLIST.md` ("Activation checklist").
 
+## Implementation sequence and status (2026-11-17)
+
+**Key:** ✅ done · 🧭 needs your decision · 🔑 needs access to an outside
+service (you, or me with credentials you grant) · ⚠️ needs your approval when
+it runs. Nothing below has been created in Production.
+
+| # | Step | Status | Who |
+| --- | --- | --- | --- |
+| **Already in place** | | | |
+| A | Waitlist, acquisition, social core and platform access migrations: approved checksums, applied and checked on staging (seven recorded, all six check files pass) | ✅ | |
+| B | The `join-waitlist` function: origin, Turnstile, consent, notice version and switch checks; salted rate limits; restricted database login. Tested in CI (Edge runtime, TLS, integration) | ✅ | |
+| C | Every Production build fails closed until a Production project reference exists (`scripts/check-supabase-target.mjs`) | ✅ | |
+| D | The form can't appear without an approved notice and every setting (`readWaitlistConfig`); the buttons say "Waitlist Opens Soon" until then (PR #37) | ✅ (pending merge) | |
+| E | Deletion and purge tools (admin workflow, staging); emergency close (`scripts/db/emergency-close.sql`) | ✅ staging only | |
+| **1. Decisions** | | | |
+| 1.1 | Domain `splitpost.social`: registered, DNS, the privacy@ mailbox | 🧭🔑 | You |
+| 1.2 | Supabase: a separate organisation and a paid plan with backups | 🧭🔑 | You |
+| 1.3 | Region: Canada (Central), `ca-central-1` | 🧭 (working decision) | You |
+| 1.4 | Canada-only sign-ups at launch, and how the form enforces it | 🧭 | You |
+| 1.5 | Privacy notice 1.0 approved (`docs/PRIVACY-NOTICE-DRAFT.md`), after counsel | 🧭 | You and counsel |
+| **2. Code, on `main`, reviewed PRs, no secrets** | | | |
+| 2.1 | Self-host the fonts and drop Google from the CSP | Ready to build | Me ⚠️ |
+| 2.2 | Production project reference in `config/supabase-projects.json` | After 3.1 | Me ⚠️ |
+| 2.3 | CSP `connect-src` per environment (Production project for Production, staging for Previews) | After 3.1 | Me ⚠️ |
+| 2.4 | A Production migration workflow and GitHub `production` environment (required reviewer, `main` only, its own secret) | Ready to build | Me ⚠️, you configure the environment 🔑 |
+| 2.5 | Branch protection on `main`: App, Database, Integration, Browser, Public site | 🔑 GitHub settings | You |
+| **3. Production project** | | | |
+| 3.1 | Create the project; SSL enforced; only `public` exposed; Auth settings matching staging | 🔑 ⚠️ | You |
+| 3.2 | Production `plan` (seven migrations), `apply`, `check`, then the read-only diagnostic | ⚠️ | Me, after your approval |
+| 3.3 | Set the two waitlist role passwords in the database | 🔑 | You |
+| **4. Bot check and function** | | | |
+| 4.1 | Cloudflare Turnstile: a test widget for one fixed Preview, and a Production widget for splitpost.social only | 🔑 | You |
+| 4.2 | Deploy `join-waitlist` to Production from your computer (`supabase login`), with its secrets: database login, Turnstile secret, a new rate salt, allowed origins and hostnames (splitpost.social only), proxy hop count. Function switch off | 🔑 ⚠️ | You, with my step-by-step |
+| 4.3 | The three hosted checks: pooler login, TLS verification, proxy hop count | ⚠️ | You run, I read results |
+| **5. End-to-end tests (switches still closed to the public)** | | | |
+| 5.1 | On staging with the test widget: a successful signup, only the documented fields stored, a duplicate changes nothing, wrong consent, Turnstile, notice version or origin refused, close works, delete removes the entry | ⚠️ | Me and you |
+| 5.2 | The same final check on Production with your own email, then delete it | ⚠️ | You |
+| **6. Opening** | | | |
+| 6.1 | Publish the approved notice (reviewed PR) | ⚠️ | Me |
+| 6.2 | Vercel Production variables for the form; record the notice version; function switch on; `admin_open()` | 🔑 ⚠️ | You |
+| 6.3 | Switch Production from the frozen demo to the public site, then allow indexing | 🔑 ⚠️ | You |
+
+The detail for each step follows.
+
 ## 0. Decisions first
 
 | Decision | Proposal |
 | --- | --- |
 | **Separate Supabase organisation** | Yes. A Supabase access token reaches every project in its organisation (`docs/PHASE-1A.md`), so Production goes in its own organisation, with its own owner account and two-factor sign-in. |
-| **Region** | Choose before creating the project; it can't be moved later. Options: `ca-central-1` (Canada, closest to an Ontario operator's obligations) or `us-west-2` (the same as staging). The privacy notice names it. |
+| **Region** | Working decision: Canada (Central), `ca-central-1`. Choose before creating the project; it can't be moved later. The privacy notice names it. |
 | **Plan** | A paid plan with daily backups (and point-in-time recovery if affordable). The free plan has no downloadable backups. |
 | **Automatic RLS option** | Either way works: migration `20261118000000` removes members' access to `public.rls_auto_enable()` if Supabase installs it, and check `006` verifies that. Record which was chosen. |
-| **Domain** | A Splitpost domain is needed for the email sender, the privacy contact, Turnstile and the Auth site address. Production on `crevant-prototype.vercel.app` is the frozen demo and stays so until the switch. |
+| **Domain** | Working decision: `splitpost.social`, for the site, the email sender, the privacy contact, Turnstile and the Auth site address. Production on `crevant-prototype.vercel.app` is the frozen demo and stays so until the switch. |
 
 ## 1. Create the project ⚠️
 
