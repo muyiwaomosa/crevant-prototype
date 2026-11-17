@@ -169,5 +169,64 @@ guard "rollback workflow: each target has its own phrase, checked before connect
    && grep -q 'waitlist) sql=scripts/db/staging-rollback-waitlist.sql ;;' $rb && grep -q 'creator_acquisition) sql=scripts/db/staging-rollback-acquisition.sql ;;' $rb \
    && [ \"\$(grep -c 'Unknown target. Nothing was done.' $rb)\" = 2 ] && grep -A8 '      target:' $rb | grep -q 'default: waitlist'"
 
+# ---------------------------------------------------------------------------
+# Production: a separate target check, workflow, environment and secret.
+PREF=hmrliwoychnqrbbydorg
+expect_prod() { # expect_prod <ok|fail> <description> <url> [env_ref] [confirm] [expected]
+  local want=$1 desc=$2 url=$3 pref=${4-$PREF} conf=${5-$PREF} exp=${6-$PREF} out visible code
+  out=$(GITHUB_ACTIONS=true EXPECTED_PROJECT_REF=$exp SUPABASE_PROJECT_REF=$pref CONFIRM_PROJECT_REF=$conf \
+        PRODUCTION_DATABASE_URL=$url scripts/db/verify-production-target.sh 2>&1); code=$?
+  visible=$(grep -v '^::add-mask::' <<<"$out" || true)
+  if [[ "$visible" == *"$PW"* ]]; then echo "FAIL  production: $desc (password appeared in output)"; failed=$((failed+1)); return; fi
+  if { [ "$want" = ok ] && [ $code -eq 0 ]; } || { [ "$want" = fail ] && [ $code -ne 0 ]; }; then
+    echo "PASS  production: $desc"; pass=$((pass+1))
+  else
+    echo "FAIL  production: $desc (exit $code): $out"; failed=$((failed+1))
+  fi
+}
+expect_prod ok   "session pooler URL for the Production project"            "postgresql://postgres.$PREF:$PW@$POOL:5432/postgres"
+expect_prod ok   "direct URL for the Production project"                    "postgresql://postgres:$PW@db.$PREF.supabase.co:5432/postgres"
+expect_prod fail "a staging connection string is refused"                   "postgresql://postgres.$REF:$PW@$POOL:5432/postgres"
+expect_prod fail "a staging direct connection is refused"                   "postgresql://postgres:$PW@db.$REF.supabase.co:5432/postgres"
+expect_prod fail "the workflow pointed at staging is refused"               "postgresql://postgres.$REF:$PW@$POOL:5432/postgres" "$REF" "$REF" "$REF"
+expect_prod fail "a reference that isn't the one in config is refused"      "postgresql://postgres.abcdefghijabcdefghij:$PW@$POOL:5432/postgres" "abcdefghijabcdefghij" "abcdefghijabcdefghij" "abcdefghijabcdefghij"
+expect_prod fail "another Supabase project in the URL"                      "postgresql://postgres.abcdefghijabcdefghij:$PW@$POOL:5432/postgres"
+expect_prod fail "the environment variable names another project"           "postgresql://postgres.$PREF:$PW@$POOL:5432/postgres" "$REF"
+expect_prod fail "typed confirmation does not match"                        "postgresql://postgres.$PREF:$PW@$POOL:5432/postgres" "$PREF" "$REF"
+expect_prod fail "typed confirmation empty"                                 "postgresql://postgres.$PREF:$PW@$POOL:5432/postgres" "$PREF" ""
+expect_prod fail "transaction pooler port 6543"                             "postgresql://postgres.$PREF:$PW@$POOL:6543/postgres"
+expect_prod fail "TLS disabled"                                             "postgresql://postgres.$PREF:$PW@$POOL:5432/postgres?sslmode=disable"
+expect_prod fail "non-Supabase host"                                        "postgresql://postgres.$PREF:$PW@db.example.com:5432/postgres"
+expect_prod fail "missing password"                                         "postgresql://postgres.$PREF@$POOL:5432/postgres"
+expect_prod fail "empty connection string"                                  ""
+
+pw=.github/workflows/deploy-db-production.yml
+sw=.github/workflows/deploy-db-staging.yml
+guard "production workflow: started by hand only (workflow_dispatch, no other trigger)" \
+  "grep -A1 '^on:' $pw | grep -q '^  workflow_dispatch:' && ! grep -qE '^  (push|pull_request|pull_request_target|schedule|workflow_run|repository_dispatch|workflow_call):' $pw"
+guard "production workflow: main only, started and re-run by the repository owner only (both jobs), production environment" \
+  "[ \"\$(grep -c \"^    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner\$\" $pw)\" = 2 ] && [ \"\$(grep -c '^    environment:' $pw)\" = 1 ] && grep -q '^    environment: production$' $pw"
+guard "production workflow: uses only the PRODUCTION_DATABASE_URL secret, and the staging workflow never does" \
+  "[ \"\$(grep -oE 'secrets\.[A-Z_]+' $pw | sort -u)\" = 'secrets.PRODUCTION_DATABASE_URL' ] && ! grep -q 'PRODUCTION_DATABASE_URL' $sw"
+guard "production workflow: never names the staging project, and staging never names Production" \
+  "! grep -q 'kpudeppgokpjhvaqrprn' $pw && ! grep -q 'hmrliwoychnqrbbydorg' $sw && grep -q '^  EXPECTED_PROJECT_REF: hmrliwoychnqrbbydorg$' $pw"
+guard "production workflow: its own concurrency group, separate from staging" \
+  "grep -A1 '^concurrency:' $pw | grep -q 'group: deploy-database-production$'"
+guard "production workflow: verifies the Production target before anything connects" \
+  "awk '/run: scripts\/db\/verify-production-target.sh\$/{v=NR} /--db-url \"\\\$PRODUCTION_DATABASE_URL\"|psql \"\\\$PRODUCTION_DATABASE_URL\"/{if(!c)c=NR} END{exit !(v && c && v<c)}' $pw && ! grep -q 'verify-staging-target' $pw"
+pinstalls=$(grep -c 'supabase db push' "$pw" || true)
+pwrites=$(grep 'supabase db push' "$pw" | grep -vc -- '--dry-run' || true)
+pguard=$(grep -B4 -- 'db push --db-url "$PRODUCTION_DATABASE_URL" --yes' "$pw" | grep -c "if: inputs.mode == 'apply'$" || true)
+guard "production workflow: installs migrations in apply mode only (plan and check never change it)" \
+  "[ '$pinstalls' = 2 ] && [ '$pwrites' = 1 ] && [ '$pguard' = 1 ]"
+guard "production workflow: apply needs the typed phrase and the backup confirmation, checked before any job connects" \
+  "grep -q '\[ \"\$PHRASE\" = \"APPLY TO PRODUCTION\" \]' $pw && grep -q '\[ \"\$BACKUP\" = \"true\" \]' $pw && grep -A4 '      backup_confirmed:' $pw | grep -q 'default: false'"
+guard "production workflow: inputs and secrets reach commands only through env (no injection)" \
+  "! grep -E '\\\$\{\{ *(inputs|secrets|vars)\.' $pw | grep -vqE '^ +([A-Z_]+|name): '"
+guard "production workflow: defaults to plan" \
+  "grep -A9 '      mode:' $pw | grep -q 'default: plan'"
+guard "no rollback or admin workflow can reach Production" \
+  "! grep -l 'PRODUCTION_DATABASE_URL\|hmrliwoychnqrbbydorg' .github/workflows/*.yml | grep -vq '^$pw\$'"
+
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]
