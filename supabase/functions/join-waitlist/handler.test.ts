@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { cachedHealthCheck, clientIpFrom, handleJoin, parseTrustedHops, rateKeysFor, toPayload, verifyWithCloudflare, type JoinDeps } from './handler'
+import { cachedHealthCheck, clientIpFor, clientIpFrom, handleJoin, parseClientAddressMode, parseTrustedHops, rateKeysFor, rateKeysForMode, toPayload, verifyWithCloudflare, type JoinDeps } from './handler'
 import { checkDatabaseTarget, databaseOptions, submitWithDatabase, type Sql } from './db'
 
 const ORIGIN = 'https://crevant.example'
@@ -489,5 +489,55 @@ describe('invitation preview', () => {
     expect([closed.status, JSON.parse(closed.body)]).toEqual([503, { status: 'closed' }])
     const limited = await handleJoin(post({ action: 'invite_preview', code: '7c1e94a2b05d3f68e1a9' }), deps({ previewInvite: vi.fn(async () => ({ status: 'rate_limited' })) }))
     expect(limited.status).toBe(429)
+  })
+})
+
+describe('client address mode (WAITLIST_CLIENT_ADDRESS)', () => {
+  const SALT32 = 's'.repeat(32)
+
+  it('needs an explicit, consistent choice: ignore without a hop count, or a confirmed hop count', () => {
+    expect(parseClientAddressMode('ignore', '')).toEqual({ kind: 'ignore' })
+    expect(parseClientAddressMode(' ignore ', undefined)).toEqual({ kind: 'ignore' })
+    expect(parseClientAddressMode('', '2')).toEqual({ kind: 'forwarded', hops: 2 })
+    expect(parseClientAddressMode('forwarded', '1')).toEqual({ kind: 'forwarded', hops: 1 })
+    for (const [mode, hops] of [
+      ['', ''], [undefined, undefined], ['ignore', '1'], ['ignore', 'x'], ['forwarded', ''], ['forwarded', '0'],
+      ['IGNORE', ''], ['off', ''], ['none', ''], ['ignore,forwarded', ''], ['', '6'],
+    ] as const) {
+      expect(parseClientAddressMode(mode, hops), `${mode} / ${hops}`).toBeNull()
+    }
+  })
+
+  it('in ignore mode never reads the forwarding header', () => {
+    let reads = 0
+    const header = () => { reads++; return '198.51.100.7, 203.0.113.7' }
+    expect(clientIpFor({ kind: 'ignore' }, header)).toBeNull()
+    expect(clientIpFor(null, header)).toBeNull()
+    expect(reads).toBe(0)
+    expect(clientIpFor({ kind: 'forwarded', hops: 1 }, header)).toBe('203.0.113.7')
+    expect(reads).toBe(1)
+  })
+
+  it('in ignore mode gives every request its own client key, never the shared unknown bucket', async () => {
+    const unknown = (await rateKeysFor('a@example.com', null, SALT32)).clientKey
+    const keys = await Promise.all(Array.from({ length: 50 }, () => rateKeysForMode({ kind: 'ignore' }, 'a@example.com', null, SALT32)))
+    const clientKeys = new Set(keys.map((k) => k.clientKey))
+    expect(clientKeys.size).toBe(50)
+    for (const k of keys) {
+      expect(k.clientKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(k.clientKey).not.toBe(unknown)
+    }
+  })
+
+  it('in ignore mode keeps the same salted per-email key, so the per-email limit still applies', async () => {
+    const forwarded = await rateKeysFor('Maya@Example.com ', '203.0.113.7', SALT32)
+    const ignored = await rateKeysForMode({ kind: 'ignore' }, 'maya@example.com', null, SALT32)
+    expect(ignored.emailKey).toBe(forwarded.emailKey)
+    await expect(rateKeysForMode({ kind: 'ignore' }, 'a@example.com', null, 'short')).rejects.toThrow()
+  })
+
+  it('in forwarded mode behaves exactly like rateKeysFor', async () => {
+    const a = await rateKeysForMode({ kind: 'forwarded', hops: 1 }, 'a@example.com', '203.0.113.7', SALT32)
+    expect(a).toEqual(await rateKeysFor('a@example.com', '203.0.113.7', SALT32))
   })
 })

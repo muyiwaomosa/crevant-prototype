@@ -21,6 +21,9 @@ EDGE_REAL_PORT="$((EDGE_PORT + 2))"
 EDGE_HOPS2_PORT="$((EDGE_PORT + 3))"
 EDGE_NOHOPS_PORT="$((EDGE_PORT + 4))"
 EDGE_HOSTED_PORT="$((EDGE_PORT + 5))"
+EDGE_IGNORE_PORT="$((EDGE_PORT + 6))"
+EDGE_IGNORE_REAL_PORT="$((EDGE_PORT + 7))"
+EDGE_CONFLICT_PORT="$((EDGE_PORT + 8))"
 # The local Supabase address, as SUPABASE_URL (the function's own project).
 LOCAL_SUPABASE_URL="http://127.0.0.1:54321"
 WRITER_PW="$(openssl rand -hex 24)"
@@ -32,7 +35,8 @@ PSQL=(psql "$DB_URL" -v ON_ERROR_STOP=1 -q -X -At)
 
 cleanup() {
   docker rm -f crevant-waitlist-edge crevant-waitlist-edge-bad crevant-waitlist-edge-real crevant-waitlist-edge-hops2 \
-    crevant-waitlist-edge-nohops crevant-waitlist-edge-hosted >/dev/null 2>&1 || true
+    crevant-waitlist-edge-nohops crevant-waitlist-edge-hosted crevant-waitlist-edge-ignore crevant-waitlist-edge-ignore-real \
+    crevant-waitlist-edge-conflict >/dev/null 2>&1 || true
   "${PSQL[@]}" -c "alter role waitlist_writer password null; alter role waitlist_admin password null" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -45,10 +49,12 @@ EXTRA=()
 if [ -n "${HTTPS_PROXY:-}" ]; then EXTRA+=(-e HTTPS_PROXY -e HTTP_PROXY -e NO_PROXY=127.0.0.1,localhost); fi
 if [ -n "${EDGE_CA_FILE:-}" ]; then EXTRA+=(-v "${EDGE_CA_FILE}:/extra-ca.crt:ro" -e DENO_CERT=/extra-ca.crt); fi
 
-start_edge() { # name port db_url [trusted_hops]
+start_edge() { # name port db_url [trusted_hops, or "ignore" for WAITLIST_CLIENT_ADDRESS=ignore]
+  local mode=(-e WAITLIST_TRUSTED_PROXY_HOPS="${4-1}")
+  if [ "${4-}" = ignore ]; then mode=(-e WAITLIST_CLIENT_ADDRESS=ignore); fi
   docker run -d --name "$1" --network host "${EXTRA[@]}" \
     -e WAITLIST_DB_URL="$3" -e WAITLIST_RATE_SALT="$SALT" -e SUPABASE_URL="$LOCAL_SUPABASE_URL" \
-    -e WAITLIST_TRUSTED_PROXY_HOPS="${4-1}" \
+    "${mode[@]}" \
     -e TEST_ORIGIN=https://site.test -e TEST_HOSTNAME=site.test \
     -v "$PWD/supabase/functions/join-waitlist:/home/deno/functions/join-waitlist:ro" \
     -v "$PWD/e2e/edge/waitlist-e2e:/home/deno/functions/waitlist-e2e:ro" \
@@ -60,6 +66,8 @@ start_edge crevant-waitlist-edge "$EDGE_PORT" "postgresql://waitlist_writer:${WR
 start_edge crevant-waitlist-edge-bad "$EDGE_BAD_PORT" "$DB_URL"
 # Two trusted proxy hops, to prove the hop counting is not fixed at one.
 start_edge crevant-waitlist-edge-hops2 "$EDGE_HOPS2_PORT" "postgresql://waitlist_writer:${WRITER_PW}@127.0.0.1:${DB_PORT}/postgres" 2
+# WAITLIST_CLIENT_ADDRESS=ignore with no hop count: no forwarding header read.
+start_edge crevant-waitlist-edge-ignore "$EDGE_IGNORE_PORT" "postgresql://waitlist_writer:${WRITER_PW}@127.0.0.1:${DB_PORT}/postgres" ignore
 
 # The real entry point (index.ts), fully set up except for the Turnstile
 # secret: it must start and stay closed.
@@ -87,8 +95,16 @@ start_real crevant-waitlist-edge-nohops "$EDGE_NOHOPS_PORT" "$LOCAL_SUPABASE_URL
 # The real entry point told it runs on the hosted staging project, but given
 # this machine's database: it must refuse the database (wrong project).
 start_real crevant-waitlist-edge-hosted "$EDGE_HOSTED_PORT" "https://kpudeppgokpjhvaqrprn.supabase.co" -e WAITLIST_TRUSTED_PROXY_HOPS=1
+# The real entry point in ignore mode, without its Turnstile secret: it must
+# start, stay closed, connect for the health check, and log no address problem.
+start_real crevant-waitlist-edge-ignore-real "$EDGE_IGNORE_REAL_PORT" "$LOCAL_SUPABASE_URL" -e WAITLIST_CLIENT_ADDRESS=ignore
+# Contradictory: ignore AND a hop count. Must stay closed and say why. (The
+# Turnstile placeholder makes the contradiction the only thing wrong; it is
+# never sent anywhere, because the function stays closed.)
+start_real crevant-waitlist-edge-conflict "$EDGE_CONFLICT_PORT" "$LOCAL_SUPABASE_URL" -e WAITLIST_CLIENT_ADDRESS=ignore \
+  -e WAITLIST_TRUSTED_PROXY_HOPS=1 -e TURNSTILE_SECRET_KEY=placeholder-never-sent
 
-for port in "$EDGE_PORT" "$EDGE_BAD_PORT" "$EDGE_HOPS2_PORT"; do
+for port in "$EDGE_PORT" "$EDGE_BAD_PORT" "$EDGE_HOPS2_PORT" "$EDGE_IGNORE_PORT"; do
   for _ in $(seq 1 90); do
     curl -fs "http://127.0.0.1:${port}/__config" >/dev/null 2>&1 && break
     sleep 2
@@ -96,7 +112,7 @@ for port in "$EDGE_PORT" "$EDGE_BAD_PORT" "$EDGE_HOPS2_PORT"; do
 done
 
 EDGE_URL="http://127.0.0.1:${EDGE_PORT}" EDGE_BAD_URL="http://127.0.0.1:${EDGE_BAD_PORT}" \
-EDGE_HOPS2_URL="http://127.0.0.1:${EDGE_HOPS2_PORT}" \
+EDGE_HOPS2_URL="http://127.0.0.1:${EDGE_HOPS2_PORT}" EDGE_IGNORE_URL="http://127.0.0.1:${EDGE_IGNORE_PORT}" \
 DB_URL="$DB_URL" \
 WRITER_URL="postgresql://waitlist_writer:${WRITER_PW}@127.0.0.1:${DB_PORT}/postgres" \
 ADMIN_URL="postgresql://waitlist_admin:${ADMIN_PW}@127.0.0.1:${DB_PORT}/postgres" \
@@ -125,6 +141,29 @@ if [ "$nohops" = '{"status":"closed"}' ] && docker logs crevant-waitlist-edge-no
   echo "PASS  without a confirmed proxy hop count the real entry point stays closed, and logs why"
 else
   echo "FAIL  without a hop count the real entry point answered: $nohops" >&2
+  exit 1
+fi
+
+# In ignore mode the real entry point starts, stays closed without its
+# Turnstile secret, connects for the health check, and reports no address problem.
+ign_real="$(curl -s -m 60 -X POST "http://127.0.0.1:${EDGE_IGNORE_REAL_PORT}/" -H 'Origin: https://site.test' -H 'Content-Type: application/json' -d '{"email":"ignore@e2e.test"}' || true)"
+ign_health="$(curl -s -m 30 "http://127.0.0.1:${EDGE_IGNORE_REAL_PORT}/" || true)"
+if [ "$ign_real" = '{"status":"closed"}' ] && [ "$ign_health" = '{"status":"ok"}' ] \
+   && ! docker logs crevant-waitlist-edge-ignore-real 2>&1 | grep -q 'WAITLIST_CLIENT_ADDRESS'; then
+  echo "PASS  in ignore mode the real entry point starts with no hop count, stays closed without Turnstile, and its health check connects"
+else
+  echo "FAIL  the ignore-mode real entry point answered: $ign_real / $ign_health" >&2
+  docker logs crevant-waitlist-edge-ignore-real 2>&1 | tail -5 >&2
+  exit 1
+fi
+
+# Ignore AND a hop count is a contradiction: closed, and the reason is logged.
+conflict="$(curl -s -m 60 -X POST "http://127.0.0.1:${EDGE_CONFLICT_PORT}/" -H 'Origin: https://site.test' -H 'Content-Type: application/json' -d '{"email":"conflict@e2e.test"}' || true)"
+if [ "$conflict" = '{"status":"closed"}' ] && docker logs crevant-waitlist-edge-conflict 2>&1 | grep -q 'or both are set'; then
+  echo "PASS  ignore together with a hop count keeps the real entry point closed, and logs why"
+else
+  echo "FAIL  the contradictory configuration answered: $conflict" >&2
+  docker logs crevant-waitlist-edge-conflict 2>&1 | tail -5 >&2
   exit 1
 fi
 

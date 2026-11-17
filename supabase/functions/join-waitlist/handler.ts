@@ -405,6 +405,58 @@ export async function rateKeysFor(email: string, ip: string | null, salt: string
   }
 }
 
+/**
+ * How the function treats the visitor's address for the per-visitor limit
+ * (10 an hour). There is no default; without an explicit, consistent choice
+ * the function stays closed.
+ *
+ *   ignore     WAITLIST_CLIENT_ADDRESS=ignore and NO hop count set. No
+ *              forwarding header is ever read, and the per-visitor limit is
+ *              switched off (see rateKeysForMode). Turnstile, the per-email
+ *              and overall limits carry the load: docs/WAITLIST-ABUSE-CONTROLS.md.
+ *   forwarded  WAITLIST_CLIENT_ADDRESS unset or 'forwarded', with a hop count
+ *              confirmed by hosted staging check 3 (parseTrustedHops).
+ *
+ * Anything else, including 'ignore' together with a hop count, is a
+ * contradiction and gives null (closed).
+ */
+export type ClientAddressMode = { kind: 'ignore' } | { kind: 'forwarded'; hops: number }
+
+export function parseClientAddressMode(mode: string | null | undefined, hops: string | null | undefined): ClientAddressMode | null {
+  const m = typeof mode === 'string' ? mode.trim() : ''
+  const h = typeof hops === 'string' ? hops.trim() : ''
+  if (m === 'ignore') return h === '' ? { kind: 'ignore' } : null
+  if (m !== '' && m !== 'forwarded') return null
+  const n = parseTrustedHops(h)
+  return n === null ? null : { kind: 'forwarded', hops: n }
+}
+
+/** The visitor's address under the chosen mode. In 'ignore' mode the header is never read. */
+export function clientIpFor(mode: ClientAddressMode | null, readForwardedFor: () => string | null): string | null {
+  if (!mode || mode.kind === 'ignore') return null
+  return clientIpFrom(readForwardedFor(), mode.hops)
+}
+
+function randomHex(bytes: number): string {
+  return [...crypto.getRandomValues(new Uint8Array(bytes))].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Rate limit keys under the chosen mode. 'forwarded' is rateKeysFor. 'ignore'
+ * keeps the salted per-email key and gives every request its own random
+ * client key, so the database's per-visitor bucket never accumulates: that
+ * limit is OFF, deliberately, and nothing about the visitor (not even a
+ * hash of their address) is stored. This is not a security control in
+ * itself; it is how the limit is switched off without a database change.
+ * It never falls back to the shared "unknown" bucket, which would cap
+ * everyone together at 10 an hour.
+ */
+export async function rateKeysForMode(mode: ClientAddressMode, email: string, ip: string | null, salt: string): Promise<RateKeys> {
+  if (mode.kind === 'forwarded') return rateKeysFor(email, ip, salt)
+  if (salt.length < 32) throw new Error('WAITLIST_RATE_SALT is missing or too short')
+  return { emailKey: await hmacHex(salt, `email:${normaliseEmail(email)}`), clientKey: randomHex(32) }
+}
+
 /** Cloudflare Turnstile server-side verification. */
 export async function verifyWithCloudflare(
   token: string,

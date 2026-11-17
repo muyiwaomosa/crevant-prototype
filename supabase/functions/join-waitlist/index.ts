@@ -17,11 +17,18 @@
 //   TURNSTILE_SECRET_KEY        Cloudflare Turnstile secret. Missing = closed.
 //   WAITLIST_RATE_SALT          random string (at least 32 characters) used to
 //                               make the salted rate limit keys. Missing = closed.
+//   WAITLIST_CLIENT_ADDRESS     'ignore': never read forwarding headers, and
+//                               switch the per-visitor limit off (the per-email
+//                               and overall limits and Turnstile remain; see
+//                               docs/WAITLIST-ABUSE-CONTROLS.md). Requires
+//                               WAITLIST_TRUSTED_PROXY_HOPS to be unset.
+//                               Unset or 'forwarded': use the hop count below.
 //   WAITLIST_TRUSTED_PROXY_HOPS how many X-Forwarded-For entries, counted from
 //                               the right, Supabase's own proxies add (1 to 5).
 //                               No default: it must be confirmed on the hosted
 //                               platform first (docs/WAITLIST.md, hosted
-//                               staging check 3). Missing = closed.
+//                               staging check 3).
+//   One of the two must be chosen, consistently. Neither, or both = closed.
 //
 // Supabase also provides SUPABASE_URL (https://<project ref>.supabase.co),
 // which secrets can't override. The database URL must belong to that same
@@ -35,7 +42,7 @@
 //   supabase functions deploy join-waitlist --no-verify-jwt
 
 import postgres from 'npm:postgres@3.4.9'
-import { cachedHealthCheck, clientIpFrom, handleJoin, parseTrustedHops, rateKeysFor, verifyWithCloudflare } from './handler.ts'
+import { cachedHealthCheck, clientIpFor, handleJoin, parseClientAddressMode, rateKeysForMode, verifyWithCloudflare } from './handler.ts'
 import { checkDatabaseTarget, databaseOptions, databaseReachable, previewWithDatabase, submitWithDatabase, type Sql } from './db.ts'
 
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
@@ -61,15 +68,17 @@ try {
   configProblem((e as Error).message)
 }
 
-// Not guessed: without a confirmed hop count the visitor's address can't be
-// established, so the function stays closed.
-const trustedHops = parseTrustedHops(env('WAITLIST_TRUSTED_PROXY_HOPS'))
-if (trustedHops === null) configProblem('WAITLIST_TRUSTED_PROXY_HOPS is not set to a confirmed value (1 to 5)')
+// Not guessed: either addresses are ignored on purpose, or a confirmed hop
+// count says where the visitor's address is. Neither, or both, stays closed.
+const clientMode = parseClientAddressMode(env('WAITLIST_CLIENT_ADDRESS'), env('WAITLIST_TRUSTED_PROXY_HOPS'))
+if (clientMode === null) {
+  configProblem('WAITLIST_CLIENT_ADDRESS is not ignore and WAITLIST_TRUSTED_PROXY_HOPS is not set to a confirmed value (1 to 5), or both are set')
+}
 
 const enabled =
   env('WAITLIST_FUNCTION_ENABLED') === 'true' &&
   sql !== null &&
-  trustedHops !== null &&
+  clientMode !== null &&
   env('WAITLIST_RATE_SALT').length >= 32 &&
   env('TURNSTILE_SECRET_KEY') !== ''
 
@@ -77,8 +86,9 @@ const enabled =
 const health = cachedHealthCheck(() => databaseReachable(sql))
 
 Deno.serve(async (req: Request) => {
-  // Only the trusted hop of X-Forwarded-For; client-supplied headers are ignored.
-  const ip = clientIpFrom(req.headers.get('x-forwarded-for'), trustedHops)
+  // In 'ignore' mode no forwarding header is read at all. Otherwise only the
+  // trusted hop of X-Forwarded-For; client-supplied entries are ignored.
+  const ip = clientIpFor(clientMode, () => req.headers.get('x-forwarded-for'))
   const out = await handleJoin(
     {
       method: req.method,
@@ -92,7 +102,7 @@ Deno.serve(async (req: Request) => {
       allowedOrigins: list('WAITLIST_ALLOWED_ORIGINS'),
       allowedHostnames: list('WAITLIST_ALLOWED_HOSTNAMES'),
       verifyTurnstile: (token, clientIp) => verifyWithCloudflare(token, clientIp, env('TURNSTILE_SECRET_KEY'), fetch),
-      rateKeys: (email, clientIp) => rateKeysFor(email, clientIp, env('WAITLIST_RATE_SALT')),
+      rateKeys: (email, clientIp) => rateKeysForMode(clientMode!, email, clientIp, env('WAITLIST_RATE_SALT')),
       submit: (payload) => submitWithDatabase(sql!, payload),
       previewInvite: (code, clientKey) => previewWithDatabase(sql!, code, clientKey),
       databaseReachable: health,
