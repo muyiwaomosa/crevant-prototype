@@ -34,6 +34,14 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`)
 }
 const sql = (q) => execFileSync('psql', [DB, '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', q]).toString().trim()
+// Counts the rows matching a condition and, when there isn't exactly the
+// expected number, lists them (id, created_at, body) so a failure shows
+// whether it was a duplicate write, a missing one, or something else.
+function rowsReport(table, where, cols = 'id, created_at, left(body, 40) as body') {
+  const n = Number(sql(`select count(*) from ${table} where ${where}`))
+  const rows = n > 1 ? sql(`select ${cols} from ${table} where ${where} order by created_at, 1`).split('\n').join(' ; ') : ''
+  return { n, detail: rows ? `found ${n}: ${rows}` : `found ${n}` }
+}
 const adminHeaders = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' }
 
 async function createMember(email) {
@@ -56,10 +64,28 @@ async function rpc(token, fn, args = {}) {
   return { status: r.status, body: text ? JSON.parse(text) : null }
 }
 
+// Every write the pages send (as the page sees it: a request the browser
+// re-sends on its own over a fresh connection is not listed here, which tells
+// the two apart). Printed with a failing storage check.
+const writes = []
+const WRITE_FNS = /\/rest\/v1\/rpc\/(app_create_post|app_add_comment)$/
+const writesTo = (fn) => writes.filter((w) => w.fn === fn).map((w) => `${w.at} ${w.status ?? w.failure ?? 'pending'}`).join(', ') || 'none'
 const cspViolations = []
 const consoleErrors = []
 async function newContext(browser, opts = {}) {
   const ctx = await browser.newContext(opts)
+  ctx.on('request', (req) => {
+    const m = req.method() === 'POST' && new URL(req.url()).pathname.match(WRITE_FNS)
+    if (m) writes.push({ fn: m[1], req, at: new Date().toISOString().slice(11, 23) })
+  })
+  ctx.on('requestfinished', async (req) => {
+    const w = writes.find((x) => x.req === req)
+    if (w) w.status = (await req.response())?.status()
+  })
+  ctx.on('requestfailed', (req) => {
+    const w = writes.find((x) => x.req === req)
+    if (w) w.failure = req.failure()?.errorText
+  })
   await ctx.route(`${APP}/**`, async (route) => {
     // A request can outlive its page (for example a font still downloading
     // when the test moves on); then there's nothing left to answer.
@@ -85,6 +111,18 @@ async function newContext(browser, opts = {}) {
     return page
   }
   return ctx
+}
+
+// Runs a UI action that writes, and waits until the server has answered that
+// write. Waiting for the text to appear is not enough: the composer's own
+// textarea holds the same text (React keeps its text content in step with the
+// value), and a like shows before its request is answered.
+async function answered(page, fn, action) {
+  const [res] = await Promise.all([
+    page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `/rest/v1/rpc/${fn}`),
+    action(),
+  ])
+  return res.status()
 }
 
 async function signInAndSetUp(page, email, username, displayName) {
@@ -132,10 +170,16 @@ async function signInAndSetUp(page, email, username, displayName) {
   await signInAndSetUp(pageA, emailA, userA, 'Aye Teacher')
   check('A chose a username and display name, and the feed opened', sql(`select username || '|' || display_name from public.profiles where id = '${idA}'`) === `${userA}|Aye Teacher`)
   await pageA.getByLabel('Write a post').fill(postText)
-  await pageA.getByRole('button', { name: 'Post', exact: true }).click()
-  await pageA.getByText(postText).waitFor()
-  check('A\'s post appears in their own feed', true)
-  check('the post is stored once, as written', sql(`select count(*) from social.posts where author_id = '${idA}' and body = '${postText}' and deleted_at is null`) === '1')
+  const postStatus = await answered(pageA, 'app_create_post', () => pageA.getByRole('button', { name: 'Post', exact: true }).click())
+  check('the server accepted A\'s post', postStatus === 200, String(postStatus))
+  await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
+  check('A\'s post appears in their own feed', (await pageA.getByTestId('post').filter({ hasText: postText }).count()) === 1)
+  check('the composer is cleared once the post is published', (await pageA.getByLabel('Write a post').inputValue()) === '')
+  {
+    const posts = rowsReport('social.posts', `author_id = '${idA}' and body = '${postText}' and deleted_at is null`)
+    const all = rowsReport('social.posts', `author_id = '${idA}'`)
+    check('the post is stored once, as written', posts.n === 1, `${posts.detail}; all of A's posts: ${all.detail}; page sent app_create_post: ${writesTo('app_create_post')}`)
+  }
 
   // 3. B finds A, follows, adds A to their Clique, likes and comments.
   const ctxB = await newContext(browser)
@@ -152,22 +196,32 @@ async function signInAndSetUp(page, email, username, displayName) {
   check('following and joining the Clique are separate records', sql(`select (select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${idA}') || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${idA}' and removed_at is null)`) === '1|1')
 
   await pageB.getByRole('link', { name: 'Home' }).first().click()
-  await pageB.getByText(postText).waitFor()
+  await pageB.getByTestId('post').filter({ hasText: postText }).waitFor()
   check('A\'s post shows in B\'s feed after following, marked as in B\'s Clique', await pageB.getByText('In your Clique').first().isVisible())
-  await pageB.getByRole('button', { name: 'Like (0 likes)' }).click()
+  const likeStatus = await answered(pageB, 'app_like', () => pageB.getByRole('button', { name: 'Like (0 likes)' }).click())
+  check('the server accepted B\'s like', likeStatus === 204 || likeStatus === 200, String(likeStatus))
   await pageB.getByRole('button', { name: 'Unlike (1 likes)' }).waitFor()
   await pageB.getByRole('link', { name: 'Comments (0)' }).click()
   await pageB.getByLabel('Write a comment').fill('This finally made it click for my class.')
-  await pageB.getByRole('button', { name: 'Comment', exact: true }).click()
-  await pageB.getByText('This finally made it click for my class.').waitFor()
-  check('B\'s like and comment are stored once each', sql(`select (select count(*) from social.likes where user_id = '${idB}') || '|' || (select count(*) from social.comments where author_id = '${idB}' and deleted_at is null)`) === '1|1')
+  const commentStatus = await answered(pageB, 'app_add_comment', () => pageB.getByRole('button', { name: 'Comment', exact: true }).click())
+  check('the server accepted B\'s comment', commentStatus === 200, String(commentStatus))
+  await pageB.getByTestId('comment').filter({ hasText: 'This finally made it click for my class.' }).waitFor()
+  {
+    const likes = rowsReport('social.likes', `user_id = '${idB}'`, 'post_id, created_at')
+    const comments = rowsReport('social.comments', `author_id = '${idB}' and deleted_at is null`, 'id, created_at, post_id, left(body, 40) as body')
+    check('B\'s like and comment are stored once each', likes.n === 1 && comments.n === 1, `likes ${likes.detail}; comments ${comments.detail}; page sent app_add_comment: ${writesTo('app_add_comment')}`)
+  }
 
   // 4. Everything survives a reload (database-backed, not browser storage).
   await pageB.goto(`${APP}/app`)
   await pageB.reload()
-  await pageB.getByText(postText).waitFor()
+  await pageB.getByTestId('post').filter({ hasText: postText }).waitFor()
   check('after a reload, B\'s like is still there', await pageB.getByRole('button', { name: 'Unlike (1 likes)' }).isVisible())
-  check('after a reload, the comment count is still 1', await pageB.getByRole('link', { name: 'Comments (1)' }).isVisible())
+  {
+    const shown = await pageB.getByRole('link', { name: /^Comments \(\d+\)$/ }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
+    const stored = rowsReport('social.comments', `author_id = '${idB}' and deleted_at is null`, 'id, created_at, post_id, left(body, 40) as body')
+    check('after a reload, the comment count is still 1', await pageB.getByRole('link', { name: 'Comments (1)' }).isVisible(), `page shows ${JSON.stringify(shown)}; stored ${stored.detail}`)
+  }
   const appStorage = await pageB.evaluate(() => Object.keys(localStorage).filter((k) => !/^sb-/.test(k)))
   check('no social data is kept in browser storage', appStorage.length === 0, appStorage.join(','))
 
@@ -202,7 +256,7 @@ async function signInAndSetUp(page, email, username, displayName) {
 
   // 7. A sees B's comment on their post, and only A can delete the post.
   await pageA.goto(`${APP}/app/u/${userA}`)
-  await pageA.getByText(postText).waitFor()
+  await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
   check('A sees one comment on their post', await pageA.getByRole('link', { name: 'Comments (1)' }).isVisible())
   await pageA.getByRole('button', { name: 'Delete post' }).click()
   await pageA.getByRole('button', { name: 'Delete', exact: true }).click()
