@@ -1,0 +1,49 @@
+name: Waitlist health check (Production)
+
+# Daily check of the PRODUCTION join-waitlist function
+# (scripts/waitlist-health.mjs): it answers, its restricted database login
+# connects, the site's browser preflight is allowed, and the function switch
+# matches the expected state. It submits nothing and uses no secrets, only
+# three repository variables, kept apart from staging's:
+#   PRODUCTION_WAITLIST_FUNCTION_URL     https://hmrliwoychnqrbbydorg.supabase.co/functions/v1/join-waitlist
+#   PRODUCTION_WAITLIST_SITE_ORIGIN      https://www.splitpost.ca
+#   PRODUCTION_WAITLIST_EXPECTED_STATE   open or closed
+# A failed run makes GitHub email a notification.
+#
+# The daily run is off until PRODUCTION_WAITLIST_HEALTH_ENABLED is 'true'
+# (set once the function is deployed). It can always be run by hand.
+
+on:
+  schedule:
+    - cron: '41 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    name: Waitlist health (Production)
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || vars.PRODUCTION_WAITLIST_HEALTH_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The function address is the Production project's
+        env:
+          WAITLIST_FUNCTION_URL: ${{ vars.PRODUCTION_WAITLIST_FUNCTION_URL }}
+        run: |
+          set -euo pipefail
+          [ "$WAITLIST_FUNCTION_URL" = "https://hmrliwoychnqrbbydorg.supabase.co/functions/v1/join-waitlist" ] \
+            || { echo "::error::PRODUCTION_WAITLIST_FUNCTION_URL must be the Production project's join-waitlist function."; exit 1; }
+      - name: Check the waitlist function
+        env:
+          WAITLIST_FUNCTION_URL: ${{ vars.PRODUCTION_WAITLIST_FUNCTION_URL }}
+          WAITLIST_SITE_ORIGIN: ${{ vars.PRODUCTION_WAITLIST_SITE_ORIGIN }}
+          WAITLIST_EXPECTED_STATE: ${{ vars.PRODUCTION_WAITLIST_EXPECTED_STATE }}
+        run: node scripts/waitlist-health.mjs

@@ -1,0 +1,98 @@
+name: Waitlist admin (Production)
+
+# The minimum founder tools for the PRODUCTION waitlist (splitpost-production,
+# hmrliwoychnqrbbydorg): status, summary (counts only), open and close
+# registrations, delete an entry on request, the retention purge, and the
+# privacy notice version. Nothing else: no waves, no creator links (those
+# stay on the staging workflow until approved for Production).
+#
+# Started by hand only, on main, by the repository owner, and approved through
+# the GitHub "production" environment (required reviewer) every run. It uses
+# one secret, WAITLIST_ADMIN_DATABASE_URL in that environment, and only as the
+# restricted waitlist_admin login (scripts/db/verify-production-target.sh with
+# EXPECTED_DB_USER, then REQUIRE_ADMIN_ROLE in scripts/db/waitlist-admin.sh).
+# Everything it prints is counts or switch states, never personal data.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "What to do. Everything prints counts or states only."
+        type: choice
+        options:
+          - status
+          - summary
+          - open
+          - close
+          - delete
+          - purge
+          - set-notice-version
+        default: status
+        required: true
+      waitlist_id:
+        description: "For delete: the waitlist id (UUID) from the Supabase dashboard. Never an email address."
+        type: string
+        required: false
+      retention_months:
+        description: "For purge: months since signup or last verified confirmation (approved policy: 12)."
+        type: string
+        default: '12'
+        required: false
+      notice_version:
+        description: "For set-notice-version: the published privacy notice version, e.g. 1.0."
+        type: string
+        required: false
+      confirm_project_ref:
+        description: "Type the Production project reference to confirm: hmrliwoychnqrbbydorg"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waitlist-admin-production
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PROJECT_REF: hmrliwoychnqrbbydorg
+
+jobs:
+  admin:
+    name: Waitlist ${{ inputs.action }} (Production)
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Only the minimum Production actions
+        env:
+          ACTION: ${{ inputs.action }}
+        run: |
+          set -euo pipefail
+          case "$ACTION" in
+            status|summary|open|close|delete|purge|set-notice-version) echo "Action: $ACTION" ;;
+            *) echo "::error::$ACTION is not a Production action. Nothing was done."; exit 1 ;;
+          esac
+
+      - name: Verify the target is the approved Production project and the restricted admin login
+        env:
+          PRODUCTION_DATABASE_URL: ${{ secrets.WAITLIST_ADMIN_DATABASE_URL }}
+          EXPECTED_DB_USER: waitlist_admin
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-production-target.sh
+
+      - name: Run the action
+        env:
+          DATABASE_URL: ${{ secrets.WAITLIST_ADMIN_DATABASE_URL }}
+          REQUIRE_ADMIN_ROLE: '1'
+          ACTION: ${{ inputs.action }}
+          RETENTION_MONTHS: ${{ inputs.retention_months }}
+          WAITLIST_ID: ${{ inputs.waitlist_id }}
+          NOTICE_VERSION: ${{ inputs.notice_version }}
+          PGSSLMODE: require
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/waitlist-admin.sh
