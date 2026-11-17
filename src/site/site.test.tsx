@@ -41,7 +41,7 @@ describe('public site build', () => {
     for (const p of ['/join', '/join/creator', '/join/supporter', '/request-invite']) {
       const { container, getByTestId } = renderSite(p)
       expect(getByTestId('where').textContent, p).toBe('/join')
-      expect(container.textContent).toContain('The waitlist opens once our privacy notice is published.')
+      expect(container.textContent).toContain("You can't sign up just yet.")
       cleanup()
     }
   })

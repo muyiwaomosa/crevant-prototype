@@ -187,7 +187,7 @@ function Track() {
         <path key={i} d={`M${-40 + i * 22} 320 C${80 + i * 14} ${130 + i * 22} ${320 - i * 14} ${130 + i * 22} ${440 - i * 22} 320`} fill="none" stroke="#fff" strokeWidth="2" opacity="0.8" />
       ))}
       <path d="M92 320 C160 230 240 230 308 320" fill="#2f8f5b" />
-      <text x="200" y="300" textAnchor="middle" fontFamily="Bricolage Grotesque, sans-serif" fontWeight="800" fontSize="40" fill="#fff" opacity="0.9">400</text>
+      <text x="200" y="300" textAnchor="middle" fontFamily="Bricolage Grotesque Variable, Bricolage Grotesque, sans-serif" fontWeight="800" fontSize="40" fill="#fff" opacity="0.9">400</text>
       <circle cx="320" cy="60" r="26" fill="#fff4c8" />
     </>
   )

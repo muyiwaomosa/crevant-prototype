@@ -54,13 +54,25 @@ npm run build:site >/dev/null
 # deployed). It must build only the public site, pass the bundle check with
 # the staging project forbidden, show the public site at the production
 # address, and index only / and /join. Without approval it must not build.
-if env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY VERCEL_ENV=production npm run build >/dev/null 2>&1; then
+# What Vercel sets for a Git build of main in the splitpost project
+# (config/vercel-projects.json). The guard needs all of it for Production.
+SITE_PROJECT="$(node -p "require('./config/vercel-projects.json').publicSite.projectId")"
+DEMO_PROJECT="$(node -p "require('./config/vercel-projects.json').demo.projectId")"
+VERCEL_GIT=(VERCEL_GIT_REPO_OWNER=muyiwaomosa VERCEL_GIT_REPO_SLUG=crevant-prototype VERCEL_GIT_COMMIT_REF=main)
+if env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY VERCEL_ENV=production VERCEL_PROJECT_ID="$SITE_PROJECT" "${VERCEL_GIT[@]}" npm run build >/dev/null 2>&1; then
   echo "FAIL  a Production build ran without approval" >&2
   exit 1
 fi
 echo "PASS  a Production build without approval is refused"
+if env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY VERCEL_ENV=production CREVANT_PRODUCTION_SITE_APPROVED=true \
+  VERCEL_PROJECT_ID="$DEMO_PROJECT" "${VERCEL_GIT[@]}" npm run build >/dev/null 2>&1; then
+  echo "FAIL  the public site built for Production in the demo project" >&2
+  exit 1
+fi
+echo "PASS  an approved Production build in the demo project (crevant-prototype) is refused"
 env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY \
   VERCEL_ENV=production CREVANT_PRODUCTION_SITE_APPROVED=true CREVANT_ALLOW_INDEXING=true \
+  VERCEL_PROJECT_ID="$SITE_PROJECT" "${VERCEL_GIT[@]}" \
   npm run build >/dev/null
 node_modules/.bin/vite preview --host 127.0.0.1 --port "$APP_PORT" --strictPort >/dev/null 2>&1 &
 preview_pid=$!

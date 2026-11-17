@@ -1,10 +1,11 @@
 import { useEffect, type ReactNode } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { TOUR_BASE } from '../entry'
+import { DISCOVER_PATH } from '../entry'
 import { useMemberLinks } from './member-links'
 import { useRobotsMeta } from './robots'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 import { HOMEPAGE_COPY } from './landing/copy'
+import { WAITLIST_CLOSED_COPY, WAITLIST_OPEN, waitlistCta } from './waitlist/status'
 import { SplitpostWordmark } from './landing/ui/SplitpostWordmark'
 
 const HEADER_LINK =
@@ -48,21 +49,29 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             <SplitpostWordmark />
           </Link>
           <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2">
-            {/* The tour is a separate app, so it needs a full page load. */}
             {/* Phones: logo, Sign in and Join the Waitlist; Discover Splitpost stays in the hero. */}
             <span className="hidden sm:contents">
-              <a href={TOUR_BASE} className={`${HEADER_LINK} px-3.5`}>
+              <Link to={DISCOVER_PATH} className={`${HEADER_LINK} px-3.5`}>
                 {HOMEPAGE_COPY.hero.secondaryCta}
-              </a>
+              </Link>
             </span>
             {/* Below 420px only the logo and Join the Waitlist fit; Sign in stays in the hero and footer. */}
             {/* The account link is shared with the account pages, so it's restyled here rather than changed. */}
             {account && <span className="hidden min-[420px]:contents [&_a]:text-white [&_a:hover]:bg-white/10">{account}</span>}
             <Link
               to="/join"
+              aria-label={waitlistCta()}
               className="inline-flex h-9 items-center whitespace-nowrap rounded-full bg-sp-secondary px-3 text-[13px] font-bold min-[360px]:px-4 min-[360px]:text-sm text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#bde3db] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
             >
-              {HOMEPAGE_COPY.hero.primaryCta}
+              {WAITLIST_OPEN ? (
+                waitlistCta()
+              ) : (
+                <>
+                  {/* Under 390px the full closed label doesn't fit beside the logo. */}
+                  <span aria-hidden="true" className="min-[390px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
+                  <span aria-hidden="true" className="hidden min-[390px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
+                </>
+              )}
             </Link>
           </nav>
         </div>
@@ -88,11 +97,8 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
               How It Works
             </Link>
             <Link to="/join" className="hover:text-sp-secondary-on-dark">
-              {HOMEPAGE_COPY.hero.primaryCta}
+              {waitlistCta()}
             </Link>
-            <a href={TOUR_BASE} className="hover:text-sp-secondary-on-dark">
-              {HOMEPAGE_COPY.hero.secondaryCta}
-            </a>
             {import.meta.env.MODE !== 'site' && memberLinks && (
               <Link to="/sign-in" className="hover:text-sp-secondary-on-dark">
                 Sign in

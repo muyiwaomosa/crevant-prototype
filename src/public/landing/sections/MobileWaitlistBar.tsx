@@ -2,7 +2,7 @@ import clsx from 'clsx'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { HOMEPAGE_COPY } from '../copy'
+import { waitlistCta } from '../../waitlist/status'
 
 /**
  * Phones only: a slim Join the Waitlist bar once the hero has scrolled away,
@@ -45,7 +45,7 @@ export function MobileWaitlistBar() {
         tabIndex={show ? 0 : -1}
         className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-sp-secondary text-base font-bold text-sp-ink focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
-        {HOMEPAGE_COPY.hero.primaryCta} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        {waitlistCta()} <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Link>
     </div>
   )

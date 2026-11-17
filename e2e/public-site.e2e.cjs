@@ -13,7 +13,8 @@ const path = require('node:path')
 const { chromium, devices } = require('playwright')
 
 const BASE = (process.argv[2] || 'http://localhost:4176').replace(/\/$/, '')
-const ALLOWED_THIRD_PARTY = ['fonts.googleapis.com', 'fonts.gstatic.com']
+// Fonts are self-hosted: no third party is allowed on the public pages.
+const ALLOWED_THIRD_PARTY = []
 const vercel = JSON.parse(readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'))
 const SECURITY_HEADERS = Object.fromEntries(vercel.headers.find((h) => h.source === '/(.*)').headers.map((h) => [h.key.toLowerCase(), h.value]))
 
@@ -36,10 +37,20 @@ async function newContext(browser, options = {}) {
   // Apply the production security headers to every page, so a CSP problem
   // shows up here exactly as it would on Vercel.
   await ctx.route(`${BASE}/**`, async (route) => {
-    const res = await route.fetch()
-    const headers = { ...res.headers() }
-    if ((headers['content-type'] || '').includes('text/html')) Object.assign(headers, SECURITY_HEADERS)
-    await route.fulfill({ response: res, headers })
+    // A request can outlive its page (the test moves on while a font is still
+    // downloading). Then there's nothing left to answer, so it's ignored
+    // rather than crashing the run.
+    // Only pages need the headers; scripts, styles, images and fonts pass
+    // straight through, so they're never fetched twice.
+    if (route.request().resourceType() !== 'document') return route.continue()
+    try {
+      const res = await route.fetch()
+      const headers = { ...res.headers() }
+      if ((headers['content-type'] || '').includes('text/html')) Object.assign(headers, SECURITY_HEADERS)
+      await route.fulfill({ response: res, headers })
+    } catch (e) {
+      if (!/disposed|closed|Target page|Route is already handled/i.test(String(e && e.message))) throw e
+    }
   })
   return ctx
 }
@@ -74,8 +85,19 @@ async function newContext(browser, options = {}) {
       })
       check(`${label}: the security headers are applied (an inline script is blocked)`, inlineRan === false)
       check(`${label}: the page is the public site build`, (await page.locator('meta[name="crevant-build"]').getAttribute('content')) === 'public-site')
+      // The typefaces come from this site, and the headline really uses them.
+      const fonts = await page.evaluate(async () => {
+        await document.fonts.ready
+        const loaded = [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family.replace(/"/g, ''))
+        const h1 = getComputedStyle(document.querySelector('h1')).fontFamily
+        return { loaded: [...new Set(loaded)], h1, archivo: document.fonts.check('900 40px "Archivo Variable"'), inter: document.fonts.check('400 16px "Inter Variable"') }
+      })
+      check(`${label}: the self-hosted Archivo and Inter load, and the headline uses Archivo`, fonts.archivo && fonts.inter && fonts.loaded.includes('Archivo Variable') && fonts.loaded.includes('Inter Variable') && /Archivo Variable/.test(fonts.h1), JSON.stringify(fonts))
+      check(`${label}: the page names the commit it was built from`, /^([0-9a-f]{7}|local)$/.test((await page.locator('meta[name="splitpost-commit"]').getAttribute('content')) || ''))
       check(`${label}: the landing page renders`, await shows(page.getByRole('heading', { level: 1 })))
-      check(`${label}: Join the Waitlist is offered`, await shows(page.getByRole('link', { name: 'Join the Waitlist' })))
+      // While registration is closed the buttons say so (they switch to "Join the Waitlist" when it opens).
+      check(`${label}: the waitlist button says it opens soon while registration is closed`, await shows(page.getByRole('link', { name: 'Waitlist Opens Soon' })))
+      check(`${label}: no button invites a signup that isn't possible yet`, (await page.getByRole('link', { name: 'Join the Waitlist' }).count()) === 0)
 
       // 2. No member links anywhere on the landing page.
       const memberHrefs = await page.$$eval('a[href]', (as) => as.map((a) => a.getAttribute('href')).filter((h) => /sign-in|forgot-password|\/auth\/|^\/app(\/|$)/.test(h)))
@@ -84,7 +106,7 @@ async function newContext(browser, options = {}) {
 
       // 3. /join is the closed waitlist page: nothing to type into.
       await page.goto(`${BASE}/join`)
-      check(`${label}: /join shows the waitlist page`, await shows(page.getByText('The waitlist opens once our privacy notice is published.')))
+      check(`${label}: /join says plainly that you can't sign up yet`, await shows(page.getByText("You can't sign up just yet.")))
       check(`${label}: /join has no form while the waitlist is off`, (await page.locator('form, input, select, textarea').count()) === 0)
 
       // 4. Every member path is the public "not found" page.
@@ -108,6 +130,11 @@ async function newContext(browser, options = {}) {
       // 5. The sample tour still works, and old prototype links still redirect.
       await page.goto(`${BASE}/tour`)
       check(`${label}: /tour shows the sample tour`, await shows(page.getByText(/sample/i)))
+      // Creator invitation links open the tour's welcome screen: the banner
+      // there says the points and rewards are an early concept.
+      await page.goto(`${BASE}/tour/welcome?invite=7c1e94a2b05d3f68e1a9`)
+      check(`${label}: an invitation link's welcome screen says the tour's points and rewards aren't the pilot's`,
+        await shows(page.getByRole('complementary', { name: 'Sample tour' }).getByText("The points and rewards shown aren't how the Splitpost pilot works.")))
       await page.goto(`${BASE}/discover`)
       await page.waitForURL(/\/tour\/discover$/, { timeout: 5000 }).catch(() => {})
       check(`${label}: /discover redirects into the tour`, page.url().endsWith('/tour/discover'), page.url())
@@ -290,6 +317,118 @@ async function newContext(browser, options = {}) {
       await ctx.close()
     }
 
+    // 5c2. Every "Join the Waitlist" button, on desktop and on a phone
+    //      (including the phone's sticky bar), opens /join on this same site,
+    //      so a Preview never sends visitors to another deployment.
+    for (const [label, options] of [
+      ['desktop', { viewport: { width: 1280, height: 900 } }],
+      ['phone', { ...devices['iPhone 13'] }],
+    ]) {
+      const ctx = await newContext(browser, options)
+      const page = await ctx.newPage()
+      await page.goto(`${BASE}/`, { waitUntil: 'networkidle' })
+      const ctas = page.getByRole('link', { name: /waitlist opens soon/i, includeHidden: true })
+      const total = await ctas.count()
+      const hrefs = await ctas.evaluateAll((as) => as.map((a) => a.href))
+      const wrong = hrefs.filter((h) => h !== `${new URL(BASE).origin}/join`)
+      check(`${label}: all ${total} waitlist buttons point to /join on this site`, total >= 4 && wrong.length === 0, wrong.join(', '))
+      const failed = []
+      let clicked = 0
+      for (let i = 0; i < total; i++) {
+        await page.goto(`${BASE}/`, { waitUntil: 'networkidle' })
+        const link = page.getByRole('link', { name: /waitlist opens soon/i, includeHidden: true }).nth(i)
+        // The phone's sticky bar slides in (and becomes focusable) only once
+        // the hero has scrolled away; until then it is off screen.
+        if ((await link.getAttribute('tabindex')) === '-1') {
+          if (label !== 'phone') continue
+          await page.mouse.wheel(0, 1400)
+          await page.waitForFunction((el) => el.getAttribute('tabindex') === '0', await link.elementHandle(), { timeout: 3000 }).catch(() => {})
+          if ((await link.getAttribute('tabindex')) !== '0') { failed.push(`link ${i + 1} (sticky bar) never appeared`); continue }
+          await page.waitForTimeout(400)
+        } else {
+          await link.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {})
+        }
+        if (!(await link.isVisible())) continue
+        clicked++
+        await link.click()
+        await page.waitForURL(`${BASE}/join`, { timeout: 5000 }).catch(() => {})
+        const here = page.url()
+        const heading = await shows(page.getByRole('heading', { level: 1, name: 'The Waitlist Opens Soon' }), 3000)
+        if (here !== `${BASE}/join` || !heading) failed.push(`link ${i + 1} went to ${here}`)
+      }
+      check(`${label}: clicking each of the ${clicked} visible waitlist buttons opens this site's /join page`, clicked >= 4 && failed.length === 0, failed.join(' | '))
+      await ctx.close()
+    }
+
+    // 5c3. Every "Discover Splitpost" button, on desktop and on a phone, from
+    //      the homepage and from /join, opens the homepage introduction
+    //      ("What we're building") on this site, never the old sample tour.
+    for (const [label, options] of [
+      ['desktop', { viewport: { width: 1280, height: 900 } }],
+      ['phone', { ...devices['iPhone 13'] }],
+    ]) {
+      const ctx = await newContext(browser, options)
+      const page = await ctx.newPage()
+      const failed = []
+      let clicked = 0
+      for (const start of ['/', '/join']) {
+        await page.goto(`${BASE}${start}`, { waitUntil: 'networkidle' })
+        const total = await page.getByRole('link', { name: 'Discover Splitpost', exact: true, includeHidden: true }).count()
+        for (let i = 0; i < total; i++) {
+          await page.goto(`${BASE}${start}`, { waitUntil: 'networkidle' })
+          const link = page.getByRole('link', { name: 'Discover Splitpost', exact: true, includeHidden: true }).nth(i)
+          const href = await link.evaluate((a) => a.href)
+          if (href !== `${new URL(BASE).origin}/#building`) failed.push(`${start} link ${i + 1} points to ${href}`)
+          await link.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {})
+          if (!(await link.isVisible())) continue
+          clicked++
+          await link.click()
+          await page.waitForURL(`${BASE}/#building`, { timeout: 5000 }).catch(() => {})
+          const heading = page.locator('#building-title')
+          await page.waitForTimeout(800)
+          const box = await heading.boundingBox()
+          const vh = page.viewportSize().height
+          const inView = !!box && box.y < vh && box.y + box.height > 0
+          const tour = await page.getByText('Sample tour.').count()
+          if (page.url() !== `${BASE}/#building` || !inView || tour) failed.push(`${start} link ${i + 1}: ${page.url()}${inView ? '' : ', introduction not on screen'}${tour ? ', showed the sample tour' : ''}`)
+        }
+      }
+      check(`${label}: each of the ${clicked} visible Discover Splitpost buttons (homepage and /join) opens the introduction on this site`, clicked >= (label === 'phone' ? 2 : 3) && failed.length === 0, failed.join(' | '))
+      await ctx.close()
+    }
+
+    // 5c4. Repeated clicks, as people really use the page (no reload between
+    //      them): Discover Splitpost, then back to the top, then Discover
+    //      again, then the footer's How It Works. Each one must scroll to the
+    //      introduction. (A second click to the same #section used to do
+    //      nothing.)
+    for (const [label, options] of [
+      ['desktop', { viewport: { width: 1280, height: 900 } }],
+      ['phone', { ...devices['iPhone 13'] }],
+    ]) {
+      const ctx = await newContext(browser, options)
+      const page = await ctx.newPage()
+      await page.goto(`${BASE}/`, { waitUntil: 'networkidle' })
+      const onScreen = async () => {
+        await page.waitForTimeout(700)
+        const box = await page.locator('#building-title').boundingBox()
+        return !!box && box.y >= -5 && box.y < page.viewportSize().height
+      }
+      const hero = page.locator('[data-testid="hero-actions"]').getByRole('link', { name: 'Discover Splitpost' })
+      const results = []
+      await hero.click()
+      results.push(['first Discover click', await onScreen()])
+      await page.evaluate(() => window.scrollTo(0, 0))
+      await hero.click()
+      results.push(['second Discover click', await onScreen()])
+      await page.evaluate(() => window.scrollTo(0, 0))
+      await page.getByRole('contentinfo').getByRole('link', { name: 'How It Works' }).click()
+      results.push(['footer How It Works', await onScreen()])
+      const missed = results.filter(([, ok]) => !ok).map(([n]) => n)
+      check(`${label}: Discover Splitpost and How It Works scroll to the introduction on every click, not just the first`, missed.length === 0, missed.join(', '))
+      await ctx.close()
+    }
+
     // 5d. Image quality on high-density screens: every image on the homepage
     //     and tour loads, and none is shown more than 1.25x larger than its
     //     real pixels (which is when photos start to look soft or blurry).
@@ -301,14 +440,28 @@ async function newContext(browser, options = {}) {
       const page = await ctx.newPage()
       const issues = []
       for (const path of ['/', '/join', '/tour/discover', '/tour/creator/amara', '/tour/profile']) {
-        await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' })
-        await page.evaluate(async () => {
-          for (let y = 0; y < document.body.scrollHeight; y += 400) {
-            window.scrollTo(0, y)
-            await new Promise((r) => setTimeout(r, 30))
-          }
-        })
-        await page.waitForLoadState('networkidle')
+        // 'load', not 'networkidle': a slow third-party font request must not
+        // stall the check. Whether each image finished loading is checked below.
+        await page.goto(`${BASE}${path}`, { waitUntil: 'load' })
+        // Bounded: at most 200 steps, and 30 seconds, so a page that keeps
+        // growing or a stalled browser fails clearly instead of hanging the job.
+        const scrolled = await Promise.race([
+          page.evaluate(async () => {
+            for (let y = 0, n = 0; y < document.body.scrollHeight && n < 200; y += 400, n++) {
+              window.scrollTo(0, y)
+              await new Promise((r) => setTimeout(r, 30))
+            }
+            return true
+          }),
+          new Promise((r) => setTimeout(() => r(false), 30000)),
+        ])
+        if (!scrolled) {
+          issues.push(`${path}: scrolling through the page did not finish within 30 seconds`)
+          continue
+        }
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+        // Lazy images below the fold: give each one up to 10 seconds to finish.
+        await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 10000 }).catch(() => {})
         const rows = await page.$$eval('img', (imgs) =>
           imgs.map((i) => {
             const r = i.getBoundingClientRect()

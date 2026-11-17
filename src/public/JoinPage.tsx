@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
-import { TOUR_BASE } from '../entry'
+import { DISCOVER_PATH } from '../entry'
 import { readWaitlistConfig } from './waitlist/config'
+import { WAITLIST_CLOSED_COPY } from './waitlist/status'
 import { WaitlistForm } from './waitlist/WaitlistForm'
 import { InviteBanner } from './waitlist/InviteBanner'
 import { DISCLOSURES } from './landing/claims'
@@ -27,7 +28,7 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Splitpost
         </Link>
         <h1 id="join-title" className="mt-6 font-display text-[2rem] font-extrabold leading-tight tracking-[-0.02em] text-ink-900 sm:text-[2.5rem]">
-          Join the Waitlist
+          {waitlist ? 'Join the Waitlist' : WAITLIST_CLOSED_COPY.joinTitle}
         </h1>
         {/* The founder-approved introduction, with its first line updated to the Splitpost message. */}
         <div data-testid="join-intro" className="mt-4 space-y-4 text-lg leading-relaxed text-ink-600">
@@ -45,8 +46,9 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
           <div data-testid="not-open" className="mt-8 flex gap-3 rounded-3xl bg-spark-50 p-5 text-ink-700 ring-1 ring-spark-200">
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-spark-700" aria-hidden="true" />
             <div className="space-y-1.5 leading-relaxed">
-              <p className="font-semibold text-ink-900">The waitlist opens once our privacy notice is published.</p>
-              <p>This page collects nothing.</p>
+              <p className="font-semibold text-ink-900">{WAITLIST_CLOSED_COPY.notOpenTitle}</p>
+              <p>{WAITLIST_CLOSED_COPY.notOpenBody}</p>
+              <p>{WAITLIST_CLOSED_COPY.collectsNothing}</p>
             </div>
           </div>
         )}
@@ -60,12 +62,13 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
         </ul>
 
         <div className="mt-10 rounded-3xl bg-white p-6 ring-1 ring-ink-100">
-          <h2 className="font-display text-xl font-bold text-ink-900">Explore the interactive tour</h2>
-          <p className="mt-2 leading-relaxed text-ink-600">Try the product concept now, in a demonstration with sample data. Everything you do there stays in your own browser.</p>
+          {/* Draft copy, pending founder approval. */}
+          <h2 className="font-display text-xl font-bold text-ink-900">See how Splitpost works</h2>
+          <p className="mt-2 leading-relaxed text-ink-600">How your followers find your posts, how you understand the community you're building, and how your supporters can help you grow.</p>
           <div className="mt-5 flex flex-col gap-3 min-[420px]:flex-row">
-            <a href={TOUR_BASE} className={buttonClass('primary')}>
+            <Link to={DISCOVER_PATH} className={buttonClass('primary')}>
               Discover Splitpost
-            </a>
+            </Link>
             <Link to="/#invitation" className={buttonClass('secondary')}>
               Back to Splitpost
             </Link>

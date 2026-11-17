@@ -69,7 +69,7 @@ describe('waitlist switch (browser)', () => {
       </MemoryRouter>,
     )
     expect(container.querySelector('form, input, select, textarea')).toBeNull()
-    expect(screen.getByText('The waitlist opens once our privacy notice is published.')).toBeTruthy()
+    expect(screen.getByText("You can't sign up just yet.")).toBeTruthy()
     expect(document.querySelector('script[src*="challenges.cloudflare.com"]')).toBeNull()
   })
 
@@ -258,5 +258,22 @@ describe('waitlist and server function agree', () => {
     const { TURNSTILE_ACTION } = await import('./turnstile')
     const server = await import('../../../supabase/functions/join-waitlist/handler')
     expect(TURNSTILE_ACTION).toBe(server.TURNSTILE_ACTION)
+  })
+})
+
+describe('waitlist button wording follows whether registration is open', () => {
+  it('says "Waitlist Opens Soon" while closed and "Join the Waitlist" once the form is configured', async () => {
+    const { waitlistCta, WAITLIST_OPEN, WAITLIST_CLOSED_COPY } = await import('./status')
+    expect(waitlistCta(false)).toBe('Waitlist Opens Soon')
+    expect(waitlistCta(true)).toBe('Join the Waitlist')
+    // This repository has no approved notice, so every build is closed today.
+    expect(WAITLIST_OPEN).toBe(false)
+    expect(waitlistCta()).toBe('Waitlist Opens Soon')
+    // The closed wording never claims anyone can sign up.
+    for (const t of Object.values(WAITLIST_CLOSED_COPY)) expect(t).not.toMatch(/sign up now|join now|register now/i)
+  })
+  it('is open exactly when the form would show: same settings, same approved notice', () => {
+    expect(readWaitlistConfig(ENV, NOTICE)).not.toBeNull()
+    expect(readWaitlistConfig(ENV, null)).toBeNull()
   })
 })

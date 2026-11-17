@@ -29,13 +29,16 @@ import { Seam } from './landing/ui/Story'
 // never secures a place.
 
 export function LandingPage() {
-  // Links such as /#invitation from other pages: scroll to the section once rendered.
-  const { hash } = useLocation()
+  // Links such as /#building: scroll to the section once rendered, and again
+  // on every click, even when the address already ends in that #section
+  // (each click is a new navigation with its own key, though the hash is the
+  // same). Without the key, a second "Discover Splitpost" did nothing.
+  const { hash, key } = useLocation()
   useEffect(() => {
     if (!hash) return
     const el = document.getElementById(decodeURIComponent(hash.slice(1)))
     if (el) el.scrollIntoView()
-  }, [hash])
+  }, [hash, key])
 
   return (
     <>

@@ -40,10 +40,15 @@ function publicSiteBuild(): Plugin {
       order: 'pre',
       handler(html) {
         const robots = `<meta name="robots" content="${flags.allowIndexing ? 'index, follow' : 'noindex'}" />`
-        if (!site) return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    ${robots}`)
+        // Which commit this page was built from (Vercel sets the variable), so
+        // anyone can check a deployment is the latest: View Source, or
+        // document.querySelector('meta[name="splitpost-commit"]').content
+        const sha = (process.env.VERCEL_GIT_COMMIT_SHA || '').trim().toLowerCase()
+        const commit = `<meta name="splitpost-commit" content="${/^[0-9a-f]{7,40}$/.test(sha) ? sha.slice(0, 7) : 'local'}" />`
+        if (!site) return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    ${robots}\n    ${commit}`)
         const out = html
           .replace('<script type="module" src="/src/main.tsx"></script>', '<script type="module" src="/src/site/main.tsx"></script>')
-          .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta name="crevant-build" content="public-site" />\n    ${robots}`)
+          .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta name="crevant-build" content="public-site" />\n    ${robots}\n    ${commit}`)
         if (!out.includes('/src/site/main.tsx')) throw new Error('public site build: could not switch index.html to the site entry')
         return out
       },

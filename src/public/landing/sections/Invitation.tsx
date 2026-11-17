@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, Check } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
+import { WAITLIST_CLOSED_COPY, WAITLIST_OPEN, waitlistCta } from '../../waitlist/status'
 
 const copy = HOMEPAGE_COPY.invitation
 
@@ -36,13 +37,13 @@ export function Invitation() {
           </div>
           <p className="mt-5 max-w-xl text-[1.05rem] leading-relaxed text-sp-bg">{copy.shape}</p>
           <p data-testid="invitation-close" className="mt-2 font-sp-display text-xl font-extrabold text-sp-accent">
-            {copy.close}
+            {WAITLIST_OPEN ? copy.close : WAITLIST_CLOSED_COPY.close}
           </p>
           <Link
             to="/join"
             className={`mt-8 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-sp-secondary px-8 text-base font-bold text-sp-ink transition-[background-color,transform] hover:bg-[#bde3db] active:scale-[0.98] motion-reduce:transition-none min-[420px]:w-auto ${focusRing}`}
           >
-            {copy.cta} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            {waitlistCta()} <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
           <div data-testid="founder-signoff" className="mt-8 flex items-center gap-3">
             <img src="/media/landing/founder.jpg" alt="" width={640} height={640} loading="lazy" decoding="async" className="h-10 w-10 rounded-full object-cover ring-2 ring-white/25" />

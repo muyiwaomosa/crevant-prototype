@@ -58,8 +58,14 @@ Production still serves the frozen `demo` branch. These safeguards are in `main`
 
 * **One build entry point.** `npm run build` (`scripts/build.mjs`) builds:
   * the full app everywhere, as before
-  * the public site build for Vercel Production always, or for a Preview branch with `CREVANT_BUILD=site`
-* **Two locks on Production.** A Production build of `main` fails unless it's the public site build **and** `CREVANT_PRODUCTION_SITE_APPROVED=true` is set in Vercel's Production environment variables. That variable is set only at the approved switch, together with moving Production Branch Tracking to `main`.
+  * the public site build for Vercel Production always, for every build in the `splitpost` Vercel project (Previews too), or for a Preview branch with `CREVANT_BUILD=site`
+* **Four locks on Production.** A Production build of `main` fails unless **all** of these hold (`scripts/guard-build-target.mjs`):
+  1. it's the public site build;
+  2. `CREVANT_PRODUCTION_SITE_APPROVED=true` is set in that project's Production environment variables;
+  3. it runs in the **`splitpost`** Vercel project: Vercel's `VERCEL_PROJECT_ID` matches `publicSite.projectId` in `config/vercel-projects.json`, and is never the demo project `crevant-prototype` (always refused);
+  4. Vercel built it from Git, from `muyiwaomosa/crevant-prototype` at `main`.
+
+  A missing or unexpected value refuses the build. The two projects: `crevant-prototype` keeps Production on the `demo` branch (the frozen demo, which never runs this guard); `splitpost` serves the public site at `splitpost.ca`.
 * **The demo stays protected.** Every build except an approved Production build still shows the demo at `crevant-prototype.vercel.app`, so promoting a Preview can't replace it.
 * **Separate waitlist addresses.** Project references live in `config/supabase-projects.json`, where staging is set and **Production is `null`**.
   * A Preview or local build may only use the staging function.
