@@ -31,8 +31,8 @@ describe('Splitpost design tokens (Modern Disruptor)', () => {
     expect(token('sp-ink').toLowerCase()).toBe('#1b2430')
     expect(token('sp-accent-text').toLowerCase()).toBe('#94481a')
     for (const n of ['sp-primary-raised', 'sp-secondary-tint', 'sp-secondary-on-dark', 'sp-link', 'sp-muted', 'sp-muted-on-dark']) token(n)
-    expect(css).toMatch(/--font-sp-display:\s*'Archivo'/)
-    expect(css).toMatch(/--font-sp-body:\s*'Inter'/)
+    expect(css).toMatch(/--font-sp-display:\s*'Archivo Variable', 'Archivo'/)
+    expect(css).toMatch(/--font-sp-body:\s*'Inter Variable', 'Inter'/)
   })
 
   it('tunes the shared tokens to the same palette, so the tour, /join and account screens match', () => {
@@ -41,8 +41,8 @@ describe('Splitpost design tokens (Modern Disruptor)', () => {
     expect(token('spark-400')).toBe(token('sp-accent'))
     expect(token('spark-600')).toBe(token('sp-accent-text'))
     expect(token('paper')).toBe(token('sp-bg'))
-    expect(css).toMatch(/--font-sans: 'Inter'/)
-    expect(css).toMatch(/--font-display: 'Archivo'/)
+    expect(css).toMatch(/--font-sans: 'Inter Variable', 'Inter'/)
+    expect(css).toMatch(/--font-display: 'Archivo Variable', 'Archivo'/)
   })
 
   it('retires the earlier palettes everywhere: no orange, midnight, teal, green or gold', () => {
@@ -90,13 +90,9 @@ describe('Splitpost design tokens (Modern Disruptor)', () => {
     expect(contrast(token('sp-accent'), token('sp-bg'))).toBeLessThan(3)
   })
 
-  it('loads Archivo on its own link, leaving the existing font request exactly as it was', () => {
-    const links = [...html.matchAll(/<link href="(https:\/\/fonts\.googleapis\.com\/css2\?[^"]+)" rel="stylesheet" \/>/g)].map((m) => m[1])
-    // Combining families into one request changes how Google serves the existing
-    // faces, which shifts text rendering slightly on some screens. Kept apart.
-    expect(links).toEqual([
-      'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400..700&display=swap',
-      'https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap',
-    ])
+  it('serves its typefaces itself: no Google Fonts link, and the font tokens name the self-hosted families', () => {
+    expect(html).not.toMatch(/fonts\.googleapis\.com|fonts\.gstatic\.com/)
+    for (const t of ['font-sans', 'font-sp-body']) expect(css).toMatch(new RegExp(`--${t}: 'Inter Variable'`))
+    for (const t of ['font-display', 'font-sp-display']) expect(css).toMatch(new RegExp(`--${t}: 'Archivo Variable'`))
   })
 })

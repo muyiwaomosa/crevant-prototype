@@ -79,10 +79,19 @@ async function newContext(browser) {
     return page
   }
   await ctx.route(`${APP}/**`, async (route) => {
-    const res = await route.fetch()
-    const headers = { ...res.headers() }
-    if ((headers['content-type'] || '').includes('text/html')) Object.assign(headers, SECURITY_HEADERS)
-    await route.fulfill({ response: res, headers })
+    // A request can outlive its page (for example a font still downloading
+    // when the test moves on); then there's nothing left to answer.
+    // Only pages need the headers; scripts, styles, images and fonts pass
+    // straight through, so they're never fetched twice.
+    if (route.request().resourceType() !== 'document') return route.continue()
+    try {
+      const res = await route.fetch()
+      const headers = { ...res.headers() }
+      if ((headers['content-type'] || '').includes('text/html')) Object.assign(headers, SECURITY_HEADERS)
+      await route.fulfill({ response: res, headers })
+    } catch (e) {
+      if (!/disposed|closed|Target page|Route is already handled/i.test(String(e && e.message))) throw e
+    }
   })
   await ctx.addInitScript(() => {
     document.addEventListener('securitypolicyviolation', (e) => {
