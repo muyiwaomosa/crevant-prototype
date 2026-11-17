@@ -28,6 +28,10 @@ name: Deploy database to Production
 #     (scripts/db/verify-production-target.sh).
 #   - Migrations must be on the reviewed approved list with matching checksums,
 #     and must pass on a throwaway database before Production is touched.
+#   - Production receives ONLY the migrations in supabase/production-migrations.txt
+#     (the waitlist and its dependencies; not the social core), pushed from a
+#     folder holding just those (scripts/db/production-subset.sh), and is
+#     checked with supabase/production-checks.txt.
 #   - It shares no concurrency group with staging, and has no rollback: the
 #     staging rollbacks refuse to run anywhere but staging, by design.
 
@@ -115,6 +119,15 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/crevant_test
         run: scripts/db/test.sh
 
+      - name: The Production subset applies on its own and passes its checks (no social core)
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/production_subset
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@localhost:5432/postgres" -q -X -c "create database production_subset"
+          scripts/db/production-subset.sh test
+
   production:
     name: ${{ inputs.mode == 'apply' && 'Apply to Production' || inputs.mode == 'check' && 'Read-only checks on Production' || 'Plan for Production (no changes)' }}
     needs: verify-migrations
@@ -134,6 +147,9 @@ jobs:
 
       - name: Only approved, unchanged migrations are present
         run: scripts/db/check-approved-migrations.sh
+
+      - name: Prepare the Production subset (only the listed migrations)
+        run: scripts/db/production-subset.sh prepare "$RUNNER_TEMP/production"
 
       - uses: actions/setup-node@v4
         with:
@@ -159,13 +175,13 @@ jobs:
         if: inputs.mode == 'plan' || inputs.mode == 'apply'
         env:
           PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
-        run: supabase db push --db-url "$PRODUCTION_DATABASE_URL" --dry-run
+        run: supabase --workdir "$RUNNER_TEMP/production" db push --db-url "$PRODUCTION_DATABASE_URL" --dry-run
 
       - name: Apply approved migrations
         if: inputs.mode == 'apply'
         env:
           PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
-        run: supabase db push --db-url "$PRODUCTION_DATABASE_URL" --yes
+        run: supabase --workdir "$RUNNER_TEMP/production" db push --db-url "$PRODUCTION_DATABASE_URL" --yes
 
       - name: Security and separation checks on Production
         if: inputs.mode == 'apply' || inputs.mode == 'check'
@@ -175,9 +191,9 @@ jobs:
           PGCONNECT_TIMEOUT: '15'
         run: |
           set -euo pipefail
-          for f in supabase/tests/*.sql; do
-            echo "Running $f"
-            psql "$PRODUCTION_DATABASE_URL" -v ON_ERROR_STOP=1 -q -X -f "$f"
+          grep -vE '^\s*(#|$)' supabase/production-checks.txt | while read -r c; do
+            echo "Running supabase/tests/$c"
+            psql "$PRODUCTION_DATABASE_URL" -v ON_ERROR_STOP=1 -q -X -f "supabase/tests/$c"
           done
           echo "Production security and separation checks passed"
 
@@ -185,4 +201,4 @@ jobs:
         if: inputs.mode == 'apply' || inputs.mode == 'check'
         env:
           PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
-        run: supabase migration list --db-url "$PRODUCTION_DATABASE_URL"
+        run: supabase --workdir "$RUNNER_TEMP/production" migration list --db-url "$PRODUCTION_DATABASE_URL"

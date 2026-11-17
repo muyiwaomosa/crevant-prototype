@@ -214,8 +214,8 @@ guard "production workflow: its own concurrency group, separate from staging" \
   "grep -A1 '^concurrency:' $pw | grep -q 'group: deploy-database-production$'"
 guard "production workflow: verifies the Production target before anything connects" \
   "awk '/run: scripts\/db\/verify-production-target.sh\$/{v=NR} /--db-url \"\\\$PRODUCTION_DATABASE_URL\"|psql \"\\\$PRODUCTION_DATABASE_URL\"/{if(!c)c=NR} END{exit !(v && c && v<c)}' $pw && ! grep -q 'verify-staging-target' $pw"
-pinstalls=$(grep -c 'supabase db push' "$pw" || true)
-pwrites=$(grep 'supabase db push' "$pw" | grep -vc -- '--dry-run' || true)
+pinstalls=$(grep -c 'db push --db-url' "$pw" || true)
+pwrites=$(grep 'db push --db-url' "$pw" | grep -vc -- '--dry-run' || true)
 pguard=$(grep -B4 -- 'db push --db-url "$PRODUCTION_DATABASE_URL" --yes' "$pw" | grep -c "if: inputs.mode == 'apply'$" || true)
 guard "production workflow: installs migrations in apply mode only (plan and check never change it)" \
   "[ '$pinstalls' = 2 ] && [ '$pwrites' = 1 ] && [ '$pguard' = 1 ]"
@@ -225,6 +225,12 @@ guard "production workflow: inputs and secrets reach commands only through env (
   "! grep -E '\\\$\{\{ *(inputs|secrets|vars)\.' $pw | grep -vqE '^ +([A-Z_]+|name): '"
 guard "production workflow: defaults to plan" \
   "grep -A9 '      mode:' $pw | grep -q 'default: plan'"
+guard "production workflow: every push and migration list uses the prepared subset folder, never the full migrations folder" \
+  "[ \"\$(grep -cE 'db push --db-url|migration list --db-url' $pw)\" = 3 ] && [ \"\$(grep -cE 'supabase --workdir \"\\\$RUNNER_TEMP/production\" (db push|migration list) --db-url' $pw)\" = 3 ] && awk '/production-subset.sh prepare/{p=NR} /--workdir .*db push/{if(!d)d=NR} END{exit !(p && d && p<d)}' $pw"
+guard "production workflow: the subset is tested on its own, and Production checks come from production-checks.txt" \
+  "grep -q 'run: |' $pw && grep -q 'scripts/db/production-subset.sh test' $pw && grep -q 'supabase/production-checks.txt' $pw && ! grep -q 'for f in supabase/tests/\*.sql' $pw"
+guard "the Production subset verifies: approved, in order, and without the social core or its check" \
+  "scripts/db/production-subset.sh verify >/dev/null 2>&1 && ! grep -qE '^20261117000000' supabase/production-migrations.txt && ! grep -qE '^005_' supabase/production-checks.txt"
 guard "no rollback or admin workflow can reach Production" \
   "! grep -l 'PRODUCTION_DATABASE_URL\|hmrliwoychnqrbbydorg' .github/workflows/*.yml | grep -vq '^$pw\$'"
 
