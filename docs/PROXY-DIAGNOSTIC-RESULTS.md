@@ -24,6 +24,16 @@ Production should keep the JWT check on.
 
 ## Results
 
-To be filled in from the founder's output: the refusal tests, the answers
-from two networks, the address check, the confirmed hop count, and the
-cleanup confirmation.
+| Item | Result |
+| --- | --- |
+| Diagnostic deployment | Completed (commit `24bc859`, staging only) |
+| Unauthenticated request | 404, as designed |
+| Supabase JWT check | Off (see above) |
+| Wrong token refusal tests | Not run |
+| Hop count tests from two networks | **Not completed** |
+| Function deleted | **Succeeded** |
+| `DIAG_ENABLED`, `DIAG_TOKEN`, `DIAG_EXPIRES_AT` unset | **Succeeded** |
+
+**Check 3 remains unverified.** No hop count was measured, so none is
+assumed, and `WAITLIST_TRUSTED_PROXY_HOPS` stays unset. The waitlist
+function stays closed without it, by design.
