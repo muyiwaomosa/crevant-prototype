@@ -30,12 +30,6 @@ export const PLATFORMS: Array<[string, string]> = [
   ['newsletter', 'Newsletter or blog'],
   ['other', 'Other'],
 ]
-/** How someone plans to use Splitpost. For recruiting a balanced pilot only: never an account role. */
-export const INTENTS: Array<[string, string]> = [
-  ['create', 'Create content'],
-  ['discover', 'Discover and support creators'],
-  ['both', 'Both'],
-]
 export const AUDIENCE: Array<[string, string]> = [
   ['under_1k', 'Under 1,000'],
   ['1k_10k', '1,000 to 10,000'],
@@ -69,7 +63,6 @@ export function WaitlistForm({
 }) {
   const [email, setEmail] = useState('')
   const [interests, setInterests] = useState<string[]>([])
-  const [intent, setIntent] = useState<'' | 'create' | 'discover' | 'both'>('')
   const [introduced, setIntroduced] = useState<'' | 'yes' | 'no'>('')
   const [shares, setShares] = useState<'' | 'yes' | 'not_yet'>('')
   const [platform, setPlatform] = useState('')
@@ -114,20 +107,19 @@ export function WaitlistForm({
     if (Object.keys(e).length) return
     setOutcome('sending')
     const { source, creatorRef } = readAcquisition(search)
-    // The sharing details only apply to people who plan to create.
-    const asksSharing = intent !== 'discover'
-    const yes = asksSharing && shares === 'yes'
+    // One Splitpost, one account: everyone can create and support, so nobody
+    // is asked to pick a side, and everyone sees the same questions.
+    const yes = shares === 'yes'
     const body = {
       email: email.trim(),
       interests,
-      sharesContent: (asksSharing && shares) || null,
+      sharesContent: shares || null,
       platform: yes && platform ? platform : null,
       audienceBand: yes && audience ? audience : null,
       source,
       ageConfirmed: age,
       waitlistConsent: consent,
       noticeVersion: config.noticeVersion,
-      intent: intent || null,
       introducedByCreator: introduced === '' ? null : introduced === 'yes',
       creatorRef,
       turnstileToken: token,
@@ -207,21 +199,6 @@ export function WaitlistForm({
 
       <fieldset>
         <legend className="font-semibold text-ink-900">
-          How do you plan to use Splitpost? <span className="font-normal text-ink-500">Optional</span>
-        </legend>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {INTENTS.map(([value, label]) => (
-            <label key={value} className={clsx('cursor-pointer rounded-full px-4 py-2 text-sm ring-1', intent === value ? 'bg-brand-600 text-white ring-brand-600' : 'bg-paper text-ink-700 ring-ink-200')}>
-              <input type="radio" name="wl-intent" className="sr-only" checked={intent === value} onChange={() => setIntent(value as typeof intent)} />
-              {label}
-            </label>
-          ))}
-        </div>
-        <p className="mt-1.5 text-sm text-ink-500">This helps us invite a balanced mix of people. It isn't an account type: everyone can do both.</p>
-      </fieldset>
-
-      <fieldset>
-        <legend className="font-semibold text-ink-900">
           What interests you most about Splitpost? <span className="font-normal text-ink-500">Optional, choose any</span>
         </legend>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -242,7 +219,6 @@ export function WaitlistForm({
         </div>
       </fieldset>
 
-      {intent !== 'discover' && (
       <fieldset data-testid="waitlist-sharing">
         <legend className="font-semibold text-ink-900">
           Do you share your own content anywhere today? <span className="font-normal text-ink-500">Optional</span>
@@ -291,7 +267,6 @@ export function WaitlistForm({
           </div>
         )}
       </fieldset>
-      )}
 
       <fieldset data-testid="waitlist-introduced">
         <legend className="font-semibold text-ink-900">

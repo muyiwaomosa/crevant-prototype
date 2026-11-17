@@ -31,7 +31,8 @@ Creator acquisition (intent, "did a creator introduce you?", accepted-creator in
 | Joined at, verified at, last verified confirmation | Retention and verification |
 | Participant groups (worked out from the answers above, not asked) | Analysis: who joined |
 | Status, invitation link, selection reasons per wave (fixed list) | Internal, for invitations later |
-| Intent (create / discover / both), "a creator introduced me" (yes / no), a verified creator link (creator acquisition, not yet approved) | Optional; see `docs/ACQUISITION.md` and the draft notice `docs/PRIVACY-NOTICE-ACQUISITION-DRAFT.md` |
+| "A creator introduced me" (yes / no), a verified creator link (creator acquisition) | Optional; see `docs/ACQUISITION.md` and the draft notice `docs/PRIVACY-NOTICE-ACQUISITION-DRAFT.md` |
+| Intent (create / discover / both) | **No longer asked.** Splitpost has one account and one experience for everyone, so the form never asks people to choose creator or fan. The optional column remains (empty for new entries) so no database change is needed. |
 
 **Not stored:**
 * public links
