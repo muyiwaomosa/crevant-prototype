@@ -105,6 +105,7 @@ restricted `waitlist_admin` login only:
 | `open` / `close` | Open or close registrations at once |
 | `delete` | Delete one entry on request, by its id from the dashboard (never an email address) |
 | `purge` | The monthly retention purge (`retention_months` 12) |
+| `purge-acquisition-events` | The monthly cleanup of hourly counts older than 90 days (the notice's 90 day promise) |
 
 It needs a second secret in the `production` environment,
 `WAITLIST_ADMIN_DATABASE_URL`: the session pooler string for the login

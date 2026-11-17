@@ -26,6 +26,7 @@ on:
           - close
           - delete
           - purge
+          - purge-acquisition-events
           - set-notice-version
         default: status
         required: true
@@ -81,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$ACTION" in
-            status|summary|open|close|delete|purge|set-notice-version) echo "Action: $ACTION" ;;
+            status|summary|open|close|delete|purge|purge-acquisition-events|set-notice-version) echo "Action: $ACTION" ;;
             *) echo "::error::$ACTION is not a Production action. Nothing was done."; exit 1 ;;
           esac
 
