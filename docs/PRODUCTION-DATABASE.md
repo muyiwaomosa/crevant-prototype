@@ -69,7 +69,7 @@ database and runs those checks.
    social core (`20261117`).
 3. **apply**, only with founder approval: type the reference, type
    `APPLY TO PRODUCTION`, and tick the backup confirmation. It applies the
-   migrations, then runs all six check files against Production.
+   migrations, then runs the listed checks against Production.
 4. **check**: read-only, the listed checks pass and the six migrations are
    recorded. Then run `scripts/db/staging-diagnose-function-access.sql` in
    the Production SQL editor (read-only; it works on any project).
