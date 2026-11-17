@@ -24,7 +24,7 @@ already asks those questions.
 
 | Topic | Decision | Still needed before publication |
 | --- | --- | --- |
-| Website | https://splitpost.ca | **[confirm]** the domain is registered to the operator. It goes live only at the approved public switch. |
+| Website | https://splitpost.ca (canonical address www.splitpost.ca) | Live since 2026-11-17 with the waitlist closed. **[confirm]** the domain is registered to the operator. |
 | Operator | 1000859123 Ontario Inc. | **[confirm]** the exact registered name, the registered business name "Splitpost" if used, and a mailing address. |
 | Privacy contact | privacy@splitpost.ca | **[confirm]** the mailbox receives and sends mail. |
 | Retention | 12 months for inactive waitlist records, removed by the monthly purge | Documented deletion policy: `docs/WAITLIST-OPERATIONS.md` (monthly purge, delete on request). **[legal]** confirm the period. |
@@ -95,7 +95,7 @@ already asks those questions.
 > collect when you visit our website and join the Splitpost waitlist, why we
 > collect it, how long we keep it, and the choices you have.
 >
-> It covers our website at **splitpost.ca** and the waitlist only. If you're invited to
+> It covers our website at **splitpost.ca** (www.splitpost.ca) and the waitlist only. If you're invited to
 > the Splitpost pilot, we'll tell you how your pilot account works before you
 > create it.
 >
