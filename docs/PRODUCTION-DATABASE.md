@@ -60,6 +60,21 @@ database and runs those checks.
    string above). Never as a repository secret.
 4. **Environment variable** `SUPABASE_PROJECT_REF` = `hmrliwoychnqrbbydorg`.
 
+## TLS
+
+Every hosted connection in these workflows (psql and the Supabase CLI)
+verifies the server's certificate and host name: the job sets
+`PGSSLMODE=verify-full` and `PGSSLROOTCERT` to Supabase's public root CA,
+committed at `config/certs/supabase-root-2021-ca.crt` (Supabase Root 2021 CA,
+SHA-256 `80:70:25:AD:…:E6:CA:FA`, valid to 2031). The certificate is public;
+no key is committed. `REQUIRE_VERIFY_FULL=1` makes the target check refuse a
+URL that carries any connection setting except `sslmode=verify-full`, since a
+setting in the URL would override the job's. `scripts/db-tls.test.mjs` guards
+all of this.
+
+So the database URL secrets carry **nothing after `?`**, or only
+`?sslmode=verify-full`.
+
 ## Running it
 
 1. Actions, **Deploy database to Production**, Run workflow, on `main`.

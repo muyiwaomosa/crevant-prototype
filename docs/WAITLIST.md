@@ -172,7 +172,7 @@ Decisions:
 - [ ] **Hosted prerequisites from A2,** each of which fails closed if wrong:
   * the hosted function's `SUPABASE_URL` is exactly `https://kpudeppgokpjhvaqrprn.supabase.co`;
   * the pooler host has the form `<region>.pooler.supabase.com` and the transaction pooler is on port 6543;
-  * for the rollback workflow only: the staging session pooler's certificate verifies against the runner's system certificates with `sslmode=verify-full`. If it doesn't, add Supabase's public CA file in a reviewed PR; never weaken the mode.
+  * every database workflow (migrations, admin, rollback) connects with `sslmode=verify-full` against Supabase's public root CA committed at `config/certs/supabase-root-2021-ca.crt` (the staging pooler's certificate is not publicly trusted, hosted check 2). The secrets must carry no connection setting after `?` except `sslmode=verify-full`; the target checks refuse anything else.
 - [ ] Operations set up (`docs/WAITLIST-OPERATIONS.md`): `WAITLIST_ADMIN_DATABASE_URL`, the health check variables, and a monthly reminder to run the purge (no scheduled deletion)
 - [ ] Activation itself approved
 
