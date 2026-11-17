@@ -105,6 +105,11 @@ test('the committed config names the demo project, and leaves the splitpost ID t
   assert.notEqual(VERCEL_PROJECTS.publicSite.projectId, DEMO_ID)
   // With the committed config, the demo project is always refused for Production.
   assert.equal(checkBuildTarget({ ...APPROVED, VERCEL_PROJECT_ID: DEMO_ID }).ok, false)
+  // And, once recorded, only the splitpost project's own ID is allowed.
+  if (VERCEL_PROJECTS.publicSite.projectId) {
+    assert.equal(checkBuildTarget({ ...APPROVED, VERCEL_PROJECT_ID: VERCEL_PROJECTS.publicSite.projectId }).ok, true)
+    assert.equal(checkBuildTarget({ ...APPROVED, VERCEL_PROJECT_ID: SITE_ID }).ok, false)
+  }
 })
 
 test('preview, development and local builds are allowed', () => {
