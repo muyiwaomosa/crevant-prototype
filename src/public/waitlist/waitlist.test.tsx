@@ -154,6 +154,10 @@ describe('waitlist form', () => {
     await tokenReady()
     submit()
     await waitFor(() => expect(screen.getByTestId('waitlist-success')).toBeTruthy())
+    // The success screen says how to leave the waitlist, by email to the privacy contact.
+    const leave = screen.getByTestId('waitlist-leave')
+    expect(leave.textContent).toContain('privacy@splitpost.ca')
+    expect(leave.querySelector('a')?.getAttribute('href')).toBe('mailto:privacy@splitpost.ca')
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist')
     expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
