@@ -34,20 +34,20 @@ it runs. Nothing below has been created in Production.
 | 1.1 | Domain `splitpost.ca` registered and connected to the `splitpost` Vercel project (live 2026-11-17) | ✅ | |
 | 1.1a | The privacy@splitpost.ca mailbox (created 2026-11-17). Before publication: send and receive a test message, and check SPF, DKIM and DMARC pass | ✅ created, test pending | You |
 | 1.1b | One canonical address: `www.splitpost.ca` (as configured: `splitpost.ca` redirects to it). The waitlist origin, Turnstile and Auth use it | ✅ (as configured) | |
-| 1.2 | Supabase: a separate organisation and a paid plan with backups | 🧭🔑 | You |
-| 1.3 | Region: Canada (Central), `ca-central-1` | 🧭 (working decision) | You |
+| 1.2 | Supabase: a separate organisation (done) and a paid plan with backups (**Pro or above**: 7 days of daily backups; point-in-time recovery is a paid add-on). Wait for the first backup in Database, Backups before any `apply` | ✅ org, 🔑 plan | You |
+| 1.3 | Region: **West US (Oregon), `us-west-2`** (Canada (Central) wasn't offered). The notice says data is stored in the US; counsel reviews the cross-border wording | ✅ decided | You and counsel |
 | 1.4 | Audience: potentially international, no Canada-only restriction implemented; counsel advises what the notice must add | 🧭 decided, pending legal review | You and counsel |
 | 1.5 | Privacy notice 1.0 approved (`docs/PRIVACY-NOTICE-DRAFT.md`), after counsel | 🧭 | You and counsel |
 | **2. Code, on `main`, reviewed PRs, no secrets** | | | |
 | 2.1 | Self-host the fonts and drop Google from the CSP | ✅ (PR #38) | |
-| 2.2 | Production project reference in `config/supabase-projects.json` | After 3.1 | Me ⚠️ |
+| 2.2 | Production project reference `hmrliwoychnqrbbydorg` in `config/supabase-projects.json`, and the approval-gated Production migration workflow (PR #41, `docs/PRODUCTION-DATABASE.md`) | PR open | Me ⚠️ |
 | 2.3 | CSP `connect-src` per environment (Production project for Production, staging for Previews) | After 3.1 | Me ⚠️ |
 | 2.4 | A Production migration workflow and GitHub `production` environment (required reviewer, `main` only, its own secret) | Ready to build | Me ⚠️, you configure the environment 🔑 |
 | 2.5 | Branch protection on `main`: App, Database, Integration, Browser, Public site | 🔑 GitHub settings | You |
 | 2.7 | Live audit of www.splitpost.ca (2026-11-17): public site build from `main` (`200cd5f`), no member area or Supabase code in the bundle, noindex everywhere, security headers, HTTPS with HSTS, no third parties, desktop and phone checked | ✅ | |
 | 2.6 | The domain switch PR: the Production address changes to `splitpost.ca` everywhere the code names it (see "Domain switch" below). Prepared before opening, merged only with the public switch | Ready to build | Me ⚠️ |
 | **3. Production project** | | | |
-| 3.1 | Create the project; SSL enforced; only `public` exposed; Auth settings matching staging | 🔑 ⚠️ | You |
+| 3.1 | Project `splitpost-production` created (`hmrliwoychnqrbbydorg`, us-west-2, no GitHub integration, no migrations) ✅. Still to set: SSL enforced, only `public` exposed, Auth settings, and the GitHub `production` environment with `PRODUCTION_DATABASE_URL` (`docs/PRODUCTION-DATABASE.md`) | 🔑 | You |
 | 3.2 | Production `plan` (seven migrations), `apply`, `check`, then the read-only diagnostic | ⚠️ | Me, after your approval |
 | 3.3 | Set the two waitlist role passwords in the database | 🔑 | You |
 | **4. Bot check and function** | | | |
@@ -69,7 +69,7 @@ The detail for each step follows.
 | Decision | Proposal |
 | --- | --- |
 | **Separate Supabase organisation** | Yes. A Supabase access token reaches every project in its organisation (`docs/PHASE-1A.md`), so Production goes in its own organisation, with its own owner account and two-factor sign-in. |
-| **Region** | Working decision: Canada (Central), `ca-central-1`. Choose before creating the project; it can't be moved later. The privacy notice names it. |
+| **Region** | Decided: West US (Oregon), `us-west-2`; Canada (Central) wasn't offered. It can't be moved later without a new project and a data migration. The privacy notice names it. |
 | **Plan** | A paid plan with daily backups (and point-in-time recovery if affordable). The free plan has no downloadable backups. |
 | **Automatic RLS option** | Either way works: migration `20261118000000` removes members' access to `public.rls_auto_enable()` if Supabase installs it, and check `006` verifies that. Record which was chosen. |
 | **Domain** | Decided: `splitpost.ca`, for the site, the email sender, the privacy contact, Turnstile and the Auth site address. Production on `crevant-prototype.vercel.app` is the frozen demo and stays so until the switch. |

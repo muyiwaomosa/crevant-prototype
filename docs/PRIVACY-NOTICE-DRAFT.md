@@ -29,7 +29,7 @@ already asks those questions.
 | Privacy contact | privacy@splitpost.ca (created 2026-11-17) | **[confirm]** a test message is received and answered. |
 | Retention | 12 months for inactive waitlist records, removed by the monthly purge | Documented deletion policy: `docs/WAITLIST-OPERATIONS.md` (monthly purge, delete on request). **[legal]** confirm the period. |
 | Audience | Potentially international. No Canada-only restriction is implemented (the form doesn't ask for a country). | **[legal]** what the notice must add for people outside Canada (see "Open questions", item 8). |
-| Hosting | A Canadian region where practical | **[confirm]** the Production Supabase project's region once created. Other providers (Vercel, Cloudflare) may process data outside Canada. |
+| Hosting | **United States:** the Production database is in Supabase's West US (Oregon) region, `us-west-2` (Canada (Central) wasn't offered). Vercel and Cloudflare may also process data outside Canada. | **[legal]** the cross-border wording and any assessment it needs ("Open questions", item 3). Other providers (Vercel, Cloudflare) may process data outside Canada. |
 | Fonts | Self-hosted | ✅ Done (PR #38, `ec7df1c`): no Google Fonts requests and no Google hosts in the CSP, so Google isn't a service provider here. |
 | Creator invitation links | Keep the section in 1.0 | None. |
 | Creator link hourly visit counts | Kept 90 days | **[legal]** confirm the period. |
@@ -46,9 +46,16 @@ already asks those questions.
    notice must say.
 2. **Accountable person.** Whether the notice must name a person (title and
    contact) responsible for privacy, and who that is.
-3. **Cross-border processing.** The wording for providers that process data
-   outside Canada (Vercel, Cloudflare, and Supabase if any of its processing
-   is outside the chosen region).
+3. **Cross-border processing.** Waitlist entries are **stored in the United
+   States** (Supabase, Oregon), and Vercel and Cloudflare may process data
+   outside Canada too. Counsel to confirm: the notice wording (that data is
+   stored in the US and may be accessible to US authorities under US law);
+   whether a written assessment of the transfer is needed (for example
+   under Quebec's Law 25 if Quebec residents can join); and that our
+   contracts with these providers (their data processing terms) are in
+   place. Moving the database to Canada later would mean a new project and a
+   data migration, so decide now whether US hosting is acceptable for
+   launch.
 4. **Consent.** Whether the single required checkbox ("I agree to join the
    waitlist and to this notice") is enough for the optional research answers
    and the creator link attribution, or whether they need separate consent.
@@ -76,8 +83,10 @@ already asks those questions.
 1. ✅ The splitpost.ca domain (live) and the privacy@splitpost.ca mailbox
    (created; send and receive test pending).
 2. ~~Self-hosted fonts~~ ✅ done (PR #38).
-3. The Production Supabase project in a Canadian region
-   (`docs/PRODUCTION-SUPABASE-CHECKLIST.md`).
+3. ✅ The Production Supabase project exists (`hmrliwoychnqrbbydorg`,
+   us-west-2); setup and migrations follow
+   `docs/PRODUCTION-SUPABASE-CHECKLIST.md`. Accept Supabase's, Vercel's and
+   Cloudflare's data processing terms for the organization and projects.
 4. A way to verify identity before acting on a request (for example, replying
    from the address on the list) and a written procedure in
    `docs/WAITLIST-OPERATIONS.md`.
@@ -183,13 +192,15 @@ already asks those questions.
 > process information only to provide their service to us:
 >
 > - **Supabase:** stores the waitlist and runs the form's server function, in
->   **[confirm: region, for example Canada (Central)]**.
+>   the **United States** (West US, Oregon).
 > - **Vercel:** hosts the website.
 > - **Cloudflare:** the Turnstile bot check.
 >
-> Some of these providers may process information outside Canada, including
-> in the United States, where it may be accessible under the laws of those
-> countries. **[legal: confirm this wording]**
+> Your waitlist entry is stored in the United States. These providers may
+> also process information in other countries. Information stored or
+> processed outside Canada is subject to the laws of those countries and may
+> be accessible to their courts, law enforcement and national security
+> authorities. **[legal: confirm this wording]**
 >
 > ## How long we keep it
 >
