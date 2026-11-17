@@ -421,14 +421,28 @@ async function newContext(browser, options = {}) {
       const page = await ctx.newPage()
       const issues = []
       for (const path of ['/', '/join', '/tour/discover', '/tour/creator/amara', '/tour/profile']) {
-        await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' })
-        await page.evaluate(async () => {
-          for (let y = 0; y < document.body.scrollHeight; y += 400) {
-            window.scrollTo(0, y)
-            await new Promise((r) => setTimeout(r, 30))
-          }
-        })
-        await page.waitForLoadState('networkidle')
+        // 'load', not 'networkidle': a slow third-party font request must not
+        // stall the check. Whether each image finished loading is checked below.
+        await page.goto(`${BASE}${path}`, { waitUntil: 'load' })
+        // Bounded: at most 200 steps, and 30 seconds, so a page that keeps
+        // growing or a stalled browser fails clearly instead of hanging the job.
+        const scrolled = await Promise.race([
+          page.evaluate(async () => {
+            for (let y = 0, n = 0; y < document.body.scrollHeight && n < 200; y += 400, n++) {
+              window.scrollTo(0, y)
+              await new Promise((r) => setTimeout(r, 30))
+            }
+            return true
+          }),
+          new Promise((r) => setTimeout(() => r(false), 30000)),
+        ])
+        if (!scrolled) {
+          issues.push(`${path}: scrolling through the page did not finish within 30 seconds`)
+          continue
+        }
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+        // Lazy images below the fold: give each one up to 10 seconds to finish.
+        await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 10000 }).catch(() => {})
         const rows = await page.$$eval('img', (imgs) =>
           imgs.map((i) => {
             const r = i.getBoundingClientRect()

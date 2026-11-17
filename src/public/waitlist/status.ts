@@ -12,6 +12,8 @@ export const WAITLIST_OPEN: boolean = readWaitlistConfig(import.meta.env) !== nu
 /** The wording while registration is closed. Draft, pending founder approval. */
 export const WAITLIST_CLOSED_COPY = {
   cta: 'Waitlist Opens Soon',
+  // The header button on phones under 390px wide, where the full label doesn't fit.
+  ctaShort: 'Opens Soon',
   close: 'The waitlist opens soon. Be part of a better split.',
   joinTitle: 'The Waitlist Opens Soon',
   notOpenTitle: "You can't sign up just yet.",

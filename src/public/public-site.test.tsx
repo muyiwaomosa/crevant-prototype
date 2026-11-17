@@ -334,7 +334,7 @@ describe('header and footer', () => {
       const header = container.querySelector('header')!
       expect(header.querySelector('a[aria-label="Splitpost home"]'), path).toBeTruthy()
       expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Discover Splitpost' && a.getAttribute('href') === '/#building'), path).toBe(true)
-      const join = [...header.querySelectorAll('a')].find((a) => norm(a).trim() === 'Waitlist Opens Soon')!
+      const join = [...header.querySelectorAll('a')].find((a) => a.getAttribute('aria-label') === 'Waitlist Opens Soon')!
       expect(join.getAttribute('href'), path).toBe('/join')
       expect(join.closest('.hidden'), path).toBeNull()
       expect(norm(header), path).not.toMatch(/Crevant/)

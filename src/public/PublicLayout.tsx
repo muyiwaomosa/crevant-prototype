@@ -5,7 +5,7 @@ import { useMemberLinks } from './member-links'
 import { useRobotsMeta } from './robots'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 import { HOMEPAGE_COPY } from './landing/copy'
-import { waitlistCta } from './waitlist/status'
+import { WAITLIST_CLOSED_COPY, WAITLIST_OPEN, waitlistCta } from './waitlist/status'
 import { SplitpostWordmark } from './landing/ui/SplitpostWordmark'
 
 const HEADER_LINK =
@@ -60,9 +60,18 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             {account && <span className="hidden min-[420px]:contents [&_a]:text-white [&_a:hover]:bg-white/10">{account}</span>}
             <Link
               to="/join"
+              aria-label={waitlistCta()}
               className="inline-flex h-9 items-center whitespace-nowrap rounded-full bg-sp-secondary px-3 text-[13px] font-bold min-[360px]:px-4 min-[360px]:text-sm text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#bde3db] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
             >
-              {waitlistCta()}
+              {WAITLIST_OPEN ? (
+                waitlistCta()
+              ) : (
+                <>
+                  {/* Under 390px the full closed label doesn't fit beside the logo. */}
+                  <span aria-hidden="true" className="min-[390px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
+                  <span aria-hidden="true" className="hidden min-[390px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
+                </>
+              )}
             </Link>
           </nav>
         </div>
