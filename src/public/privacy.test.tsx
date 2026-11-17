@@ -15,25 +15,41 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('/privacy before a notice is approved', () => {
-  it('there is no approved notice in this repository', () => {
-    expect(APPROVED_NOTICE).toBeNull()
+describe('/privacy with the approved notice, version 1.0', () => {
+  it('the repository holds the approved notice: version 1.0, with its text', () => {
+    expect(APPROVED_NOTICE?.version).toBe('1.0')
+    expect(APPROVED_NOTICE?.effectiveDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
-  it('shows the approved wording: the notice is coming and no registrations are collected, with nothing to fill in', () => {
-    const { container } = render(
+  it('names the operator, the US hosting, retention, deletion and one contact address', () => {
+    render(
       <MemoryRouter>
         <PrivacyPage />
       </MemoryRouter>,
     )
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Privacy Notice')
+    const text = screen.getByTestId('privacy-notice').textContent ?? ''
+    expect(text).toContain('Version 1.0, effective')
+    for (const s of ['1000859123 ONTARIO INC.', 'United States', '12 months', 'One waitlist for everyone', 'Office of the Privacy Commissioner of Canada']) {
+      expect(text).toContain(s)
+    }
+    const mails = [...screen.getByTestId('privacy-notice').querySelectorAll('a[href^="mailto:"]')].map((a) => a.getAttribute('href'))
+    expect(mails.length).toBeGreaterThan(0)
+    expect(new Set(mails)).toEqual(new Set(['mailto:privacy@splitpost.ca']))
+    expect(text).not.toMatch(/\[(legal|confirm|decide)/i)
+    expect(screen.getByTestId('privacy-notice').querySelector('form, input, select, textarea')).toBeNull()
+  })
+
+  it('without a notice, shows the approved holding wording instead, with nothing to fill in', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <PrivacyPage notice={null} />
+      </MemoryRouter>,
+    )
     const box = screen.getByTestId('privacy-not-published')
-    expect(box.querySelectorAll('p')[0].textContent).toBe("We're preparing Splitpost for its first members.")
     expect(box.querySelectorAll('p')[1].textContent).toBe(
       "Our privacy notice will be published before waitlist registration opens. We're not collecting waitlist registrations yet.",
     )
     expect(container.querySelector('form, input, select, textarea')).toBeNull()
-    expect(screen.queryByTestId('privacy-notice')).toBeNull()
   })
 
   it('is served at /privacy in both the public site and the full app', () => {
@@ -43,7 +59,7 @@ describe('/privacy before a notice is approved', () => {
           <Routes />
         </MemoryRouter>,
       )
-      expect(screen.getByTestId('privacy-not-published')).toBeTruthy()
+      expect(screen.getByTestId('privacy-notice')).toBeTruthy()
       cleanup()
     }
   })
