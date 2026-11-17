@@ -76,7 +76,7 @@ export function NoticeBody() {
           <strong>To keep the waitlist working and safe:</strong> the form uses Cloudflare Turnstile to tell people from automated programs.
           Cloudflare processes information from your browser to do this, under its own privacy policy. To slow down abuse, we also keep
           short-lived counters made from a one-way, keyed code of your email address, which can&rsquo;t be turned back into the address.
-          They expire after two days and are cleared out automatically.
+          They expire after two days, and expired ones are removed the next time the waitlist processes a sign-up.
         </li>
       </UL>
       <P>We don&rsquo;t sell your information, use it for advertising, or send you marketing.</P>
@@ -111,7 +111,7 @@ export function NoticeBody() {
           <strong>The hourly counts:</strong> 90 days, also removed in the monthly clean-up.
         </li>
         <li>
-          <strong>The rate limit counters:</strong> two days, cleared out automatically.
+          <strong>The rate limit counters:</strong> two days. Expired ones are removed the next time the waitlist processes a sign-up.
         </li>
       </UL>
 
