@@ -20,6 +20,20 @@ import { APPROVED_NOTICE, type ApprovedNotice } from '../privacy/notice'
  * its own two switches (the function's environment and the database
  * setting), so turning this on alone stores nothing.
  */
+/**
+ * The waitlist settings this build was given, read ONE BY ONE. Passing the
+ * whole import.meta.env object instead would make Vite copy every VITE_
+ * variable in the build environment into the public JavaScript, including
+ * ones the site never uses (such as another project's address).
+ */
+export const BUILD_WAITLIST_ENV: Record<string, unknown> = {
+  VITE_WAITLIST_FORM_ENABLED: import.meta.env.VITE_WAITLIST_FORM_ENABLED,
+  VITE_WAITLIST_ENDPOINT: import.meta.env.VITE_WAITLIST_ENDPOINT,
+  VITE_TURNSTILE_SITE_KEY: import.meta.env.VITE_TURNSTILE_SITE_KEY,
+  VITE_PRIVACY_NOTICE_URL: import.meta.env.VITE_PRIVACY_NOTICE_URL,
+  VITE_PRIVACY_NOTICE_VERSION: import.meta.env.VITE_PRIVACY_NOTICE_VERSION,
+}
+
 export type WaitlistConfig = {
   endpoint: string
   turnstileSiteKey: string

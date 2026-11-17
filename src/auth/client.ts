@@ -10,7 +10,8 @@ let client: SupabaseClient | null | undefined
  */
 export function getSupabase(): SupabaseClient | null {
   if (client !== undefined) return client
-  const config = readAuthConfig(import.meta.env)
+  // Read one by one, so no other VITE_ variable is copied into the bundle.
+  const config = readAuthConfig({ VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY })
   client = config
     ? createClient(config.url, config.key, {
         auth: {

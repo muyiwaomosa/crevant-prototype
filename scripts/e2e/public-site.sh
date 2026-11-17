@@ -47,6 +47,21 @@ else
   echo "FAIL  the configured site build is missing the function address or holds a Supabase key" >&2
   exit 1
 fi
+# A splitpost Preview build with unrelated VITE_ settings in its environment
+# (another project's address, a database connection string): the site reads
+# its settings one by one, so none of them reaches the bundle, and the bundle
+# check passes. (The splitpost Previews of PRs #41 and #43 failed this way.)
+SPLITPOST="$(node -p "require('./config/vercel-projects.json').publicSite.projectId")"
+env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY VERCEL_ENV=preview VERCEL_PROJECT_ID="$SPLITPOST" \
+  VITE_STRAY_ADDRESS=https://hmrliwoychnqrbbydorg.supabase.co \
+  VITE_STRAY_DATABASE=postgresql://postgres.hmrliwoychnqrbbydorg:x@aws-0-us-west-2.pooler.supabase.com:5432/postgres \
+  npm run build >/dev/null
+if grep -qE "hmrliwoychnqrbbydorg|VITE_STRAY|pooler\.supabase" dist/assets/*.js; then
+  echo "FAIL  an unrelated VITE_ setting reached the site bundle" >&2
+  exit 1
+fi
+echo "PASS  a splitpost Preview build keeps unrelated VITE_ settings out of the bundle"
+
 # Leave dist/ as the default (form off) build.
 npm run build:site >/dev/null
 
