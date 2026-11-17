@@ -20,16 +20,19 @@ already asks those questions.
 
 ---
 
-## Working decisions (founder, 2026-11-17)
+## Working decisions (founder, updated 2026-11-17)
 
 | Topic | Decision | Still needed before publication |
 | --- | --- | --- |
+| Website | https://splitpost.ca | **[confirm]** the domain is registered to the operator. It goes live only at the approved public switch. |
 | Operator | 1000859123 Ontario Inc. | **[confirm]** the exact registered name, the registered business name "Splitpost" if used, and a mailing address. |
-| Privacy contact | privacy@splitpost.social | **[confirm]** the domain is registered and the mailbox receives mail. |
+| Privacy contact | privacy@splitpost.ca | **[confirm]** the mailbox receives and sends mail. |
 | Retention | 12 months for inactive waitlist records, removed by the monthly purge | Documented deletion policy: `docs/WAITLIST-OPERATIONS.md` (monthly purge, delete on request). **[legal]** confirm the period. |
-| Audience | Canada first; international eligibility reviewed before launch | **[decide]** how the form limits sign-ups to Canada, if it should (today it doesn't ask for a country). See "Open questions". |
+| Audience | Potentially international. No Canada-only restriction is implemented (the form doesn't ask for a country). | **[legal]** what the notice must add for people outside Canada (see "Open questions", item 8). |
 | Hosting | A Canadian region where practical | **[confirm]** the Production Supabase project's region once created. Other providers (Vercel, Cloudflare) may process data outside Canada. |
-| Fonts | Self-host | **Code change needed before publication:** the site still loads Google Fonts (`index.html`, `vercel.json`). This notice assumes that's done; otherwise Google must be listed. |
+| Fonts | Self-hosted | ✅ Done (PR #38, `ec7df1c`): no Google Fonts requests and no Google hosts in the CSP, so Google isn't a service provider here. |
+| Creator invitation links | Keep the section in 1.0 | None. |
+| Creator link hourly visit counts | Kept 90 days | **[legal]** confirm the period. |
 | Version | `1.0` | The effective date is set on publication. |
 
 ## Open questions and dependencies
@@ -55,20 +58,24 @@ already asks those questions.
 6. **Age.** Whether self-confirming 18 or older is enough.
 7. **Response time** for access and deletion requests, and which authority
    people can complain to.
+8. **People outside Canada.** Sign-ups aren't limited to Canada. If people in
+   the EU, the UK, US states with privacy laws (for example California) or
+   elsewhere can join, counsel should say what the notice must add: for
+   example a legal basis for each use, their specific rights, how to contact
+   us from those regions, and whether any local representative is needed.
+   Or whether to limit sign-ups after all.
 
 **For the founder [decide]**
-1. **International sign-ups.** Whether to restrict sign-ups to Canada at
-   launch, and how (for example, a required "I live in Canada" confirmation,
-   which would be a small form change), or to accept everyone and adjust this
-   notice for other regions.
-2. **The hourly visit counts** for creator links are kept 90 days (proposed).
-3. **Email.** Verification and invitation emails aren't built yet. This
+1. **The operator's exact registered name and mailing address** as printed
+   on the notice.
+2. **Email.** Verification and invitation emails aren't built yet. This
    notice says we will email invitations; the sender address should be on
-   splitpost.social.
+   splitpost.ca.
 
 **Operational dependencies**
-1. The splitpost.social domain and the privacy@ mailbox.
-2. Self-hosted fonts (a small code change, then remove Google from the CSP).
+1. The splitpost.ca domain, registered to the operator, and the
+   privacy@splitpost.ca mailbox.
+2. ~~Self-hosted fonts~~ ✅ done (PR #38).
 3. The Production Supabase project in a Canadian region
    (`docs/PRODUCTION-SUPABASE-CHECKLIST.md`).
 4. A way to verify identity before acting on a request (for example, replying
@@ -88,7 +95,7 @@ already asks those questions.
 > collect when you visit our website and join the Splitpost waitlist, why we
 > collect it, how long we keep it, and the choices you have.
 >
-> It covers the public website and the waitlist only. If you're invited to
+> It covers our website at **splitpost.ca** and the waitlist only. If you're invited to
 > the Splitpost pilot, we'll tell you how your pilot account works before you
 > create it.
 >
@@ -189,7 +196,7 @@ already asks those questions.
 > - **Your waitlist entry,** including your answers and which link you used:
 >   until **12 months** after you joined or last confirmed your place, then we
 >   delete it. Joining again with the same email address doesn't extend this.
-> - **The hourly counts:** 90 days. **[decide]**
+> - **The hourly counts:** 90 days. **[legal: confirm]**
 > - **The temporary codes and rate limit counters:** two days.
 >
 > If you're invited and join the pilot, your pilot account is covered by the
@@ -197,7 +204,7 @@ already asks those questions.
 >
 > ## Your choices and rights
 >
-> - **Leave the waitlist at any time.** Email **privacy@splitpost.social** and
+> - **Leave the waitlist at any time.** Email **privacy@splitpost.ca** and
 >   we'll delete your entry and your answers.
 > - **See or correct** the information we hold about you, by emailing the
 >   same address.
@@ -210,8 +217,11 @@ already asks those questions.
 >
 > ## Who can join
 >
-> Splitpost is for adults 18 and older **[decide: living in Canada]**. If we
-> learn that someone under 18 has joined, we delete their entry.
+> Splitpost is for adults 18 and older. If we learn that someone under 18 has
+> joined, we delete their entry.
+>
+> **[legal: if people outside Canada can join, a section here on their
+> rights and how to exercise them]**
 >
 > ## Changes to this notice
 >
@@ -222,7 +232,7 @@ already asks those questions.
 > ## Contact
 >
 > **1000859123 Ontario Inc.** **[confirm address]**
-> privacy@splitpost.social
+> privacy@splitpost.ca
 
 ---
 
@@ -231,8 +241,7 @@ already asks those questions.
 - [ ] Every **[confirm]**, **[decide]** and **[legal]** item above is
       resolved, and the open questions are answered.
 - [ ] Counsel has reviewed the final text.
-- [ ] Fonts are self-hosted, and Google is removed from the CSP, or the notice
-      lists Google Fonts.
+- [x] Fonts are self-hosted, and Google is removed from the CSP (PR #38).
 - [ ] The text still matches the code on `main` (fields, two-day codes, no IP
       addresses stored, the purge).
 - [ ] The publishing PR sets `version: "1.0"` and the effective date in

@@ -9,7 +9,11 @@ database at all).
 The waitlist launch order around it is in `docs/LAUNCH-RUNBOOK.md` and
 `docs/WAITLIST.md` ("Activation checklist").
 
-## Implementation sequence and status (2026-11-17)
+## Implementation sequence and status (updated 2026-11-17)
+
+**Domain:** the official site is **https://splitpost.ca**, and the privacy
+contact is **privacy@splitpost.ca**. The operator is 1000859123 Ontario Inc.,
+subject to confirming its exact registered name and address.
 
 **Key:** ✅ done · 🧭 needs your decision · 🔑 needs access to an outside
 service (you, or me with credentials you grant) · ⚠️ needs your approval when
@@ -21,27 +25,30 @@ it runs. Nothing below has been created in Production.
 | A | Waitlist, acquisition, social core and platform access migrations: approved checksums, applied and checked on staging (seven recorded, all six check files pass) | ✅ | |
 | B | The `join-waitlist` function: origin, Turnstile, consent, notice version and switch checks; salted rate limits; restricted database login. Tested in CI (Edge runtime, TLS, integration) | ✅ | |
 | C | Every Production build fails closed until a Production project reference exists (`scripts/check-supabase-target.mjs`) | ✅ | |
-| D | The form can't appear without an approved notice and every setting (`readWaitlistConfig`); the buttons say "Waitlist Opens Soon" until then (PR #37) | ✅ (pending merge) | |
+| D | The form can't appear without an approved notice and every setting (`readWaitlistConfig`); the buttons say "Waitlist Opens Soon" until then (PR #37, `d976d5d`) | ✅ | |
+| F | Fonts self-hosted, no Google hosts in the CSP (PR #38, `ec7df1c`) | ✅ | |
 | E | Deletion and purge tools (admin workflow, staging); emergency close (`scripts/db/emergency-close.sql`) | ✅ staging only | |
 | **1. Decisions** | | | |
-| 1.1 | Domain `splitpost.social`: registered, DNS, the privacy@ mailbox | 🧭🔑 | You |
+| 1.1 | Domain `splitpost.ca`: registered to the operator, DNS, and the privacy@splitpost.ca mailbox (MX, SPF, DKIM, DMARC), tested. **Not** connected to Vercel yet | 🔑 (in progress) | You |
+| 1.1b | `www.splitpost.ca`: redirect to `splitpost.ca` (proposed), so there's one address for origins and Turnstile | 🧭 | You |
 | 1.2 | Supabase: a separate organisation and a paid plan with backups | 🧭🔑 | You |
 | 1.3 | Region: Canada (Central), `ca-central-1` | 🧭 (working decision) | You |
-| 1.4 | Canada-only sign-ups at launch, and how the form enforces it | 🧭 | You |
+| 1.4 | Audience: potentially international, no Canada-only restriction implemented; counsel advises what the notice must add | 🧭 decided, pending legal review | You and counsel |
 | 1.5 | Privacy notice 1.0 approved (`docs/PRIVACY-NOTICE-DRAFT.md`), after counsel | 🧭 | You and counsel |
 | **2. Code, on `main`, reviewed PRs, no secrets** | | | |
-| 2.1 | Self-host the fonts and drop Google from the CSP | Ready to build | Me ⚠️ |
+| 2.1 | Self-host the fonts and drop Google from the CSP | ✅ (PR #38) | |
 | 2.2 | Production project reference in `config/supabase-projects.json` | After 3.1 | Me ⚠️ |
 | 2.3 | CSP `connect-src` per environment (Production project for Production, staging for Previews) | After 3.1 | Me ⚠️ |
 | 2.4 | A Production migration workflow and GitHub `production` environment (required reviewer, `main` only, its own secret) | Ready to build | Me ⚠️, you configure the environment 🔑 |
 | 2.5 | Branch protection on `main`: App, Database, Integration, Browser, Public site | 🔑 GitHub settings | You |
+| 2.6 | The domain switch PR: the Production address changes to `splitpost.ca` everywhere the code names it (see "Domain switch" below). Prepared before opening, merged only with the public switch | Ready to build | Me ⚠️ |
 | **3. Production project** | | | |
 | 3.1 | Create the project; SSL enforced; only `public` exposed; Auth settings matching staging | 🔑 ⚠️ | You |
 | 3.2 | Production `plan` (seven migrations), `apply`, `check`, then the read-only diagnostic | ⚠️ | Me, after your approval |
 | 3.3 | Set the two waitlist role passwords in the database | 🔑 | You |
 | **4. Bot check and function** | | | |
-| 4.1 | Cloudflare Turnstile: a test widget for one fixed Preview, and a Production widget for splitpost.social only | 🔑 | You |
-| 4.2 | Deploy `join-waitlist` to Production from your computer (`supabase login`), with its secrets: database login, Turnstile secret, a new rate salt, allowed origins and hostnames (splitpost.social only), proxy hop count. Function switch off | 🔑 ⚠️ | You, with my step-by-step |
+| 4.1 | Cloudflare Turnstile: a test widget for one fixed Preview, and a Production widget for `splitpost.ca` only | 🔑 | You |
+| 4.2 | Deploy `join-waitlist` to Production from your computer (`supabase login`), with its secrets: database login, Turnstile secret, a new rate salt, allowed origins `https://splitpost.ca` and hostname `splitpost.ca` only, proxy hop count. Function switch off | 🔑 ⚠️ | You, with my step-by-step |
 | 4.3 | The three hosted checks: pooler login, TLS verification, proxy hop count | ⚠️ | You run, I read results |
 | **5. End-to-end tests (switches still closed to the public)** | | | |
 | 5.1 | On staging with the test widget: a successful signup, only the documented fields stored, a duplicate changes nothing, wrong consent, Turnstile, notice version or origin refused, close works, delete removes the entry | ⚠️ | Me and you |
@@ -61,7 +68,7 @@ The detail for each step follows.
 | **Region** | Working decision: Canada (Central), `ca-central-1`. Choose before creating the project; it can't be moved later. The privacy notice names it. |
 | **Plan** | A paid plan with daily backups (and point-in-time recovery if affordable). The free plan has no downloadable backups. |
 | **Automatic RLS option** | Either way works: migration `20261118000000` removes members' access to `public.rls_auto_enable()` if Supabase installs it, and check `006` verifies that. Record which was chosen. |
-| **Domain** | Working decision: `splitpost.social`, for the site, the email sender, the privacy contact, Turnstile and the Auth site address. Production on `crevant-prototype.vercel.app` is the frozen demo and stays so until the switch. |
+| **Domain** | Decided: `splitpost.ca`, for the site, the email sender, the privacy contact, Turnstile and the Auth site address. Production on `crevant-prototype.vercel.app` is the frozen demo and stays so until the switch. |
 
 ## 1. Create the project ⚠️
 
@@ -77,7 +84,8 @@ The detail for each step follows.
    (`docs/PHASE-1A.md`):
    * public sign up **off**; email sign in on; email confirmation required;
    * minimum password length 10;
-   * Site URL and redirect URLs: the Production domain and `/auth/confirm`
+   * Site URL and redirect URLs: `https://splitpost.ca` and
+     `https://splitpost.ca/auth/confirm`
      only;
    * invite and reset email templates using token-hash links after `#`;
    * a custom email sender on the Splitpost domain before any invitation.
@@ -124,7 +132,7 @@ The detail for each step follows.
 
 ## 4. The server function ⚠️
 
-1. Create a Production Cloudflare Turnstile widget for the Production domain
+1. Create a Production Cloudflare Turnstile widget for `splitpost.ca`
    only.
 2. From the founder's computer: `supabase login`, then deploy
    `join-waitlist` to the Production project with `--no-verify-jwt`. No access
@@ -133,7 +141,7 @@ The detail for each step follows.
    `WAITLIST_DB_URL` (the `waitlist_writer` pooler address),
    `TURNSTILE_SECRET_KEY`, `WAITLIST_RATE_SALT` (new, 32+ random characters,
    different from staging), `WAITLIST_ALLOWED_ORIGINS` and
-   `WAITLIST_ALLOWED_HOSTNAMES` (the Production domain only), optionally
+   `WAITLIST_ALLOWED_HOSTNAMES` (`splitpost.ca` only), optionally
    `WAITLIST_DB_CA_CERT`, and `WAITLIST_TRUSTED_PROXY_HOPS` once confirmed.
    Leave `WAITLIST_FUNCTION_ENABLED` off.
 
@@ -174,6 +182,26 @@ Only after the privacy notice is approved and published
 4. Switch Production from the demo to the public site
    (`CREVANT_PRODUCTION_SITE_APPROVED=true`, Production branch `main`), and
    then allow indexing, per `docs/LAUNCH-RUNBOOK.md`.
+
+## Domain switch (step 2.6): every place the code names the Production address
+
+Today the code treats `crevant-prototype.vercel.app` as the Production
+address, where the frozen demo lives. None of these change until the public
+switch is approved; the PR is prepared ahead and merged with it.
+
+| File | What it does now | At the switch |
+| --- | --- | --- |
+| `config/public-site.json` (`productionHost`) | Production host for `robots.txt` and the sitemap | `splitpost.ca` |
+| `index.html` (`og:image`) | Sharing image address | `https://splitpost.ca/media/brand/og-image.png` |
+| `vercel.json` (`X-Robots-Tag` host rules) | Which host may be indexed (only `/` and `/join`) | `splitpost.ca` |
+| `src/entry.ts` (`PRODUCTION_DEMO_HOSTS`) | Safeguard: a `main` build served on the demo address shows only the demo | Keep `crevant-prototype.vercel.app`. The approved Production site build already turns the fallback off. |
+| `vite.config.ts` (`preview.allowedHosts`) | Local tests load a build at the Production address | Add `splitpost.ca` |
+| `scripts/check-production-demo.sh` | Checks the demo's fingerprint | Kept for the old address; a new check for `splitpost.ca` |
+| Docs: `LAUNCH-RUNBOOK.md`, `PUBLIC-SITE.md`, `WAITLIST.md`, `PHASE-1A.md` | Describe the Production address | Updated in the same PR |
+
+Outside the code, at the switch: add `splitpost.ca` to the Vercel project
+(Production), the Supabase Auth site and redirect addresses, the function's
+allowed origins and hostnames, and the Turnstile widget.
 
 ## Never
 
