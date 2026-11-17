@@ -15,8 +15,12 @@ cd "$(dirname "$0")/../.."
 DB_PORT="${DB_PORT:-54322}"
 DB_URL="postgresql://postgres:postgres@127.0.0.1:${DB_PORT}/postgres"
 EDGE_IMAGE="${EDGE_IMAGE:-supabase/edge-runtime:v1.78.1}"
-EDGE_PORT="${JOURNEY_EDGE_PORT:-54410}"
-HARNESS_PORT="${JOURNEY_HARNESS_PORT:-4190}"
+# Free ports chosen at start-up (fixed ones can be briefly taken on a shared
+# CI machine: "Address already in use"). Override with JOURNEY_*_PORT.
+free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'; }
+EDGE_PORT="${JOURNEY_EDGE_PORT:-$(free_port)}"
+HARNESS_PORT="${JOURNEY_HARNESS_PORT:-$(free_port)}"
+[ "$EDGE_PORT" != "$HARNESS_PORT" ] || HARNESS_PORT="$(free_port)"
 HARNESS_URL="http://127.0.0.1:${HARNESS_PORT}"
 ENDPOINT="http://127.0.0.1:${EDGE_PORT}/"
 WRITER_PW="$(openssl rand -hex 24)"
