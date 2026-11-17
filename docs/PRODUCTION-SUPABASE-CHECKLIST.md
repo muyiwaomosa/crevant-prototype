@@ -30,6 +30,7 @@ it runs. Nothing below has been created in Production.
 | D | The form can't appear without an approved notice and every setting (`readWaitlistConfig`); the buttons say "Waitlist Opens Soon" until then (PR #37, `d976d5d`) | ✅ | |
 | F | Fonts self-hosted, no Google hosts in the CSP (PR #38, `ec7df1c`) | ✅ | |
 | E | Deletion and purge tools (admin workflow, staging); emergency close (`scripts/db/emergency-close.sql`) | ✅ staging only | |
+| G | **One unified experience:** one account and one waitlist form for everyone, with no creator or fan choice (PR #45). The database and function need no change (`intent` is optional and stays empty) | PR open | |
 | **1. Decisions** | | | |
 | 1.1 | Domain `splitpost.ca` registered and connected to the `splitpost` Vercel project (live 2026-11-17) | ✅ | |
 | 1.1a | The privacy@splitpost.ca mailbox (created 2026-11-17). Before publication: send and receive a test message, and check SPF, DKIM and DMARC pass | ✅ created, test pending | You |

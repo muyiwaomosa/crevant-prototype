@@ -21,6 +21,13 @@ already asks those questions.
 
 ---
 
+## Unified experience (founder decision, 2026-11-17)
+
+Splitpost has **one account and one experience for everyone**: no creator or
+fan account types, journeys or modes. The waitlist form no longer asks
+whether someone plans to create or discover (PR #45), so this notice doesn't
+mention it. The optional questions are the same for everyone.
+
 ## What blocks publication
 
 1. **The operator's exact registered name and mailing address** (founder).
@@ -134,8 +141,6 @@ and deletion on request by email.
 > - **When you joined.**
 >
 > **Only if you choose to answer:**
-> - Whether you plan to create content, discover and support creators, or
->   both.
 > - What interests you most about Splitpost (from six fixed choices).
 > - Whether you share content online now, and if you do, your main platform
 >   (from a fixed list) and roughly how many people follow you (one of four
