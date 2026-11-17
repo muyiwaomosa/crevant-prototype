@@ -1,4 +1,4 @@
-import { readWaitlistConfig } from './config'
+import { BUILD_WAITLIST_ENV, readWaitlistConfig } from './config'
 
 /**
  * Whether visitors can actually register: true only when this build has an
@@ -7,7 +7,7 @@ import { readWaitlistConfig } from './config'
  * promise a signup the page can't take, and they switch back to "Join the
  * Waitlist" automatically once the form is configured.
  */
-export const WAITLIST_OPEN: boolean = readWaitlistConfig(import.meta.env) !== null
+export const WAITLIST_OPEN: boolean = readWaitlistConfig(BUILD_WAITLIST_ENV) !== null
 
 /** The wording while registration is closed. Draft, pending founder approval. */
 export const WAITLIST_CLOSED_COPY = {

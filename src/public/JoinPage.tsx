@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
 import { DISCOVER_PATH } from '../entry'
-import { readWaitlistConfig } from './waitlist/config'
+import { BUILD_WAITLIST_ENV, readWaitlistConfig } from './waitlist/config'
 import { WAITLIST_CLOSED_COPY } from './waitlist/status'
 import { WaitlistForm } from './waitlist/WaitlistForm'
 import { InviteBanner } from './waitlist/InviteBanner'
@@ -19,7 +19,7 @@ import { HOMEPAGE_COPY } from './landing/copy'
  * waitlist never secures a place in the pilot; invitations go out in small
  * groups.
  */
-export function JoinPage({ env = import.meta.env }: { env?: Record<string, unknown> }) {
+export function JoinPage({ env = BUILD_WAITLIST_ENV }: { env?: Record<string, unknown> }) {
   const waitlist = readWaitlistConfig(env)
   return (
     <section aria-labelledby="join-title" className="px-4 py-12 sm:px-6 sm:py-20">
