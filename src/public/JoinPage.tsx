@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
-import { TOUR_BASE } from '../entry'
+import { DISCOVER_PATH } from '../entry'
 import { readWaitlistConfig } from './waitlist/config'
 import { WaitlistForm } from './waitlist/WaitlistForm'
 import { InviteBanner } from './waitlist/InviteBanner'
@@ -60,12 +60,13 @@ export function JoinPage({ env = import.meta.env }: { env?: Record<string, unkno
         </ul>
 
         <div className="mt-10 rounded-3xl bg-white p-6 ring-1 ring-ink-100">
-          <h2 className="font-display text-xl font-bold text-ink-900">Explore the interactive tour</h2>
-          <p className="mt-2 leading-relaxed text-ink-600">Try the product concept now, in a demonstration with sample data. Everything you do there stays in your own browser.</p>
+          {/* Draft copy, pending founder approval. */}
+          <h2 className="font-display text-xl font-bold text-ink-900">See how Splitpost works</h2>
+          <p className="mt-2 leading-relaxed text-ink-600">How your followers find your posts, how you understand the community you're building, and how your supporters can help you grow.</p>
           <div className="mt-5 flex flex-col gap-3 min-[420px]:flex-row">
-            <a href={TOUR_BASE} className={buttonClass('primary')}>
+            <Link to={DISCOVER_PATH} className={buttonClass('primary')}>
               Discover Splitpost
-            </a>
+            </Link>
             <Link to="/#invitation" className={buttonClass('secondary')}>
               Back to Splitpost
             </Link>

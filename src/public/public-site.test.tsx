@@ -333,7 +333,7 @@ describe('header and footer', () => {
       const { container } = renderAt(path)
       const header = container.querySelector('header')!
       expect(header.querySelector('a[aria-label="Splitpost home"]'), path).toBeTruthy()
-      expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Discover Splitpost' && a.getAttribute('href') === '/tour'), path).toBe(true)
+      expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Discover Splitpost' && a.getAttribute('href') === '/#building'), path).toBe(true)
       const join = [...header.querySelectorAll('a')].find((a) => norm(a).trim() === 'Join the Waitlist')!
       expect(join.getAttribute('href'), path).toBe('/join')
       expect(join.closest('.hidden'), path).toBeNull()
@@ -357,15 +357,22 @@ describe('header and footer', () => {
       ['Why Splitpost', '/#problem'],
       ['How It Works', '/#building'],
       ['Join the Waitlist', '/join'],
-      ['Discover Splitpost', '/tour'],
       ['Sign in', '/sign-in'],
     ])
   })
-  it('names every link to the tour on the home page "Discover Splitpost"', () => {
+  it('sends every "Discover Splitpost" link to the homepage introduction, and nothing on a public page to the old sample tour', () => {
     const c = landing()
-    const tour = [...c.querySelectorAll('a[href="/tour"]')]
-    expect(tour.length).toBeGreaterThanOrEqual(2)
-    for (const a of tour) expect(norm(a).trim()).toBe('Discover Splitpost')
+    const discover = [...c.querySelectorAll('a')].filter((a) => norm(a).trim() === 'Discover Splitpost')
+    expect(discover.length).toBeGreaterThanOrEqual(2)
+    for (const a of discover) expect(a.getAttribute('href')).toBe('/#building')
+    expect(c.querySelector('#building')).toBeTruthy()
+    cleanup()
+    for (const path of PUBLIC_PATHS) {
+      const { container } = renderAt(path)
+      const tour = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href') ?? '').filter((h) => h === '/tour' || h.startsWith('/tour/'))
+      expect(tour, path).toEqual([])
+      cleanup()
+    }
   })
 })
 
@@ -422,7 +429,7 @@ describe('the waitlist page', () => {
     "Whether you create content or support the people who do, there's a place for you on Splitpost.",
     "We're inviting people in small groups as we build and test the platform. Joining the waitlist doesn't guarantee an invitation to the pilot.",
   ]
-  it.each(['/join', '/join/creator', '/join/supporter'])('%s shows the one waitlist, says it is not open, and links back and to the tour', (path) => {
+  it.each(['/join', '/join/creator', '/join/supporter'])('%s shows the one waitlist, says it is not open, and links back and to how Splitpost works', (path) => {
     const { container } = renderAt(path)
     expect(norm(container.querySelector('h1'))).toBe('Join the Waitlist')
     expect([...container.querySelectorAll('[data-testid="join-intro"] p')].map((p) => norm(p))).toEqual(INTRO)
@@ -431,9 +438,10 @@ describe('the waitlist page', () => {
     expect(container.querySelector('form, input, textarea, select')).toBeNull()
     expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('This page collects nothing.')
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
-    expect(hrefs).toContain('/tour')
+    expect(hrefs).toContain('/#building')
+    expect(hrefs).not.toContain('/tour')
     expect(hrefs).toContain('/#invitation')
-    expect(norm(container)).toContain('demonstration with sample data')
+    expect(norm(container)).toContain('See how Splitpost works')
   })
 })
 

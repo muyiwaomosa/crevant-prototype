@@ -108,6 +108,11 @@ async function newContext(browser, options = {}) {
       // 5. The sample tour still works, and old prototype links still redirect.
       await page.goto(`${BASE}/tour`)
       check(`${label}: /tour shows the sample tour`, await shows(page.getByText(/sample/i)))
+      // Creator invitation links open the tour's welcome screen: the banner
+      // there says the points and rewards are an early concept.
+      await page.goto(`${BASE}/tour/welcome?invite=7c1e94a2b05d3f68e1a9`)
+      check(`${label}: an invitation link's welcome screen says the tour's points and rewards aren't the pilot's`,
+        await shows(page.getByRole('complementary', { name: 'Sample tour' }).getByText("The points and rewards shown aren't how the Splitpost pilot works.")))
       await page.goto(`${BASE}/discover`)
       await page.waitForURL(/\/tour\/discover$/, { timeout: 5000 }).catch(() => {})
       check(`${label}: /discover redirects into the tour`, page.url().endsWith('/tour/discover'), page.url())
@@ -287,6 +292,86 @@ async function newContext(browser, options = {}) {
       }
       check(`${label}: link audit of ${seen.size} pages: every link works and shows Splitpost`, bad.length === 0, bad.slice(0, 5).join(' | '))
       check(`${label}: no links to outside sites from the public pages`, external.size === 0, [...external].join(', '))
+      await ctx.close()
+    }
+
+    // 5c2. Every "Join the Waitlist" button, on desktop and on a phone
+    //      (including the phone's sticky bar), opens /join on this same site,
+    //      so a Preview never sends visitors to another deployment.
+    for (const [label, options] of [
+      ['desktop', { viewport: { width: 1280, height: 900 } }],
+      ['phone', { ...devices['iPhone 13'] }],
+    ]) {
+      const ctx = await newContext(browser, options)
+      const page = await ctx.newPage()
+      await page.goto(`${BASE}/`, { waitUntil: 'networkidle' })
+      const ctas = page.getByRole('link', { name: /join the waitlist/i, includeHidden: true })
+      const total = await ctas.count()
+      const hrefs = await ctas.evaluateAll((as) => as.map((a) => a.href))
+      const wrong = hrefs.filter((h) => h !== `${new URL(BASE).origin}/join`)
+      check(`${label}: all ${total} Join the Waitlist links point to /join on this site`, total >= 4 && wrong.length === 0, wrong.join(', '))
+      const failed = []
+      let clicked = 0
+      for (let i = 0; i < total; i++) {
+        await page.goto(`${BASE}/`, { waitUntil: 'networkidle' })
+        const link = page.getByRole('link', { name: /join the waitlist/i, includeHidden: true }).nth(i)
+        // The phone's sticky bar slides in (and becomes focusable) only once
+        // the hero has scrolled away; until then it is off screen.
+        if ((await link.getAttribute('tabindex')) === '-1') {
+          if (label !== 'phone') continue
+          await page.mouse.wheel(0, 1400)
+          await page.waitForFunction((el) => el.getAttribute('tabindex') === '0', await link.elementHandle(), { timeout: 3000 }).catch(() => {})
+          if ((await link.getAttribute('tabindex')) !== '0') { failed.push(`link ${i + 1} (sticky bar) never appeared`); continue }
+          await page.waitForTimeout(400)
+        } else {
+          await link.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {})
+        }
+        if (!(await link.isVisible())) continue
+        clicked++
+        await link.click()
+        await page.waitForURL(`${BASE}/join`, { timeout: 5000 }).catch(() => {})
+        const here = page.url()
+        const heading = await shows(page.getByRole('heading', { level: 1, name: 'Join the Waitlist' }), 3000)
+        if (here !== `${BASE}/join` || !heading) failed.push(`link ${i + 1} went to ${here}`)
+      }
+      check(`${label}: clicking each of the ${clicked} visible Join the Waitlist buttons opens this site's /join page`, clicked >= 4 && failed.length === 0, failed.join(' | '))
+      await ctx.close()
+    }
+
+    // 5c3. Every "Discover Splitpost" button, on desktop and on a phone, from
+    //      the homepage and from /join, opens the homepage introduction
+    //      ("What we're building") on this site, never the old sample tour.
+    for (const [label, options] of [
+      ['desktop', { viewport: { width: 1280, height: 900 } }],
+      ['phone', { ...devices['iPhone 13'] }],
+    ]) {
+      const ctx = await newContext(browser, options)
+      const page = await ctx.newPage()
+      const failed = []
+      let clicked = 0
+      for (const start of ['/', '/join']) {
+        await page.goto(`${BASE}${start}`, { waitUntil: 'networkidle' })
+        const total = await page.getByRole('link', { name: 'Discover Splitpost', exact: true, includeHidden: true }).count()
+        for (let i = 0; i < total; i++) {
+          await page.goto(`${BASE}${start}`, { waitUntil: 'networkidle' })
+          const link = page.getByRole('link', { name: 'Discover Splitpost', exact: true, includeHidden: true }).nth(i)
+          const href = await link.evaluate((a) => a.href)
+          if (href !== `${new URL(BASE).origin}/#building`) failed.push(`${start} link ${i + 1} points to ${href}`)
+          await link.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {})
+          if (!(await link.isVisible())) continue
+          clicked++
+          await link.click()
+          await page.waitForURL(`${BASE}/#building`, { timeout: 5000 }).catch(() => {})
+          const heading = page.locator('#building-title')
+          await page.waitForTimeout(800)
+          const box = await heading.boundingBox()
+          const vh = page.viewportSize().height
+          const inView = !!box && box.y < vh && box.y + box.height > 0
+          const tour = await page.getByText('Sample tour.').count()
+          if (page.url() !== `${BASE}/#building` || !inView || tour) failed.push(`${start} link ${i + 1}: ${page.url()}${inView ? '' : ', introduction not on screen'}${tour ? ', showed the sample tour' : ''}`)
+        }
+      }
+      check(`${label}: each of the ${clicked} visible Discover Splitpost buttons (homepage and /join) opens the introduction on this site`, clicked >= (label === 'phone' ? 2 : 3) && failed.length === 0, failed.join(' | '))
       await ctx.close()
     }
 
