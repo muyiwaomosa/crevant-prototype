@@ -25,6 +25,8 @@ describe('the sample tour', () => {
     const { getByRole } = render(<App basename={TOUR_BASE} banner />)
     const banner = getByRole('complementary', { name: 'Sample tour' })
     expect(banner.textContent).toContain('Everything here is made up')
+    expect(banner.textContent).toContain('Sample tour of an early concept.')
+    expect(banner.textContent).toContain("The points and rewards shown aren't how the Splitpost pilot works.")
     expect(banner.querySelector('a')?.getAttribute('href')).toBe('/')
   })
 

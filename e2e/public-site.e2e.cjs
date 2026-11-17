@@ -108,6 +108,11 @@ async function newContext(browser, options = {}) {
       // 5. The sample tour still works, and old prototype links still redirect.
       await page.goto(`${BASE}/tour`)
       check(`${label}: /tour shows the sample tour`, await shows(page.getByText(/sample/i)))
+      // Creator invitation links open the tour's welcome screen: the banner
+      // there says the points and rewards are an early concept.
+      await page.goto(`${BASE}/tour/welcome?invite=7c1e94a2b05d3f68e1a9`)
+      check(`${label}: an invitation link's welcome screen says the tour's points and rewards aren't the pilot's`,
+        await shows(page.getByRole('complementary', { name: 'Sample tour' }).getByText("The points and rewards shown aren't how the Splitpost pilot works.")))
       await page.goto(`${BASE}/discover`)
       await page.waitForURL(/\/tour\/discover$/, { timeout: 5000 }).catch(() => {})
       check(`${label}: /discover redirects into the tour`, page.url().endsWith('/tour/discover'), page.url())
