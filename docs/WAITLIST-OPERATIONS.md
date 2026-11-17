@@ -176,4 +176,4 @@ The switch only counts in the staging environment. GitHub merges organization, r
 
 ## Still required before activation
 
-The three hosted staging checks in `docs/WAITLIST.md` (pooler login, TLS certificate, proxy hop count) must pass on staging before any real signups.
+The hosted staging checks in `docs/WAITLIST.md` must pass on staging before any real signups: the pooler login and the TLS certificate always, and the proxy hop count only if the per-visitor limit is used instead of `WAITLIST_CLIENT_ADDRESS=ignore`.

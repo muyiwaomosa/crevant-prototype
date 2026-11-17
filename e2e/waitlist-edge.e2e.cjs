@@ -4,6 +4,7 @@
 //   EDGE_URL      the function (real handler and database code, stand-in Turnstile)
 //   EDGE_BAD_URL  the same function given the database owner's login
 //   EDGE_HOPS2_URL the same function trusting two proxy hops instead of one
+//   EDGE_IGNORE_URL the same function with WAITLIST_CLIENT_ADDRESS=ignore (no hop count)
 //   DB_URL        the local database owner (to inspect and clean up)
 //   WRITER_URL    waitlist_writer with a throwaway password
 //   ADMIN_URL     waitlist_admin with a throwaway password
@@ -12,7 +13,7 @@
 const http = require('node:http')
 const postgres = require('postgres')
 
-const { EDGE_URL, EDGE_BAD_URL, EDGE_HOPS2_URL, DB_URL, WRITER_URL, ADMIN_URL } = process.env
+const { EDGE_URL, EDGE_BAD_URL, EDGE_HOPS2_URL, EDGE_IGNORE_URL, DB_URL, WRITER_URL, ADMIN_URL } = process.env
 const ORIGIN = 'https://site.test'
 const NOTICE = 'e2e-notice-1'
 
@@ -247,6 +248,48 @@ function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
     const keys = await owner`select bucket from ops.waitlist_rate_limits`
     check('rate limit keys never contain an address', keys.every((b) => !/[.@]|2001/.test(b.bucket)))
 
+    // 9d. WAITLIST_CLIENT_ADDRESS=ignore: no forwarding header is read, the
+    // per-visitor limit is off, and every other control still applies.
+    const cfgI = await (await fetch(`${EDGE_IGNORE_URL}/__config`)).json()
+    check('the ignore instance reads its mode, and has no hop count', cfgI.clientMode === 'ignore' && cfgI.trustedHops === null && cfgI.ok === true, JSON.stringify(cfgI))
+    await freshLimits()
+    await awayFromWindowEdge(60, 20)
+    const ign = []
+    for (let i = 1; i <= 15; i++) ign.push((await post(body({ email: email() }), { url: EDGE_IGNORE_URL, xff: '203.0.113.130' })).state)
+    check('ignore mode: 15 submissions with one address and different emails all answer ok (no per-visitor limit)', ign.every((x) => x === 'ok'), ign.join(','))
+    const noHeader = []
+    for (let i = 1; i <= 12; i++) noHeader.push((await post(body({ email: email() }), { url: EDGE_IGNORE_URL, xff: null })).state)
+    check('ignore mode: without any forwarding header there is no shared bucket either', noHeader.every((x) => x === 'ok'), noHeader.join(','))
+    const clientRows = await owner`select count(*)::int as n, count(distinct bucket)::int as d, coalesce(max(hits), 0)::int as most from ops.waitlist_rate_limits where bucket like 'client:%'`
+    check('ignore mode: every request has its own client key, none repeats', clientRows[0].n === 27 && clientRows[0].d === 27 && clientRows[0].most === 1, JSON.stringify(clientRows[0]))
+
+    await freshLimits()
+    await awayFromWindowEdge(86400, 60)
+    const sameI = email()
+    const triesI = []
+    for (let i = 1; i <= 3; i++) triesI.push((await post(body({ email: sameI }), { url: EDGE_IGNORE_URL, xff: `203.0.113.${140 + i}` })).state)
+    check('ignore mode: the per-email limit still allows three a day', triesI.every((x) => x === 'ok'), triesI.join(','))
+    check('ignore mode: the 4th for one email is limited', (await post(body({ email: sameI.toUpperCase() }), { url: EDGE_IGNORE_URL, xff: null })).state === 'rate_limited')
+
+    await freshLimits()
+    await awayFromWindowEdge(60, 15)
+    await owner`insert into ops.waitlist_rate_limits (bucket, window_start, hits)
+      values ('global', to_timestamp(floor(extract(epoch from now()) / 60) * 60), 59)
+      on conflict (bucket, window_start) do update set hits = 59`
+    check('ignore mode: the global limit still accepts the 60th in a minute', (await post(body({ email: email() }), { url: EDGE_IGNORE_URL })).state === 'ok')
+    check('ignore mode: and limits the 61st', (await post(body({ email: email() }), { url: EDGE_IGNORE_URL })).state === 'rate_limited')
+
+    await freshLimits()
+    check('ignore mode: Turnstile is still required', (await post(body({ email: email(), turnstileToken: 'fail' }), { url: EDGE_IGNORE_URL })).state === 'verification_failed')
+    check('ignore mode: the Turnstile hostname is still checked', (await post(body({ email: email(), turnstileToken: 'pass:evil.test:join' }), { url: EDGE_IGNORE_URL })).state === 'verification_failed')
+    check('ignore mode: the origin is still checked', (await post(body({ email: email() }), { url: EDGE_IGNORE_URL, origin: 'https://evil.test' })).status === 403)
+    const storedBefore = (await owner`select count(*)::int as n from ops.waitlist`)[0].n
+    check('ignore mode: the honeypot still answers ok', (await post(body({ email: email(), website: 'bot' }), { url: EDGE_IGNORE_URL })).state === 'ok')
+    check('ignore mode: and stores nothing', (await owner`select count(*)::int as n from ops.waitlist`)[0].n === storedBefore)
+    check('ignore mode: a repeat of a stored address changes nothing', (await post(body({ email: 'maya@e2e.test', source: 'tiktok' }), { url: EDGE_IGNORE_URL })).state === 'ok'
+      && (await owner`select count(*)::int as n from ops.waitlist where email = 'maya@e2e.test'`)[0].n === 1)
+    await freshLimits()
+
     // 10. What the login roles can NOT do, over real connections.
     check('waitlist_writer cannot read the waitlist', await denied(() => writer`select * from ops.waitlist limit 1`))
     check('waitlist_writer cannot read member profiles', await denied(() => writer`select * from public.profiles limit 1`))
@@ -310,7 +353,7 @@ function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
     check('the health script passes against a healthy function', healthy.ok, healthy.lines.join(' | '))
     const unhealthy = await runHealthCheck({ url: official, origin: ORIGIN, expected: 'open' }, viaTest(EDGE_BAD_URL))
     check('the health script fails, clearly, when the database login is broken', !unhealthy.ok && /could not connect/.test(unhealthy.lines.join(' ')), unhealthy.lines[0])
-    check('the health script stores nothing', (await owner`select count(*)::int as n from ops.waitlist`)[0].n === before)
+    check('the health script stores nothing', (await owner`select count(*)::int as n from ops.waitlist`)[0].n === storedBefore)
     check('the health script output holds nothing personal', !/@|e2e\.test/.test([...healthy.lines, ...unhealthy.lines].join(' ')))
 
     // 15. The emergency close script, run as the database owner (as in the Supabase SQL editor).
