@@ -63,4 +63,19 @@ describe('invitation banner on /join', () => {
       if (b) expect(b.textContent).not.toContain('<script>')
     }
   })
+
+  it('asks the server once per page, with its built-in fetch, as the real /join page uses it (no request loop)', async () => {
+    // The page renders the banner without a fetchImpl. A default made afresh on
+    // each render would re-run the request after every answer, forever.
+    for (const data of [{ status: 'ok', invite: 'valid', name: 'Priya Raman' }, { status: 'ok', invite: 'unavailable' }]) {
+      cleanup()
+      const f = vi.fn(async () => new Response(JSON.stringify(data), { status: 200 }))
+      vi.stubGlobal('fetch', f)
+      render(<InviteBanner config={config} search={`?ref=${CODE}`} />)
+      await screen.findByTestId(data.invite === 'valid' ? 'invite-banner' : 'invite-unusable')
+      await new Promise((r) => setTimeout(r, 200))
+      expect(f).toHaveBeenCalledTimes(1)
+      vi.unstubAllGlobals()
+    }
+  })
 })

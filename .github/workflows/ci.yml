@@ -172,6 +172,11 @@ jobs:
         run: scripts/ci/start-local-supabase.sh
       - name: Run the sign-in journey
         run: scripts/e2e/auth-journey.sh
+      # The waitlist as people use it: the real form in a browser, the real
+      # function in the Edge runtime (Turnstile is a stand-in), the local
+      # database as the restricted login.
+      - name: Run the waitlist journey
+        run: scripts/e2e/waitlist-journey.sh
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup || true

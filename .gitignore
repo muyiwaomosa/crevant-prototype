@@ -11,3 +11,4 @@ dist
 # Supabase CLI local state
 supabase/.temp/
 supabase/.branches/
+e2e-dist
