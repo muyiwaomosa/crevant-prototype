@@ -69,3 +69,44 @@ test('the robots header rules are exactly two, and nothing ever sends an "index"
   // The same source style as the existing rewrite, which Vercel already serves.
   assert.equal(config.rewrites[0].source, '/((?!media/|assets/|favicon).*)')
 })
+
+// The security headers come as exactly two rules, split by one host:
+// www.splitpost.ca (the public site in the splitpost project) may only talk to
+// the Production Supabase project; every other address (Previews, the demo
+// project, local tests) only to staging. Never both, and never crossed.
+const SITE_HOST = 'www.splitpost.ca'
+const STAGING = 'https://kpudeppgokpjhvaqrprn.supabase.co'
+const PRODUCTION = 'https://hmrliwoychnqrbbydorg.supabase.co'
+const securityRules = config.headers.filter((h) => h.headers.some((x) => x.key === 'Content-Security-Policy'))
+const cspOf = (rule) => Object.fromEntries(rule.headers.find((x) => x.key === 'Content-Security-Policy').value.split(';').map((d) => d.trim().split(/\s+/)).map(([k, ...v]) => [k, v]))
+
+test('two security rules, for www.splitpost.ca and for everything else, so exactly one applies to any request', () => {
+  assert.deepEqual(securityRules.map((h) => [h.source, h.has ?? null, h.missing ?? null]), [
+    ['/(.*)', null, [{ type: 'host', value: SITE_HOST }]],
+    ['/(.*)', [{ type: 'host', value: SITE_HOST }], null],
+  ])
+})
+
+test('www.splitpost.ca may talk only to the Production project; everywhere else only to staging', () => {
+  const [elsewhere, site] = securityRules
+  assert.deepEqual(cspOf(elsewhere)['connect-src'], ["'self'", STAGING])
+  assert.deepEqual(cspOf(site)['connect-src'], ["'self'", PRODUCTION])
+  for (const rule of securityRules) {
+    const value = rule.headers.find((x) => x.key === 'Content-Security-Policy').value
+    assert.equal(value.includes(STAGING) && value.includes(PRODUCTION), false, 'a policy must never allow both projects')
+  }
+})
+
+test('the two rules are otherwise identical: the same policy apart from connect-src, the same other headers', () => {
+  const [elsewhere, site] = securityRules
+  const without = (rule) => ({ ...cspOf(rule), 'connect-src': null })
+  assert.deepEqual(without(site), without(elsewhere))
+  const others = (rule) => rule.headers.filter((x) => x.key !== 'Content-Security-Policy')
+  assert.deepEqual(others(site), others(elsewhere))
+})
+
+test('the Production project in the policy is the one in config/supabase-projects.json, once recorded', () => {
+  const projects = JSON.parse(readFileSync(new URL('../config/supabase-projects.json', import.meta.url), 'utf8'))
+  if (projects.production?.ref) assert.equal(PRODUCTION, `https://${projects.production.ref}.supabase.co`)
+  assert.equal(STAGING, `https://${projects.staging.ref}.supabase.co`)
+})
