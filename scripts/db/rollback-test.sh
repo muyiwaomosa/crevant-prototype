@@ -16,11 +16,13 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Two later migrations build on the waitlist: creator acquisition
-# (20261116000000) and the Release 1 social core (20261117000000). Each
-# rollback refuses while a later migration is recorded, so they run newest
-# first: social core (scripts/db/rollback-social-test.sh), then creator
-# acquisition (scripts/db/rollback-acquisition-test.sh), then this one. After
+# Three later migrations follow the waitlist: creator acquisition
+# (20261116000000), the Release 1 social core (20261117000000) and platform
+# function access (20261118000000). Each rollback refuses while a later
+# migration is recorded, so they run newest first: platform access
+# (scripts/db/rollback-platform-access-test.sh), social core
+# (scripts/db/rollback-social-test.sh), creator acquisition
+# (scripts/db/rollback-acquisition-test.sh), then this one. After
 # reapplying, this test proves the order holds: each rollback refuses until
 # the later ones have run.
 # rollback has run.
@@ -94,7 +96,19 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+PLATFORM=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261118000000')")
 SOCIAL_APPLIED=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261117000000')")
+if [ "$PLATFORM" = t ]; then
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-social.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the social core rollback refuses while platform function access is recorded" \
+    || bad "the social core rollback did not refuse while platform function access is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-platform-access-test.sh; then
+    ok "the platform function access rollback refuses safely and removes only its record"
+  else
+    bad "the platform function access rollback tests failed"
+  fi
+fi
 ACQ=$("${PSQL[@]}" -c "select count(*) from supabase_migrations.schema_migrations where version = '20261116000000'")
 if [ "$SOCIAL_APPLIED" = t ]; then
   refuses "the social core migration is still recorded (it must be removed first)" "later migration" "select 1" "select 1"
@@ -210,17 +224,29 @@ if out=$(for f in supabase/tests/*.sql; do psql "$DB_URL" -X -q -v ON_ERROR_STOP
 else
   bad "database checks after reapplying: $(tail -3 <<<"$out" | tr '\n' ' ')"
 fi
-if [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
+if [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
   # Everything is back: the waitlist rollback must refuse until the later ones are removed.
   out=$(rollback check ""); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "after reapplying, the waitlist rollback refuses while a later migration is recorded" \
     || bad "the waitlist rollback did not refuse while a later migration is recorded (exit $code)"
+  if [ "$PLATFORM" = t ]; then
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-platform-access.sql 2>&1); code=$?
+    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+      && ok "after reapplying, the platform function access rollback check passes again" \
+      || bad "platform function access rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+  fi
   if [ "$SOCIAL_APPLIED" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-social.sql 2>&1); code=$?
-    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-      && ok "after reapplying, the social core rollback check passes again" \
-      || bad "social core rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    if [ "$PLATFORM" = t ]; then
+      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+        && ok "after reapplying, the social core rollback refuses while platform function access is recorded" \
+        || bad "the social core rollback did not refuse after reapply while platform function access is recorded (exit $code)"
+    else
+      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+        && ok "after reapplying, the social core rollback check passes again" \
+        || bad "social core rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    fi
   fi
   if [ "$ACQ" = 1 ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-acquisition.sql 2>&1); code=$?
