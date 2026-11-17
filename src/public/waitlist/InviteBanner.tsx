@@ -22,9 +22,14 @@ import { readAcquisition, type WaitlistConfig } from './config'
  */
 type Shown = { kind: 'named'; name: string } | { kind: 'nameless' } | { kind: 'unavailable' } | null
 
+// Defined once, outside the component: a default created on every render
+// would be a new dependency each time, so the effect below would send a new
+// preview request after every answer, forever.
+const defaultFetch: typeof fetch = (...a) => fetch(...a)
+
 export function InviteBanner({
   config,
-  fetchImpl = (...a: Parameters<typeof fetch>) => fetch(...a),
+  fetchImpl = defaultFetch,
   search = typeof window !== 'undefined' ? window.location.search : '',
 }: {
   config: WaitlistConfig

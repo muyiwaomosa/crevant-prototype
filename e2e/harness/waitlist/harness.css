@@ -1,0 +1,3 @@
+@import '../../../src/index.css';
+/* The harness lives outside src: scan the real components for their classes. */
+@source '../../../src';
