@@ -25,8 +25,11 @@ const walk = (dir) =>
 // Code only: comments may name what the code must not do.
 const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '')
 
-test('supabase/functions holds only the join-waitlist function', () => {
-  assert.deepEqual(readdirSync(join(root, 'supabase/functions')).sort(), ['join-waitlist'])
+// Branch claude/proxy-diagnostic only, never merged (docs/PROXY-DIAGNOSTIC-THREAT-MODEL.md):
+// the temporary staging diagnostic is the one reviewed exception. On main this
+// test allows join-waitlist alone.
+test('supabase/functions holds only join-waitlist and the temporary proxy diagnostic', () => {
+  assert.deepEqual(readdirSync(join(root, 'supabase/functions')).sort(), ['join-waitlist', 'proxy-diagnostic'])
 })
 
 test('no test substitution or verification bypass in deployable code', () => {
@@ -68,7 +71,7 @@ test('nothing deploys any function but join-waitlist', () => {
   const files = [...walk('.github'), ...walk('scripts'), ...walk('docs'), 'package.json'].filter((p) => !p.endsWith('.test.mjs'))
   for (const f of files) {
     for (const m of read(f).matchAll(/functions deploy\s+([^\s`'"]+)/g)) {
-      assert.equal(m[1], 'join-waitlist', `${f} deploys ${m[1]}`)
+      assert.ok(['join-waitlist', 'proxy-diagnostic'].includes(m[1]), `${f} deploys ${m[1]}`)
     }
   }
 })
