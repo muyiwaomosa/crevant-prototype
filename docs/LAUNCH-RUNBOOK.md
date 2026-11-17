@@ -6,7 +6,8 @@ Status: **preparation only.** Production still serves the frozen `demo` branch. 
 
 | Environment | The only authorized way to change it |
 |---|---|
-| **Production** (`crevant-prototype.vercel.app`) | **Before the approved switch:** none. It stays on the `demo` branch. **After the approved switch:** a commit merged into `main` through a reviewed PR with all five CI checks green, which Vercel then builds from Git with the Production environment variables. |
+| **Demo project Production** (`crevant-prototype`, `crevant-prototype.vercel.app`) | None. It stays on the `demo` branch. The build guard refuses any public site build in this project. |
+| **Public site Production** (`splitpost` project, `splitpost.ca`) | A commit merged into `main` through a reviewed PR with all CI checks green, which Vercel builds from Git. Only once the project's ID is recorded in `config/vercel-projects.json` (reviewed PR) and `CREVANT_PRODUCTION_SITE_APPROVED=true` is set in that project (approval). |
 | **Previews** | Pushes to branches; Vercel builds them from Git. |
 
 The Production build guard (`scripts/guard-build-target.mjs`) only runs when Vercel **builds** from Git. The following actions skip it, so they are **not authorized deployment paths**, and must never be used for Production:
@@ -58,7 +59,7 @@ The staging workflows (database deploy, waitlist admin, staging rollback) each h
 
 1. ⚠️ Merge the reviewed launch preparation PRs.
 2. ⚠️ Accounts, the Production Supabase project, credentials, migrations and the function: see `docs/WAITLIST.md`, the launch readiness plan, and the three mandatory hosted checks.
-3. ⚠️ **Switch Production to the public site.** In Vercel, set `CREVANT_PRODUCTION_SITE_APPROVED=true` (Production only), then set Production Branch Tracking to `main`. Leave the form and indexing variables off. Then check:
+3. ⚠️ **Publish the public site from the `splitpost` project.** Record its project ID in `config/vercel-projects.json` (reviewed PR), then set `CREVANT_PRODUCTION_SITE_APPROVED=true` in the `splitpost` project's Production variables. The `crevant-prototype` project is not changed. Leave the form and indexing variables off. Then check:
    * the site serves the public build
    * all paths except `/` and `/join` send `x-robots-tag: noindex`
    * `/` and `/join` say `noindex` in the page source

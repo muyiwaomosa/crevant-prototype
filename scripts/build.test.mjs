@@ -38,3 +38,20 @@ test('npm run build and build:site both go through this one entry point', () => 
   assert.equal(scripts['build:site'], 'node scripts/build.mjs --site')
   assert.equal(scripts['vercel-build'], undefined)
 })
+
+test('the splitpost project builds only the public site, Previews included; the demo project and unknown projects are unchanged', async () => {
+  const { VERCEL_PROJECTS } = await import('./vercel-project.mjs')
+  const demo = VERCEL_PROJECTS.demo.projectId
+  // The demo project's Previews keep building the full app, as today.
+  assert.equal(planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: demo }).mode, 'app')
+  assert.equal(planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: 'prj_SomeOtherProject00000000' }).mode, 'app')
+  // Production is the public site in every project (the guard then decides whether it may build at all).
+  assert.equal(planBuild({ VERCEL_ENV: 'production', VERCEL_PROJECT_ID: demo }).mode, 'site')
+  // With the splitpost ID recorded (a stand-in here), its Previews build the public site with every site check.
+  const site = 'prj_SplitpostTestOnly0000000001'
+  const projects = { ...VERCEL_PROJECTS, publicSite: { name: 'splitpost', projectId: site } }
+  const plan = planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: site }, [], projects)
+  assert.equal(plan.mode, 'site')
+  assert.ok(commands(plan).includes('node scripts/check-site-bundle.mjs dist'))
+  assert.equal(planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: demo }, [], projects).mode, 'app')
+})
