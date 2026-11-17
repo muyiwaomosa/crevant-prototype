@@ -1,7 +1,8 @@
 # Splitpost privacy notice, version 1.0 (DRAFT FOR APPROVAL)
 
-**Status: ready for the founder's review and for legal review. Not approved,
-not published, not wired into the site.** The waitlist form cannot appear
+**Status (2026-11-17): final draft, ready for counsel. Not approved, not
+published, not wired into the site.** Only the items under "What blocks
+publication" remain.** The waitlist form cannot appear
 until an approved notice exists in `src/public/privacy/notice.ts` with a
 matching version (`src/public/waitlist/config.ts`). Publishing is a separate
 reviewed pull request.
@@ -19,6 +20,20 @@ from `docs/PRIVACY-NOTICE-ACQUISITION-DRAFT.md`, because the form on `main`
 already asks those questions.
 
 ---
+
+## What blocks publication
+
+1. **The operator's exact registered name and mailing address** (founder).
+2. **Counsel's review** (see "Open questions"), in particular: which laws
+   apply, including for people outside Canada; the wording for storage in
+   the United States; whether one consent checkbox is enough; the reply time,
+   the complaint authority, and the retention periods (12 months, 90 days).
+3. **A test message** to and from privacy@splitpost.ca.
+
+Everything else in the text matches the code on `main` and the waitlist
+journey test (PR #42): the fields, the optional questions, the creator link
+attribution, the two-day codes, no stored IP addresses, the 12-month purge
+and deletion on request by email.
 
 ## Working decisions (founder, updated 2026-11-17)
 
@@ -215,8 +230,9 @@ already asks those questions.
 >
 > ## Your choices and rights
 >
-> - **Leave the waitlist at any time.** Email **privacy@splitpost.ca** and
->   we'll delete your entry and your answers.
+> - **Leave the waitlist at any time.** Email **privacy@splitpost.ca** from
+>   the address you joined with, and we'll delete your entry and your
+>   answers. (The waitlist's confirmation screen says the same.)
 > - **See or correct** the information we hold about you, by emailing the
 >   same address.
 > - **Withdraw your consent** by asking us to delete your entry.
