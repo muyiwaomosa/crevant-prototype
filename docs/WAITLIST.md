@@ -99,7 +99,7 @@ The function refuses the URL, and stays closed, if:
 **Verified locally:** the real function code was run in Supabase's Edge runtime (`supabase/edge-runtime:v1.78.1`) against Supabase's own Postgres 17 image, logged in as `waitlist_writer` (`scripts/e2e/waitlist-edge.sh`, also in CI). `scripts/e2e/waitlist-tls.sh` (also in CI) proves, against throwaway local servers, that the connection is refused with no CA, the wrong CA, the wrong hostname, a server without TLS, or any weakening setting. Three things still have to be confirmed on staging (Phase E). They are hosted staging checks 1 to 3 in the activation checklist:
 * that the hosted pooler accepts the custom login
 * which certificate it presents
-* the proxy hop count
+* the proxy hop count, **only** if the per-visitor limit is used (`WAITLIST_CLIENT_ADDRESS` unset or `forwarded`). The recommended launch setting, `WAITLIST_CLIENT_ADDRESS=ignore`, reads no forwarding header and needs no hop count (`docs/WAITLIST-ABUSE-CONTROLS.md`).
 
 If the pooler refuses the custom login, the plan stops there and comes back for a decision. It doesn't fall back to a broader credential.
 
@@ -118,7 +118,7 @@ The form also stays off unless the function address, Turnstile site key, privacy
 * a valid `waitlist_writer` database URL for its own project
 * `TURNSTILE_SECRET_KEY`
 * a `WAITLIST_RATE_SALT` of at least 32 characters
-* a confirmed `WAITLIST_TRUSTED_PROXY_HOPS` (1 to 5; there is no default)
+* an explicit client address choice: `WAITLIST_CLIENT_ADDRESS=ignore` with no hop count, **or** a confirmed `WAITLIST_TRUSTED_PROXY_HOPS` (1 to 5). There is no default, and both together is refused.
 
 Any one switch being off stops submissions.
 
@@ -137,8 +137,9 @@ The database holds the one notice version people must have been shown. It's set 
   * 3 a day per email
 
   The keys are HMAC-SHA256 with the secret `WAITLIST_RATE_SALT`, separately for the email and the client address, so they can't be reversed or matched without the salt. The database refuses a submission without both keys.
-* **Client address:** taken only from the `X-Forwarded-For` entry added by Supabase's own proxy, `WAITLIST_TRUSTED_PROXY_HOPS` from the right.
-  * There's no default. The number must be confirmed on the hosted platform (hosted staging check 3), and the function stays closed until it's set.
+* **Client address, `WAITLIST_CLIENT_ADDRESS=ignore` (recommended for launch):** no forwarding header is read at all, and the per-visitor limit is off. Each request gets its own random client key, so that bucket never builds up and never falls back to the shared one. Turnstile, the per-email and overall limits, the unique address and the close switch remain. Why this is acceptable, and what it doesn't stop: `docs/WAITLIST-ABUSE-CONTROLS.md`.
+* **Client address, hop count mode:** taken only from the `X-Forwarded-For` entry added by Supabase's own proxy, `WAITLIST_TRUSTED_PROXY_HOPS` from the right.
+  * There's no default. The number must be confirmed on the hosted platform (hosted staging check 3), and the function stays closed until it's set (or until `ignore` is chosen instead).
   * Entries a client writes itself, and headers like `X-Real-IP`, `CF-Connecting-IP`, `True-Client-IP` and `Forwarded`, are ignored. Separate header lines are read as one list.
   * IPv6 addresses are grouped by /64.
   * Anything that can't be trusted falls into one shared bucket rather than skipping the limit: a missing, malformed, oversized or too short header, and a private or internal address in the trusted position (which would mean the hop count points at one of the platform's own proxies).
@@ -168,11 +169,11 @@ Decisions:
 - [ ] **Branch protection on `main`** requiring pull requests and these CI checks: App, Database, Integration, Browser, and **Public site**. The Public site job must be a required check before Production moves to the public site build.
 - [ ] **Hosted staging check 1: pooler login.** The Supabase pooler accepts the custom `waitlist_writer.kpudeppgokpjhvaqrprn` login. If it doesn't, stop and decide; never fall back to a broader credential.
 - [ ] **Hosted staging check 2: TLS certificate.** The function connects with full certificate verification, adding Supabase's public CA as `WAITLIST_DB_CA_CERT` if needed. Never turn verification off.
-- [ ] **Hosted staging check 3: proxy hop count.** `WAITLIST_TRUSTED_PROXY_HOPS` is confirmed, so a made up `X-Forwarded-For` value can't change the client bucket. This needs the temporary proxy diagnostic (A3, separately approved; design in `docs/PROXY-DIAGNOSTIC-THREAT-MODEL.md`).
+- [ ] **Hosted staging check 3: proxy hop count. Only needed in hop count mode;** not needed with `WAITLIST_CLIENT_ADDRESS=ignore`. `WAITLIST_TRUSTED_PROXY_HOPS` is confirmed, so a made up `X-Forwarded-For` value can't change the client bucket. This needs the temporary proxy diagnostic (A3, separately approved; design in `docs/PROXY-DIAGNOSTIC-THREAT-MODEL.md`).
 - [ ] **Hosted prerequisites from A2,** each of which fails closed if wrong:
   * the hosted function's `SUPABASE_URL` is exactly `https://kpudeppgokpjhvaqrprn.supabase.co`;
   * the pooler host has the form `<region>.pooler.supabase.com` and the transaction pooler is on port 6543;
-  * for the rollback workflow only: the staging session pooler's certificate verifies against the runner's system certificates with `sslmode=verify-full`. If it doesn't, add Supabase's public CA file in a reviewed PR; never weaken the mode.
+  * every database workflow (migrations, admin, rollback) connects with `sslmode=verify-full` against Supabase's public root CA committed at `config/certs/supabase-root-2021-ca.crt` (the staging pooler's certificate is not publicly trusted, hosted check 2). The secrets must carry no connection setting after `?` except `sslmode=verify-full`; the target checks refuse anything else.
 - [ ] Operations set up (`docs/WAITLIST-OPERATIONS.md`): `WAITLIST_ADMIN_DATABASE_URL`, the health check variables, and a monthly reminder to run the purge (no scheduled deletion)
 - [ ] Activation itself approved
 
@@ -189,11 +190,11 @@ Setup, once approved (each step needs approval):
    * `WAITLIST_ALLOWED_ORIGINS`
    * `WAITLIST_ALLOWED_HOSTNAMES`
    * optionally `WAITLIST_DB_CA_CERT`
-   * `WAITLIST_TRUSTED_PROXY_HOPS`, once confirmed (required: without it the function stays closed)
-6. **Smoke test on staging,** covering hosted staging checks 1 to 3 in the checklist above (Windows steps: `docs/STAGING-CHECKS-WINDOWS.md`). All three must pass before activation:
+   * `WAITLIST_CLIENT_ADDRESS=ignore` (recommended for launch), **or** `WAITLIST_TRUSTED_PROXY_HOPS` once confirmed. One of the two is required, never both: otherwise the function stays closed
+6. **Smoke test on staging,** covering hosted staging checks 1 to 3 in the checklist above (Windows steps: `docs/STAGING-CHECKS-WINDOWS.md`). Checks 1 and 2 must pass before activation; check 3 only if the hop count mode is used:
    * The pooler accepts `waitlist_writer.<ref>`.
    * The certificate verifies.
-   * The hop count is confirmed: send test requests with a made up `X-Forwarded-For` value and check, by rate limit behaviour and without logging addresses, that the made up value doesn't change the client bucket.
+   * Hop count mode only: the hop count is confirmed: send test requests with a made up `X-Forwarded-For` value and check, by rate limit behaviour and without logging addresses, that the made up value doesn't change the client bucket.
 7. **Security policy:** the Content Security Policy in `vercel.json` already allows `https://challenges.cloudflare.com` in `script-src` and `frame-src` (added with the public site build). The function address is covered by `connect-src`.
 8. **Vercel env:** `VITE_WAITLIST_ENDPOINT` (`https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist`), `VITE_TURNSTILE_SITE_KEY`, `VITE_PRIVACY_NOTICE_URL` and `VITE_PRIVACY_NOTICE_VERSION`, then `VITE_WAITLIST_FORM_ENABLED=true`.
 9. **Notice version:** record the approved version with `waitlist_api.admin_set_notice_version('<version>')`.

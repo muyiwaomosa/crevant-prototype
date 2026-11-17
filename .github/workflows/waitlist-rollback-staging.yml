@@ -117,6 +117,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: staging
+    # Full certificate and host name verification for every hosted database
+    # connection in this job (psql and the Supabase CLI both read these), against
+    # Supabase's public root CA committed at config/certs. REQUIRE_VERIFY_FULL
+    # makes the target check refuse a URL that would override them.
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
     steps:
       - name: Refuse unless the founder has enabled this workflow
         env:
@@ -150,7 +158,6 @@ jobs:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
-          REQUIRE_VERIFY_FULL: '1'
         run: scripts/db/verify-staging-target.sh
 
       - name: Run the rollback
@@ -159,16 +166,9 @@ jobs:
           MODE: ${{ inputs.mode }}
           TARGET: ${{ inputs.target }}
           PHRASE: ${{ inputs.confirm_phrase }}
-          PGSSLMODE: verify-full
-          PGSSLROOTCERT: system
           PGCONNECT_TIMEOUT: '15'
         run: |
           set -euo pipefail
-          major="$(psql --version | grep -oE '[0-9]+' | head -1)"
-          if [ "$major" -lt 16 ]; then
-            echo "::error::psql $major cannot verify against the system certificates (needs 16 or later). Nothing was done."
-            exit 1
-          fi
           case "$TARGET" in
             waitlist) sql=scripts/db/staging-rollback-waitlist.sql ;;
             creator_acquisition) sql=scripts/db/staging-rollback-acquisition.sql ;;

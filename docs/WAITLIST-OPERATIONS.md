@@ -172,8 +172,8 @@ The switch only counts in the staging environment. GitHub merges organization, r
 
 **Tested** in CI against a local Supabase (`scripts/db/rollback-test.sh`): every refusal in both modes leaves everything unchanged, a clean dry run changes nothing, the removal leaves the earlier migrations intact, and the migrations then apply again cleanly and pass the staging checks.
 
-**Before it could ever be used on staging (prerequisites, each needing approval):** confirm the staging session pooler's certificate verifies with `sslmode=verify-full` against the runner's system certificates (if not, the workflow fails closed; the fix is adding Supabase's public CA file in a reviewed PR), and confirm the GitHub environment settings.
+**Before it could ever be used on staging (prerequisites, each needing approval):** the workflow verifies the staging session pooler's certificate with `sslmode=verify-full` against Supabase's public root CA in `config/certs` (it fails closed if that doesn't verify; never weaken the mode), and confirm the GitHub environment settings.
 
 ## Still required before activation
 
-The three hosted staging checks in `docs/WAITLIST.md` (pooler login, TLS certificate, proxy hop count) must pass on staging before any real signups.
+The hosted staging checks in `docs/WAITLIST.md` must pass on staging before any real signups: the pooler login and the TLS certificate always, and the proxy hop count only if the per-visitor limit is used instead of `WAITLIST_CLIENT_ADDRESS=ignore`.
