@@ -357,7 +357,7 @@ describe('header and footer', () => {
       ['Why Splitpost', '/#problem'],
       ['How It Works', '/#building'],
       ['Waitlist Opens Soon', '/join'],
-      ['Sign in', '/sign-in'],
+      ['Sign In', '/sign-in'],
     ])
   })
   it('sends every "Discover Splitpost" link to the homepage introduction, and nothing on a public page to the old sample tour', () => {
