@@ -673,6 +673,130 @@ describe('Following and My Clique', () => {
   })
 })
 
+describe('Discover, follow, add to Clique, read their posts', () => {
+  it('Discover cards link to the profile and posts, and lead from a follow to the next steps', async () => {
+    const { api, seedPost, clique, key } = fakeApi()
+    seedPost('c1', 'First post from Creator 1')
+    renderApp('/app/discover', api)
+    const card = within((await screen.findByRole('link', { name: 'Creator 1' })).closest('li')!)
+    expect(card.getByRole('link', { name: "See Creator 1's posts" }).getAttribute('href')).toBe('/app/u/creator_1#posts')
+    expect(card.queryByRole('button', { name: 'Unfollow Creator 1' })).toBeNull()
+
+    fireEvent.click(card.getByRole('button', { name: 'Follow Creator 1' }))
+    const confirmation = within(await card.findByTestId('follow-confirmation'))
+    expect(confirmation.getByText(/You're following/).textContent).toMatch(/Creator 1\. Their new posts will appear on Home, newest first\./)
+    expect(card.getByRole('button', { name: 'Unfollow Creator 1' }).textContent).toBe('Following')
+    // One "Add to Clique" only: the confirmation's.
+    expect(card.getAllByRole('button', { name: 'Add Creator 1 to your Clique' })).toHaveLength(1)
+    expect(confirmation.getByRole('link', { name: 'See their posts' }).getAttribute('href')).toBe('/app/u/creator_1#posts')
+
+    fireEvent.click(confirmation.getByRole('button', { name: 'Add Creator 1 to your Clique' }))
+    expect(await card.findByText(/They are in your Clique\./)).toBeTruthy()
+    expect(clique.has(key('me', 'c1'))).toBe(true)
+    expect(card.getByRole('button', { name: 'Remove Creator 1 from your Clique (you keep following them)' })).toBeTruthy()
+
+    fireEvent.click(card.getByRole('button', { name: 'Not now' }))
+    expect(card.queryByTestId('follow-confirmation')).toBeNull()
+  })
+
+  it('"See their posts" opens the profile at its posts', async () => {
+    const { api, seedPost } = fakeApi()
+    seedPost('c2', 'Something worth reading')
+    renderApp('/app/discover', api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 2' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'See their posts' }))
+    expect(await screen.findByRole('heading', { name: 'Creator 2', level: 1 })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Posts' }).id).toBe('posts')
+    expect(await screen.findByText('Something worth reading')).toBeTruthy()
+  })
+
+  it('without posts, there is no "See posts" link, and the profile says what happens when they post', async () => {
+    const { api } = fakeApi()
+    renderApp('/app/discover', api)
+    const card = within((await screen.findByRole('link', { name: 'Creator 3' })).closest('li')!)
+    expect(card.queryByRole('link', { name: /posts/ })).toBeNull()
+    fireEvent.click(card.getByRole('button', { name: 'Follow Creator 3' }))
+    const confirmation = within(await card.findByTestId('follow-confirmation'))
+    expect(confirmation.queryByRole('link', { name: 'See their posts' })).toBeNull()
+    cleanup()
+    renderApp('/app/u/creator_3', api)
+    expect((await screen.findByText(/hasn't posted yet/)).textContent).toBe("Creator 3 hasn't posted yet. When they do, it will appear on your Home feed.")
+    cleanup()
+    renderApp('/app/u/creator_4', api)
+    expect((await screen.findByText(/hasn't posted yet/)).textContent).toBe("Creator 4 hasn't posted yet. Follow them to see their posts on Home when they do.")
+  })
+
+  it('following from a profile offers the same next steps, with "See their posts" jumping to the posts below', async () => {
+    const { api, seedPost } = fakeApi()
+    seedPost('c5', 'Hello from five')
+    renderApp('/app/u/creator_5', api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 5' }))
+    const confirmation = within(await screen.findByTestId('follow-confirmation'))
+    expect(confirmation.getByRole('link', { name: 'See their posts' }).getAttribute('href')).toBe('#posts')
+    expect(confirmation.getByRole('button', { name: 'Add Creator 5 to your Clique' })).toBeTruthy()
+  })
+
+  it('adding from the confirmation when the Clique is full leads to the replacement choice', async () => {
+    const fake = fakeApi('me', { creators: 26 })
+    for (let i = 1; i <= 25; i++) {
+      fake.follows.add(fake.key('me', `c${i}`))
+      fake.clique.add(fake.key('me', `c${i}`))
+    }
+    renderApp('/app/u/creator_26', fake.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 26' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Creator 26 to your Clique' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Your Clique is full (25). Choose someone to replace.')
+    expect(screen.getByRole('link', { name: 'Choose who to replace' }).getAttribute('href')).toBe('/app/clique?add=c26')
+  })
+
+  it('a new member sees three first steps on Home; someone following quiet people sees a different message', async () => {
+    const fake = fakeApi()
+    renderApp('/app', fake.api)
+    expect(await screen.findByText('Your feed is quiet')).toBeTruthy()
+    const steps = screen.getAllByRole('listitem').map((li) => li.textContent)
+    expect(steps.some((t) => /^1Find people/.test(t ?? ''))).toBe(true)
+    expect(steps.some((t) => /^2Follow them/.test(t ?? ''))).toBe(true)
+    expect(steps.some((t) => /^3Choose your Clique/.test(t ?? ''))).toBe(true)
+    expect(screen.getByRole('link', { name: 'Discover people' }).getAttribute('href')).toBe('/app/discover')
+    expect(screen.getByRole('link', { name: 'Your Clique' }).getAttribute('href')).toBe('/app/clique')
+    cleanup()
+
+    fake.follows.add(fake.key('me', 'c1'))
+    renderApp('/app', fake.api)
+    expect(await screen.findByText('Nothing new yet')).toBeTruthy()
+    expect(screen.getByText(/You follow 1 person, and they haven't posted yet/)).toBeTruthy()
+    expect(screen.queryByText('Your feed is quiet')).toBeNull()
+  })
+
+  it('the Home feed stays chronological, with no filters or extra tabs', async () => {
+    const { api, seedPost, follows, clique, key } = fakeApi()
+    follows.add(key('me', 'c1'))
+    follows.add(key('me', 'c2'))
+    clique.add(key('me', 'c2'))
+    seedPost('c2', 'Older, from my Clique')
+    seedPost('c1', 'Newer, from someone I follow')
+    renderApp('/app', api)
+    await screen.findByText('Newer, from someone I follow')
+    const bodies = screen.getAllByTestId('post').map((p) => p.textContent ?? '')
+    expect(bodies[0]).toMatch(/Newer, from someone I follow/)
+    expect(bodies[1]).toMatch(/Older, from my Clique/)
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Everyone|filter/i })).toBeNull()
+  })
+
+  it('a search with no matches offers to show everyone again', async () => {
+    const { api } = fakeApi()
+    renderApp('/app/discover', api)
+    await screen.findByRole('link', { name: 'Creator 1' })
+    fireEvent.change(screen.getByLabelText('Search people by name or username'), { target: { value: 'zzz' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    expect(await screen.findByText('No one matches "zzz". Try a different name or username.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show everyone' }))
+    expect(await screen.findByRole('link', { name: 'Creator 1' })).toBeTruthy()
+    expect((screen.getByLabelText('Search people by name or username') as HTMLInputElement).value).toBe('')
+  })
+})
+
 // Members see two relationships only: Following and My Clique. "Inner Clique"
 // was the earlier name and must never reach member-facing copy again.
 describe('member-facing copy never says "Inner Clique"', () => {

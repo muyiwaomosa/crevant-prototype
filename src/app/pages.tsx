@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, Modal, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
@@ -99,6 +99,8 @@ function PostList({ posts, loadOlder, onDeleted }: { posts: Post[]; loadOlder: (
 export function FeedPage() {
   const api = useAppApi()
   const feed = useLoad(() => api.feed(), [api])
+  // Only to choose the right empty state: new member, or following people who haven't posted yet.
+  const me = useLoad(async () => (feed.data && feed.data.length === 0 ? api.me() : null), [api, feed.data?.length === 0])
   return (
     <>
       <PageHeader title="Home" subtitle="Posts from people you follow, newest first." />
@@ -116,7 +118,25 @@ export function FeedPage() {
       </Card>
       {feed.loading && !feed.data && <Loading label="Loading your feed…" />}
       {feed.error !== null && <ErrorNote error={feed.error} />}
-      {feed.data && feed.data.length === 0 && (
+      {feed.data && feed.data.length === 0 && me.data && me.data.followingCount > 0 && (
+        <EmptyState
+          icon={<Compass className="h-7 w-7" />}
+          title="Nothing new yet"
+          body={`You follow ${me.data.followingCount} ${me.data.followingCount === 1 ? 'person' : 'people'}, and they haven't posted yet. Their posts will appear here, newest first.`}
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Link to="/app/discover" className={buttonClass('primary')}>
+                Discover more people
+              </Link>
+              <Link to="/app/clique" className={buttonClass('secondary')}>
+                Your Clique
+              </Link>
+            </div>
+          }
+        />
+      )}
+      {feed.data && feed.data.length === 0 && me.data && me.data.followingCount === 0 && <GettingStarted />}
+      {feed.data && feed.data.length === 0 && me.error !== null && (
         <EmptyState
           icon={<Compass className="h-7 w-7" />}
           title="Your feed is quiet"
@@ -136,6 +156,39 @@ export function FeedPage() {
         />
       )}
     </>
+  )
+}
+
+/** First steps for a new member: find people, follow, choose a Clique. */
+function GettingStarted() {
+  const steps: Array<{ title: string; body: string; to: string; cta: string }> = [
+    { title: 'Find people', body: 'Browse Discover or search by name, then open a profile to read their posts.', to: '/app/discover', cta: 'Discover people' },
+    { title: 'Follow them', body: 'Their new posts appear here on Home, newest first. Nobody is added for you.', to: '/app/discover', cta: 'Find someone to follow' },
+    { title: 'Choose your Clique', body: 'Pick up to 25 of the people you follow. You can change them at any time.', to: '/app/clique', cta: 'Your Clique' },
+  ]
+  return (
+    <Card className="p-5">
+      <h2 className="font-display text-lg font-bold text-ink-900">Your feed is quiet</h2>
+      <p className="mt-1 text-sm text-ink-600">Here's how to start. It takes a minute.</p>
+      <ol className="mt-4 space-y-4">
+        {steps.map((step, i) => (
+          <li key={step.title} className="flex gap-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-bold text-brand-700" aria-hidden="true">
+              {i + 1}
+            </span>
+            <div className="min-w-0">
+              <p className="font-semibold text-ink-900">{step.title}</p>
+              <p className="text-sm text-ink-600">{step.body}</p>
+              {i !== 1 && (
+                <Link to={step.to} className="mt-1 inline-block text-sm font-semibold text-brand-700 underline">
+                  {step.cta}
+                </Link>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </Card>
   )
 }
 
@@ -181,7 +234,7 @@ export function DiscoverPage() {
 
   return (
     <>
-      <PageHeader title="Discover" subtitle="Find people to follow. Most recently active first." />
+      <PageHeader title="Discover" subtitle="Find people to follow, most recently active first. Open a profile to read their posts." />
       <form onSubmit={search} role="search" className="mb-4 flex gap-2">
         <label htmlFor="discover-search" className="sr-only">
           Search people by name or username
@@ -204,7 +257,25 @@ export function DiscoverPage() {
       {list.loading && !list.data && <Loading label="Finding people…" />}
       {list.error !== null && <ErrorNote error={list.error} />}
       {list.data && list.data.length === 0 && (
-        <EmptyState icon={<Search className="h-7 w-7" />} title="Nobody found" body={submitted ? 'Try a different name or username.' : 'No other members yet.'} />
+        <EmptyState
+          icon={<Search className="h-7 w-7" />}
+          title="Nobody found"
+          body={submitted ? `No one matches "${submitted}". Try a different name or username.` : 'No other members yet. Invited members will appear here.'}
+          action={
+            submitted ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('')
+                  setSubmitted('')
+                }}
+                className={buttonClass('secondary')}
+              >
+                Show everyone
+              </button>
+            ) : undefined
+          }
+        />
       )}
       {list.data && list.data.length > 0 && (
         <ul className="space-y-3">
@@ -220,19 +291,29 @@ export function DiscoverPage() {
 }
 
 function PersonCard({ member, onChange }: { member: DiscoverMember; onChange: () => Promise<void> }) {
+  const profile = `/app/u/${member.username}`
   return (
-    <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <MemberAvatar member={member} size={44} />
-        <div className="min-w-0 leading-tight">
-          <MemberLink member={member} />
+    <Card className="p-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <Link to={profile} aria-hidden="true" tabIndex={-1} className="shrink-0">
+          <MemberAvatar member={member} size={44} />
+        </Link>
+        <div className="min-w-0 flex-1 leading-tight">
+          <MemberLink member={member} className="block truncate" />
           <p className="truncate text-[13px] text-ink-500">
             @{member.username} · {member.postCount} {member.postCount === 1 ? 'post' : 'posts'} · {member.followerCount}{' '}
             {member.followerCount === 1 ? 'follower' : 'followers'}
           </p>
         </div>
       </div>
-      <RelationshipButtons member={member} onChange={onChange} />
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <RelationshipButtons member={member} onChange={onChange} postsHref={member.postCount > 0 ? `${profile}#posts` : undefined} />
+        {member.postCount > 0 && (
+          <Link to={`${profile}#posts`} aria-label={`See ${member.displayName}'s posts`} className="text-sm font-semibold text-brand-700 underline sm:mt-1.5">
+            See posts
+          </Link>
+        )}
+      </div>
     </Card>
   )
 }
@@ -243,9 +324,15 @@ function PersonCard({ member, onChange }: { member: DiscoverMember; onChange: ()
 export function MemberPage() {
   const api = useAppApi()
   const { username = '' } = useParams()
+  const { hash } = useLocation()
   const member = useLoad(() => api.member(username), [api, username])
   const m = member.data
   const posts = useLoad(async () => (m ? api.memberPosts(m.id) : []), [api, m?.id])
+  // Arriving from "See posts" (…#posts): bring the posts into view once they load.
+  const postsReady = posts.data !== undefined && m !== undefined && m !== null
+  useEffect(() => {
+    if (hash === '#posts' && postsReady) document.getElementById('posts')?.scrollIntoView?.({ block: 'start' })
+  }, [hash, postsReady])
 
   if (member.loading && member.data === undefined) return <Loading label="Loading profile…" />
   if (member.error !== null) return <ErrorNote error={member.error} />
@@ -253,10 +340,20 @@ export function MemberPage() {
   return (
     <>
       <MemberHeader member={m} onChange={member.reload} />
-      <h2 className="mb-3 mt-6 font-display text-lg font-bold text-ink-900">Posts</h2>
+      <h2 id="posts" className="mb-3 mt-6 scroll-mt-20 font-display text-lg font-bold text-ink-900">
+        Posts
+      </h2>
       {posts.loading && !posts.data && <Loading label="Loading posts…" />}
       {posts.error !== null && <ErrorNote error={posts.error} />}
-      {posts.data && posts.data.length === 0 && <Message tone="info">{m.isMe ? "You haven't posted yet." : `${m.displayName} hasn't posted yet.`}</Message>}
+      {posts.data && posts.data.length === 0 && (
+        <Message tone="info">
+          {m.isMe
+            ? "You haven't posted yet. Use Create to share your first post."
+            : m.followedByMe
+              ? `${m.displayName} hasn't posted yet. When they do, it will appear on your Home feed.`
+              : `${m.displayName} hasn't posted yet. Follow them to see their posts on Home when they do.`}
+        </Message>
+      )}
       {posts.data && posts.data.length > 0 && (
         <PostList
           posts={posts.data}
@@ -301,7 +398,7 @@ function MemberHeader({ member, onChange }: { member: Member; onChange: () => Pr
             Edit your profile
           </Link>
         ) : (
-          <RelationshipButtons member={member} onChange={onChange} size="md" />
+          <RelationshipButtons member={member} onChange={onChange} size="md" postsHref={member.postCount > 0 ? '#posts' : undefined} />
         )}
       </div>
     </Card>

@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Heart, MessageCircle, Trash2, Users } from 'lucide-react'
+import { Check, Heart, MessageCircle, Trash2, Users } from 'lucide-react'
 import { Avatar, Card, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
@@ -241,19 +241,27 @@ export function TextComposer({
  * the Clique: that's a separate, deliberate choice, and only for people you
  * follow. Removing from the Clique never unfollows. When the Clique is full,
  * it links to the Clique page to choose who to replace.
+ *
+ * Right after a follow, a short confirmation offers the next steps: add them to
+ * your Clique, or see their posts (postsHref). While it shows, its "Add to
+ * Clique" replaces the one in the button row, so there is only ever one.
  */
 export function RelationshipButtons({
   member,
   onChange,
   size = 'sm',
+  postsHref,
 }: {
   member: { id: string; displayName: string; followedByMe: boolean; inMyClique: boolean }
   onChange: () => void | Promise<void>
   size?: 'sm' | 'md'
+  /** Where "See their posts" goes: a route (`/app/u/name#posts`) or an in-page anchor (`#posts`). Omit to hide it. */
+  postsHref?: string
 }) {
   const api = useAppApi()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const [justFollowed, setJustFollowed] = useState(false)
 
   async function run(action: () => Promise<void>) {
     if (busy) return
@@ -269,6 +277,19 @@ export function RelationshipButtons({
     }
   }
 
+  const prompt = justFollowed && member.followedByMe
+  const addToClique = (className: string) => (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => run(() => api.cliqueAdd(member.id))}
+      aria-label={`Add ${member.displayName} to your Clique`}
+      className={className}
+    >
+      <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique
+    </button>
+  )
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -276,7 +297,12 @@ export function RelationshipButtons({
           <button
             type="button"
             disabled={busy}
-            onClick={() => run(() => api.unfollow(member.id))}
+            onClick={() =>
+              run(async () => {
+                await api.unfollow(member.id)
+                setJustFollowed(false)
+              })
+            }
             aria-label={`Unfollow ${member.displayName}`}
             className={buttonClass('secondary', size)}
           >
@@ -286,7 +312,12 @@ export function RelationshipButtons({
           <button
             type="button"
             disabled={busy}
-            onClick={() => run(() => api.follow(member.id))}
+            onClick={() =>
+              run(async () => {
+                await api.follow(member.id)
+                setJustFollowed(true)
+              })
+            }
             aria-label={`Follow ${member.displayName}`}
             className={buttonClass('primary', size)}
           >
@@ -305,16 +336,37 @@ export function RelationshipButtons({
               <Users className="h-4 w-4" aria-hidden="true" /> In your Clique
             </button>
           ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => run(() => api.cliqueAdd(member.id))}
-              aria-label={`Add ${member.displayName} to your Clique`}
-              className={buttonClass('secondary', size)}
-            >
-              <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique
-            </button>
+            !prompt && addToClique(buttonClass('secondary', size))
           ))}
+      </div>
+      <div aria-live="polite">
+        {prompt && (
+          <div data-testid="follow-confirmation" className="rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-900 ring-1 ring-brand-100">
+            <p className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                You're following <strong>{member.displayName}</strong>. Their new posts will appear on Home, newest first.
+                {member.inMyClique ? ' They are in your Clique.' : ' Add them to your Clique to keep them close.'}
+              </span>
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {!member.inMyClique && addToClique(buttonClass('primary', 'sm'))}
+              {postsHref &&
+                (postsHref.startsWith('#') ? (
+                  <a href={postsHref} className={buttonClass('secondary', 'sm')}>
+                    See their posts
+                  </a>
+                ) : (
+                  <Link to={postsHref} className={buttonClass('secondary', 'sm')}>
+                    See their posts
+                  </Link>
+                ))}
+              <button type="button" onClick={() => setJustFollowed(false)} className={buttonClass('ghost', 'sm')}>
+                Not now
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       {error !== null && <ErrorNote error={error} />}
       {error instanceof AppApiError && error.code === 'clique_full' && (
