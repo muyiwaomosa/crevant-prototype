@@ -187,10 +187,19 @@ async function signInAndSetUp(page, email, username, displayName) {
   await signInAndSetUp(pageB, emailB, userB, 'Bee Fan')
   await pageB.getByText('Your feed is quiet').waitFor()
   check('B\'s feed is empty before following anyone', (await pageB.getByTestId('post').count()) === 0)
+  check('a new member sees the three first steps on Home', await pageB.getByText('Choose your Clique').isVisible())
   await pageB.getByRole('link', { name: 'Discover people' }).click()
   await pageB.getByLabel('Search people by name or username').fill(userA)
   await pageB.getByRole('button', { name: 'Search' }).click()
   await pageB.getByRole('button', { name: 'Follow Aye Teacher' }).click()
+  const confirmation = pageB.getByTestId('follow-confirmation')
+  await confirmation.waitFor()
+  check(
+    'after following, a confirmation offers Add to Clique and See their posts',
+    (await confirmation.getByRole('button', { name: 'Add Aye Teacher to your Clique' }).count()) === 1
+      && (await confirmation.getByRole('link', { name: 'See their posts' }).getAttribute('href')) === `/app/u/${userA}#posts`
+      && (await pageB.getByRole('button', { name: 'Add Aye Teacher to your Clique' }).count()) === 1,
+  )
   await pageB.getByRole('button', { name: 'Add Aye Teacher to your Clique' }).click()
   await pageB.getByRole('button', { name: 'Remove Aye Teacher from your Clique (you keep following them)' }).waitFor()
   check('following and joining the Clique are separate records', sql(`select (select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${idA}') || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${idA}' and removed_at is null)`) === '1|1')
@@ -399,6 +408,13 @@ async function signInAndSetUp(page, email, username, displayName) {
     check('no sideways scrolling on a phone', extra <= 0, `${extra}px`)
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 740 })
+      await page.goto(`${APP}/app/discover`)
+      await page.getByRole('search').waitFor()
+      await page.getByRole('listitem').first().waitFor()
+      const discoverSideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      const discoverClipped = await page.evaluate(() => [...document.querySelectorAll('main button, main a')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.left < 0 || r.right > document.documentElement.clientWidth) }).length)
+      check(`at ${width}px, Discover has no sideways scrolling or clipped controls`, discoverSideways <= 0 && discoverClipped === 0, `${discoverSideways}px, ${discoverClipped} clipped`)
+      await page.screenshot({ path: `${process.env.SCREENSHOT_DIR || '/tmp'}/discover-${width}.png`, fullPage: false })
       await page.goto(`${APP}/app/clique`)
       await page.getByRole('region', { name: 'Following' }).waitFor()
       const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
