@@ -287,11 +287,18 @@ describe('Turnstile verification', () => {
     expect(url).toBe('https://challenges.cloudflare.com/turnstile/v0/siteverify')
     const form = init.body as URLSearchParams
     expect([form.get('secret'), form.get('response'), form.get('remoteip')]).toEqual(['sec', 'tok', '203.0.113.7'])
-    expect(await verifyWithCloudflare('tok', null, '', f as unknown as typeof fetch)).toEqual({ success: false })
+    expect(await verifyWithCloudflare('tok', null, '', f as unknown as typeof fetch)).toEqual({ success: false, errorCodes: ['no-secret'] })
   })
-  it("keeps only Cloudflare's documented error codes", async () => {
-    const f = vi.fn(async () => new Response(JSON.stringify({ success: false, 'error-codes': ['invalid-input-secret', '<script>', 'maya@example.com', 42] }), { status: 200 }))
-    expect((await verifyWithCloudflare('tok', null, 'sec', f as unknown as typeof fetch)).errorCodes).toEqual(['invalid-input-secret'])
+  it('passes on only values shaped like Cloudflare codes, and says when the reply was an HTTP error', async () => {
+    const token = '0.' + 'Ab9_-'.repeat(60)
+    const f = vi.fn(async () => new Response(JSON.stringify({ success: false, 'error-codes': ['invalid-input-secret', 'invalid-widget-id', '<script>', 'maya@example.com', 42, token, 'a'.repeat(41)] }), { status: 200 }))
+    expect((await verifyWithCloudflare(token, null, 'sec', f as unknown as typeof fetch)).errorCodes).toEqual([
+      'invalid-input-secret', 'invalid-widget-id', 'unrecognized', 'unrecognized', 'unrecognized', 'unrecognized', 'unrecognized',
+    ])
+    const empty = vi.fn(async () => new Response(JSON.stringify({ success: false, 'error-codes': [] }), { status: 200 }))
+    expect((await verifyWithCloudflare('tok', null, 'sec', empty as unknown as typeof fetch)).errorCodes).toEqual([])
+    const http = vi.fn(async () => new Response('nope', { status: 403 }))
+    expect(await verifyWithCloudflare('tok', null, 'sec', http as unknown as typeof fetch)).toEqual({ success: false, errorCodes: ['http-403'] })
   })
 
   it('records why verification failed for the log only, never in the reply', async () => {

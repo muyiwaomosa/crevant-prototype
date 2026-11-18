@@ -70,15 +70,21 @@ export interface TurnstileResult {
   success: boolean
   hostname?: string
   action?: string
-  /** Cloudflare's documented error codes only (TURNSTILE_ERROR_CODES), for the log. */
+  /**
+   * For the log only: Cloudflare's error codes (only values shaped like its
+   * codes, see TURNSTILE_CODE), or http-<status> when siteverify answered
+   * with an HTTP error, or no-secret.
+   */
   errorCodes?: string[]
 }
 
-/** Cloudflare's documented siteverify error codes. Anything else is dropped, so nothing a visitor sends reaches the log. */
-export const TURNSTILE_ERROR_CODES = [
-  'missing-input-secret', 'invalid-input-secret', 'missing-input-response', 'invalid-input-response',
-  'bad-request', 'timeout-or-duplicate', 'internal-error',
-] as const
+/**
+ * The shape of Cloudflare's siteverify error codes, for example
+ * invalid-input-secret or invalid-widget-id: short, lowercase, hyphenated.
+ * A token (long), an email (@ and .) or a key can't match, so nothing else
+ * can reach the log; anything that doesn't match is counted as "unrecognized".
+ */
+export const TURNSTILE_CODE = /^[a-z][a-z0-9-]{0,39}$/
 
 export interface RateKeys {
   emailKey: string
@@ -474,18 +480,18 @@ export async function verifyWithCloudflare(
   secret: string,
   fetchImpl: typeof fetch,
 ): Promise<TurnstileResult> {
-  if (!secret) return { success: false }
+  if (!secret) return { success: false, errorCodes: ['no-secret'] }
   const form = new URLSearchParams({ secret, response: token })
   if (ip) form.set('remoteip', ip)
   const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form })
-  if (!res.ok) return { success: false }
+  if (!res.ok) return { success: false, errorCodes: [`http-${res.status}`] }
   const data = (await res.json()) as { success?: unknown; hostname?: unknown; action?: unknown; 'error-codes'?: unknown }
   const codes = Array.isArray(data['error-codes']) ? data['error-codes'] : []
   return {
     success: data.success === true,
     hostname: typeof data.hostname === 'string' ? data.hostname : undefined,
     action: typeof data.action === 'string' ? data.action : undefined,
-    errorCodes: codes.filter((c): c is string => (TURNSTILE_ERROR_CODES as readonly unknown[]).includes(c)),
+    errorCodes: codes.map((c) => (typeof c === 'string' && TURNSTILE_CODE.test(c) ? c : 'unrecognized')),
   }
 }
 
