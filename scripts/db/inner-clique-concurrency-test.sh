@@ -97,3 +97,37 @@ if grep -q ERROR <<<"$FIRST" || ! grep -q not_following <<<"$SECOND" || [ "$(is_
   echo "FAIL: a replacement after an unfollow: first '$FIRST', second '$SECOND', $(open_count) open" >&2; exit 1
 fi
 echo "PASS: an unfollow and a replacement racing each other never leave a membership without a follow"
+
+# 6. At the rate limit boundary: member ...836 has 118 changes, and two
+#    replacements (two changes each) arrive at once. The per-member lock makes
+#    the second count after the first: one applies (120), the other is refused.
+R=00000000-0000-4000-8000-000000000836
+as_r() {
+  psql "$DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 2>&1 <<SQL || true
+begin;
+select set_config('request.jwt.claims', '{"sub":"$R","role":"authenticated"}', true) \\gset ignored_
+set local role authenticated;
+$1;
+commit;
+SQL
+}
+as_r "do \$\$ begin
+  for i in 802..806 loop perform public.app_follow(('00000000-0000-4000-8000-000000000' || i)::uuid); end loop;
+  perform public.app_clique_add('$(c 803)');
+  perform public.app_clique_add('$(c 804)');
+  for i in 1..58 loop perform public.app_clique_add('$(c 802)'); perform public.app_clique_remove('$(c 802)'); end loop;
+end \$\$" > /dev/null
+changes() { db "select count(*) filter (where added_at > now() - interval '1 hour') + count(*) filter (where removed_at > now() - interval '1 hour' and removal_reason in ('removed', 'replaced')) from social.clique_members where fan_id = '$R'"; }
+[ "$(changes)" = 118 ] || { echo "FAIL: boundary setup expected 118 changes, found $(changes)" >&2; exit 1; }
+tmp=$(mktemp)
+as_r "select public.app_clique_replace('$(c 803)', '$(c 805)'); select pg_sleep(2)" > "$tmp" &
+pid=$!
+sleep 0.5
+SECOND=$(as_r "select public.app_clique_replace('$(c 804)', '$(c 806)')")
+wait "$pid"
+FIRST=$(cat "$tmp"); rm -f "$tmp"
+open_r=$(db "select string_agg(right(creator_id::text, 3), ',' order by creator_id) from social.clique_members where fan_id = '$R' and removed_at is null")
+if grep -q ERROR <<<"$FIRST" || ! grep -q rate_limited <<<"$SECOND" || [ "$(changes)" != 120 ] || [ "$open_r" != "804,805" ]; then
+  echo "FAIL: two replacements at 118 changes: first '$FIRST', second '$SECOND', $(changes) changes, open $open_r" >&2; exit 1
+fi
+echo "PASS: two simultaneous replacements at 118 changes: one applies (reaching 120), the other is refused (rate_limited) and changes nothing"

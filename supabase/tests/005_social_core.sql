@@ -144,9 +144,11 @@ begin
     raise exception 'FAIL: the Inner Clique limit is not 25';
   end if;
   if (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname = 'public' and p.proname in ('app_clique_add', 'app_clique_remove', 'app_clique_replace')
-        and p.prosrc ~ 'rate_check\(''clique''') <> 3
-     or not exists (select 1 from pg_proc where oid = 'social.rate_check(text, uuid)'::regprocedure and prosrc ~ 'p_kind = ''clique''') then
+      where n.nspname = 'public' and p.proname in ('app_clique_add', 'app_clique_remove')
+        and p.prosrc ~ 'rate_check\(''clique''') <> 2
+     or not exists (select 1 from pg_proc where oid = 'public.app_clique_replace(uuid, uuid)'::regprocedure and prosrc ~ 'rate_check\(''clique_replace''')
+     or not exists (select 1 from pg_proc where oid = 'social.rate_check(text, uuid)'::regprocedure
+                    and prosrc ~ '''clique_replace''' and prosrc ~ 'v_cost := 2' and prosrc ~ 'n \+ v_cost > v_limit') then
     raise exception 'FAIL: Inner Clique add, remove and replace are not all rate limited';
   end if;
   raise notice 'PASS: the Clique and history guards are in place, and Inner Clique changes are rate limited';

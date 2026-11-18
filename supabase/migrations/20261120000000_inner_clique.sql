@@ -18,11 +18,16 @@
 --     follow. Its behaviour is otherwise unchanged.
 --   * removal_reason allows 'replaced' alongside 'removed' and 'unfollowed'.
 --   * Inner Clique changes are rate limited through the existing
---     social.rate_check: at most 120 an hour per member, counting each
---     membership opened, and each one closed by removing or replacing (a
---     replacement is two). Unfollowing is limited by the follow limit instead.
---     Requests that change nothing (adding someone already there, removing
---     someone who isn't) don't count. A refused request changes nothing.
+--     social.rate_check (same signature): at most 120 an hour per member,
+--     counting each membership opened, and each one closed by removing or
+--     replacing. Kind 'clique' is one change (add, remove); kind
+--     'clique_replace' is two. A request is refused when it would take the
+--     member past 120, so a replacement at 119 is refused and at 118 it is
+--     allowed (reaching 120). The other limits are unchanged: their cost is
+--     one, so "past the limit" is the same as before. Unfollowing is limited by
+--     the follow limit instead. Requests that change nothing (adding someone
+--     already there, removing someone who isn't) don't count. A refused
+--     request changes nothing.
 --
 -- Inner Clique changes presentation priority only. It never changes feed
 -- ordering, and records no Connection Points, rewards or money.
@@ -54,7 +59,9 @@ comment on function social.clique_members_guard() is 'An Inner Clique membership
 -- The rate limit counts a member's recent history rows.
 create index clique_by_fan_recent on social.clique_members (fan_id, added_at);
 
--- The existing rate limits, plus Inner Clique changes.
+-- The existing rate limits, plus Inner Clique changes. A request is refused
+-- if it would take the member past the limit: existing + this request's cost.
+-- Every kind costs one change except 'clique_replace', which costs two.
 create or replace function social.rate_check(p_kind text, p_user uuid)
 returns void
 language plpgsql
@@ -65,6 +72,7 @@ as $$
 declare
   n int;
   v_limit int;
+  v_cost int := 1;
 begin
   if p_kind = 'post' then
     select count(*) into n from social.posts where author_id = p_user and created_at > pg_catalog.now() - interval '1 hour';
@@ -75,17 +83,20 @@ begin
   elsif p_kind = 'follow' then
     select count(*) into n from social.follow_events where follower_id = p_user and occurred_at > pg_catalog.now() - interval '1 hour';
     v_limit := 120;
-  elsif p_kind = 'clique' then
+  elsif p_kind in ('clique', 'clique_replace') then
     select count(*) filter (where c.added_at > pg_catalog.now() - interval '1 hour')
          + count(*) filter (where c.removed_at > pg_catalog.now() - interval '1 hour' and c.removal_reason in ('removed', 'replaced'))
       into n
     from social.clique_members c
     where c.fan_id = p_user and (c.added_at > pg_catalog.now() - interval '1 hour' or c.removed_at > pg_catalog.now() - interval '1 hour');
     v_limit := 120;
+    if p_kind = 'clique_replace' then
+      v_cost := 2; -- closes one membership and opens another
+    end if;
   else
     raise exception 'unknown rate limit %', p_kind;
   end if;
-  if n >= v_limit then
+  if n + v_cost > v_limit then
     raise exception 'rate_limited' using errcode = 'P0001', detail = 'Please slow down and try again later.';
   end if;
 end;
@@ -188,7 +199,7 @@ begin
   if not exists (select 1 from social.follows where follower_id = v_uid and creator_id = p_add) then
     raise exception 'not_following' using errcode = 'P0001';
   end if;
-  perform social.rate_check('clique', v_uid);
+  perform social.rate_check('clique_replace', v_uid); -- two changes
   update social.clique_members set removed_at = pg_catalog.now(), removal_reason = 'replaced'
   where fan_id = v_uid and creator_id = p_remove and removed_at is null;
   insert into social.clique_members (fan_id, creator_id) values (v_uid, p_add);

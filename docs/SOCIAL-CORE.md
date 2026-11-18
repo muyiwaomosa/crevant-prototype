@@ -120,7 +120,7 @@ table). Every existing follow and membership is kept as it is.
 | Removing from the Inner Clique never unfollows | `app_clique_remove` only closes the membership (`removed`). |
 | Unfollowing removes Inner Clique membership | `app_unfollow` closes it (`unfollowed`), now under the same per-member lock as add and replace, so it can't race them. |
 | At 25, a new creator replaces one the member chooses | `app_clique_replace(p_remove, p_add)`: checks, closes the old membership (`replaced`) and opens the new one in one transaction, under the per-member lock. Any failure changes nothing. The replaced creator stays followed. |
-| At most 120 Inner Clique changes an hour | The existing `social.rate_check`, new kind `clique`, called by add, remove and replace after their checks. It counts memberships opened, and those closed by removing or replacing, in the last hour (a replacement is two). Requests that change nothing (adding someone already there, removing someone who isn't) are not counted. A refused request (`rate_limited`) changes nothing. Unfollowing is covered by the follow limit (120 an hour), so it is never blocked by Inner Clique activity. The index `clique_by_fan_recent` keeps the count cheap. |
+| At most 120 Inner Clique changes an hour | The existing `social.rate_check(text, uuid)` (same signature), called by add, remove and replace after their checks. It counts memberships opened, and those closed by removing or replacing, in the last rolling hour. Add and remove pass kind `clique` (one change); replace passes `clique_replace` (two changes). A request is refused when the existing changes plus its own would go past 120: a replacement at 118 is allowed (reaching 120), at 119 it is refused, while a single add or remove at 119 is still allowed. The other limits (posts, comments, follows) cost one, so they behave exactly as before. Requests that change nothing (adding someone already there, removing someone who isn't) are not counted. A refused request (`rate_limited`) changes nothing. Unfollowing is covered by the follow limit (120 an hour), so it is never blocked by Inner Clique activity. The index `clique_by_fan_recent` keeps the count cheap. |
 
 Errors: `not_in_clique`, `already_in_clique`, `not_following`,
 `cannot_add_self`, `clique_full`, `rate_limited`. Signed-in members only, like every other
@@ -166,10 +166,13 @@ cap, replace, every failed replace changing nothing, a replace failing at its
 last step changing nothing, removal keeping the follow, unfollow closing the
 membership, anonymous refusal, the rate limit refusing add, remove and
 replace without changing anything while follow and unfollow keep working,
-and the one-hour window), `scripts/db/inner-clique-concurrency-test.sh`
+the one-hour window, and the boundary: a replacement allowed at 118 and
+refused at 119 without changing memberships or history, a single add still
+allowed at 119, and the follow limit unchanged), `scripts/db/inner-clique-concurrency-test.sh`
 (two real sessions: same creator replaced twice, two different replacements,
 the same creator brought in twice, an add racing a replace at 25, unfollow
-racing a replace), `src/app/app.test.tsx` (the page, the dialog, keyboard use,
+racing a replace, and two replacements at once at 118 changes: one applies,
+the other is refused), `src/app/app.test.tsx` (the page, the dialog, keyboard use,
 a refused replacement kept open and retried, a stale choice refreshed, a
 place opening up, an unfollow elsewhere), and `e2e/social-journey.e2e.cjs`
 (27 follows, the 26th refused, a real replacement in the browser, a stale

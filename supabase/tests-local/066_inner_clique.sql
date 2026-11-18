@@ -7,15 +7,17 @@
 -- scripts/db/rollback-inner-clique-test.sh (rolls back and reapplies with data).
 --
 -- Members: F = ...801 (the fan), creators ...802 to ...830 (29), O = ...831,
--- R = ...832 (a second fan, for the rate limit), ...833 (followed by R only).
+-- R = ...832 (a second fan, for the rate limit), ...833 (followed by R only),
+-- ...834 and ...835 (the replacement boundary), ...836 (the concurrency script's
+-- boundary race).
 
 set role supabase_auth_admin;
 insert into auth.users (id, email, email_confirmed_at)
 select ('00000000-0000-4000-8000-000000000' || n::text)::uuid, 'inner' || n || '@example.test', now()
-from generate_series(801, 833) as n;
+from generate_series(801, 836) as n;
 reset role;
 update public.profiles p set username = 'inner_' || right(p.id::text, 3), display_name = 'Inner ' || right(p.id::text, 3)
-where p.id::text between '00000000-0000-4000-8000-000000000801' and '00000000-0000-4000-8000-000000000833';
+where p.id::text between '00000000-0000-4000-8000-000000000801' and '00000000-0000-4000-8000-000000000836';
 
 create function pg_temp.expect_error_ic(sql text, expected text, what text)
 returns void
@@ -360,5 +362,132 @@ begin
     raise exception 'FAIL: changes older than an hour still counted against the limit';
   end if;
   raise notice 'PASS: Inner Clique changes older than an hour no longer count against the limit';
+end $$;
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- 12. The boundary: a request is refused when it would go past 120. Add and
+--     remove are one change, a replacement is two.
+--     ...834: 118 changes, then a replacement is allowed (reaching 120).
+--     ...835: 119 changes, then a replacement is refused, changing nothing;
+--             a single add is still allowed (reaching 120), then refused.
+create function pg_temp.changes(fan uuid) returns int language sql as $$
+  select (count(*) filter (where added_at > now() - interval '1 hour')
+        + count(*) filter (where removed_at > now() - interval '1 hour' and removal_reason in ('removed', 'replaced')))::int
+  from social.clique_members where fan_id = fan
+$$;
+create function pg_temp.history(fan uuid) returns text language sql as $$
+  select coalesce(string_agg(creator_id || ':' || (removed_at is null) || ':' || coalesce(removal_reason, '-'), ',' order by id), '')
+  from social.clique_members where fan_id = fan
+$$;
+
+-- Builds up exactly p_changes changes for the signed-in member, leaving ...803 in their Inner Clique.
+create function pg_temp.build_changes(p_changes int) returns void language plpgsql as $$
+begin
+  for i in 802..806 loop
+    perform public.app_follow(pg_temp.c(i));
+  end loop;
+  perform public.app_clique_add(pg_temp.c(803));          -- 1
+  for i in 1..(p_changes - 1) / 2 loop                    -- 2 each
+    perform public.app_clique_add(pg_temp.c(802));
+    perform public.app_clique_remove(pg_temp.c(802));
+  end loop;
+  if (p_changes - 1) % 2 = 1 then
+    perform public.app_clique_add(pg_temp.c(804));        -- 1 more, to make it odd
+  end if;
+end;
+$$;
+grant execute on function pg_temp.build_changes(int) to authenticated;
+
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000834","role":"authenticated"}', true);
+set local role authenticated;
+select pg_temp.build_changes(118);
+reset role;
+do $$
+begin
+  if pg_temp.changes('00000000-0000-4000-8000-000000000834') <> 118 then
+    raise exception 'FAIL: setup expected 118 changes, found %', pg_temp.changes('00000000-0000-4000-8000-000000000834');
+  end if;
+end $$;
+set local role authenticated;
+do $$
+begin
+  perform public.app_clique_replace(pg_temp.c(803), pg_temp.c(805));
+  if not (select in_my_clique from public.app_following() where id = pg_temp.c(805))
+     or (select in_my_clique from public.app_following() where id = pg_temp.c(803)) then
+    raise exception 'FAIL: a replacement at 118 changes should be allowed';
+  end if;
+  raise notice 'PASS: at 118 changes, a replacement (two changes) is allowed and reaches 120';
+  perform pg_temp.expect_error_ic('select public.app_clique_add(pg_temp.c(806))', 'rate_limited', 'an add at 120 changes');
+  perform pg_temp.expect_error_ic('select public.app_clique_remove(pg_temp.c(805))', 'rate_limited', 'a remove at 120 changes');
+end $$;
+reset role;
+do $$
+begin
+  if pg_temp.changes('00000000-0000-4000-8000-000000000834') <> 120 then
+    raise exception 'FAIL: expected exactly 120 changes, found %', pg_temp.changes('00000000-0000-4000-8000-000000000834');
+  end if;
+  raise notice 'PASS: at 120 changes, add and remove are refused, and the count never goes past 120';
+end $$;
+commit;
+
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000835","role":"authenticated"}', true);
+set local role authenticated;
+select pg_temp.build_changes(119);
+reset role;
+create temp table boundary_before on commit drop as
+  select pg_temp.changes('00000000-0000-4000-8000-000000000835') as n, pg_temp.history('00000000-0000-4000-8000-000000000835') as h;
+do $$
+begin
+  if (select n from boundary_before) <> 119 then
+    raise exception 'FAIL: setup expected 119 changes, found %', (select n from boundary_before);
+  end if;
+end $$;
+set local role authenticated;
+do $$
+begin
+  perform pg_temp.expect_error_ic('select public.app_clique_replace(pg_temp.c(803), pg_temp.c(805))', 'rate_limited', 'a replacement at 119 changes');
+end $$;
+reset role;
+do $$
+begin
+  if pg_temp.history('00000000-0000-4000-8000-000000000835') <> (select h from boundary_before)
+     or pg_temp.changes('00000000-0000-4000-8000-000000000835') <> 119 then
+    raise exception 'FAIL: a replacement refused at 119 changes changed memberships or history';
+  end if;
+  raise notice 'PASS: at 119 changes, a replacement (two changes) is refused, and memberships and history are unchanged';
+end $$;
+set local role authenticated;
+do $$
+begin
+  perform public.app_clique_add(pg_temp.c(806));
+  perform pg_temp.expect_error_ic('select public.app_clique_add(pg_temp.c(802))', 'rate_limited', 'an add at 120 changes');
+  perform pg_temp.expect_error_ic('select public.app_clique_replace(pg_temp.c(803), pg_temp.c(802))', 'rate_limited', 'a replacement at 120 changes');
+end $$;
+reset role;
+do $$
+begin
+  if pg_temp.changes('00000000-0000-4000-8000-000000000835') <> 120 then
+    raise exception 'FAIL: expected exactly 120 changes, found %', pg_temp.changes('00000000-0000-4000-8000-000000000835');
+  end if;
+  raise notice 'PASS: at 119 changes a single add (one change) is still allowed, reaching 120; then everything is refused';
+end $$;
+commit;
+
+-- 13. The other limits are unchanged: their cost is one, so the last allowed
+--     request is still the limit itself (here, the 120th follow change).
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000836","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  for i in 1..60 loop
+    perform public.app_follow(pg_temp.c(802));
+    perform public.app_unfollow(pg_temp.c(802));
+  end loop;                                                -- 120 follow changes
+  perform pg_temp.expect_error_ic('select public.app_follow(pg_temp.c(802))', 'rate_limited', 'a 121st follow change');
+  raise notice 'PASS: the follow limit is unchanged: 120 follow changes are allowed, the 121st is refused';
 end $$;
 rollback;
