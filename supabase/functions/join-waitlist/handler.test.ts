@@ -299,6 +299,12 @@ describe('Turnstile verification', () => {
     expect((await verifyWithCloudflare('tok', null, 'sec', empty as unknown as typeof fetch)).errorCodes).toEqual([])
     const http = vi.fn(async () => new Response('nope', { status: 403 }))
     expect(await verifyWithCloudflare('tok', null, 'sec', http as unknown as typeof fetch)).toEqual({ success: false, errorCodes: ['http-403'] })
+    // An HTTP error with Cloudflare's JSON body: the status and its codes, through the same filter.
+    const bad = vi.fn(async () => new Response(JSON.stringify({ success: false, 'error-codes': ['invalid-input-secret', 'maya@example.com'] }), { status: 400 }))
+    expect(await verifyWithCloudflare('tok', null, 'sec', bad as unknown as typeof fetch)).toEqual({ success: false, errorCodes: ['http-400', 'invalid-input-secret', 'unrecognized'] })
+    // An HTTP error is never a success, whatever the body says.
+    const odd = vi.fn(async () => new Response(JSON.stringify({ success: true, hostname: 'crevant.example', action: 'join' }), { status: 400 }))
+    expect((await verifyWithCloudflare('tok', null, 'sec', odd as unknown as typeof fetch)).success).toBe(false)
   })
 
   it('records why verification failed for the log only, never in the reply', async () => {
