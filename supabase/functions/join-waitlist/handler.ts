@@ -70,7 +70,15 @@ export interface TurnstileResult {
   success: boolean
   hostname?: string
   action?: string
+  /** Cloudflare's documented error codes only (TURNSTILE_ERROR_CODES), for the log. */
+  errorCodes?: string[]
 }
+
+/** Cloudflare's documented siteverify error codes. Anything else is dropped, so nothing a visitor sends reaches the log. */
+export const TURNSTILE_ERROR_CODES = [
+  'missing-input-secret', 'invalid-input-secret', 'missing-input-response', 'invalid-input-response',
+  'bad-request', 'timeout-or-duplicate', 'internal-error',
+] as const
 
 export interface RateKeys {
   emailKey: string
@@ -106,6 +114,8 @@ export interface Outgoing {
   status: number
   headers: Record<string, string>
   body: string
+  /** Why Turnstile verification failed, for the function's log only. Never sent to the visitor. Fixed labels and Cloudflare codes only. */
+  logNote?: string
 }
 
 const MAX_BODY_BYTES = 4096
@@ -216,22 +226,22 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
   if (typeof body.website === 'string' && body.website.trim() !== '') return reply(200, 'ok', origin)
 
   const token = typeof body.turnstileToken === 'string' ? body.turnstileToken : ''
-  if (!token || token.length > 2048) return reply(400, 'verification_failed', origin)
+  if (!token || token.length > 2048) return { ...reply(400, 'verification_failed', origin), logNote: token ? 'token_too_long' : 'no_token' }
   let verified: TurnstileResult
   try {
     // Cloudflare's optional remoteip takes a full address, not a /64 network.
     verified = await deps.verifyTurnstile(token, req.ip && !req.ip.includes('/') ? req.ip : null)
   } catch {
-    return reply(502, 'error', origin)
+    return { ...reply(502, 'error', origin), logNote: 'siteverify_unreachable' }
   }
-  if (
-    !verified.success ||
-    !verified.hostname ||
-    !deps.allowedHostnames.includes(verified.hostname) ||
-    verified.action !== TURNSTILE_ACTION
-  ) {
-    return reply(400, 'verification_failed', origin)
-  }
+  const failure = !verified.success
+    ? `cloudflare_rejected:${(verified.errorCodes ?? []).join(',') || 'no_code'}`
+    : !verified.hostname || !deps.allowedHostnames.includes(verified.hostname)
+      ? 'hostname_not_allowed'
+      : verified.action !== TURNSTILE_ACTION
+        ? 'action_mismatch'
+        : null
+  if (failure) return { ...reply(400, 'verification_failed', origin), logNote: failure }
 
   const email = typeof body.email === 'string' ? normaliseEmail(body.email) : ''
   let keys: RateKeys
@@ -469,11 +479,13 @@ export async function verifyWithCloudflare(
   if (ip) form.set('remoteip', ip)
   const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form })
   if (!res.ok) return { success: false }
-  const data = (await res.json()) as { success?: unknown; hostname?: unknown; action?: unknown }
+  const data = (await res.json()) as { success?: unknown; hostname?: unknown; action?: unknown; 'error-codes'?: unknown }
+  const codes = Array.isArray(data['error-codes']) ? data['error-codes'] : []
   return {
     success: data.success === true,
     hostname: typeof data.hostname === 'string' ? data.hostname : undefined,
     action: typeof data.action === 'string' ? data.action : undefined,
+    errorCodes: codes.filter((c): c is string => (TURNSTILE_ERROR_CODES as readonly unknown[]).includes(c)),
   }
 }
 
