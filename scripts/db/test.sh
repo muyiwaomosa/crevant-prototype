@@ -63,6 +63,12 @@ scripts/db/request-ids-concurrency-test.sh
 # Two real sessions at once: Inner Clique changes stay within 25, never duplicated.
 scripts/db/inner-clique-concurrency-test.sh
 
+# Two real sessions at once: each viewed post is recorded once, and the hourly cap holds.
+scripts/db/viewed-state-concurrency-test.sh
+
+# Real query plans and timings for viewed state at pilot scale (no sequential scans).
+scripts/db/viewed-state-plan-test.sh
+
 # Negative checks: each file applies one deliberate violation inside a
 # transaction that is always rolled back. The profile, ops and waitlist checks
 # must then fail with a "FAIL:" message, proving they would catch it. (Only

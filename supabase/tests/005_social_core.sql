@@ -25,7 +25,7 @@ begin
       raise exception 'FAIL: role % can use schema social', r;
     end if;
   end loop;
-  foreach t in array array['social.posts', 'social.follows', 'social.follow_events', 'social.clique_members', 'social.likes', 'social.comments'] loop
+  foreach t in array array['social.posts', 'social.follows', 'social.follow_events', 'social.clique_members', 'social.likes', 'social.comments', 'social.post_views'] loop
     if not (select relrowsecurity from pg_class where oid = t::regclass) then
       raise exception 'FAIL: row level security is off on %', t;
     end if;
@@ -41,7 +41,7 @@ begin
   if exists (
     select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'social' and c.relkind in ('r', 'p')
-      and c.relname not in ('posts', 'follows', 'follow_events', 'clique_members', 'likes', 'comments')
+      and c.relname not in ('posts', 'follows', 'follow_events', 'clique_members', 'likes', 'comments', 'post_views')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -56,9 +56,9 @@ declare
   expected text[] := array[
     -- app_add_comment and app_create_post have two versions each: the original,
     -- and the one with a request id (20261119000000_publishing_request_ids).
-    'app_add_comment', 'app_add_comment', 'app_clique_add', 'app_clique_remove', 'app_clique_replace', 'app_comments',
+    'app_add_comment', 'app_add_comment', 'app_catch_up', 'app_clique_add', 'app_clique_remove', 'app_clique_replace', 'app_comments',
     'app_create_post', 'app_create_post', 'app_delete_comment', 'app_delete_post', 'app_discover', 'app_feed', 'app_follow', 'app_following',
-    'app_like', 'app_me', 'app_member', 'app_member_posts', 'app_post', 'app_unfollow', 'app_unlike'
+    'app_like', 'app_mark_viewed', 'app_me', 'app_member', 'app_member_posts', 'app_post', 'app_unfollow', 'app_unlike', 'app_unseen_creators'
   ];
   found text[];
 begin
@@ -112,7 +112,7 @@ begin
     end if;
   end loop;
   if (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'social')
-     <> array['clique_members_guard', 'current_member', 'history_is_append_only', 'is_member', 'rate_check'] then
+     <> array['clique_members_guard', 'current_member', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check'] then
     raise exception 'FAIL: the social helper and trigger functions are not the approved set (found %)', n;
   end if;
   raise notice 'PASS: social helpers and triggers are not callable by members';
@@ -152,6 +152,32 @@ begin
     raise exception 'FAIL: Inner Clique add, remove and replace are not all rate limited';
   end if;
   raise notice 'PASS: the Clique and history guards are in place, and Inner Clique changes are rate limited';
+end $$;
+
+-- 4b. Viewed state: one row per member and post, permanent, bounded, never a reward signal.
+do $$
+declare
+  src text := (select prosrc from pg_proc where oid = 'public.app_mark_viewed(uuid[], text)'::regprocedure);
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'social.post_views'::regclass and contype = 'p'
+                 and pg_get_constraintdef(oid) = 'PRIMARY KEY (viewer_id, post_id)') then
+    raise exception 'FAIL: viewed state could record the same post twice for a member';
+  end if;
+  if not exists (select 1 from pg_trigger where tgname = 'post_views_permanent'
+                 and tgrelid = 'social.post_views'::regclass and tgenabled <> 'D') then
+    raise exception 'FAIL: viewed state is not protected from being rewritten';
+  end if;
+  if pg_catalog.strpos(src, 'cardinality(v_ids) > 50') = 0 or pg_catalog.strpos(src, 'v_recent + v_new > 3000') = 0
+     or pg_catalog.strpos(src, 'pg_advisory_xact_lock') = 0 or pg_catalog.strpos(src, 'on conflict (viewer_id, post_id) do nothing') = 0 then
+    raise exception 'FAIL: app_mark_viewed lost its batch cap, hourly cap, lock or duplicate guard';
+  end if;
+  if pg_catalog.strpos((select prosrc from pg_proc where oid = 'public.app_catch_up(uuid, timestamptz, uuid)'::regprocedure), '(s.created_at, s.id) < (p_before_at, p_before_id)') = 0 then
+    raise exception 'FAIL: catch-up does not page on (created_at, id)';
+  end if;
+  if pg_catalog.strpos((select prosrc from pg_proc where oid = 'public.app_unseen_creators()'::regprocedure), 's.created_at >= f.followed_at') = 0 then
+    raise exception 'FAIL: unseen counts include posts from before the follow';
+  end if;
+  raise notice 'PASS: viewed state is private, one row per member and post, permanent, and bounded';
 end $$;
 
 -- 5. No Connection Points, money, email or role in Release 1.
