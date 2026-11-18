@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, Modal, PageHeader, buttonClass } from '../components/ui'
@@ -518,7 +518,7 @@ export function CliquePage() {
               </ul>
             </section>
           )}
-          <ReplaceDialog adding={replacing} inner={inner} onClose={closeReplace} onDone={changed} />
+          <ReplaceDialog adding={replacing} all={all} onClose={closeReplace} onDone={changed} />
         </>
       )}
     </>
@@ -642,15 +642,21 @@ function FollowedRow({
   )
 }
 
-/** At 25: choose who the new creator replaces. One atomic change on the server. */
+/**
+ * At 25: choose who the new creator replaces. One atomic change on the server.
+ * If it fails (another tab or device changed things, or the server refused),
+ * the dialog stays open with the error, the list is refreshed, and the choice
+ * is kept while it is still valid. The dialog then follows the current state:
+ * room again means a plain add; already added or no longer followed says so.
+ */
 function ReplaceDialog({
   adding,
-  inner,
+  all,
   onClose,
   onDone,
 }: {
   adding: FollowedCreator | null
-  inner: FollowedCreator[]
+  all: FollowedCreator[]
   onClose: () => void
   onDone: (message: string) => Promise<void>
 }) {
@@ -658,70 +664,141 @@ function ReplaceDialog({
   const [choice, setChoice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const errorRef = useRef<HTMLDivElement>(null)
   const name = useId()
+  const inner = all.filter((f) => f.inMyClique)
+  const current = adding ? all.find((f) => f.id === adding.id) : undefined
+  const full = inner.length >= LIMITS.clique
 
   useEffect(() => {
     setChoice(null)
     setError(null)
   }, [adding])
+  // Keep the choice only while that creator is still in the Inner Clique.
+  useEffect(() => {
+    if (choice && !inner.some((f) => f.id === choice)) setChoice(null)
+  }, [choice, inner])
+  // Move focus to the error, so keyboard and screen reader users land on it.
+  useEffect(() => {
+    if (error !== null) errorRef.current?.focus()
+  }, [error])
 
-  async function confirm(e: FormEvent) {
-    e.preventDefault()
-    if (!adding || !choice || busy) return
-    const replaced = inner.find((f) => f.id === choice)
+  async function attempt(action: () => Promise<void>, message: string) {
+    if (busy) return
     setBusy(true)
     setError(null)
     try {
-      await api.cliqueReplace(choice, adding.id)
+      await action()
       onClose()
-      await onDone(`${adding.displayName} replaced ${replaced?.displayName ?? 'a creator'} in your Inner Clique. You still follow ${replaced?.displayName ?? 'them'}.`)
+      await onDone(message)
     } catch (err) {
-      // Nothing changed on the server; show the latest list so the choice is current.
+      // Nothing changed on the server; refresh so the dialog shows what is current.
       setError(err)
-      setChoice(null)
       await onDone('')
     } finally {
       setBusy(false)
     }
   }
 
-  return (
-    <Modal open={adding !== null} onClose={onClose} title="Your Inner Clique is full">
-      {adding && (
-        <form onSubmit={confirm}>
-          <fieldset>
-            <legend className="mb-3 text-sm text-ink-700">
-              Choose who <strong className="text-ink-900">{adding.displayName}</strong> replaces. The person you replace stays in My Clique, and you keep following them.
-            </legend>
-            <div className="max-h-[45dvh] space-y-1 overflow-y-auto">
-              {inner.map((f) => (
-                <label key={f.id} className="flex cursor-pointer items-center gap-3 rounded-2xl px-2 py-2 hover:bg-ink-50 has-[:checked]:bg-brand-50">
-                  <input
-                    type="radio"
-                    name={name}
-                    value={f.id}
-                    checked={choice === f.id}
-                    onChange={() => setChoice(f.id)}
-                    className="h-4 w-4 accent-brand-600"
-                  />
-                  <MemberAvatar member={f} size={32} />
-                  <span className="min-w-0 truncate text-sm font-semibold text-ink-900">{f.displayName}</span>
-                  <span className="ml-auto truncate text-[13px] text-ink-500">@{f.username}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          {error !== null && <ErrorNote error={error} />}
-          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button type="button" onClick={onClose} className={buttonClass('secondary')}>
-              Cancel
-            </button>
-            <button type="submit" disabled={!choice || busy} className={buttonClass('primary')}>
-              {busy ? 'Replacing…' : 'Replace'}
-            </button>
+  function confirm(e: FormEvent) {
+    e.preventDefault()
+    if (!adding || !choice) return
+    const replaced = inner.find((f) => f.id === choice)?.displayName ?? 'a creator'
+    void attempt(
+      () => api.cliqueReplace(choice, adding.id),
+      `${adding.displayName} replaced ${replaced} in your Inner Clique. You still follow ${replaced}.`,
+    )
+  }
+
+  const errorNote =
+    error !== null ? (
+      <div ref={errorRef} tabIndex={-1} className="outline-none">
+        <ErrorNote error={error} />
+      </div>
+    ) : null
+  const closeButton = (label: string) => (
+    <button type="button" onClick={onClose} className={buttonClass('secondary')}>
+      {label}
+    </button>
+  )
+
+  const title = !current ? 'No longer followed' : current.inMyClique ? 'Already in your Inner Clique' : full ? 'Your Inner Clique is full' : 'Add to your Inner Clique'
+  let body: ReactNode = null
+  if (adding && !current) {
+    body = (
+      <>
+        <p className="text-sm text-ink-700">You no longer follow {adding.displayName}, so there is nothing to add.</p>
+        {errorNote}
+        <div className="mt-4 flex justify-end">{closeButton('Done')}</div>
+      </>
+    )
+  } else if (adding && current?.inMyClique) {
+    body = (
+      <>
+        <p className="text-sm text-ink-700">{adding.displayName} is already in your Inner Clique.</p>
+        {errorNote}
+        <div className="mt-4 flex justify-end">{closeButton('Done')}</div>
+      </>
+    )
+  } else if (adding && !full) {
+    body = (
+      <>
+        <p className="text-sm text-ink-700">
+          There is room in your Inner Clique now ({inner.length}/{LIMITS.clique}), so {adding.displayName} can be added without replacing anyone.
+        </p>
+        {errorNote}
+        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          {closeButton('Cancel')}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void attempt(() => api.cliqueAdd(adding.id), `${adding.displayName} was added to your Inner Clique.`)}
+            className={buttonClass('primary')}
+          >
+            {busy ? 'Adding…' : `Add ${adding.displayName}`}
+          </button>
+        </div>
+      </>
+    )
+  } else if (adding) {
+    body = (
+      <form onSubmit={confirm}>
+        <fieldset>
+          <legend className="mb-3 text-sm text-ink-700">
+            Choose who <strong className="text-ink-900">{adding.displayName}</strong> replaces. The person you replace stays in My Clique, and you keep following them.
+          </legend>
+          <div className="max-h-[45dvh] space-y-1 overflow-y-auto">
+            {inner.map((f) => (
+              <label key={f.id} className="flex cursor-pointer items-center gap-3 rounded-2xl px-2 py-2 hover:bg-ink-50 has-[:checked]:bg-brand-50">
+                <input
+                  type="radio"
+                  name={name}
+                  value={f.id}
+                  checked={choice === f.id}
+                  onChange={() => setChoice(f.id)}
+                  className="h-4 w-4 accent-brand-600"
+                />
+                <MemberAvatar member={f} size={32} />
+                <span className="min-w-0 truncate text-sm font-semibold text-ink-900">{f.displayName}</span>
+                <span className="ml-auto truncate text-[13px] text-ink-500">@{f.username}</span>
+              </label>
+            ))}
           </div>
-        </form>
-      )}
+        </fieldset>
+        {errorNote}
+        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          {closeButton('Cancel')}
+          <button type="submit" disabled={!choice || busy} className={buttonClass('primary')}>
+            {busy ? 'Replacing…' : 'Replace'}
+          </button>
+        </div>
+      </form>
+    )
+  }
+
+  return (
+    <Modal open={adding !== null} onClose={onClose} title={title}>
+      {body}
     </Modal>
   )
 }

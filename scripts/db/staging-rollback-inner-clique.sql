@@ -8,8 +8,10 @@
 --   psql "<url>" -X -q -v ON_ERROR_STOP=1 -v mode=apply -v confirm='REMOVE THE STAGING INNER CLIQUE' -f ...
 --
 -- Restores exactly what the migration replaced: the guard at 10, app_unfollow
--- without the per-member lock, the removal reasons 'removed' and 'unfollowed',
--- and the original comments; drops app_clique_replace; deletes the record.
+-- without the per-member lock, social.rate_check, app_clique_add and
+-- app_clique_remove without the Inner Clique rate limit, the removal reasons
+-- 'removed' and 'unfollowed', and the original comments; drops
+-- app_clique_replace and the clique_by_fan_recent index; deletes the record.
 -- Every follow and every membership row stays.
 --
 -- Refuses, changing nothing, if the record or an expected object is missing,
@@ -44,6 +46,7 @@ begin
   if not exists (select 1 from supabase_migrations.schema_migrations where version = '20261120000000')
      or to_regprocedure('public.app_clique_replace(uuid, uuid)') is null
      or to_regprocedure('social.clique_members_guard()') is null
+     or to_regclass('social.clique_by_fan_recent') is null
      or to_regclass('social.clique_members') is null then
     raise exception 'refused: expected objects are missing (20261120000000 inner_clique), so the database is not in the state this rollback was written for';
   end if;
@@ -65,9 +68,10 @@ begin
   end if;
 end $$;
 
-\echo 'Checks passed. To restore: the guard at 10, app_unfollow without the lock, the two removal reasons and the original comments; to remove: app_clique_replace and the migration record. Follows and memberships stay.'
+\echo 'Checks passed. To restore: the guard at 10, app_unfollow without the lock, add, remove and rate_check without the Inner Clique limit, the two removal reasons and the original comments; to remove: app_clique_replace, the clique_by_fan_recent index and the migration record. Follows and memberships stay.'
 
 drop function public.app_clique_replace(uuid, uuid);
+drop index social.clique_by_fan_recent;
 
 create or replace function social.clique_members_guard()
 returns trigger
@@ -110,6 +114,71 @@ begin
   insert into social.follow_events (follower_id, creator_id, action) values (v_uid, p_creator, 'unfollowed');
   -- A Clique needs a follow: close an open membership, keeping its history.
   update social.clique_members set removed_at = pg_catalog.now(), removal_reason = 'unfollowed'
+  where fan_id = v_uid and creator_id = p_creator and removed_at is null;
+end;
+$fn$;
+
+create or replace function social.rate_check(p_kind text, p_user uuid)
+returns void
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $fn$
+declare
+  n int;
+  v_limit int;
+begin
+  if p_kind = 'post' then
+    select count(*) into n from social.posts where author_id = p_user and created_at > pg_catalog.now() - interval '1 hour';
+    v_limit := 20;
+  elsif p_kind = 'comment' then
+    select count(*) into n from social.comments where author_id = p_user and created_at > pg_catalog.now() - interval '1 hour';
+    v_limit := 60;
+  elsif p_kind = 'follow' then
+    select count(*) into n from social.follow_events where follower_id = p_user and occurred_at > pg_catalog.now() - interval '1 hour';
+    v_limit := 120;
+  else
+    raise exception 'unknown rate limit %', p_kind;
+  end if;
+  if n >= v_limit then
+    raise exception 'rate_limited' using errcode = 'P0001', detail = 'Please slow down and try again later.';
+  end if;
+end;
+$fn$;
+
+create or replace function public.app_clique_add(p_creator uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_uid uuid := social.current_member();
+begin
+  if p_creator is null or p_creator = v_uid then
+    raise exception 'cannot_add_self' using errcode = 'P0001';
+  end if;
+  -- One Clique change at a time per fan, so two requests can't both take the last slot.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('social.clique:' || v_uid::text, 0));
+  if exists (select 1 from social.clique_members where fan_id = v_uid and creator_id = p_creator and removed_at is null) then
+    return; -- already in the Clique
+  end if;
+  insert into social.clique_members (fan_id, creator_id) values (v_uid, p_creator);
+end;
+$fn$;
+
+create or replace function public.app_clique_remove(p_creator uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_uid uuid := social.current_member();
+begin
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('social.clique:' || v_uid::text, 0));
+  update social.clique_members set removed_at = pg_catalog.now(), removal_reason = 'removed'
   where fan_id = v_uid and creator_id = p_creator and removed_at is null;
 end;
 $fn$;

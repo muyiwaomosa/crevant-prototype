@@ -6,15 +6,16 @@
 -- Keeping existing memberships through the migration:
 -- scripts/db/rollback-inner-clique-test.sh (rolls back and reapplies with data).
 --
--- Members: F = ...801 (the fan), creators ...802 to ...830 (29), O = ...831.
+-- Members: F = ...801 (the fan), creators ...802 to ...830 (29), O = ...831,
+-- R = ...832 (a second fan, for the rate limit), ...833 (followed by R only).
 
 set role supabase_auth_admin;
 insert into auth.users (id, email, email_confirmed_at)
 select ('00000000-0000-4000-8000-000000000' || n::text)::uuid, 'inner' || n || '@example.test', now()
-from generate_series(801, 831) as n;
+from generate_series(801, 833) as n;
 reset role;
 update public.profiles p set username = 'inner_' || right(p.id::text, 3), display_name = 'Inner ' || right(p.id::text, 3)
-where p.id::text between '00000000-0000-4000-8000-000000000801' and '00000000-0000-4000-8000-000000000831';
+where p.id::text between '00000000-0000-4000-8000-000000000801' and '00000000-0000-4000-8000-000000000833';
 
 create function pg_temp.expect_error_ic(sql text, expected text, what text)
 returns void
@@ -276,3 +277,88 @@ begin
   end if;
   raise notice 'PASS: Inner Clique carries no points, money or ranking, and the feed stays chronological';
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 10. Inner Clique changes are rate limited (120 an hour; a replacement is
+--     two). Refused requests change nothing; requests that change nothing
+--     don't count; follow and unfollow keep working.
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000832","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare
+  before text;
+begin
+  for i in 802..805 loop
+    perform public.app_follow(pg_temp.c(i));
+  end loop;
+  perform public.app_clique_add(pg_temp.c(803));               -- 1 change
+  for i in 1..59 loop                                           -- 118 changes
+    perform public.app_clique_add(pg_temp.c(802));
+    perform public.app_clique_remove(pg_temp.c(802));
+  end loop;
+  perform public.app_clique_add(pg_temp.c(802));               -- the 120th
+  -- Requests that change nothing are not refused and not counted.
+  perform public.app_clique_add(pg_temp.c(803));
+  perform public.app_clique_remove(pg_temp.c(805));
+  before := (select coalesce(string_agg(id::text, ',' order by id), '') from public.app_following() where in_my_clique);
+  perform pg_temp.expect_error_ic('select public.app_clique_add(pg_temp.c(804))', 'rate_limited', 'a 121st Inner Clique change (add)');
+  perform pg_temp.expect_error_ic('select public.app_clique_remove(pg_temp.c(802))', 'rate_limited', 'a 121st Inner Clique change (remove)');
+  perform pg_temp.expect_error_ic('select public.app_clique_replace(pg_temp.c(803), pg_temp.c(804))', 'rate_limited', 'a 121st Inner Clique change (replace)');
+  if (select coalesce(string_agg(id::text, ',' order by id), '') from public.app_following() where in_my_clique) <> before
+     or before <> pg_temp.c(802)::text || ',' || pg_temp.c(803)::text then
+    raise exception 'FAIL: a rate limited request changed the Inner Clique (%)', before;
+  end if;
+  raise notice 'PASS: after 120 Inner Clique changes in an hour, add, remove and replace are refused (rate_limited) and change nothing';
+  raise notice 'PASS: requests that change nothing (adding someone already there, removing someone who is not) are not counted or refused';
+
+  -- Follow and unfollow are limited separately, and still work.
+  perform public.app_unfollow(pg_temp.c(803));
+  perform public.app_follow(pg_temp.c(833));
+  perform public.app_follow(pg_temp.c(833));
+  perform public.app_unfollow(pg_temp.c(805));
+  perform public.app_unfollow(pg_temp.c(805));
+  if exists (select 1 from public.app_following() where id in (pg_temp.c(803), pg_temp.c(805)))
+     or not exists (select 1 from public.app_following() where id = pg_temp.c(833) and not in_my_clique)
+     or (select count(*) from public.app_following() where in_my_clique) <> 1 then
+    raise exception 'FAIL: follow and unfollow did not work while Inner Clique changes were rate limited';
+  end if;
+  raise notice 'PASS: while Inner Clique changes are rate limited, follow and unfollow still work, and unfollowing still closes the membership';
+end $$;
+commit;
+
+do $$
+declare
+  r uuid := '00000000-0000-4000-8000-000000000832';
+begin
+  if exists (select 1 from social.clique_members where fan_id = r and creator_id = '00000000-0000-4000-8000-000000000804')
+     or (select count(*) from social.clique_members where fan_id = r) <> 61
+     or (select count(*) from social.clique_members where fan_id = r and creator_id = '00000000-0000-4000-8000-000000000803' and removal_reason = 'unfollowed') <> 1 then
+    raise exception 'FAIL: rate limited requests wrote to the Inner Clique history';
+  end if;
+  -- Follow history: four follows, one unfollow of 803, one follow of 833 (the
+  -- repeat records nothing), one unfollow of 805 (the repeat records nothing).
+  if (select count(*) from social.follow_events where follower_id = r) <> 7
+     or (select count(*) from social.follows where follower_id = r) <> 3 then
+    raise exception 'FAIL: follow and unfollow history changed behaviour (% events)', (select count(*) from social.follow_events where follower_id = r);
+  end if;
+  raise notice 'PASS: rate limited requests wrote no history, and follow history is recorded exactly as before';
+end $$;
+
+-- 11. The window is an hour: changes older than that no longer count.
+begin;
+alter table social.clique_members disable trigger user;
+update social.clique_members set added_at = added_at - interval '2 hours', removed_at = removed_at - interval '2 hours'
+where fan_id = '00000000-0000-4000-8000-000000000832';
+alter table social.clique_members enable trigger user;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000832","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  perform public.app_clique_add(pg_temp.c(804));
+  if not (select in_my_clique from public.app_following() where id = pg_temp.c(804)) then
+    raise exception 'FAIL: changes older than an hour still counted against the limit';
+  end if;
+  raise notice 'PASS: Inner Clique changes older than an hour no longer count against the limit';
+end $$;
+rollback;

@@ -17,6 +17,12 @@
 --     race an Inner Clique add or replace and leave a membership without a
 --     follow. Its behaviour is otherwise unchanged.
 --   * removal_reason allows 'replaced' alongside 'removed' and 'unfollowed'.
+--   * Inner Clique changes are rate limited through the existing
+--     social.rate_check: at most 120 an hour per member, counting each
+--     membership opened, and each one closed by removing or replacing (a
+--     replacement is two). Unfollowing is limited by the follow limit instead.
+--     Requests that change nothing (adding someone already there, removing
+--     someone who isn't) don't count. A refused request changes nothing.
 --
 -- Inner Clique changes presentation priority only. It never changes feed
 -- ordering, and records no Connection Points, rewards or money.
@@ -45,6 +51,46 @@ end;
 $$;
 comment on function social.clique_members_guard() is 'An Inner Clique membership needs a current follow, and a member has at most 25 open memberships.';
 
+-- The rate limit counts a member's recent history rows.
+create index clique_by_fan_recent on social.clique_members (fan_id, added_at);
+
+-- The existing rate limits, plus Inner Clique changes.
+create or replace function social.rate_check(p_kind text, p_user uuid)
+returns void
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $$
+declare
+  n int;
+  v_limit int;
+begin
+  if p_kind = 'post' then
+    select count(*) into n from social.posts where author_id = p_user and created_at > pg_catalog.now() - interval '1 hour';
+    v_limit := 20;
+  elsif p_kind = 'comment' then
+    select count(*) into n from social.comments where author_id = p_user and created_at > pg_catalog.now() - interval '1 hour';
+    v_limit := 60;
+  elsif p_kind = 'follow' then
+    select count(*) into n from social.follow_events where follower_id = p_user and occurred_at > pg_catalog.now() - interval '1 hour';
+    v_limit := 120;
+  elsif p_kind = 'clique' then
+    select count(*) filter (where c.added_at > pg_catalog.now() - interval '1 hour')
+         + count(*) filter (where c.removed_at > pg_catalog.now() - interval '1 hour' and c.removal_reason in ('removed', 'replaced'))
+      into n
+    from social.clique_members c
+    where c.fan_id = p_user and (c.added_at > pg_catalog.now() - interval '1 hour' or c.removed_at > pg_catalog.now() - interval '1 hour');
+    v_limit := 120;
+  else
+    raise exception 'unknown rate limit %', p_kind;
+  end if;
+  if n >= v_limit then
+    raise exception 'rate_limited' using errcode = 'P0001', detail = 'Please slow down and try again later.';
+  end if;
+end;
+$$;
+
 alter table social.clique_members drop constraint clique_removal_reason;
 alter table social.clique_members add constraint clique_removal_reason check (removal_reason in ('removed', 'unfollowed', 'replaced'));
 comment on table social.clique_members is 'Inner Clique history: one row per membership, closed (never deleted or overwritten) when it ends, as removed, unfollowed or replaced. At most 25 open rows per member.';
@@ -71,7 +117,48 @@ begin
 end;
 $$;
 
+-- Add and remove: the same behaviour, now rate limited (only when they change something).
+create or replace function public.app_clique_add(p_creator uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := social.current_member();
+begin
+  if p_creator is null or p_creator = v_uid then
+    raise exception 'cannot_add_self' using errcode = 'P0001';
+  end if;
+  -- One Inner Clique change at a time per member, so two requests can't both take the last slot.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('social.clique:' || v_uid::text, 0));
+  if exists (select 1 from social.clique_members where fan_id = v_uid and creator_id = p_creator and removed_at is null) then
+    return; -- already in the Inner Clique
+  end if;
+  perform social.rate_check('clique', v_uid);
+  insert into social.clique_members (fan_id, creator_id) values (v_uid, p_creator);
+end;
+$$;
 comment on function public.app_clique_add(uuid) is 'Adds a followed creator to the member''s Inner Clique (at most 25).';
+
+create or replace function public.app_clique_remove(p_creator uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := social.current_member();
+begin
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('social.clique:' || v_uid::text, 0));
+  if not exists (select 1 from social.clique_members where fan_id = v_uid and creator_id = p_creator and removed_at is null) then
+    return; -- not in the Inner Clique: nothing changes
+  end if;
+  perform social.rate_check('clique', v_uid);
+  update social.clique_members set removed_at = pg_catalog.now(), removal_reason = 'removed'
+  where fan_id = v_uid and creator_id = p_creator and removed_at is null;
+end;
+$$;
 comment on function public.app_clique_remove(uuid) is 'Removes a creator from the member''s Inner Clique. They stay followed, and the history is kept.';
 
 -- Replace one Inner Clique creator with another followed creator, atomically.
@@ -101,6 +188,7 @@ begin
   if not exists (select 1 from social.follows where follower_id = v_uid and creator_id = p_add) then
     raise exception 'not_following' using errcode = 'P0001';
   end if;
+  perform social.rate_check('clique', v_uid);
   update social.clique_members set removed_at = pg_catalog.now(), removal_reason = 'replaced'
   where fan_id = v_uid and creator_id = p_remove and removed_at is null;
   insert into social.clique_members (fan_id, creator_id) values (v_uid, p_add);

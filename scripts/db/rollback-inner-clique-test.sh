@@ -39,6 +39,8 @@ state() {
     to_regprocedure('public.app_clique_replace(uuid, uuid)') is not null,
     md5((select prosrc from pg_proc where oid = 'social.clique_members_guard()'::regprocedure)),
     md5((select prosrc from pg_proc where oid = 'public.app_unfollow(uuid)'::regprocedure)),
+    md5((select string_agg(prosrc, '' order by oid) from pg_proc where oid in ('social.rate_check(text, uuid)'::regprocedure, 'public.app_clique_add(uuid)'::regprocedure, 'public.app_clique_remove(uuid)'::regprocedure))),
+    to_regclass('social.clique_by_fan_recent') is not null,
     (select pg_get_constraintdef(oid) from pg_constraint where conname = 'clique_removal_reason'),
     (select count(*) from social.follows), (select count(*) from social.clique_members),
     (select count(*) from social.clique_members where removed_at is null))"
@@ -118,10 +120,13 @@ after=$("${PSQL[@]}" -c "select concat_ws('|',
   (select prosrc ~ '>= 10' and prosrc !~ '>= 25' from pg_proc where oid = 'social.clique_members_guard()'::regprocedure),
   (select prosrc !~ 'advisory' from pg_proc where oid = 'public.app_unfollow(uuid)'::regprocedure),
   (select pg_get_constraintdef(oid) !~ 'replaced' from pg_constraint where conname = 'clique_removal_reason'),
-  obj_description('social.clique_members_guard()'::regprocedure, 'pg_proc') is null)")
+  obj_description('social.clique_members_guard()'::regprocedure, 'pg_proc') is null,
+  (select prosrc !~ 'clique' from pg_proc where oid = 'social.rate_check(text, uuid)'::regprocedure),
+  (select bool_and(prosrc !~ 'rate_check') from pg_proc where oid in ('public.app_clique_add(uuid)'::regprocedure, 'public.app_clique_remove(uuid)'::regprocedure)),
+  to_regclass('social.clique_by_fan_recent') is null)")
 rows_after=$("${PSQL[@]}" -c "$ROWS")
 follows_after=$("${PSQL[@]}" -c "select count(*) from social.follows")
-[ $code -eq 0 ] && grep -q 'Applied' <<<"$out" && [ "$after" = "t|t|t|t|t|t|t" ] && [ "$rows_after" = "$rows_before" ] && [ "$follows_after" = "$follows_before" ] \
+[ $code -eq 0 ] && grep -q 'Applied' <<<"$out" && [ "$after" = "t|t|t|t|t|t|t|t|t|t" ] && [ "$rows_after" = "$rows_before" ] && [ "$follows_after" = "$follows_before" ] \
   && ok "apply restores the earlier definitions and removes the record, keeping every follow and membership" \
   || bad "apply (exit $code, state $after, follows $follows_before -> $follows_after)"
 

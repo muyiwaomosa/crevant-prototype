@@ -120,9 +120,10 @@ table). Every existing follow and membership is kept as it is.
 | Removing from the Inner Clique never unfollows | `app_clique_remove` only closes the membership (`removed`). |
 | Unfollowing removes Inner Clique membership | `app_unfollow` closes it (`unfollowed`), now under the same per-member lock as add and replace, so it can't race them. |
 | At 25, a new creator replaces one the member chooses | `app_clique_replace(p_remove, p_add)`: checks, closes the old membership (`replaced`) and opens the new one in one transaction, under the per-member lock. Any failure changes nothing. The replaced creator stays followed. |
+| At most 120 Inner Clique changes an hour | The existing `social.rate_check`, new kind `clique`, called by add, remove and replace after their checks. It counts memberships opened, and those closed by removing or replacing, in the last hour (a replacement is two). Requests that change nothing (adding someone already there, removing someone who isn't) are not counted. A refused request (`rate_limited`) changes nothing. Unfollowing is covered by the follow limit (120 an hour), so it is never blocked by Inner Clique activity. The index `clique_by_fan_recent` keeps the count cheap. |
 
 Errors: `not_in_clique`, `already_in_clique`, `not_following`,
-`cannot_add_self`, `clique_full`. Signed-in members only, like every other
+`cannot_add_self`, `clique_full`, `rate_limited`. Signed-in members only, like every other
 member function. The Inner Clique changes presentation priority only: the
 feed stays chronological, and nothing records Connection Points, rewards or
 money (checked). A later release can show Inner Clique creators first in the
@@ -137,24 +138,43 @@ close it, focus stays inside and returns to the button. Elsewhere (profiles,
 Discover), a full Inner Clique links to `/app/clique?add=<id>`, which opens
 the same dialog.
 
+If a replacement fails (refused by the server, or stale because another tab
+or device changed the Inner Clique), the dialog stays open, shows the error
+and moves focus to it, and refreshes the list. The chosen creator stays
+selected while still in the Inner Clique. The dialog then follows the current
+state: if a place has opened up it offers a plain add; if the creator is
+already in the Inner Clique, or is no longer followed, it says so.
+
+Follow and unfollow are unchanged, except that unfollow now takes the
+per-member lock. The existing follow tests (060), the new checks in 066 and
+the browser journey all cover them.
+
 **Rollback (staging only):** `scripts/db/staging-rollback-inner-clique.sql`
-restores the guard at 10, the earlier `app_unfollow` and reasons, drops
-`app_clique_replace` and deletes the record. It refuses if any member has more
+restores the guard at 10, the earlier `app_unfollow`, `app_clique_add`,
+`app_clique_remove` and `social.rate_check` (without the Inner Clique limit)
+and reasons, drops `app_clique_replace` and the `clique_by_fan_recent` index,
+and deletes the record. It refuses if any member has more
 than 10 Inner Clique creators or any membership was closed as `replaced`
 (the history is append-only), so once members use the larger Inner Clique,
-the way back is a forward fix. It runs first in the rollback chain. Tested by
+the way back is a forward fix. This restriction is accepted: after members
+use the 25-creator capacity, problems are fixed forward, not rolled back. It runs first in the rollback chain. Tested by
 `scripts/db/rollback-inner-clique-test.sh`, which also applies the migration
 over existing memberships and proves every one is kept.
 
 **Tests:** `supabase/tests-local/066_inner_clique.sql` (unlimited follows, the
 cap, replace, every failed replace changing nothing, a replace failing at its
 last step changing nothing, removal keeping the follow, unfollow closing the
-membership, anonymous refusal), `scripts/db/inner-clique-concurrency-test.sh`
+membership, anonymous refusal, the rate limit refusing add, remove and
+replace without changing anything while follow and unfollow keep working,
+and the one-hour window), `scripts/db/inner-clique-concurrency-test.sh`
 (two real sessions: same creator replaced twice, two different replacements,
 the same creator brought in twice, an add racing a replace at 25, unfollow
 racing a replace), `src/app/app.test.tsx` (the page, the dialog, keyboard use,
-failure), and `e2e/social-journey.e2e.cjs` (27 follows, the 26th refused, a
-real replacement in the browser, phone widths 390 and 320).
+a refused replacement kept open and retried, a stale choice refreshed, a
+place opening up, an unfollow elsewhere), and `e2e/social-journey.e2e.cjs`
+(27 follows, the 26th refused, a real replacement in the browser, a stale
+replacement made from another device while the dialog is open, phone widths
+390 and 320).
 
 ## Tests
 

@@ -143,7 +143,13 @@ begin
                  where n.nspname = 'social' and p.proname = 'clique_members_guard' and p.prosrc ~ '>= 25') then
     raise exception 'FAIL: the Inner Clique limit is not 25';
   end if;
-  raise notice 'PASS: the Clique and history guards are in place';
+  if (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname in ('app_clique_add', 'app_clique_remove', 'app_clique_replace')
+        and p.prosrc ~ 'rate_check\(''clique''') <> 3
+     or not exists (select 1 from pg_proc where oid = 'social.rate_check(text, uuid)'::regprocedure and prosrc ~ 'p_kind = ''clique''') then
+    raise exception 'FAIL: Inner Clique add, remove and replace are not all rate limited';
+  end if;
+  raise notice 'PASS: the Clique and history guards are in place, and Inner Clique changes are rate limited';
 end $$;
 
 -- 5. No Connection Points, money, email or role in Release 1.

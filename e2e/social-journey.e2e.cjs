@@ -273,6 +273,33 @@ async function signInAndSetUp(page, email, username, displayName) {
         && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and removed_at is null`) === '25'
         && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[25]}'`) === '0')
 
+    // A stale choice: another device replaces Clique 3 while the dialog is open.
+    await pageB.getByRole('button', { name: 'Add Clique 26 to your Inner Clique' }).click()
+    await dialog.waitFor()
+    await dialog.getByRole('radio', { name: /Clique 3\b/ }).check()
+    const elsewhere = await rpc(tokenB, 'app_clique_replace', { p_remove: others[2], p_add: others[0] })
+    check('another device replaced Clique 3 while the dialog was open', elsewhere.status === 204 || elsewhere.status === 200, String(elsewhere.status))
+    const staleErrorsBefore = consoleErrors.length
+    const staleStatus = await answered(pageB, 'app_clique_replace', () => dialog.getByRole('button', { name: 'Replace' }).click())
+    await dialog.getByRole('alert').waitFor()
+    // The refusal is on purpose; the browser logs its 400. Remove only that one.
+    for (let i = consoleErrors.length - 1; i >= staleErrorsBefore; i--) {
+      if (/status of 400/.test(consoleErrors[i])) { consoleErrors.splice(i, 1); break }
+    }
+    await dialog.getByRole('radio', { name: /Clique 3\b/ }).waitFor({ state: 'detached' })
+    check(
+      'the stale replacement is refused, the dialog stays open with the error, and the list is refreshed',
+      staleStatus >= 400
+        && /Nothing was changed/.test(await dialog.getByRole('alert').textContent())
+        && (await dialog.getByRole('radio', { name: /Clique 1\b/ }).count()) === 1
+        && (await dialog.getByRole('radio').count()) === 25
+        && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and removed_at is null`) === '25'
+        && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[25]}'`) === '0',
+      String(staleStatus),
+    )
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+    await dialog.waitFor({ state: 'detached' })
+
     await pageB.getByRole('region', { name: 'Inner Clique' }).getByRole('button', { name: 'Remove Clique 2 from your Inner Clique (you keep following them)' }).click()
     await pageB.getByLabel('24 of 25 in your Inner Clique').waitFor()
     check('removing from the Inner Clique keeps the follow', sql(`select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${others[1]}'`) === '1')

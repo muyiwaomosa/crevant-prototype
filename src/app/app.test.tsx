@@ -284,6 +284,9 @@ describe('data layer helpers', () => {
 
   it('turns database errors into known codes and plain messages, never raw database text', () => {
     expect(toAppError({ message: 'clique_full' }).code).toBe('clique_full')
+    expect(toAppError({ message: 'rate_limited' }).code).toBe('rate_limited')
+    expect(toAppError({ message: 'not_in_clique' }).code).toBe('not_in_clique')
+    expect(toAppError({ message: 'already_in_clique' }).code).toBe('already_in_clique')
     expect(toAppError({ message: 'not_following' }).code).toBe('not_following')
     expect(toAppError({ code: '23505', message: 'duplicate key value violates unique constraint "profiles_username_unique"' }).code).toBe('username_taken')
     expect(toAppError({ code: '23514', message: 'new row violates check constraint "posts_body_valid"' }).code).toBe('posts_body_valid')
@@ -533,19 +536,84 @@ describe('My Clique and Inner Clique', () => {
     expect(myClique().getByRole('button', { name: 'Add Creator 3 to your Inner Clique' })).toBeTruthy()
   })
 
-  it('a failed replacement says so, leaves the Inner Clique unchanged, and shows the current list', async () => {
-    const fake = setup(27, 25)
-    fake.failures.cliqueReplace = new AppApiError('not_in_clique')
-    const before = innerOf(fake)
+  // Opens the replacement dialog for Creator 26 with c1..c25 in the Inner Clique.
+  async function openReplace(fake: ReturnType<typeof fakeApi>) {
     renderApp('/app/clique', fake.api)
     fireEvent.click(await (await loaded()).findByRole('button', { name: 'Add Creator 26 to your Inner Clique' }))
-    const dialog = within(await screen.findByRole('dialog'))
-    fireEvent.click(dialog.getByRole('radio', { name: /Creator 1\b/ }))
+    return within(await screen.findByRole('dialog', { name: 'Your Inner Clique is full' }))
+  }
+
+  it('a refused replacement keeps the dialog open with the error focused, keeps the choice, and can be retried', async () => {
+    const fake = setup(27, 25)
+    const before = innerOf(fake)
+    fake.failures.cliqueReplace = new AppApiError('rate_limited')
+    const dialog = await openReplace(fake)
+    fireEvent.click(dialog.getByRole('radio', { name: /Creator 3\b/ }))
     fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
-    expect((await dialog.findByRole('alert')).textContent).toMatch(/Nothing was changed/)
-    expect(screen.getByRole('dialog')).toBeTruthy()
+    const alert = await dialog.findByRole('alert')
+    expect(alert.textContent).toMatch(/going a little fast/)
+    await waitFor(() => expect(alert.parentElement!.contains(document.activeElement)).toBe(true))
     expect(innerOf(fake)).toEqual(before)
+    expect((dialog.getByRole('radio', { name: /Creator 3\b/ }) as HTMLInputElement).checked).toBe(true)
+    expect((dialog.getByRole('button', { name: 'Replace' }) as HTMLButtonElement).disabled).toBe(false)
+    delete fake.failures.cliqueReplace
+    fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(innerOf(fake)).toContain('me>c26')
+    expect(innerOf(fake)).not.toContain('me>c3')
+  })
+
+  it('a stale choice (replaced in another tab) is refused, the list refreshes, and another choice works', async () => {
+    const fake = setup(28, 25)
+    const dialog = await openReplace(fake)
+    fireEvent.click(dialog.getByRole('radio', { name: /Creator 3\b/ }))
+    // Another tab swaps Creator 3 for Creator 28 meanwhile.
+    fake.clique.delete(fake.key('me', 'c3'))
+    fake.clique.add(fake.key('me', 'c28'))
+    const before = innerOf(fake)
+    fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
+    expect((await dialog.findByRole('alert')).textContent).toMatch(/no longer in your Inner Clique\. Nothing was changed/)
+    expect(innerOf(fake)).toEqual(before)
+    await waitFor(() => expect(dialog.queryByRole('radio', { name: /Creator 3\b/ })).toBeNull())
+    expect(dialog.getByRole('radio', { name: /Creator 28\b/ })).toBeTruthy()
+    expect(dialog.getAllByRole('radio')).toHaveLength(25)
+    expect((dialog.getByRole('button', { name: 'Replace' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(dialog.getByRole('radio', { name: /Creator 4\b/ }))
+    fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect((await screen.findByTestId('clique-status')).textContent).toMatch(/Creator 26 replaced Creator 4/)
+    expect(innerOf(fake)).toContain('me>c26')
+    expect(innerOf(fake)).toContain('me>c28')
+  })
+
+  it('if a place opened up elsewhere, the refused replacement turns into a plain add', async () => {
+    const fake = setup(27, 25)
+    const dialog = await openReplace(fake)
+    fireEvent.click(dialog.getByRole('radio', { name: /Creator 5\b/ }))
+    fake.clique.delete(fake.key('me', 'c5')) // removed in another tab: 24 now
+    fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
+    const room = within(await screen.findByRole('dialog', { name: 'Add to your Inner Clique' }))
+    expect(room.getByRole('alert').textContent).toMatch(/Nothing was changed/)
+    expect(room.getByText(/There is room in your Inner Clique now \(24\/25\)/)).toBeTruthy()
+    fireEvent.click(room.getByRole('button', { name: 'Add Creator 26' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(screen.getByLabelText('25 of 25 in your Inner Clique')).toBeTruthy()
+    expect(innerOf(fake)).toContain('me>c26')
+  })
+
+  it('if the creator was unfollowed elsewhere, the dialog says so and changes nothing', async () => {
+    const fake = setup(27, 25)
+    const before = innerOf(fake)
+    const dialog = await openReplace(fake)
+    fireEvent.click(dialog.getByRole('radio', { name: /Creator 1\b/ }))
+    fake.follows.delete(fake.key('me', 'c26'))
+    fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
+    const gone = within(await screen.findByRole('dialog', { name: 'No longer followed' }))
+    expect(gone.getByText(/You no longer follow Creator 26/)).toBeTruthy()
+    expect(gone.getByRole('alert').textContent).toMatch(/Follow this creator first/)
+    expect(innerOf(fake)).toEqual(before)
+    fireEvent.click(gone.getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
   it('the replacement dialog works from the keyboard: Escape and Cancel close it and change nothing', async () => {
