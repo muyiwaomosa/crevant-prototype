@@ -1,43 +1,80 @@
 import clsx from 'clsx'
-import { C, Heart, Person, PostCard, SplitPost, Thread } from './primitives'
+import { C, Heart, Person, PostCard, SplitPost, Thread, useSvgId } from './primitives'
 
 const svgProps = { role: 'presentation', 'aria-hidden': true, focusable: 'false' } as const
 
 /**
- * THE PROBLEM: a growing audience beside earnings that don't keep up. The
- * audience line climbs steadily, gathering more people; the earnings line
- * stays low and breaks off into a question. No axes, figures or amounts.
+ * THE PROBLEM: who keeps the value. Creators make the posts; fans pass them
+ * along with likes and shares; the attention flows into the platform, where
+ * the value visibly piles up. What comes back is small and uneven: one
+ * creator has a modest stack, another a single piece, and the fans get a
+ * thank-you heart. Nuanced on purpose (founder direction, 2026-11-18): some
+ * creators do earn, but far less than the value they help create, and fans
+ * rarely share in it at all. No figures, currency symbols or percentages.
  */
-export function AudienceVsEarnings({ className }: { className?: string }) {
+export function ValueCapture({ className }: { className?: string }) {
+  const id = useSvgId('vault')
+  const coin = (x: number, y: number, k: string | number) => (
+    <g key={k}>
+      <ellipse cx={x} cy={y + 2.5} rx="14" ry="5" fill="#d98a52" />
+      <ellipse cx={x} cy={y} rx="14" ry="5" fill={C.accent} stroke="#d98a52" strokeWidth="1.2" />
+    </g>
+  )
+  const stack = (x: number, bottom: number, n: number) => Array.from({ length: n }, (_, i) => coin(x, bottom - i * 7, `${x}-${i}`))
   return (
-    <svg viewBox="0 0 520 330" {...svgProps} data-testid="audience-vs-earnings" className={clsx('h-auto w-full', className)}>
-      <rect x="0" y="0" width="520" height="330" rx="28" fill={C.white} />
-      {/* Faint guide lines. */}
-      {[80, 150, 220, 290].map((y) => (
-        <line key={y} x1="36" x2="484" y1={y} y2={y} stroke={C.ink} strokeOpacity="0.06" strokeWidth="2" />
-      ))}
-      {/* The audience: a steady climb. */}
-      <path d="M40 270 C 140 262, 200 230, 270 180 S 400 80, 470 58" fill="none" stroke={C.primary} strokeWidth="7" strokeLinecap="round" />
-      {[
-        [120, 262, 0.7],
-        [215, 232, 0.8],
-        [300, 166, 0.9],
-        [380, 108, 1],
-        [458, 66, 1.1],
-      ].map(([x, y, s], i) => (
-        <g key={i}>
-          <circle cx={x} cy={y - 26 * s} r={16 * s} fill={C.white} stroke={C.primary} strokeWidth="2" />
-          <Person x={x} y={y - 16 * s} size={0.62 * s} fill={C.primary} />
-        </g>
-      ))}
-      {/* Earnings: low, uneven, and then a break. */}
-      <path d="M40 292 L 92 284 L 128 296 L 170 280 L 204 298 L 246 286 L 282 300" fill="none" stroke={C.accentText} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M300 292 L 330 288" fill="none" stroke={C.accentText} strokeWidth="5" strokeLinecap="round" strokeDasharray="2 12" />
-      {/* The question: but what about you? */}
-      <circle cx="380" cy="282" r="26" fill={C.accent} />
-      <text x="380" y="292" textAnchor="middle" fontFamily="var(--font-sp-display)" fontWeight="900" fontSize="30" fill={C.ink}>
-        ?
-      </text>
+    <svg viewBox="0 0 560 360" {...svgProps} data-testid="value-capture" className={clsx('h-auto w-full', className)}>
+      <defs>
+        <radialGradient id={`${id}-glow`} cx="50%" cy="60%" r="60%">
+          <stop offset="0%" stopColor={C.accent} stopOpacity="0.55" />
+          <stop offset="100%" stopColor={C.accent} stopOpacity="0" />
+        </radialGradient>
+        <clipPath id={`${id}-clip`}>
+          <rect x="392" y="140" width="118" height="164" rx="10" />
+        </clipPath>
+      </defs>
+      <line x1="12" y1="326" x2="548" y2="326" stroke={C.ink} strokeOpacity="0.1" strokeWidth="2" strokeLinecap="round" />
+
+      {/* The attention and the posts flow from the creators, through the fans, into the platform. */}
+      <Thread d="M132 150 C 190 104, 236 196, 296 140 S 352 76, 370 86" width={7} opacity={0.22} />
+      <path d="M362 76 l16 10 -18 6 Z" fill={C.primary} opacity="0.5" />
+
+      {/* The platform: a tall building, its vault full of value. */}
+      <rect x="366" y="34" width="170" height="16" rx="8" fill={C.primaryRaised} />
+      <rect x="376" y="44" width="150" height="282" rx="12" fill={C.primary} />
+      {[0, 1, 2, 3].flatMap((c) =>
+        [0, 1].map((r) => <rect key={`${c}-${r}`} x={394 + c * 30} y={64 + r * 30} width="20" height="16" rx="4" fill={C.white} opacity="0.18" />),
+      )}
+      <rect x="392" y="140" width="118" height="164" rx="10" fill={C.ink} opacity="0.3" />
+      <g clipPath={`url(#${id}-clip)`}>
+        <circle cx="451" cy="236" r="90" fill={`url(#${id}-glow)`} />
+        {stack(420, 292, 13)}
+        {stack(451, 292, 18)}
+        {stack(482, 292, 11)}
+      </g>
+
+      {/* The fans: passing the posts along, liking and sharing. */}
+      <PostCard x={226} y={150} w={42} h={48} />
+      <PostCard x={312} y={100} w={36} h={42} />
+      <Person x={214} y={300} size={1.25} outline />
+      <Person x={258} y={306} size={1.1} outline />
+      <Person x={300} y={300} size={1.25} outline />
+      <Heart x={184} y={196} s={1.6} />
+      <Heart x={286} y={196} s={1.3} />
+      {/* What the fans get back: a thank-you. */}
+      <rect x="234" y="222" width="46" height="30" rx="12" fill={C.white} stroke={C.primary} strokeOpacity="0.35" strokeWidth="1.5" />
+      <path d="M248 252 l-4 9 12 -9 Z" fill={C.white} stroke={C.primary} strokeOpacity="0.35" strokeWidth="1.5" strokeLinejoin="round" />
+      <Heart x={250} y={230} s={1.3} fill={C.accent} />
+
+      {/* The creators: one in front with their post, two more behind. */}
+      <PostCard x={44} y={112} w={88} h={100} />
+      <Person x={38} y={318} size={1.25} fill={C.primaryRaised} />
+      <Person x={124} y={318} size={1.15} fill={C.primaryRaised} />
+      <Person x={82} y={322} size={2} fill={C.primary} />
+
+      {/* What comes back: a thin, uneven trickle. A modest stack for one creator, a single piece for another. */}
+      <Thread d="M374 314 C 300 344, 220 344, 160 330" width={2.5} color={C.accentText} opacity={0.55} dashed />
+      {stack(164, 334, 3)}
+      {coin(14, 336, 'single')}
     </svg>
   )
 }
@@ -96,17 +133,17 @@ function JourneyArt({ step }: { step: 0 | 1 | 2 }) {
 /** THE VISION: POST → CONNECT → SPLIT, side by side from sm up, stacked on phones. */
 export function PostConnectSplit({ labels, className }: { labels: readonly string[]; className?: string }) {
   return (
-    <ol data-testid="journey" className={clsx('grid grid-cols-1 items-center gap-2 min-[480px]:grid-cols-[1fr_auto_1fr_auto_1fr] min-[480px]:gap-3', className)}>
+    <ol data-testid="journey" className={clsx('grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-1 sm:gap-3', className)}>
       {labels.map((label, i) => (
         <li key={label} className="contents">
           {i > 0 && (
-            <span aria-hidden="true" className="mx-auto flex h-8 w-8 rotate-90 items-center justify-center text-2xl font-black text-sp-primary min-[480px]:rotate-0">
+            <span aria-hidden="true" className="mx-auto flex h-6 w-4 items-center justify-center text-lg font-black text-sp-primary sm:h-8 sm:w-8 sm:text-2xl">
               →
             </span>
           )}
           <div className="mx-auto w-full max-w-[13rem] text-center">
             <JourneyArt step={i as 0 | 1 | 2} />
-            <p className="mt-1 font-sp-display text-lg font-black tracking-[0.18em] text-sp-primary">{label}</p>
+            <p className="mt-1 font-sp-display text-[11px] font-black tracking-[0.06em] text-sp-primary min-[400px]:text-sm min-[400px]:tracking-[0.12em] sm:text-lg sm:tracking-[0.18em]">{label}</p>
           </div>
         </li>
       ))}

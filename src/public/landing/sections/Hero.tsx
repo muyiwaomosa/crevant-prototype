@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { useMemberLinks } from '../../member-links'
 import { HOMEPAGE_COPY, PILOT_DISCLOSURES } from '../copy'
 import { waitlistCta } from '../../waitlist/status'
-import { ValueShare } from '../ui/illustrations/ValueShare'
+import { SplitThePost } from '../ui/SplitThePost'
 import { Disclosure } from '../ui/Story'
 
 const copy = HOMEPAGE_COPY.hero
@@ -11,69 +11,72 @@ const copy = HOMEPAGE_COPY.hero
 const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-sp-primary'
 
 /**
- * Section 1, HERO. White, bold, and led by the signature line: the headline is
- * the unmistakable focal point, two lines on every screen, sized to the width
- * of the screen on phones (condensed Archivo, so it can be much larger). Then
- * the approved supporting copy, the waitlist call to action (it reads
- * "Waitlist Opens Soon" while registration is closed), the hero pilot
- * disclosure, and the concept illustration of how value is shared (no
- * percentages: the pilot allocation stays private).
+ * Section 1: the hero, in the original site's layout and type, on white
+ * (founder decision, 2026-11-18). The approved headline ("Get your split." in
+ * Cobalt), the approved supporting copy, one call to action ("Waitlist Opens
+ * Soon" while registration is closed) and the approved hero disclosure. The
+ * picture is the original split post: one sample post in two pieces, what
+ * the creator made and what her community grew, settling into place once on
+ * load (motion-safe only).
+ *
+ * Phones: headline, supporting copy, picture, then the call to action and
+ * disclosure. From lg up: text left, picture right.
  */
 export function Hero() {
   const memberLinks = useMemberLinks()
   return (
     <section id="hero" aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-white text-sp-ink">
-      <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 -z-10 h-[28rem] w-[28rem] rounded-full bg-sp-secondary-tint sm:h-[36rem] sm:w-[36rem]" />
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-14 pt-8 sm:px-6 sm:pb-20 sm:pt-14 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-12 lg:pb-24 lg:pt-20">
-        <div className="min-w-0">
+      {/* The split: one diagonal cut across the whole band, as on the original site. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(118deg,transparent_0_62%,var(--color-sp-bg)_62%_100%)]" />
+      <div className="mx-auto grid max-w-6xl px-4 pb-12 pt-6 [grid-template-areas:'title'_'body'_'scene'_'rest'] sm:px-6 sm:pb-20 sm:pt-10 lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-x-14 lg:pb-24 lg:pt-16 lg:[grid-template-areas:'top_scene'_'title_scene'_'body_scene'_'rest_scene'_'end_scene']">
+        <div className="min-w-0 [grid-area:title]">
           <h1
             id="hero-title"
-            // Each sentence on its own line, never wrapping: sized from the
-            // screen width on phones (the longer line is about 6.3em wide in
-            // condensed Archivo Black), capped on larger screens.
-            className="font-sp-display text-[length:min(calc((100vw_-_2rem)/6.5),6.6rem)] font-black leading-[0.92] tracking-[-0.015em] [font-stretch:75%] sm:text-[length:min(calc((100vw_-_3rem)/6.5),7.4rem)] lg:text-[length:clamp(4.6rem,7.2vw,5.6rem)]"
+            // Exactly two lines, one sentence each, at every width: the longer
+            // sentence is about 8.3em wide at this width, so the size follows
+            // the screen on phones and is capped beside the picture on desktop.
+            className="font-sp-display text-[length:min(calc((100vw_-_2rem)/8.6),5.4rem)] font-black leading-[1] tracking-[-0.025em] [font-stretch:100%] sm:text-[length:min(calc((100vw_-_3rem)/8.6),6rem)] lg:text-[length:clamp(3.2rem,4.5vw,4.2rem)] lg:leading-[0.96] lg:[font-stretch:108%]"
           >
             <span data-testid="headline-line" className="block whitespace-nowrap">
               {copy.headlineLines[0]}
             </span>{' '}
-            <span data-testid="headline-emphasis" className="relative block whitespace-nowrap text-sp-primary">
-              <span className="relative z-10">{copy.headlineLines[1]}</span>
-              {/* The apricot line from the badge, under the second sentence. */}
-              <span aria-hidden="true" className="absolute bottom-[0.06em] left-0 -z-0 h-[0.16em] w-full origin-left -rotate-[1.5deg] rounded-full bg-sp-accent" />
+            <span data-testid="headline-emphasis" className="block whitespace-nowrap text-sp-primary">
+              {copy.headlineLines[1]}
             </span>
           </h1>
+        </div>
 
-          <div data-testid="hero-body" className="mt-7 max-w-[36rem] space-y-3 text-[1.12rem] leading-relaxed text-sp-ink sm:text-xl">
-            <p className="font-semibold">{copy.body[0]}</p>
-            <p className="text-sp-muted">{copy.body[1]}</p>
-          </div>
+        <div data-testid="hero-body" className="mt-6 min-w-0 max-w-[34rem] space-y-3 text-[1.1rem] leading-relaxed [grid-area:body] sm:text-lg">
+          <p className="font-semibold">{copy.body[0]}</p>
+          <p className="text-sp-muted">{copy.body[1]}</p>
+        </div>
 
-          <div data-testid="hero-actions" className="mt-8">
+        <div className="mt-9 min-w-0 [grid-area:scene] sm:mt-10 lg:mt-0 lg:self-center">
+          <SplitThePost />
+        </div>
+
+        <div className="mt-10 min-w-0 [grid-area:rest] lg:mt-7">
+          <div data-testid="hero-actions">
             <Link
               to="/join"
-              className={`inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-sp-primary px-8 text-[1.05rem] font-bold text-white shadow-[0_14px_30px_-14px_rgb(36_71_166/0.75)] transition-[background-color,transform] hover:bg-sp-primary-raised active:scale-[0.98] motion-reduce:transition-none min-[420px]:w-auto ${focusRing}`}
+              className={`inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-sp-primary px-7 text-base font-bold text-white transition-[background-color,transform] hover:bg-sp-primary-raised active:scale-[0.98] motion-reduce:transition-none min-[420px]:w-auto ${focusRing}`}
             >
               {waitlistCta()} <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </div>
-
-          <Disclosure testId="hero-disclosure" className="mt-5 max-w-[30rem]">
+          <Disclosure testId="hero-disclosure" className="mt-5 max-w-[34rem]">
             {PILOT_DISCLOSURES.hero}
           </Disclosure>
 
           {import.meta.env.MODE !== 'site' && memberLinks && (
             <p className="mt-2 text-sm text-sp-muted">
               Already invited?{' '}
-              <Link to="/sign-in" className={`font-semibold text-sp-link underline underline-offset-4 ${focusRing}`}>
+              <Link to="/sign-in" className={`font-semibold text-sp-link underline underline-offset-4 hover:text-sp-primary ${focusRing}`}>
                 Sign in
               </Link>
             </p>
           )}
         </div>
-
-        <figure className="m-0 min-w-0">
-          <ValueShare className="mx-auto max-w-[30rem]" />
-        </figure>
       </div>
     </section>
   )

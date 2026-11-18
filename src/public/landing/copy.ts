@@ -7,9 +7,15 @@
 // order. Do not rewrite, shorten or rearrange any of it without the
 // founder's approval. Design and layout may change; the words may not.
 //
-// Seven sections, in order:
-//   HERO, THE PROBLEM, THE VISION, HOW SPLITPOST WORKS,
+// Six sections, in order:
+//   HERO, THE PROBLEM, HOW SPLITPOST WORKS (with The Vision merged in),
 //   THE PEOPLE BEHIND THE POSTS, A BETTER FUTURE FOR CREATORS, THE INVITATION.
+//
+// The Vision and How Splitpost Works were merged with the founder's approval
+// (2026-11-18, "modified Option B"): the Vision eyebrow and headline, two
+// Vision body lines and the How It Works introduction were removed; every
+// retained line is unchanged. docs/website-brief.md records exactly what was
+// removed.
 //
 // The pilot disclosures (PILOT_DISCLOSURES) are the founder's approved
 // wording for the 60-day pilot, where fan rewards are simulated.
@@ -58,23 +64,14 @@ export const HOMEPAGE_COPY = {
     transition: 'What if the split worked differently?',
   },
 
-  vision: {
-    eyebrow: 'A DIFFERENT WAY TO POST',
-    headline: 'What if the split worked differently?',
-    body: [
-      'Imagine a social network where growing your audience could also grow your opportunity to earn.',
-      'Where the people who follow you can actually find your posts.',
-      "Where the fans who help you grow aren't just spectators, but have an opportunity to share in the success they help create.",
-      "That's the future we're building with Splitpost.",
-    ],
-    /** The visual journey named in the brief (illustration labels). */
-    journey: ['POST', 'CONNECT', 'SPLIT'],
-  },
-
+  /** How Splitpost Works, with the two retained lines from The Vision (founder-approved merge). */
   howItWorks: {
     eyebrow: 'HOW SPLITPOST WORKS',
     headline: 'Post. Connect. Grow. Split.',
-    intro: "Your content deserves more than attention. Here's how we're building a different way to post.",
+    /** From The Vision, unchanged: its first and last body lines. */
+    vision: ['Imagine a social network where growing your audience could also grow your opportunity to earn.', "That's the future we're building with Splitpost."],
+    /** The visual journey named in the brief (illustration labels). */
+    journey: ['POST', 'CONNECT', 'SPLIT'],
     steps: [
       { number: '01', title: 'Post what you love.', body: 'Create and share content that matters to you and the people who follow you.' },
       {
@@ -142,8 +139,44 @@ export const HOMEPAGE_COPY = {
     ],
     cta: 'Join the Waitlist',
     brandLine: BRAND_LINE,
+    /** The founder's sign-off beside the call to action, restored from the original site (founder decision). */
+    signOff: 'Muyiwa Omosa, Founder of Splitpost',
+  },
+
+  /**
+   * The hero's sample post, restored from the original site: a fictional
+   * creator frustrated by unpredictable reach. Illustrative numbers, labelled
+   * SAMPLE on the card. Never presented as a real person or a real result.
+   */
+  post: {
+    author: 'Priya Raman',
+    role: 'Content creator',
+    time: '2h',
+    paragraphs: [
+      'I have 10,000 followers. So why do only a few hundred people see my posts?',
+      'I spend hours creating content, but I never know if the people who followed me will even see it. One post reaches thousands. The next barely reaches anyone.',
+    ],
+    /** The graphic inside the post: the gap between followers and the people who saw it. Illustrative numbers. */
+    reach: { followers: '10,000', followersLabel: 'followers', seen: 'A few hundred', seenLabel: 'saw this post' },
+    likes: '1.2K',
+    comments: '86',
+    reposts: '214',
+  },
+  split: {
+    creatorTag: 'Created by Priya',
+    communityTag: 'Grown by her community',
+    /** A comment from Priya's community, replying to her post about reach. Sample person. */
+    communityComment: { name: 'Ana', text: "Oh wow, I was wondering why I hadn't been seeing your content. I thought you stopped posting!" },
   },
 } as const
+
+/**
+ * The footer note on every public page, restored word for word from the
+ * original site (founder decision): the hero post is a sample, and the
+ * photographs are stock images of models.
+ */
+export const PRODUCT_IMAGES_DISCLOSURE =
+  'Product screens on this site are concepts with sample data. Photos show models from stock images, not Splitpost members.'
 
 /** The header and footer links into the homepage (navigation labels, not section copy). */
 export const SITE_NAV = {
@@ -152,7 +185,7 @@ export const SITE_NAV = {
   how: 'How It Works',
 } as const
 
-export type SectionKey = 'hero' | 'problem' | 'vision' | 'howItWorks' | 'people' | 'future' | 'invitation'
+export type SectionKey = 'hero' | 'problem' | 'howItWorks' | 'people' | 'future' | 'invitation'
 
 /** The section's approved lines, in the brief's order (labels excluded), for the word-for-word check. */
 export function briefLines(key: SectionKey): string[] {
@@ -162,10 +195,8 @@ export function briefLines(key: SectionKey): string[] {
       return [c.hero.headline, ...c.hero.body, c.hero.cta]
     case 'problem':
       return [c.problem.headline, ...c.problem.body, c.problem.transition]
-    case 'vision':
-      return [c.vision.eyebrow, c.vision.headline, ...c.vision.body]
     case 'howItWorks':
-      return [c.howItWorks.eyebrow, c.howItWorks.headline, c.howItWorks.intro, ...c.howItWorks.steps.flatMap((s) => [s.title, s.body]), c.howItWorks.closing]
+      return [c.howItWorks.eyebrow, c.howItWorks.headline, ...c.howItWorks.vision, ...c.howItWorks.steps.flatMap((s) => [s.title, s.body]), c.howItWorks.closing]
     case 'people':
       return [
         c.people.eyebrow,
@@ -185,7 +216,7 @@ export function briefLines(key: SectionKey): string[] {
 }
 
 /** Every visitor-facing string in the homepage copy and the pilot disclosures, for the claim checks. */
-export function allHomepageText(copy: unknown = [HOMEPAGE_COPY, PILOT_DISCLOSURES]): string[] {
+export function allHomepageText(copy: unknown = [HOMEPAGE_COPY, PILOT_DISCLOSURES, PRODUCT_IMAGES_DISCLOSURE]): string[] {
   if (typeof copy === 'string') return [copy]
   if (Array.isArray(copy)) return copy.flatMap((c) => allHomepageText(c))
   if (copy && typeof copy === 'object') return Object.values(copy).flatMap((v) => allHomepageText(v))

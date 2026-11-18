@@ -182,7 +182,7 @@ async function newContext(browser, options = {}) {
       await page.goto(`${BASE}/`)
 
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check(`${label}: the seven sections in order`, ids === 'hero,problem,vision,how-it-works,people,future,invitation', ids)
+      check(`${label}: the six sections in order`, ids === 'hero,problem,how-it-works,people,future,invitation', ids)
       const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
       {
@@ -206,21 +206,30 @@ async function newContext(browser, options = {}) {
         check(`${label}: the hero headline is exactly two lines and fits`, r.lines === '1,1' && r.fits, JSON.stringify(r))
       }
 
-      // No photographs: the illustrations are drawn, and decorative.
-      check(`${label}: no photographs on the homepage`, (await page.locator('main img:not([data-testid="splitpost-logo"])').count()) === 0)
+      // Load every lazy image, then check each one decoded: the licensed photos, the sample avatar and the founder.
+      await page.evaluate(async () => {
+        for (let y = 0; y < document.body.scrollHeight; y += 500) {
+          window.scrollTo(0, y)
+          await new Promise((r) => setTimeout(r, 30))
+        }
+      })
+      const imgs = await page.$$eval('main img:not([data-testid="splitpost-logo"])', (els) =>
+        Promise.all(els.map((img) => (img.complete ? img.naturalWidth : new Promise((ok) => img.addEventListener('load', () => ok(img.naturalWidth), { once: true }))))),
+      )
+      check(`${label}: every photo loads (seven licensed photos, the sample avatar twice, the founder)`, imgs.length === 10 && imgs.every((w) => w > 0), imgs.join(','))
       const svgs = await page.$$eval('main svg', (els) => els.filter((e) => e.getAttribute('aria-hidden') !== 'true' && !e.closest('[aria-hidden="true"]')).length)
       check(`${label}: every illustration is decorative (hidden from screen readers)`, svgs === 0, String(svgs))
 
       const disclosures = await Promise.all(['hero-disclosure', 'step04-disclosure', 'invitation-disclosure', 'footer-disclosure'].map((t) => page.getByTestId(t).isVisible()))
       check(`${label}: each pilot disclosure is visible beside its claim`, disclosures.every(Boolean), disclosures.join())
 
-      const ills = await page.$$eval('[data-testid="value-share"], [data-testid="audience-vs-earnings"], [data-testid="journey"], [data-testid="moment-effort"], [data-testid="moment-frustration"], [data-testid="moment-supporters"], [data-testid="today"], [data-testid="possible"], [data-testid="constellation"]', (els) =>
+      const ills = await page.$$eval('[data-testid="hero-scene"], [data-testid="value-capture"], [data-testid="journey"], [data-testid="pains"], [data-testid="people-fans"], [data-testid="today"], [data-testid="possible"], [data-testid="founder-signoff"], [data-testid="invitation-disclosure"]', (els) =>
         els.map((e) => {
           const r = e.getBoundingClientRect()
           return { id: e.getAttribute('data-testid'), fits: r.width > 0 && r.left >= -0.5 && r.right <= document.documentElement.clientWidth + 0.5 }
         }),
       )
-      check(`${label}: all nine illustrations are on the page and fit the screen`, ills.length === 9 && ills.every((i) => i.fits), JSON.stringify(ills))
+      check(`${label}: the hero post, the illustrations and the photo blocks are on the page and fit the screen`, ills.length === 9 && ills.every((i) => i.fits), JSON.stringify(ills))
       const steps = await page.$$eval('[data-testid="step"] svg', (els) => els.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right <= document.documentElement.clientWidth + 0.5 }).length)
       check(`${label}: each of the four steps has its picture, on screen`, steps >= 4, String(steps))
 
@@ -228,6 +237,50 @@ async function newContext(browser, options = {}) {
       const logos = await page.$$eval('img[data-testid="splitpost-logo"]', (els) => els.map((e) => ({ src: e.getAttribute('src'), w: e.naturalWidth, ratio: e.getBoundingClientRect().width / e.getBoundingClientRect().height })))
       check(`${label}: one logo file, used in the header, footer and every seam`, logos.length >= 7 && new Set(logos.map((l) => l.src)).size === 1 && logos.every((l) => l.w > 0), `${logos.length} logos, ${new Set(logos.map((l) => l.src)).size} sources`)
       check(`${label}: the logo keeps its proportions everywhere`, logos.every((l) => Math.abs(l.ratio - 1) < 0.02), logos.map((l) => l.ratio.toFixed(2)).join())
+      await ctx.close()
+    }
+
+    // 5b1. The hero's split post on phones: both pieces upright, fully on screen with a margin on each
+    //      side, a clear gap between them, and the apricot line kept within the pieces.
+    for (const width of [320, 360, 390, 430]) {
+      const ctx = await newContext(browser, { viewport: { width, height: 900 } })
+      const page = await ctx.newPage()
+      await page.goto(`${BASE}/`)
+      // Let the one-time entrance finish: every piece must then rest exactly in place.
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)))
+      const r = await page.evaluate(() => {
+        const vw = document.documentElement.clientWidth
+        const scene = document.querySelector('[data-testid="hero-scene"]')
+        const box = (el) => el.getBoundingClientRect()
+        const creator = box(scene.querySelector('[data-testid="split-creator-piece"]'))
+        const community = box(scene.querySelector('[data-testid="split-community-piece"]'))
+        const line = [...scene.querySelectorAll('[data-testid="gold-seam"] line')].find((l) => getComputedStyle(l).display !== 'none')
+        const lb = box(line)
+        const tilted = [...scene.querySelectorAll('*')].some((el) => { const t = getComputedStyle(el).transform; return t !== 'none' && !/^matrix\(1, 0, 0, 1,/.test(t) })
+        const outside = [...scene.querySelectorAll('*')].filter((el) => { const b = box(el); return b.width > 0 && (b.left < 0 || b.right > vw) }).length
+        return { vw, tilted, outside, left: Math.round(Math.min(creator.left, community.left)), right: Math.round(vw - Math.max(creator.right, community.right)), line: [Math.round(lb.left), Math.round(lb.right)], pieces: [Math.round(Math.min(creator.left, community.left)), Math.round(Math.max(creator.right, community.right))] }
+      })
+      check(`${width}px: the hero's two post pieces stay upright`, !r.tilted, JSON.stringify(r))
+      check(`${width}px: the hero's pieces fit on screen with a margin on both sides`, r.outside === 0 && r.left >= 16 && r.right >= 16, JSON.stringify(r))
+      check(`${width}px: the apricot line stays within the pieces`, r.line[0] >= r.pieces[0] && r.line[1] <= r.pieces[1], JSON.stringify(r))
+      await ctx.close()
+    }
+
+    // 5b1b. With reduced motion the split post doesn't animate at all.
+    {
+      const ctx = await newContext(browser, { viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' })
+      const page = await ctx.newPage()
+      await page.goto(`${BASE}/`)
+      const running = await page.evaluate(() => document.getAnimations().length)
+      check('reduced motion: the hero entrance does not run', running === 0, String(running))
+      await ctx.close()
+    }
+    {
+      const ctx = await newContext(browser, { viewport: { width: 390, height: 844 } })
+      const page = await ctx.newPage()
+      await page.goto(`${BASE}/`)
+      const iters = await page.evaluate(() => document.getAnimations().map((a) => a.effect.getTiming().iterations))
+      check('the hero entrance runs once and never loops', iters.length === 3 && iters.every((n) => n === 1), JSON.stringify(iters))
       await ctx.close()
     }
 

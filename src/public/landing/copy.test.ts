@@ -20,21 +20,20 @@ function parseBrief() {
   return sections
 }
 
-const ORDER: SectionKey[] = ['hero', 'problem', 'vision', 'howItWorks', 'people', 'future', 'invitation']
+const ORDER: SectionKey[] = ['hero', 'problem', 'howItWorks', 'people', 'future', 'invitation']
 const TITLES = [
   'SECTION 1 — HERO',
   'SECTION 2 — THE PROBLEM',
-  'SECTION 3 — THE VISION',
-  'SECTION 4 — HOW SPLITPOST WORKS',
-  'SECTION 5 — THE PEOPLE BEHIND THE POSTS',
-  'SECTION 6 — A BETTER FUTURE FOR CREATORS',
-  'SECTION 7 — THE INVITATION',
+  'SECTION 3 — HOW SPLITPOST WORKS (THE VISION MERGED IN)',
+  'SECTION 4 — THE PEOPLE BEHIND THE POSTS',
+  'SECTION 5 — A BETTER FUTURE FOR CREATORS',
+  'SECTION 6 — THE INVITATION',
 ]
 
 describe('the homepage copy is the approved brief, word for word', () => {
   const brief = parseBrief()
 
-  it('has the seven approved sections, in order, then the approved pilot disclosures', () => {
+  it('has the six approved sections, in order, then the approved pilot disclosures', () => {
     expect(brief.map((s) => s.title)).toEqual([...TITLES, 'APPROVED PILOT DISCLOSURES'])
   })
 
@@ -44,7 +43,7 @@ describe('the homepage copy is the approved brief, word for word', () => {
   })
 
   it('uses the four approved pilot disclosures exactly', () => {
-    expect(brief[7].lines).toEqual([PILOT_DISCLOSURES.hero, PILOT_DISCLOSURES.step04, PILOT_DISCLOSURES.invitation, PILOT_DISCLOSURES.footer])
+    expect(brief[6].lines).toEqual([PILOT_DISCLOSURES.hero, PILOT_DISCLOSURES.step04, PILOT_DISCLOSURES.invitation, PILOT_DISCLOSURES.footer])
   })
 
   it('opens and closes with the brand line, which is also the footer tagline', () => {
@@ -52,6 +51,23 @@ describe('the homepage copy is the approved brief, word for word', () => {
     expect(HOMEPAGE_COPY.hero.headline).toBe(BRAND_LINE)
     expect(HOMEPAGE_COPY.hero.headlineLines.join(' ')).toBe(BRAND_LINE)
     expect(HOMEPAGE_COPY.invitation.brandLine).toBe(BRAND_LINE)
+  })
+
+  it('the Vision merge removed exactly the approved lines and kept the rest unchanged', () => {
+    const all = allHomepageText()
+    for (const removed of [
+      'A DIFFERENT WAY TO POST',
+      'Where the people who follow you can actually find your posts.',
+      "Where the fans who help you grow aren't just spectators, but have an opportunity to share in the success they help create.",
+      "Your content deserves more than attention. Here's how we're building a different way to post.",
+    ])
+      expect(all, removed).not.toContain(removed)
+    // The Vision headline survives once, as The Problem's transition.
+    expect(all.filter((t) => t === 'What if the split worked differently?')).toEqual(['What if the split worked differently?'])
+    expect(HOMEPAGE_COPY.howItWorks.vision).toEqual([
+      'Imagine a social network where growing your audience could also grow your opportunity to earn.',
+      "That's the future we're building with Splitpost.",
+    ])
   })
 
   it('the emphasized Problem lines are approved body lines, not new copy', () => {

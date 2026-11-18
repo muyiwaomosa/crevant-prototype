@@ -4,7 +4,7 @@ import { LogIn } from 'lucide-react'
 import { DISCOVER_PATH } from '../entry'
 import { useMemberLinks } from './member-links'
 import { useRobotsMeta } from './robots'
-import { BRAND_LINE, PILOT_DISCLOSURES, SITE_NAV } from './landing/copy'
+import { BRAND_LINE, PILOT_DISCLOSURES, PRODUCT_IMAGES_DISCLOSURE, SITE_NAV } from './landing/copy'
 import { WAITLIST_CLOSED_COPY, WAITLIST_OPEN, waitlistCta } from './waitlist/status'
 import { SplitpostWordmark } from './landing/ui/SplitpostWordmark'
 
@@ -120,6 +120,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             <SplitpostWordmark />
             <p data-testid="footer-tagline" className="mt-4 font-sp-display text-xl font-extrabold text-sp-secondary">{BRAND_LINE}</p>
             <p data-testid="footer-disclosure" className="mt-2 text-sm leading-relaxed text-sp-muted-on-dark">{PILOT_DISCLOSURES.footer}</p>
+            <p data-testid="product-images-note" className="mt-1 text-sm leading-relaxed text-sp-muted-on-dark">{PRODUCT_IMAGES_DISCLOSURE}</p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-white/85">
             <Link to="/#problem" className="hover:text-sp-secondary-on-dark">

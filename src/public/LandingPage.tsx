@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Hero } from './landing/sections/Hero'
 import { Problem } from './landing/sections/Problem'
-import { Vision } from './landing/sections/Vision'
 import { HowItWorks } from './landing/sections/HowItWorks'
 import { People } from './landing/sections/People'
 import { Future } from './landing/sections/Future'
@@ -10,12 +9,13 @@ import { Invitation } from './landing/sections/Invitation'
 import { MobileWaitlistBar } from './landing/sections/MobileWaitlistBar'
 import { Seam } from './landing/ui/Story'
 
-// The Splitpost homepage: seven sections, one story, in the order of the
-// approved Master Implementation Brief (docs/website-brief.md):
+// The Splitpost homepage: six sections, one story, in the original site's
+// design (restored 2026-11-18) with the approved new copy
+// (docs/website-brief.md). The Vision is merged into How Splitpost Works,
+// with the founder's approval.
 //
 //  #hero          HERO                          Don't just post. Get your split.
 //  #problem       THE PROBLEM                   You make the posts. Who gets the split?
-//  #vision        THE VISION                    What if the split worked differently?
 //  #how-it-works  HOW SPLITPOST WORKS           Post. Connect. Grow. Split.
 //  #people        THE PEOPLE BEHIND THE POSTS   You keep posting. They keep earning. But what about you?
 //  #future        A BETTER FUTURE FOR CREATORS  What if your next post could help build your future?
@@ -45,8 +45,6 @@ export function LandingPage() {
       <Hero />
       <Seam />
       <Problem />
-      {/* The Problem's closing bridge hands straight over to The Vision. */}
-      <Vision />
       <Seam />
       <HowItWorks />
       <Seam />

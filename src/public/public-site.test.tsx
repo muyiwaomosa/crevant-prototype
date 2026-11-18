@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PublicRoutes } from './PublicApp'
-import { BRAND_LINE, HOMEPAGE_COPY, PILOT_DISCLOSURES, briefLines } from './landing/copy'
+import { BRAND_LINE, HOMEPAGE_COPY, PILOT_DISCLOSURES, PRODUCT_IMAGES_DISCLOSURE, briefLines } from './landing/copy'
 import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation } from './landing/claims'
 import { waitlistCta } from './waitlist/status'
+import { PHOTOS } from './landing/photos'
 
 const PUBLIC_PATHS = ['/', '/join', '/request-invite', '/sign-in', '/forgot-password', '/auth/confirm', '/no-such-page']
 // Pages that must never collect anything until the privacy notice is approved.
@@ -37,12 +38,11 @@ afterEach(() => {
 const norm = (el: Element | null) => (el?.textContent || '').replace(/\s+/g, ' ')
 const landing = () => renderAt('/').container
 const section = (id: string) => landing().querySelector(`#${id}`)!
-const SECTION_ORDER = ['hero', 'problem', 'vision', 'how-it-works', 'people', 'future', 'invitation']
-const SECTION_KEYS = ['hero', 'problem', 'vision', 'howItWorks', 'people', 'future', 'invitation'] as const
+const SECTION_ORDER = ['hero', 'problem', 'how-it-works', 'people', 'future', 'invitation']
+const SECTION_KEYS = ['hero', 'problem', 'howItWorks', 'people', 'future', 'invitation'] as const
 const HEADINGS = [
   HOMEPAGE_COPY.hero.headline,
   HOMEPAGE_COPY.problem.headline,
-  HOMEPAGE_COPY.vision.headline,
   HOMEPAGE_COPY.howItWorks.headline,
   HOMEPAGE_COPY.people.headline,
   HOMEPAGE_COPY.future.headline,
@@ -69,7 +69,7 @@ const blocks = (el: Element) =>
     .filter(Boolean)
 
 describe('one Splitpost story, top to bottom', () => {
-  it('has the seven sections, in the approved order', () => {
+  it('has the six sections, in the approved order (The Vision merged into How Splitpost Works)', () => {
     expect([...landing().querySelectorAll('section')].map((sec) => sec.id)).toEqual(SECTION_ORDER)
   })
   it('uses the approved headlines, with exactly one main heading', () => {
@@ -89,11 +89,23 @@ describe('one Splitpost story, top to bottom', () => {
       from = at + shown.length
     }
   })
-  it('leaves nothing of Crevant or the retired sections and photos on the page', () => {
+  it('leaves nothing of Crevant, the old headlines, the retired sections or the app mockups on the page', () => {
     const c = landing()
-    expect(norm(c)).not.toMatch(/Crevant|You Create The Post|Every Post\. A Better Split|Priya|SAMPLE/i)
-    expect(c.querySelectorAll('img[src*="/media/landing"], picture')).toHaveLength(0)
-    expect(c.querySelector('#building, #creators, #split')).toBeNull()
+    expect(norm(c)).not.toMatch(/Crevant|You Create The Post|Every Post\. A Better Split|Concept illustration|Your month at a glance/i)
+    expect(c.querySelector('#building, #creators, #split, #vision')).toBeNull()
+  })
+  it('uses only the listed licensed photos (plus the sample avatar and the founder), each with alt text', () => {
+    const c = landing()
+    const listed = new Set(Object.values(PHOTOS).map((p) => p.id))
+    const photos = [...c.querySelectorAll('img[data-photo]')]
+    for (const img of photos) {
+      const id = img.getAttribute('data-photo')!
+      if (id === 'priya-avatar') continue
+      expect(listed.has(id), id).toBe(true)
+      expect((img.getAttribute('alt') ?? '').length, id).toBeGreaterThan(20)
+    }
+    expect(new Set(photos.map((i) => i.getAttribute('data-photo'))).size).toBe(listed.size + 1)
+    expect(c.querySelectorAll('img[src*="/media/landing"]:not([data-photo]):not([src$="founder.jpg"])')).toHaveLength(0)
   })
   it('shows no external research, statistics, percentages or amounts, in words or illustrations', () => {
     const c = landing()
@@ -120,30 +132,49 @@ describe('HERO', () => {
     const order = [...h.querySelectorAll('[data-testid="hero-actions"], [data-testid="hero-disclosure"]')].map((e) => e.getAttribute('data-testid'))
     expect(order).toEqual(['hero-actions', 'hero-disclosure'])
   })
-  it('illustrates how value is shared as a concept, with no percentages', () => {
-    const art = section('hero').querySelector('[data-testid="value-share"]')!
-    expect(art).toBeTruthy()
-    expect(art.textContent ?? '').toBe('')
+  it("keeps the original split post: Priya's sample post and what her community grew, labelled as a sample", () => {
+    const h = section('hero')
+    const scene = h.querySelector('[data-testid="hero-scene"]')!
+    expect(scene.querySelector('[data-testid="split-creator-piece"]')).toBeTruthy()
+    expect(scene.querySelector('[data-testid="split-community-piece"]')).toBeTruthy()
+    expect(norm(scene)).toContain(HOMEPAGE_COPY.split.creatorTag)
+    expect(norm(scene)).toContain(HOMEPAGE_COPY.split.communityTag)
+    expect(norm(scene)).toMatch(/Sample/)
+    expect(norm(scene.querySelector('figcaption'))).toMatch(/fictional sample creator/)
+  })
+  it('on phones, shows the picture right after the supporting copy, before the call to action', () => {
+    const h = section('hero')
+    const order = [...h.querySelectorAll('[data-testid="hero-body"], [data-testid="hero-scene"], [data-testid="hero-actions"], [data-testid="hero-disclosure"]')].map((e) => e.getAttribute('data-testid'))
+    expect(order).toEqual(['hero-body', 'hero-scene', 'hero-actions', 'hero-disclosure'])
+  })
+  it('settles the split post into place once, only when motion is allowed, and never loops', () => {
+    const scene = section('hero').querySelector('[data-testid="hero-scene"]')!
+    const animated = [...scene.querySelectorAll('[class*="animate-"]')]
+    expect(animated.length).toBe(3)
+    for (const el of animated) {
+      const anim = el.getAttribute('class')!.split(/\s+/).filter((c) => c.includes('animate-'))
+      expect(anim.every((c) => c.startsWith('motion-safe:')), anim.join()).toBe(true)
+      expect(anim.join()).not.toMatch(/infinite/)
+    }
   })
 })
 
 describe('THE PROBLEM', () => {
-  it('emphasizes the two approved lines, and hands over to THE VISION with the transition', () => {
+  it('emphasizes the two approved lines, shows who keeps the value, and closes with the transition', () => {
     const p = section('problem')
     expect([...p.querySelectorAll('[data-testid="problem-emphasis"]')].map((e) => norm(e))).toEqual([...HOMEPAGE_COPY.problem.emphasis])
     expect(norm(p.querySelector('[data-testid="problem-transition"]'))).toBe(HOMEPAGE_COPY.problem.transition)
-    expect(p.querySelector('[data-testid="audience-vs-earnings"]')).toBeTruthy()
+    expect(p.querySelector('[data-testid="value-capture"]')).toBeTruthy()
+    expect(norm(p.querySelector('figcaption'))).toMatch(/modest stack/)
   })
 })
 
-describe('THE VISION', () => {
-  it('shows the POST → CONNECT → SPLIT journey', () => {
-    const labels = [...section('vision').querySelectorAll('[data-testid="journey"] p')].map((e) => norm(e))
-    expect(labels).toEqual(['POST', 'CONNECT', 'SPLIT'])
+describe('HOW SPLITPOST WORKS (The Vision merged in)', () => {
+  it('shows the two retained Vision lines and the POST → CONNECT → SPLIT journey', () => {
+    const h = section('how-it-works')
+    expect([...h.querySelectorAll('[data-testid="how-vision"] p')].map((e) => norm(e))).toEqual([...HOMEPAGE_COPY.howItWorks.vision])
+    expect([...h.querySelectorAll('[data-testid="journey"] p')].map((e) => norm(e))).toEqual(['POST', 'CONNECT', 'SPLIT'])
   })
-})
-
-describe('HOW SPLITPOST WORKS', () => {
   it('has four connected steps, each with its own illustration, then the closing statement', () => {
     const h = section('how-it-works')
     const steps = [...h.querySelectorAll('[data-testid="step"]')]
@@ -160,20 +191,21 @@ describe('HOW SPLITPOST WORKS', () => {
 })
 
 describe('THE PEOPLE BEHIND THE POSTS', () => {
-  it('tells three moments, creators first and larger, fans after', () => {
+  it('shows creators first and largest (a lead photo and one photo per pain point), then the fans, smaller', () => {
     const p = section('people')
-    const ids = [...p.querySelectorAll('[data-testid^="moment-"]')].map((e) => e.getAttribute('data-testid'))
-    expect(ids).toEqual(['moment-effort', 'moment-frustration', 'moment-supporters'])
+    const ids = [...p.querySelectorAll('img[data-photo]')].map((e) => e.getAttribute('data-photo'))
+    expect(ids).toEqual(['creator-late-night', 'unpredictable-income', 'second-job', 'planning-bills', 'fans-sharing'])
     expect(norm(p.querySelector('[data-testid="people-emphasis"]'))).toBe(HOMEPAGE_COPY.people.emphasis)
     expect([...p.querySelectorAll('[data-testid="pains"] h3')].map((e) => norm(e))).toEqual(HOMEPAGE_COPY.people.pains.map((x) => x.title))
+    expect(norm(p.querySelector('[data-testid="people-fans"] h3'))).toBe(HOMEPAGE_COPY.people.fanTransition)
   })
 })
 
 describe('A BETTER FUTURE FOR CREATORS', () => {
   it('pairs today with what is possible, using the approved copy only', () => {
     const f = section('future')
-    expect(f.querySelector('[data-testid="today"]')).toBeTruthy()
-    expect(f.querySelector('[data-testid="possible"]')).toBeTruthy()
+    expect(f.querySelector('[data-testid="today"] img')?.getAttribute('data-photo')).toBe('future-today')
+    expect(f.querySelector('[data-testid="possible"] img')?.getAttribute('data-photo')).toBe('future-toward')
     expect(norm(f.querySelector('[data-testid="future-closing"]'))).toBe(HOMEPAGE_COPY.future.closing)
   })
 })
@@ -186,7 +218,8 @@ describe('THE INVITATION', () => {
     expect(norm(cta).trim()).toBe(waitlistCta())
     expect(norm(inv.querySelector('[data-testid="invitation-disclosure"]')).trim()).toBe(PILOT_DISCLOSURES.invitation)
     expect(norm(inv.querySelector('[data-testid="brand-line"]'))).toBe(BRAND_LINE)
-    expect(inv.querySelector('[data-testid="constellation"]')).toBeTruthy()
+    expect(norm(inv.querySelector('[data-testid="founder-signoff"]')).trim()).toBe(HOMEPAGE_COPY.invitation.signOff)
+    expect(inv.querySelector('[data-testid="founder-signoff"] img')?.getAttribute('src')).toBe('/media/landing/founder.jpg')
   })
   it('has a phone-only waitlist bar that starts hidden', () => {
     const bar = landing().querySelector('[data-testid="mobile-waitlist-bar"]')!
@@ -250,7 +283,9 @@ describe('header and footer', () => {
       expect(norm(footer.querySelector('[data-testid="footer-tagline"]')), path).toBe(BRAND_LINE)
       expect(norm(footer.querySelector('[data-testid="footer-disclosure"]')), path).toBe(PILOT_DISCLOSURES.footer)
       expect(norm(footer), path).toContain('© 2026 Splitpost. All rights reserved.')
-      expect(norm(footer), path).not.toMatch(/Every Post\. A Better Split|stock images/)
+      // Restored word for word from the original site (founder decision): photos are stock images of models.
+      expect(norm(footer.querySelector('[data-testid="product-images-note"]')), path).toBe(PRODUCT_IMAGES_DISCLOSURE)
+      expect(norm(footer), path).not.toMatch(/Every Post\. A Better Split/)
       expect(norm(footer), path).not.toMatch(/Crevant|privacy|terms/i)
       cleanup()
     }

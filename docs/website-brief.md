@@ -1,7 +1,7 @@
 # Splitpost website: approved copy (source of truth)
 
-The seven approved sections of the Splitpost Website Redesign Master
-Implementation Brief, word for word, in order. The homepage copy
+The approved sections of the Splitpost Website Redesign Master Implementation
+Brief, word for word, in order. The homepage copy
 (`src/public/landing/copy.ts`) must match this file exactly; a test reads it
 line by line (`src/public/landing/copy.test.ts`).
 
@@ -10,7 +10,25 @@ label, not page copy; every other line under a section is one approved line of
 copy, in page order.
 
 Approved pilot disclosures (2026-11-18) are listed after the sections. They
-are not part of the seven sections' marketing copy.
+are not part of the sections' marketing copy. Where a disclosure names a
+section by number ("Section 4, beside Step 04"; "Section 7, beside the final
+CTA"), it means the brief's original numbering: Step 04 is in How Splitpost
+Works, and the final CTA is in The Invitation.
+
+Change log
+
+2026-11-18, founder approval ("modified Option B"): The Vision (originally
+Section 3) was merged into How Splitpost Works (originally Section 4), and
+the later sections were renumbered. Removed, exactly:
+The Vision eyebrow: "A DIFFERENT WAY TO POST".
+The Vision headline: "What if the split worked differently?" (the same
+sentence remains once, as The Problem's transition).
+Vision body line: "Where the people who follow you can actually find your posts."
+Vision body line: "Where the fans who help you grow aren't just spectators,
+but have an opportunity to share in the success they help create."
+How It Works introduction: "Your content deserves more than attention.
+Here's how we're building a different way to post."
+Every retained line is unchanged.
 
 ## SECTION 1 — HERO
 
@@ -39,21 +57,7 @@ You did the work. But the system doesn't always reward it.
 ### Transition
 What if the split worked differently?
 
-## SECTION 3 — THE VISION
-
-### Eyebrow
-A DIFFERENT WAY TO POST
-
-### Headline
-What if the split worked differently?
-
-### Body
-Imagine a social network where growing your audience could also grow your opportunity to earn.
-Where the people who follow you can actually find your posts.
-Where the fans who help you grow aren't just spectators, but have an opportunity to share in the success they help create.
-That's the future we're building with Splitpost.
-
-## SECTION 4 — HOW SPLITPOST WORKS
+## SECTION 3 — HOW SPLITPOST WORKS (THE VISION MERGED IN)
 
 ### Eyebrow
 HOW SPLITPOST WORKS
@@ -61,8 +65,9 @@ HOW SPLITPOST WORKS
 ### Headline
 Post. Connect. Grow. Split.
 
-### Introduction
-Your content deserves more than attention. Here's how we're building a different way to post.
+### Body (from The Vision, unchanged)
+Imagine a social network where growing your audience could also grow your opportunity to earn.
+That's the future we're building with Splitpost.
 
 ### Step 01
 Post what you love.
@@ -83,7 +88,7 @@ When eligible content generates advertising revenue, creators receive a share, a
 ### Closing statement
 Because success is better when it's shared.
 
-## SECTION 5 — THE PEOPLE BEHIND THE POSTS
+## SECTION 4 — THE PEOPLE BEHIND THE POSTS
 
 ### Eyebrow
 THE PEOPLE BEHIND THE POSTS
@@ -118,7 +123,7 @@ They help you grow, but most of the time, all they get is a thank you.
 ### Closing statement
 If we all help create the value, why shouldn't we share in the success?
 
-## SECTION 6 — A BETTER FUTURE FOR CREATORS
+## SECTION 5 — A BETTER FUTURE FOR CREATORS
 
 ### Eyebrow
 A BETTER FUTURE FOR CREATORS
@@ -133,7 +138,7 @@ A future where you have more opportunities to earn from your work, more time to 
 ### Closing statement
 Not just more followers. More freedom to build the life you want.
 
-## SECTION 7 — THE INVITATION
+## SECTION 6 — THE INVITATION
 
 ### Eyebrow
 BE PART OF WHAT'S NEXT

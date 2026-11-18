@@ -158,19 +158,21 @@
   to { opacity: 1; }
 }
 
-/* Website redesign (2026-11-18): gentle motion for the split-post
-   illustration and the bridge arrow. Used only through Tailwind's
-   motion-safe: variant, so nothing moves when reduced motion is on. Lives
-   here because the Content Security Policy blocks inline <style> tags. */
-@keyframes sp-lift {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
+/* Homepage hero (2026-11-18): the split post's one-time entrance. The two
+   pieces settle into place from just above and just below, then the apricot
+   line fades in. Used only through Tailwind's motion-safe: variant, so
+   nothing moves when reduced motion is on; each ends at transform: none, so
+   the picture rests exactly where it sits without the animation. Lives here
+   because the Content Security Policy blocks inline <style> tags. */
+@keyframes sp-settle-down {
+  from { opacity: 0; transform: translateY(-18px); }
+  to { opacity: 1; transform: none; }
 }
-@keyframes sp-drop {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(5px); }
+@keyframes sp-settle-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
 }
-@keyframes sp-nudge {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(4px); }
+@keyframes sp-seam-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
