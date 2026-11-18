@@ -56,7 +56,7 @@ declare
   expected text[] := array[
     -- app_add_comment and app_create_post have two versions each: the original,
     -- and the one with a request id (20261119000000_publishing_request_ids).
-    'app_add_comment', 'app_add_comment', 'app_clique_add', 'app_clique_remove', 'app_comments',
+    'app_add_comment', 'app_add_comment', 'app_clique_add', 'app_clique_remove', 'app_clique_replace', 'app_comments',
     'app_create_post', 'app_create_post', 'app_delete_comment', 'app_delete_post', 'app_discover', 'app_feed', 'app_follow', 'app_following',
     'app_like', 'app_me', 'app_member', 'app_member_posts', 'app_post', 'app_unfollow', 'app_unlike'
   ];
@@ -123,7 +123,7 @@ do $$
 begin
   if not exists (select 1 from pg_trigger where tgname = 'clique_members_guard'
                  and tgrelid = 'social.clique_members'::regclass and tgenabled <> 'D') then
-    raise exception 'FAIL: the Clique guard (follow required, at most 10) is missing or disabled';
+    raise exception 'FAIL: the Inner Clique guard (follow required, at most 25) is missing or disabled';
   end if;
   if not exists (select 1 from pg_trigger where tgname = 'clique_members_append_only'
                  and tgrelid = 'social.clique_members'::regclass and tgenabled <> 'D') then
@@ -140,8 +140,8 @@ begin
     raise exception 'FAIL: members could follow themselves';
   end if;
   if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                 where n.nspname = 'social' and p.proname = 'clique_members_guard' and p.prosrc ~ '>= 10') then
-    raise exception 'FAIL: the Clique limit is not 10';
+                 where n.nspname = 'social' and p.proname = 'clique_members_guard' and p.prosrc ~ '>= 25') then
+    raise exception 'FAIL: the Inner Clique limit is not 25';
   end if;
   raise notice 'PASS: the Clique and history guards are in place';
 end $$;

@@ -1,6 +1,6 @@
 # Release 1: the social core
 
-Real text posts, follows, the Clique (at most 10 creators), likes and
+Real text posts, follows, My Clique and the Inner Clique (at most 25 creators since 20261120000000; 10 before), likes and
 comments, stored in the database and used through the members area at `/app`.
 This document is the review guide for the migration
 `supabase/migrations/20261117000000_social_core.sql`.
@@ -18,7 +18,7 @@ Production. Adding its checksum is a separate founder approval.
 | Post | Text, 1 to 2,000 characters, no control characters. 20 posts an hour at most. |
 | Delete a post or comment | Own only. Kept as deleted (`deleted_at`) and never shown again. |
 | Follow / unfollow | Not yourself; only members with a complete profile. Following twice records nothing new. Every change is kept in `social.follow_events`. |
-| Clique | Only creators you follow; at most 10; adding twice changes nothing; one change at a time per member (a lock), so two requests can't both take the last slot. Removing, or unfollowing, closes the membership with a reason (`removed` or `unfollowed`); history is never rewritten. |
+| Inner Clique | Only creators you follow; at most 25 (10 before 20261120000000); adding twice changes nothing; one change at a time per member (a lock), so two requests can't both take the last slot. Removing, unfollowing or replacing closes the membership with a reason (`removed`, `unfollowed` or `replaced`); history is never rewritten. |
 | Like / unlike | Live posts only; one like per member per post. |
 | Comment | Live posts only; 1 to 1,000 characters; 60 an hour at most. |
 | Feed | Posts from people you follow, and your own, newest first, 20 at a time. |
@@ -39,7 +39,7 @@ A test checks that no social table has a points, money, email or role column.
 | `social.posts`, `social.comments` | Content, soft-deleted. |
 | `social.follows` | Who follows whom now. |
 | `social.follow_events` | Every follow and unfollow. Append-only (a trigger refuses updates and deletes). |
-| `social.clique_members` | Clique history: one row per membership, closed when it ends, never deleted or rewritten. A trigger requires a current follow and enforces the limit of 10. |
+| `social.clique_members` | Clique history: one row per membership, closed when it ends, never deleted or rewritten. A trigger requires a current follow and enforces the limit (25 since 20261120000000). |
 | `social.likes` | One row per member per post. |
 | `public.app_*` (18 functions) | The only way members reach this data. Each runs as its owner (`security definer`) with an empty search path, checks the caller, and is callable by signed-in members only (`anon` and `public` are revoked). |
 | `social.*` helpers (5) | Internal: who is calling, complete-profile check, rate limits, and the two triggers. Not callable by members. |
@@ -106,6 +106,55 @@ rollback refuses until the later ones have run.
 Wiring this rollback into the "Waitlist rollback (staging)" workflow as a
 target is a follow-up that needs its own approval (as it did for creator
 acquisition).
+
+## My Clique and Inner Clique (20261120000000)
+
+**My Clique** is everyone a member follows. It is `social.follows`, unchanged
+and still the source of truth, with no limit. **Inner Clique** is the optional
+priority group inside it, kept in the existing `social.clique_members` (no new
+table). Every existing follow and membership is kept as it is.
+
+| Rule | Where it is enforced |
+| --- | --- |
+| At most 25 Inner Clique creators, each one followed | The guard trigger on `social.clique_members`, whatever writes the rows. |
+| Removing from the Inner Clique never unfollows | `app_clique_remove` only closes the membership (`removed`). |
+| Unfollowing removes Inner Clique membership | `app_unfollow` closes it (`unfollowed`), now under the same per-member lock as add and replace, so it can't race them. |
+| At 25, a new creator replaces one the member chooses | `app_clique_replace(p_remove, p_add)`: checks, closes the old membership (`replaced`) and opens the new one in one transaction, under the per-member lock. Any failure changes nothing. The replaced creator stays followed. |
+
+Errors: `not_in_clique`, `already_in_clique`, `not_following`,
+`cannot_add_self`, `clique_full`. Signed-in members only, like every other
+member function. The Inner Clique changes presentation priority only: the
+feed stays chronological, and nothing records Connection Points, rewards or
+money (checked). A later release can show Inner Clique creators first in the
+unseen strip by reading `in_my_clique` from `app_following`.
+
+**The page** (`/app/clique`, the existing Clique tab, no new tab): an Inner
+Clique section with the count (for example 8/25) and "Remove from Inner
+Clique", then My Clique with every followed creator, its status, "Add to
+Inner Clique" and "Unfollow". At 25, adding opens a dialog (a bottom sheet on
+phones) to choose who to replace: a labelled radio group, Escape and Cancel
+close it, focus stays inside and returns to the button. Elsewhere (profiles,
+Discover), a full Inner Clique links to `/app/clique?add=<id>`, which opens
+the same dialog.
+
+**Rollback (staging only):** `scripts/db/staging-rollback-inner-clique.sql`
+restores the guard at 10, the earlier `app_unfollow` and reasons, drops
+`app_clique_replace` and deletes the record. It refuses if any member has more
+than 10 Inner Clique creators or any membership was closed as `replaced`
+(the history is append-only), so once members use the larger Inner Clique,
+the way back is a forward fix. It runs first in the rollback chain. Tested by
+`scripts/db/rollback-inner-clique-test.sh`, which also applies the migration
+over existing memberships and proves every one is kept.
+
+**Tests:** `supabase/tests-local/066_inner_clique.sql` (unlimited follows, the
+cap, replace, every failed replace changing nothing, a replace failing at its
+last step changing nothing, removal keeping the follow, unfollow closing the
+membership, anonymous refusal), `scripts/db/inner-clique-concurrency-test.sh`
+(two real sessions: same creator replaced twice, two different replacements,
+the same creator brought in twice, an add racing a replace at 25, unfollow
+racing a replace), `src/app/app.test.tsx` (the page, the dialog, keyboard use,
+failure), and `e2e/social-journey.e2e.cjs` (27 follows, the 26th refused, a
+real replacement in the browser, phone widths 390 and 320).
 
 ## Tests
 

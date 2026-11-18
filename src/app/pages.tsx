@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
-import { Card, EmptyState, PageHeader, buttonClass } from '../components/ui'
+import { Card, EmptyState, Modal, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import { LIMITS, type Comment, type DiscoverMember, type FollowedCreator, type Member, type Me, type Post } from './api'
 import { useAppApi, useMyProfile } from './AppApiContext'
@@ -411,39 +411,72 @@ function CommentItem({ comment, onDeleted }: { comment: Comment; onDeleted: () =
 }
 
 // ---------------------------------------------------------------------------
-// The Clique: up to 10 creators you choose from the people you follow.
+// Your Clique. My Clique is everyone you follow (no limit). Inner Clique is up
+// to 25 of them you choose as priority creators. Removing someone from the
+// Inner Clique never unfollows them; unfollowing removes them from both.
+// Inner Clique changes presentation priority only, never feed order.
 
 export function CliquePage() {
   const api = useAppApi()
   const list = useLoad(() => api.following(), [api])
-  const clique = (list.data ?? []).filter((f) => f.inMyClique)
-  const others = (list.data ?? []).filter((f) => !f.inMyClique)
-  const full = clique.length >= LIMITS.clique
+  const [params, setParams] = useSearchParams()
+  const [replacing, setReplacing] = useState<FollowedCreator | null>(null)
+  const [status, setStatus] = useState('')
+  const all = list.data ?? []
+  const inner = all.filter((f) => f.inMyClique)
+  const full = inner.length >= LIMITS.clique
+
+  // ?add=<id>: sent here from elsewhere when the Inner Clique was full.
+  const addId = params.get('add')
+  useEffect(() => {
+    if (!addId || !list.data) return
+    const target = list.data.find((f) => f.id === addId)
+    if (target && !target.inMyClique && list.data.filter((f) => f.inMyClique).length >= LIMITS.clique) setReplacing(target)
+    setParams((p) => {
+      p.delete('add')
+      return p
+    }, { replace: true })
+  }, [addId, list.data, setParams])
+
+  const closeReplace = useCallback(() => setReplacing(null), [])
+  const reload = list.reload
+  const changed = useCallback(
+    async (message: string) => {
+      setStatus(message)
+      await reload()
+    },
+    [reload],
+  )
 
   return (
     <>
       <PageHeader
         title="Your Clique"
-        subtitle="Up to 10 creators you want a closer relationship with. You choose them from the people you follow; following someone never adds them for you."
+        subtitle="My Clique is everyone you follow. Your Inner Clique is up to 25 of them you choose as priority creators. It never changes the order of your feed."
       />
+      <p aria-live="polite" data-testid="clique-status" className="sr-only">
+        {status}
+      </p>
       {list.loading && !list.data && <Loading label="Loading your Clique…" />}
       {list.error !== null && <ErrorNote error={list.error} />}
       {list.data && (
         <>
-          <section aria-labelledby="clique-title">
-            <h2 id="clique-title" className="mb-3 flex items-baseline justify-between font-display text-lg font-bold text-ink-900">
-              In your Clique
-              <span className="text-sm font-semibold tabular-nums text-ink-500" aria-label={`${clique.length} of ${LIMITS.clique}`}>
-                {clique.length}/{LIMITS.clique}
+          <section aria-labelledby="inner-title">
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h2 id="inner-title" className="font-display text-lg font-bold text-ink-900">
+                Inner Clique
+              </h2>
+              <span className="text-sm font-semibold tabular-nums text-ink-500" aria-label={`${inner.length} of ${LIMITS.clique} in your Inner Clique`}>
+                {inner.length}/{LIMITS.clique}
               </span>
-            </h2>
-            {clique.length === 0 ? (
+            </div>
+            {inner.length === 0 ? (
               <EmptyState
                 icon={<Users className="h-7 w-7" />}
-                title="Nobody in your Clique yet"
-                body={list.data.length === 0 ? 'Follow people first, then choose who belongs in your Clique.' : 'Add creators you follow from the list below.'}
+                title="No priority creators yet"
+                body={all.length === 0 ? 'Follow people first, then choose who belongs in your Inner Clique.' : 'Add creators from My Clique below. You can change them at any time.'}
                 action={
-                  list.data.length === 0 ? (
+                  all.length === 0 ? (
                     <Link to="/app/discover" className={buttonClass('primary')}>
                       Discover people
                     </Link>
@@ -451,59 +484,245 @@ export function CliquePage() {
                 }
               />
             ) : (
-              <ul className="space-y-2">
-                {clique.map((f) => (
-                  <li key={f.id}>
-                    <FollowedRow creator={f} onChange={list.reload} />
-                  </li>
-                ))}
-              </ul>
+              <>
+                <p className="mb-3 text-sm text-ink-600">
+                  {full ? 'Full. Adding someone else lets you choose who to replace.' : 'Removing someone keeps them in My Clique.'}
+                </p>
+                <ul className="space-y-2">
+                  {inner.map((f) => (
+                    <li key={f.id}>
+                      <InnerRow creator={f} onChange={changed} />
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </section>
-          {others.length > 0 && (
-            <section aria-labelledby="following-title" className="mt-8">
-              <h2 id="following-title" className="mb-1 font-display text-lg font-bold text-ink-900">
-                People you follow
-              </h2>
-              {full && <p className="mb-3 text-sm text-ink-600">Your Clique is full. Remove someone to make room.</p>}
-              <ul className="mt-3 space-y-2">
-                {others.map((f) => (
+          {all.length > 0 && (
+            <section aria-labelledby="my-clique-title" className="mt-8">
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <h2 id="my-clique-title" className="font-display text-lg font-bold text-ink-900">
+                  My Clique
+                </h2>
+                <span className="text-sm font-semibold tabular-nums text-ink-500">
+                  {all.length} {all.length === 1 ? 'creator' : 'creators'}
+                </span>
+              </div>
+              <p className="mb-3 text-sm text-ink-600">Everyone you follow. Unfollowing also removes someone from your Inner Clique.</p>
+              <ul className="space-y-2">
+                {all.map((f) => (
                   <li key={f.id}>
-                    <FollowedRow creator={f} onChange={list.reload} />
+                    <FollowedRow creator={f} full={full} onReplace={setReplacing} onChange={changed} />
                   </li>
                 ))}
               </ul>
             </section>
           )}
+          <ReplaceDialog adding={replacing} inner={inner} onClose={closeReplace} onDone={changed} />
         </>
       )}
     </>
   )
 }
 
-function FollowedRow({ creator, onChange }: { creator: FollowedCreator; onChange: () => Promise<void> }) {
+function CreatorSummary({ creator }: { creator: FollowedCreator }) {
   return (
-    <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <MemberAvatar member={creator} size={40} />
-        <div className="min-w-0 leading-tight">
-          <MemberLink member={creator} />
-          <p className="truncate text-[13px] text-ink-500">
-            @{creator.username} ·{' '}
-            {creator.inMyClique && creator.cliqueAddedAt ? (
-              <>
-                in your Clique since <When iso={creator.cliqueAddedAt} />
-              </>
-            ) : (
-              <>
-                following since <When iso={creator.followedAt} />
-              </>
-            )}
-          </p>
+    <div className="flex min-w-0 flex-1 items-center gap-3">
+      <MemberAvatar member={creator} size={40} />
+      <div className="min-w-0 leading-tight">
+        <MemberLink member={creator} />
+        <p className="truncate text-[13px] text-ink-500">
+          @{creator.username} ·{' '}
+          {creator.inMyClique && creator.cliqueAddedAt ? (
+            <>
+              Inner Clique since <When iso={creator.cliqueAddedAt} />
+            </>
+          ) : (
+            <>
+              following since <When iso={creator.followedAt} />
+            </>
+          )}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/** Runs one change at a time for a row, reporting failures in place. */
+function useRowAction(onChange: (message: string) => Promise<void>) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  async function run(action: () => Promise<void>, message: string) {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await action()
+      await onChange(message)
+    } catch (e) {
+      setError(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return { busy, error, run }
+}
+
+function InnerRow({ creator, onChange }: { creator: FollowedCreator; onChange: (message: string) => Promise<void> }) {
+  const api = useAppApi()
+  const { busy, error, run } = useRowAction(onChange)
+  return (
+    <Card className="p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <CreatorSummary creator={creator} />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run(() => api.cliqueRemove(creator.id), `${creator.displayName} was removed from your Inner Clique. You still follow them.`)}
+          aria-label={`Remove ${creator.displayName} from your Inner Clique (you keep following them)`}
+          className={buttonClass('secondary', 'sm')}
+        >
+          Remove from Inner Clique
+        </button>
+      </div>
+      {error !== null && <ErrorNote error={error} />}
+    </Card>
+  )
+}
+
+function FollowedRow({
+  creator,
+  full,
+  onReplace,
+  onChange,
+}: {
+  creator: FollowedCreator
+  full: boolean
+  onReplace: (creator: FollowedCreator) => void
+  onChange: (message: string) => Promise<void>
+}) {
+  const api = useAppApi()
+  const { busy, error, run } = useRowAction(onChange)
+  return (
+    <Card className="p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <CreatorSummary creator={creator} />
+        <div className="flex flex-wrap items-center gap-2">
+          {creator.inMyClique ? (
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-brand-50 px-3 text-sm font-semibold text-brand-700">
+              <Users className="h-4 w-4" aria-hidden="true" /> Inner Clique
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                full ? onReplace(creator) : run(() => api.cliqueAdd(creator.id), `${creator.displayName} was added to your Inner Clique.`)
+              }
+              aria-label={`Add ${creator.displayName} to your Inner Clique`}
+              aria-haspopup={full ? 'dialog' : undefined}
+              className={buttonClass('secondary', 'sm')}
+            >
+              <Users className="h-4 w-4" aria-hidden="true" /> Add to Inner Clique
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(() => api.unfollow(creator.id), `You unfollowed ${creator.displayName}.`)}
+            aria-label={creator.inMyClique ? `Unfollow ${creator.displayName} (also removes them from your Inner Clique)` : `Unfollow ${creator.displayName}`}
+            className={buttonClass('ghost', 'sm')}
+          >
+            Unfollow
+          </button>
         </div>
       </div>
-      <RelationshipButtons member={{ ...creator, followedByMe: true }} onChange={onChange} />
+      {error !== null && <ErrorNote error={error} />}
     </Card>
+  )
+}
+
+/** At 25: choose who the new creator replaces. One atomic change on the server. */
+function ReplaceDialog({
+  adding,
+  inner,
+  onClose,
+  onDone,
+}: {
+  adding: FollowedCreator | null
+  inner: FollowedCreator[]
+  onClose: () => void
+  onDone: (message: string) => Promise<void>
+}) {
+  const api = useAppApi()
+  const [choice, setChoice] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  const name = useId()
+
+  useEffect(() => {
+    setChoice(null)
+    setError(null)
+  }, [adding])
+
+  async function confirm(e: FormEvent) {
+    e.preventDefault()
+    if (!adding || !choice || busy) return
+    const replaced = inner.find((f) => f.id === choice)
+    setBusy(true)
+    setError(null)
+    try {
+      await api.cliqueReplace(choice, adding.id)
+      onClose()
+      await onDone(`${adding.displayName} replaced ${replaced?.displayName ?? 'a creator'} in your Inner Clique. You still follow ${replaced?.displayName ?? 'them'}.`)
+    } catch (err) {
+      // Nothing changed on the server; show the latest list so the choice is current.
+      setError(err)
+      setChoice(null)
+      await onDone('')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={adding !== null} onClose={onClose} title="Your Inner Clique is full">
+      {adding && (
+        <form onSubmit={confirm}>
+          <fieldset>
+            <legend className="mb-3 text-sm text-ink-700">
+              Choose who <strong className="text-ink-900">{adding.displayName}</strong> replaces. The person you replace stays in My Clique, and you keep following them.
+            </legend>
+            <div className="max-h-[45dvh] space-y-1 overflow-y-auto">
+              {inner.map((f) => (
+                <label key={f.id} className="flex cursor-pointer items-center gap-3 rounded-2xl px-2 py-2 hover:bg-ink-50 has-[:checked]:bg-brand-50">
+                  <input
+                    type="radio"
+                    name={name}
+                    value={f.id}
+                    checked={choice === f.id}
+                    onChange={() => setChoice(f.id)}
+                    className="h-4 w-4 accent-brand-600"
+                  />
+                  <MemberAvatar member={f} size={32} />
+                  <span className="min-w-0 truncate text-sm font-semibold text-ink-900">{f.displayName}</span>
+                  <span className="ml-auto truncate text-[13px] text-ink-500">@{f.username}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {error !== null && <ErrorNote error={error} />}
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onClose} className={buttonClass('secondary')}>
+              Cancel
+            </button>
+            <button type="submit" disabled={!choice || busy} className={buttonClass('primary')}>
+              {busy ? 'Replacing…' : 'Replace'}
+            </button>
+          </div>
+        </form>
+      )}
+    </Modal>
   )
 }
 
@@ -524,7 +743,7 @@ export function ProfilePage() {
               ['Posts', me.data.postCount],
               ['Followers', me.data.followerCount],
               ['Following', me.data.followingCount],
-              ['In your Clique', `${me.data.cliqueCount}/${LIMITS.clique}`],
+              ['Inner Clique', `${me.data.cliqueCount}/${LIMITS.clique}`],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="text-ink-500">{label}</dt>

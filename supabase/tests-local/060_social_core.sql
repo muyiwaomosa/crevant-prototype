@@ -192,7 +192,8 @@ end $$;
 commit;
 
 -- ---------------------------------------------------------------------------
--- 6. At most 10 in a Clique; unfollowing closes the membership and frees a slot.
+-- 6. More than the old 10 fit (the Inner Clique holds 25: 066_inner_clique.sql
+--    tests the limit); unfollowing closes the membership.
 begin;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000602","role":"authenticated"}', true);
 set local role authenticated;
@@ -209,26 +210,29 @@ begin
   end loop;
   select count(*) into n from public.app_following() where in_my_clique;
   if n <> 10 then
-    raise exception 'FAIL: B should have 10 in their Clique, has %', n;
+    raise exception 'FAIL: B should have 10 in their Inner Clique, has %', n;
   end if;
-  perform pg_temp.expect_error('select public.app_clique_add(''00000000-0000-4000-8000-000000000612'')', 'clique_full', 'an 11th Clique member');
+  perform public.app_clique_add('00000000-0000-4000-8000-000000000612');
+  select count(*) into n from public.app_following() where in_my_clique;
+  if n <> 11 then
+    raise exception 'FAIL: an 11th Inner Clique creator should now fit (limit 25), found %', n;
+  end if;
 
   perform public.app_unfollow('00000000-0000-4000-8000-000000000601');
   select count(*) into n from public.app_following() where in_my_clique;
-  if n <> 9 then
-    raise exception 'FAIL: unfollowing A should leave 9 in the Clique, found %', n;
+  if n <> 10 then
+    raise exception 'FAIL: unfollowing A should leave 10 in the Inner Clique, found %', n;
   end if;
-  perform public.app_clique_add('00000000-0000-4000-8000-000000000612');
   perform public.app_clique_remove('00000000-0000-4000-8000-000000000603');
   select count(*) into n from public.app_following() where in_my_clique;
   if n <> 9 then
-    raise exception 'FAIL: after adding L and removing C the Clique should hold 9, found %', n;
+    raise exception 'FAIL: after removing C the Inner Clique should hold 9, found %', n;
   end if;
   select count(*) into n from public.app_feed();
   if n <> 0 then
     raise exception 'FAIL: after unfollowing A, B''s feed should not show A''s post (found %)', n;
   end if;
-  raise notice 'PASS: a Clique holds at most 10, and unfollowing frees a slot';
+  raise notice 'PASS: more than 10 fit in an Inner Clique, and unfollowing closes the membership';
 end $$;
 commit;
 

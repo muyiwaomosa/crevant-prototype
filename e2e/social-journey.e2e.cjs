@@ -1,6 +1,6 @@
 // Release 1: the social core in a real browser, against a real LOCAL
 // Supabase, with the vercel.json security headers applied. Two invited
-// members choose their names, post, follow, build a Clique, like and comment,
+// members choose their names, post, follow, build an Inner Clique, like and comment,
 // and everything survives a page reload. Run through scripts/e2e/auth-journey.sh
 // (after the sign-in journey, on the same local stack and build).
 // Every check prints PASS or FAIL; the process exits non zero on any failure.
@@ -181,7 +181,7 @@ async function signInAndSetUp(page, email, username, displayName) {
     check('the post is stored once, as written', posts.n === 1, `${posts.detail}; all of A's posts: ${all.detail}; page sent app_create_post: ${writesTo('app_create_post')}`)
   }
 
-  // 3. B finds A, follows, adds A to their Clique, likes and comments.
+  // 3. B finds A, follows, adds A to their Inner Clique, likes and comments.
   const ctxB = await newContext(browser)
   const pageB = await ctxB.newPage()
   await signInAndSetUp(pageB, emailB, userB, 'Bee Fan')
@@ -191,13 +191,13 @@ async function signInAndSetUp(page, email, username, displayName) {
   await pageB.getByLabel('Search people by name or username').fill(userA)
   await pageB.getByRole('button', { name: 'Search' }).click()
   await pageB.getByRole('button', { name: 'Follow Aye Teacher' }).click()
-  await pageB.getByRole('button', { name: 'Add Aye Teacher to your Clique' }).click()
-  await pageB.getByRole('button', { name: 'Remove Aye Teacher from your Clique' }).waitFor()
-  check('following and joining the Clique are separate records', sql(`select (select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${idA}') || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${idA}' and removed_at is null)`) === '1|1')
+  await pageB.getByRole('button', { name: 'Add Aye Teacher to your Inner Clique' }).click()
+  await pageB.getByRole('button', { name: 'Remove Aye Teacher from your Inner Clique (you keep following them)' }).waitFor()
+  check('following and joining the Inner Clique are separate records', sql(`select (select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${idA}') || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${idA}' and removed_at is null)`) === '1|1')
 
   await pageB.getByRole('link', { name: 'Home' }).first().click()
   await pageB.getByTestId('post').filter({ hasText: postText }).waitFor()
-  check('A\'s post shows in B\'s feed after following, marked as in B\'s Clique', await pageB.getByText('In your Clique').first().isVisible())
+  check('A\'s post shows in B\'s feed after following, marked as in B\'s Inner Clique', await pageB.getByTestId('post').filter({ hasText: postText }).getByText('Inner Clique').isVisible())
   const likeStatus = await answered(pageB, 'app_like', () => pageB.getByRole('button', { name: 'Like (0 likes)' }).click())
   check('the server accepted B\'s like', likeStatus === 204 || likeStatus === 200, String(likeStatus))
   await pageB.getByRole('button', { name: 'Unlike (1 likes)' }).waitFor()
@@ -225,32 +225,67 @@ async function signInAndSetUp(page, email, username, displayName) {
   const appStorage = await pageB.evaluate(() => Object.keys(localStorage).filter((k) => !/^sb-/.test(k)))
   check('no social data is kept in browser storage', appStorage.length === 0, appStorage.join(','))
 
-  // 5. The Clique holds at most 10; the database refuses an 11th even through the API.
+  // 5. My Clique is unlimited; the Inner Clique holds at most 25. The database
+  //    refuses a 26th even through the API, and at 25 the page offers an
+  //    atomic replacement instead.
   {
     const others = []
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 26; i++) {
       const email = `clique${i}-${RUN}@example.test`
       const id = await createMember(email)
       sql(`update public.profiles set username = 'cq${i}_${RUN}', display_name = 'Clique ${i}' where id = '${id}'`)
       others.push(id)
     }
     for (const id of others) await rpc(tokenB, 'app_follow', { p_creator: id })
-    for (const id of others.slice(0, 9)) await rpc(tokenB, 'app_clique_add', { p_creator: id })
-    const eleventh = await rpc(tokenB, 'app_clique_add', { p_creator: others[9] })
-    check('an 11th Clique member is refused by the database', eleventh.status >= 400 && JSON.stringify(eleventh.body).includes('clique_full'), JSON.stringify(eleventh.body).slice(0, 80))
+    check('B follows 27 creators (follows are unlimited)', sql(`select count(*) from social.follows where follower_id = '${idB}'`) === '27')
+    for (const id of others.slice(0, 24)) await rpc(tokenB, 'app_clique_add', { p_creator: id })
+    const extra = await rpc(tokenB, 'app_clique_add', { p_creator: others[24] })
+    check('a 26th Inner Clique creator is refused by the database', extra.status >= 400 && JSON.stringify(extra.body).includes('clique_full'), JSON.stringify(extra.body).slice(0, 80))
+    const anon = await rpc(null, 'app_clique_replace', { p_remove: others[0], p_add: others[24] })
+    check('signed-out visitors cannot replace Inner Clique creators', anon.status === 401 || anon.status === 403 || anon.status === 404, String(anon.status))
+
     await pageB.goto(`${APP}/app/clique`)
-    await pageB.getByLabel('10 of 10').waitFor()
-    check('the Clique page shows 10 of 10 and explains it is full', await pageB.getByText(/Your Clique is full/).isVisible())
+    await pageB.getByLabel('25 of 25 in your Inner Clique').waitFor()
+    check('the Clique page lists all 27 followed creators in My Clique', (await pageB.getByRole('region', { name: 'My Clique' }).getByRole('listitem').count()) === 27)
+    const add = pageB.getByRole('button', { name: 'Add Clique 25 to your Inner Clique' })
+    await add.click()
+    const dialog = pageB.getByRole('dialog', { name: 'Your Inner Clique is full' })
+    await dialog.waitFor()
+    await pageB.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'detached' })
+    check('Escape closes the replacement dialog and returns focus to the button', await add.evaluate((el) => el === document.activeElement))
+    await add.click()
+    await dialog.getByRole('radio', { name: /Clique 1\b/ }).check()
+    const replaceStatus = await answered(pageB, 'app_clique_replace', () => dialog.getByRole('button', { name: 'Replace' }).click())
+    check('the server accepted the replacement', replaceStatus === 204 || replaceStatus === 200, String(replaceStatus))
+    await dialog.waitFor({ state: 'detached' })
+    await pageB.getByRole('button', { name: 'Add Clique 1 to your Inner Clique' }).waitFor()
+    check(
+      'the replacement swapped Clique 1 for Clique 25 in one step: still 25, Clique 1 still followed, closed as "replaced"',
+      sql(`select (select count(*) from social.clique_members where fan_id = '${idB}' and removed_at is null)
+        || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[0]}' and removal_reason = 'replaced')
+        || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[24]}' and removed_at is null)
+        || '|' || (select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${others[0]}')`) === '25|1|1|1',
+    )
+    const failed = await rpc(tokenB, 'app_clique_replace', { p_remove: others[0], p_add: others[25] })
+    check('a replacement naming someone no longer in the Inner Clique is refused and changes nothing',
+      failed.status >= 400 && JSON.stringify(failed.body).includes('not_in_clique')
+        && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and removed_at is null`) === '25'
+        && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[25]}'`) === '0')
+
+    await pageB.getByRole('region', { name: 'Inner Clique' }).getByRole('button', { name: 'Remove Clique 2 from your Inner Clique (you keep following them)' }).click()
+    await pageB.getByLabel('24 of 25 in your Inner Clique').waitFor()
+    check('removing from the Inner Clique keeps the follow', sql(`select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${others[1]}'`) === '1')
     const self = await rpc(tokenB, 'app_follow', { p_creator: idB })
     check('members cannot follow themselves', self.status >= 400 && JSON.stringify(self.body).includes('cannot_follow_self'))
   }
 
-  // 6. Unfollowing closes the Clique membership and keeps the history.
+  // 6. Unfollowing closes the Inner Clique membership and keeps the history.
   await pageB.goto(`${APP}/app/u/${userA}`)
   await pageB.getByRole('button', { name: 'Unfollow Aye Teacher' }).click()
   await pageB.getByRole('button', { name: 'Follow Aye Teacher' }).waitFor()
   check(
-    'unfollowing closes the Clique membership (reason "unfollowed") and records the unfollow',
+    'unfollowing closes the Inner Clique membership (reason "unfollowed") and records the unfollow',
     sql(`select (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${idA}' and removal_reason = 'unfollowed') || '|' || (select count(*) from social.follow_events where follower_id = '${idB}' and creator_id = '${idA}')`) === '1|2',
   )
 
@@ -335,6 +370,13 @@ async function signInAndSetUp(page, email, username, displayName) {
     check('on a phone, the tab bar offers Home, Discover, Create, Clique and Profile', (await tabs.getByRole('link').count()) === 5)
     const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     check('no sideways scrolling on a phone', extra <= 0, `${extra}px`)
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 740 })
+      await page.goto(`${APP}/app/clique`)
+      await page.getByRole('region', { name: 'My Clique' }).waitFor()
+      const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      check(`at ${width}px, the Clique page has no sideways scrolling`, sideways <= 0, `${sideways}px`)
+    }
     await ctx.close()
   }
 
