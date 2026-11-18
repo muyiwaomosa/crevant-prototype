@@ -72,6 +72,14 @@ A post or comment is stored **once** per request, however often it's sent.
   refused as `request_reused`. Two simultaneous requests end up as one row.
   The original `app_create_post(text)` and `app_add_comment(uuid, text)` are
   unchanged, so older pages keep working.
+* **Compatibility fallback (in the browser):** if the database doesn't have the
+  request id versions yet (or they were rolled back), PostgREST answers
+  `PGRST202` naming that function with `p_request_id`. Only then does
+  `createSupabaseApi` send the original call once (`isMissingRequestIdVersion`
+  in `src/app/api.ts`). A network failure, timeout or any other error is never
+  retried, because the first write may have been stored. Tested in
+  `src/app/api.test.ts`, and against a real old and new schema in
+  `src/app/api.local-supabase.test.ts` (CI's Integration job).
 * **Tests:** `supabase/tests-local/065_publishing_request_ids.sql`,
   `scripts/db/request-ids-concurrency-test.sh` (two real sessions at once),
   the app tests (a double submit, a retry after a lost answer), and the social

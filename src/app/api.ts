@@ -213,11 +213,39 @@ export function toPost(r: PostRow): Post {
 }
 
 /** The real data layer, backed by the signed-in member's Supabase session. */
+/**
+ * True only when the database definitively doesn't have the request id
+ * version of `fn`: PostgREST's "function not found" (PGRST202), naming
+ * exactly public.<fn>, with p_request_id among the parameters it looked for.
+ * That answer means the call never ran, so retrying with the original
+ * version can't make a second post. Anything else (a network failure, a
+ * timeout, a server error, or PGRST202 about another function) may mean the
+ * first call ran, so it is never retried.
+ */
+export function isMissingRequestIdVersion(error: { code?: string; message?: string } | null | undefined, fn: string): boolean {
+  if (!error || error.code !== 'PGRST202') return false
+  const m = /Could not find the function public\.([a-z_]+)\(([^)]*)\)/.exec(error.message ?? '')
+  if (!m || m[1] !== fn) return false
+  return m[2].split(',').map((p) => p.trim()).includes('p_request_id')
+}
+
 export function createSupabaseApi(client: SupabaseClient, userId: string): AppApi {
   async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
     const { data, error } = await client.rpc(fn, args)
     if (error) throw toAppError(error)
     return data as T
+  }
+  /**
+   * A write with a request id (issue #48). The server's request id is the
+   * protection; this only keeps posting working if the page is newer than
+   * the database (the request id version not deployed yet, or rolled back):
+   * then, and only then, it sends the original call once, without the id.
+   */
+  async function writeOnce<T>(fn: string, withId: Record<string, unknown>, original: Record<string, unknown>): Promise<T> {
+    const { data, error } = await client.rpc(fn, withId)
+    if (!error) return data as T
+    if (isMissingRequestIdVersion(error, fn)) return rpc<T>(fn, original)
+    throw toAppError(error)
   }
   return {
     async ownProfile() {
@@ -310,7 +338,9 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       }))
     },
     createPost: (body, requestId) =>
-      rpc<string>('app_create_post', requestId ? { p_body: body, p_request_id: requestId } : { p_body: body }),
+      requestId
+        ? writeOnce<string>('app_create_post', { p_body: body, p_request_id: requestId }, { p_body: body })
+        : rpc<string>('app_create_post', { p_body: body }),
     deletePost: (id) => rpc<void>('app_delete_post', { p_post: id }),
     follow: (id) => rpc<void>('app_follow', { p_creator: id }),
     unfollow: (id) => rpc<void>('app_unfollow', { p_creator: id }),
@@ -319,7 +349,9 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     like: (id) => rpc<void>('app_like', { p_post: id }),
     unlike: (id) => rpc<void>('app_unlike', { p_post: id }),
     addComment: (postId, body, requestId) =>
-      rpc<string>('app_add_comment', requestId ? { p_post: postId, p_body: body, p_request_id: requestId } : { p_post: postId, p_body: body }),
+      requestId
+        ? writeOnce<string>('app_add_comment', { p_post: postId, p_body: body, p_request_id: requestId }, { p_post: postId, p_body: body })
+        : rpc<string>('app_add_comment', { p_post: postId, p_body: body }),
     deleteComment: (id) => rpc<void>('app_delete_comment', { p_comment: id }),
   }
 }
