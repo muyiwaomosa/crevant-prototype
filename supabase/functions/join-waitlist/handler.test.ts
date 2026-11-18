@@ -282,12 +282,33 @@ describe('client address', () => {
 describe('Turnstile verification', () => {
   it('sends the secret, token and client address, and returns hostname and action', async () => {
     const f = vi.fn(async () => new Response(JSON.stringify({ success: true, hostname: 'crevant.example', action: 'join' }), { status: 200 }))
-    expect(await verifyWithCloudflare('tok', '203.0.113.7', 'sec', f as unknown as typeof fetch)).toEqual({ success: true, hostname: 'crevant.example', action: 'join' })
+    expect(await verifyWithCloudflare('tok', '203.0.113.7', 'sec', f as unknown as typeof fetch)).toEqual({ success: true, hostname: 'crevant.example', action: 'join', errorCodes: [] })
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://challenges.cloudflare.com/turnstile/v0/siteverify')
     const form = init.body as URLSearchParams
     expect([form.get('secret'), form.get('response'), form.get('remoteip')]).toEqual(['sec', 'tok', '203.0.113.7'])
     expect(await verifyWithCloudflare('tok', null, '', f as unknown as typeof fetch)).toEqual({ success: false })
+  })
+  it("keeps only Cloudflare's documented error codes", async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ success: false, 'error-codes': ['invalid-input-secret', '<script>', 'maya@example.com', 42] }), { status: 200 }))
+    expect((await verifyWithCloudflare('tok', null, 'sec', f as unknown as typeof fetch)).errorCodes).toEqual(['invalid-input-secret'])
+  })
+
+  it('records why verification failed for the log only, never in the reply', async () => {
+    const cases: [Record<string, unknown>, string][] = [
+      [{ success: false, errorCodes: ['invalid-input-secret'] }, 'cloudflare_rejected:invalid-input-secret'],
+      [{ success: false }, 'cloudflare_rejected:no_code'],
+      [{ success: true, hostname: 'evil.example', action: 'join' }, 'hostname_not_allowed'],
+      [{ success: true, hostname: 'crevant.example', action: 'login' }, 'action_mismatch'],
+    ]
+    for (const [verdict, note] of cases) {
+      const out = await handleJoin(post(valid), deps({ verifyTurnstile: vi.fn(async () => verdict) }))
+      expect([out.status, JSON.parse(out.body), out.logNote]).toEqual([400, { status: 'verification_failed' }, note])
+    }
+    const none = await handleJoin(post({ ...valid, turnstileToken: '' }), deps())
+    expect([JSON.parse(none.body), none.logNote]).toEqual([{ status: 'verification_failed' }, 'no_token'])
+    const ok = await handleJoin(post(valid), deps())
+    expect(ok.logNote).toBeUndefined()
   })
 })
 

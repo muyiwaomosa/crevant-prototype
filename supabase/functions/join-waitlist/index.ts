@@ -108,9 +108,9 @@ Deno.serve(async (req: Request) => {
       databaseReachable: health,
     },
   )
-  // Status only: never the email, address or request body.
+  // Status, and for a failed Turnstile check a fixed reason: never the email, address, token or request body.
   console.log(
-    JSON.stringify({ event: req.method === 'GET' ? 'health' : 'join', status: out.status, result: JSON.parse(out.body || '{}').status ?? null }),
+    JSON.stringify({ event: req.method === 'GET' ? 'health' : 'join', status: out.status, result: JSON.parse(out.body || '{}').status ?? null, ...(out.logNote ? { reason: out.logNote } : {}) }),
   )
   return new Response(out.body || null, { status: out.status, headers: out.headers })
 })
