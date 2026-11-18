@@ -484,14 +484,20 @@ export async function verifyWithCloudflare(
   const form = new URLSearchParams({ secret, response: token })
   if (ip) form.set('remoteip', ip)
   const res = await fetchImpl('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form })
-  if (!res.ok) return { success: false, errorCodes: [`http-${res.status}`] }
-  const data = (await res.json()) as { success?: unknown; hostname?: unknown; action?: unknown; 'error-codes'?: unknown }
+  type Reply = { success?: unknown; hostname?: unknown; action?: unknown; 'error-codes'?: unknown }
+  // Cloudflare puts its error codes in the body of an HTTP error too, so read
+  // it either way. A body that isn't JSON on an HTTP error just leaves the
+  // status; on a 200 it is an unexpected reply and throws, as before.
+  let data: Reply = {}
+  if (res.ok) data = (await res.json()) as Reply
+  else data = ((await res.json().catch(() => ({}))) ?? {}) as Reply
   const codes = Array.isArray(data['error-codes']) ? data['error-codes'] : []
+  const shaped = codes.map((c) => (typeof c === 'string' && TURNSTILE_CODE.test(c) ? c : 'unrecognized'))
   return {
-    success: data.success === true,
+    success: res.ok && data.success === true,
     hostname: typeof data.hostname === 'string' ? data.hostname : undefined,
     action: typeof data.action === 'string' ? data.action : undefined,
-    errorCodes: codes.map((c) => (typeof c === 'string' && TURNSTILE_CODE.test(c) ? c : 'unrecognized')),
+    errorCodes: res.ok ? shaped : [`http-${res.status}`, ...shaped],
   }
 }
 
