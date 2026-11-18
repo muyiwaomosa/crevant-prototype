@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -456,8 +458,8 @@ describe('feed and posting', () => {
   })
 })
 
-describe('My Clique and Inner Clique', () => {
-  // The fan follows c1..cN, with c1..cM in the Inner Clique.
+describe('Following and My Clique', () => {
+  // The fan follows c1..cN, with c1..cM in their Clique.
   function setup(followed: number, inner: number, creators = 30) {
     const fake = fakeApi('me', { creators })
     for (let i = 1; i <= followed; i++) fake.follows.add(fake.key('me', `c${i}`))
@@ -465,49 +467,49 @@ describe('My Clique and Inner Clique', () => {
     return fake
   }
   const innerOf = (fake: ReturnType<typeof fakeApi>) => [...fake.clique].filter((k) => k.startsWith('me>')).sort()
+  const following = () => within(screen.getByRole('region', { name: 'Following' }))
   const myClique = () => within(screen.getByRole('region', { name: 'My Clique' }))
-  const innerClique = () => within(screen.getByRole('region', { name: 'Inner Clique' }))
-  const loaded = async () => within(await screen.findByRole('region', { name: 'My Clique' }))
+  const loaded = async () => within(await screen.findByRole('region', { name: 'Following' }))
 
-  it('following adds to My Clique but never to the Inner Clique; adding is a separate choice, shown everywhere', async () => {
+  it('following never adds someone to the Clique; adding is a separate choice, shown everywhere', async () => {
     const { api, seedPost } = fakeApi()
     seedPost('c1', 'Hello from Creator 1')
     renderApp('/app/discover', api)
     fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 1' }))
     expect(await screen.findByRole('button', { name: 'Unfollow Creator 1' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Add Creator 1 to your Inner Clique' }))
-    expect(await screen.findByRole('button', { name: 'Remove Creator 1 from your Inner Clique (you keep following them)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Add Creator 1 to your Clique' }))
+    expect(await screen.findByRole('button', { name: 'Remove Creator 1 from your Clique (you keep following them)' })).toBeTruthy()
   })
 
-  it('follows are unlimited: My Clique lists all 30 followed creators, each with its status', async () => {
+  it('follows are unlimited: Following lists all 30 followed creators, each with its status', async () => {
     const { api } = setup(30, 2)
     renderApp('/app/clique', api)
     expect(await screen.findByText('30 creators')).toBeTruthy()
-    expect(myClique().getAllByRole('listitem')).toHaveLength(30)
-    expect(myClique().getAllByText('Inner Clique')).toHaveLength(2)
-    expect(myClique().getAllByRole('button', { name: /^Add Creator \d+ to your Inner Clique$/ })).toHaveLength(28)
-    expect(myClique().getAllByRole('button', { name: /^Unfollow Creator/ })).toHaveLength(30)
-    expect(screen.getByLabelText('2 of 25 in your Inner Clique').textContent).toBe('2/25')
+    expect(following().getAllByRole('listitem')).toHaveLength(30)
+    expect(following().getAllByText('Clique')).toHaveLength(2)
+    expect(following().getAllByRole('button', { name: /^Add Creator \d+ to your Clique$/ })).toHaveLength(28)
+    expect(following().getAllByRole('button', { name: /^Unfollow Creator/ })).toHaveLength(30)
+    expect(screen.getByLabelText('2 of 25 in your Clique').textContent).toBe('2/25')
   })
 
-  it('adds and removes Inner Clique creators; removing never unfollows', async () => {
+  it('adds and removes Clique creators; removing never unfollows', async () => {
     const fake = setup(3, 1)
     renderApp('/app/clique', fake.api)
-    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Add Creator 2 to your Inner Clique' }))
-    expect(await screen.findByLabelText('2 of 25 in your Inner Clique')).toBeTruthy()
+    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Add Creator 2 to your Clique' }))
+    expect(await screen.findByLabelText('2 of 25 in your Clique')).toBeTruthy()
     expect((await screen.findByTestId('clique-status')).textContent).toMatch(/Creator 2 was added/)
-    fireEvent.click(innerClique().getByRole('button', { name: 'Remove Creator 1 from your Inner Clique (you keep following them)' }))
-    expect(await screen.findByLabelText('1 of 25 in your Inner Clique')).toBeTruthy()
+    fireEvent.click(myClique().getByRole('button', { name: 'Remove Creator 1 from your Clique (you keep following them)' }))
+    expect(await screen.findByLabelText('1 of 25 in your Clique')).toBeTruthy()
     expect(fake.follows.has(fake.key('me', 'c1'))).toBe(true)
-    expect(myClique().getByRole('button', { name: 'Unfollow Creator 1' })).toBeTruthy()
+    expect(following().getByRole('button', { name: 'Unfollow Creator 1' })).toBeTruthy()
     expect((await screen.findByTestId('clique-status')).textContent).toMatch(/You still follow them/)
   })
 
-  it('unfollowing removes the creator from My Clique and the Inner Clique', async () => {
+  it('unfollowing removes the creator from Following and My Clique', async () => {
     const fake = setup(2, 1)
     renderApp('/app/clique', fake.api)
-    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Unfollow Creator 1 (also removes them from your Inner Clique)' }))
-    expect(await screen.findByLabelText('0 of 25 in your Inner Clique')).toBeTruthy()
+    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Unfollow Creator 1 (also removes them from your Clique)' }))
+    expect(await screen.findByLabelText('0 of 25 in your Clique')).toBeTruthy()
     expect(screen.queryByText('Creator 1')).toBeNull()
     expect(innerOf(fake)).toEqual([])
   })
@@ -515,12 +517,12 @@ describe('My Clique and Inner Clique', () => {
   it('at 25, adding opens the replacement dialog; the chosen creator is swapped out and stays followed', async () => {
     const fake = setup(27, 25)
     renderApp('/app/clique', fake.api)
-    expect(await screen.findByLabelText('25 of 25 in your Inner Clique')).toBeTruthy()
-    const add = myClique().getByRole('button', { name: 'Add Creator 26 to your Inner Clique' })
+    expect(await screen.findByLabelText('25 of 25 in your Clique')).toBeTruthy()
+    const add = following().getByRole('button', { name: 'Add Creator 26 to your Clique' })
     expect(add.getAttribute('aria-haspopup')).toBe('dialog')
     fireEvent.click(add)
-    const dialog = within(await screen.findByRole('dialog', { name: 'Your Inner Clique is full' }))
-    expect(dialog.getByText(/stays in My Clique/)).toBeTruthy()
+    const dialog = within(await screen.findByRole('dialog', { name: 'Your Clique is full' }))
+    expect(dialog.getByText(/stays in Following/)).toBeTruthy()
     expect(dialog.getAllByRole('radio')).toHaveLength(25)
     const replace = dialog.getByRole('button', { name: 'Replace' }) as HTMLButtonElement
     expect(replace.disabled).toBe(true)
@@ -528,19 +530,19 @@ describe('My Clique and Inner Clique', () => {
     expect(replace.disabled).toBe(false)
     fireEvent.click(replace)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect((await screen.findByTestId('clique-status')).textContent).toMatch(/Creator 26 replaced Creator 3 in your Inner Clique/)
-    expect(screen.getByLabelText('25 of 25 in your Inner Clique')).toBeTruthy()
+    expect((await screen.findByTestId('clique-status')).textContent).toMatch(/Creator 26 replaced Creator 3 in your Clique/)
+    expect(screen.getByLabelText('25 of 25 in your Clique')).toBeTruthy()
     expect(innerOf(fake)).toContain('me>c26')
     expect(innerOf(fake)).not.toContain('me>c3')
     expect(fake.follows.has(fake.key('me', 'c3'))).toBe(true)
-    expect(myClique().getByRole('button', { name: 'Add Creator 3 to your Inner Clique' })).toBeTruthy()
+    expect(following().getByRole('button', { name: 'Add Creator 3 to your Clique' })).toBeTruthy()
   })
 
-  // Opens the replacement dialog for Creator 26 with c1..c25 in the Inner Clique.
+  // Opens the replacement dialog for Creator 26 with c1..c25 in the Clique.
   async function openReplace(fake: ReturnType<typeof fakeApi>) {
     renderApp('/app/clique', fake.api)
-    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Add Creator 26 to your Inner Clique' }))
-    return within(await screen.findByRole('dialog', { name: 'Your Inner Clique is full' }))
+    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Add Creator 26 to your Clique' }))
+    return within(await screen.findByRole('dialog', { name: 'Your Clique is full' }))
   }
 
   it('a refused replacement keeps the dialog open with the error focused, keeps the choice, and can be retried', async () => {
@@ -572,7 +574,7 @@ describe('My Clique and Inner Clique', () => {
     fake.clique.add(fake.key('me', 'c28'))
     const before = innerOf(fake)
     fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
-    expect((await dialog.findByRole('alert')).textContent).toMatch(/no longer in your Inner Clique\. Nothing was changed/)
+    expect((await dialog.findByRole('alert')).textContent).toMatch(/no longer in your Clique\. Nothing was changed/)
     expect(innerOf(fake)).toEqual(before)
     await waitFor(() => expect(dialog.queryByRole('radio', { name: /Creator 3\b/ })).toBeNull())
     expect(dialog.getByRole('radio', { name: /Creator 28\b/ })).toBeTruthy()
@@ -592,12 +594,12 @@ describe('My Clique and Inner Clique', () => {
     fireEvent.click(dialog.getByRole('radio', { name: /Creator 5\b/ }))
     fake.clique.delete(fake.key('me', 'c5')) // removed in another tab: 24 now
     fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
-    const room = within(await screen.findByRole('dialog', { name: 'Add to your Inner Clique' }))
+    const room = within(await screen.findByRole('dialog', { name: 'Add to your Clique' }))
     expect(room.getByRole('alert').textContent).toMatch(/Nothing was changed/)
-    expect(room.getByText(/There is room in your Inner Clique now \(24\/25\)/)).toBeTruthy()
+    expect(room.getByText(/There is room in your Clique now \(24\/25\)/)).toBeTruthy()
     fireEvent.click(room.getByRole('button', { name: 'Add Creator 26' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(screen.getByLabelText('25 of 25 in your Inner Clique')).toBeTruthy()
+    expect(screen.getByLabelText('25 of 25 in your Clique')).toBeTruthy()
     expect(innerOf(fake)).toContain('me>c26')
   })
 
@@ -620,7 +622,7 @@ describe('My Clique and Inner Clique', () => {
     const fake = setup(27, 25)
     const before = innerOf(fake)
     renderApp('/app/clique', fake.api)
-    const add = await (await loaded()).findByRole('button', { name: 'Add Creator 27 to your Inner Clique' })
+    const add = await (await loaded()).findByRole('button', { name: 'Add Creator 27 to your Clique' })
     add.focus()
     fireEvent.click(add)
     const dialog = await screen.findByRole('dialog')
@@ -634,25 +636,25 @@ describe('My Clique and Inner Clique', () => {
     expect(innerOf(fake)).toEqual(before)
   })
 
-  it('a full Inner Clique elsewhere links to the Clique page, which opens the replacement for that creator', async () => {
+  it('a full Clique elsewhere links to the Clique page, which opens the replacement for that creator', async () => {
     const fake = setup(26, 25)
     renderApp('/app/u/creator_26', fake.api)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Creator 26 to your Inner Clique' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Creator 26 to your Clique' }))
     expect((await screen.findByRole('alert')).textContent).toMatch(/full \(25\)/)
     fireEvent.click(screen.getByRole('link', { name: 'Choose who to replace' }))
-    const dialog = within(await screen.findByRole('dialog', { name: 'Your Inner Clique is full' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Your Clique is full' }))
     expect(dialog.getByText('Creator 26')).toBeTruthy()
   })
 
   it('existing memberships show as they are', async () => {
     const fake = setup(11, 10, 11)
     renderApp('/app/clique', fake.api)
-    expect(await screen.findByLabelText('10 of 25 in your Inner Clique')).toBeTruthy()
-    expect(innerClique().getAllByRole('listitem')).toHaveLength(10)
+    expect(await screen.findByLabelText('10 of 25 in your Clique')).toBeTruthy()
+    expect(myClique().getAllByRole('listitem')).toHaveLength(10)
     expect(screen.getByText('11 creators')).toBeTruthy()
   })
 
-  it('unfollowing elsewhere removes Inner Clique membership too', async () => {
+  it('unfollowing elsewhere removes Clique membership too', async () => {
     const { api, follows, clique, key } = fakeApi()
     follows.add(key('me', 'c1'))
     clique.add(key('me', 'c1'))
@@ -660,6 +662,84 @@ describe('My Clique and Inner Clique', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Unfollow Creator 1' }))
     expect(await screen.findByRole('button', { name: 'Follow Creator 1' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Clique/ })).toBeNull()
+  })
+
+  it('the Clique page shows My Clique first, then Following', async () => {
+    const { api } = setup(3, 1)
+    renderApp('/app/clique', api)
+    await loaded()
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+    expect(headings).toEqual(['My Clique', 'Following'])
+  })
+})
+
+// Members see two relationships only: Following and My Clique. "Inner Clique"
+// was the earlier name and must never reach member-facing copy again.
+describe('member-facing copy never says "Inner Clique"', () => {
+  const OLD = /inner\s*clique/i
+  // Visible text plus everything assistive technology reads.
+  function shownCopy() {
+    const attrs = [...document.querySelectorAll('[aria-label], [title], [placeholder], [alt]')].flatMap((el) =>
+      ['aria-label', 'title', 'placeholder', 'alt'].map((n) => el.getAttribute(n) ?? ''),
+    )
+    return [document.body.textContent ?? '', ...attrs].join('\n')
+  }
+
+  it('on every member page, including the full-Clique dialog, status messages and errors', async () => {
+    const fake = fakeApi('me', { creators: 30 })
+    for (let i = 1; i <= 27; i++) fake.follows.add(fake.key('me', `c${i}`))
+    for (let i = 1; i <= 25; i++) fake.clique.add(fake.key('me', `c${i}`))
+    fake.seedPost('c1', 'A post from someone in my Clique')
+    for (const path of ['/app', '/app/discover', '/app/profile', '/app/u/creator_1', '/app/u/creator_26']) {
+      renderApp(path, fake.api)
+      await waitFor(() => expect(document.body.textContent).not.toMatch(/Loading|Checking/))
+      expect(shownCopy()).not.toMatch(OLD)
+      cleanup()
+    }
+    // The badge on a Clique creator's post reads "Clique".
+    renderApp('/app', fake.api)
+    expect(within(await screen.findByTestId('post')).getByText('Clique')).toBeTruthy()
+    cleanup()
+
+    // A full Clique elsewhere: the error and the link.
+    renderApp('/app/u/creator_26', fake.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Creator 26 to your Clique' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Your Clique is full (25). Choose someone to replace.')
+    expect(shownCopy()).not.toMatch(OLD)
+    cleanup()
+
+    // The Clique page, the replacement dialog, a refusal inside it, and the status after a replacement.
+    renderApp('/app/clique', fake.api)
+    const followingList = within(await screen.findByRole('region', { name: 'Following' }))
+    expect(shownCopy()).not.toMatch(OLD)
+    fireEvent.click(followingList.getByRole('button', { name: 'Add Creator 26 to your Clique' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Your Clique is full' }))
+    expect(shownCopy()).not.toMatch(OLD)
+    fake.failures.cliqueReplace = new AppApiError('not_in_clique')
+    fireEvent.click(dialog.getByRole('radio', { name: /Creator 2\b/ }))
+    fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
+    expect((await dialog.findByRole('alert')).textContent).toBe('That creator is no longer in your Clique. Nothing was changed.')
+    expect(shownCopy()).not.toMatch(OLD)
+    delete fake.failures.cliqueReplace
+    fireEvent.click(dialog.getByRole('button', { name: 'Replace' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect((await screen.findByTestId('clique-status')).textContent).toBe('Creator 26 replaced Creator 2 in your Clique. You still follow Creator 2.')
+    expect(shownCopy()).not.toMatch(OLD)
+  })
+
+  it('in every error message', () => {
+    for (const code of ['cannot_add_self', 'not_following', 'clique_full', 'not_in_clique', 'already_in_clique', 'rate_limited', 'not_found', 'unknown']) {
+      const text = messageFor(new AppApiError(code))
+      expect(text, code).not.toMatch(OLD)
+    }
+    expect(messageFor(new AppApiError('not_following'))).toBe('Follow this creator first. Your Clique only includes people you follow.')
+  })
+
+  it('anywhere in the member app source (tests excepted)', () => {
+    const dir = join(process.cwd(), 'src/app')
+    const files = readdirSync(dir).filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f))
+    expect(files.length).toBeGreaterThan(3)
+    for (const f of files) expect(readFileSync(join(dir, f), 'utf8'), f).not.toMatch(OLD)
   })
 })
 

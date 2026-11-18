@@ -90,7 +90,7 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
           </div>
           {post.authorInMyClique && (
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[12px] font-semibold text-brand-700">
-              <Users className="h-3.5 w-3.5" aria-hidden="true" /> Inner Clique
+              <Users className="h-3.5 w-3.5" aria-hidden="true" /> Clique
             </span>
           )}
         </header>
@@ -237,11 +237,10 @@ export function TextComposer({
 }
 
 /**
- * Follow and Inner Clique buttons for one creator. Following adds them to My
- * Clique, never to the Inner Clique: that's a separate, deliberate choice, and
- * only for people you follow. Removing from the Inner Clique never unfollows.
- * When the Inner Clique is full, it links to the Clique page to choose who to
- * replace.
+ * Follow and Clique buttons for one creator. Following never adds someone to
+ * the Clique: that's a separate, deliberate choice, and only for people you
+ * follow. Removing from the Clique never unfollows. When the Clique is full,
+ * it links to the Clique page to choose who to replace.
  */
 export function RelationshipButtons({
   member,
@@ -300,20 +299,20 @@ export function RelationshipButtons({
               type="button"
               disabled={busy}
               onClick={() => run(() => api.cliqueRemove(member.id))}
-              aria-label={`Remove ${member.displayName} from your Inner Clique (you keep following them)`}
+              aria-label={`Remove ${member.displayName} from your Clique (you keep following them)`}
               className={buttonClass('secondary', size)}
             >
-              <Users className="h-4 w-4" aria-hidden="true" /> In Inner Clique
+              <Users className="h-4 w-4" aria-hidden="true" /> In your Clique
             </button>
           ) : (
             <button
               type="button"
               disabled={busy}
               onClick={() => run(() => api.cliqueAdd(member.id))}
-              aria-label={`Add ${member.displayName} to your Inner Clique`}
+              aria-label={`Add ${member.displayName} to your Clique`}
               className={buttonClass('secondary', size)}
             >
-              <Users className="h-4 w-4" aria-hidden="true" /> Add to Inner Clique
+              <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique
             </button>
           ))}
       </div>

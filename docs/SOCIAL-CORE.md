@@ -1,6 +1,6 @@
 # Release 1: the social core
 
-Real text posts, follows, My Clique and the Inner Clique (at most 25 creators since 20261120000000; 10 before), likes and
+Real text posts, follows (Following), My Clique (at most 25 creators since 20261120000000; 10 before), likes and
 comments, stored in the database and used through the members area at `/app`.
 This document is the review guide for the migration
 `supabase/migrations/20261117000000_social_core.sql`.
@@ -18,7 +18,7 @@ Production. Adding its checksum is a separate founder approval.
 | Post | Text, 1 to 2,000 characters, no control characters. 20 posts an hour at most. |
 | Delete a post or comment | Own only. Kept as deleted (`deleted_at`) and never shown again. |
 | Follow / unfollow | Not yourself; only members with a complete profile. Following twice records nothing new. Every change is kept in `social.follow_events`. |
-| Inner Clique | Only creators you follow; at most 25 (10 before 20261120000000); adding twice changes nothing; one change at a time per member (a lock), so two requests can't both take the last slot. Removing, unfollowing or replacing closes the membership with a reason (`removed`, `unfollowed` or `replaced`); history is never rewritten. |
+| My Clique | Only creators you follow; at most 25 (10 before 20261120000000); adding twice changes nothing; one change at a time per member (a lock), so two requests can't both take the last slot. Removing, unfollowing or replacing closes the membership with a reason (`removed`, `unfollowed` or `replaced`); history is never rewritten. |
 | Like / unlike | Live posts only; one like per member per post. |
 | Comment | Live posts only; 1 to 1,000 characters; 60 an hour at most. |
 | Feed | Posts from people you follow, and your own, newest first, 20 at a time. |
@@ -107,43 +107,53 @@ Wiring this rollback into the "Waitlist rollback (staging)" workflow as a
 target is a follow-up that needs its own approval (as it did for creator
 acquisition).
 
-## My Clique and Inner Clique (20261120000000)
+## Following and My Clique (20261120000000)
 
-**My Clique** is everyone a member follows. It is `social.follows`, unchanged
-and still the source of truth, with no limit. **Inner Clique** is the optional
+**Terminology.** Members see two relationships only: **Following** (everyone
+they follow) and **My Clique** (up to 25 chosen from Following). This section
+was first written when those were called "My Clique" and "Clique"; the
+member app no longer uses "Clique" anywhere, and a test fails if it
+returns. Database names are unchanged: the Clique is `social.clique_members`,
+`in_my_clique` and `app_clique_*`, and the migration file keeps its name.
+Future monetary reward eligibility is specified in
+docs/PRODUCT-STRATEGY.md (section 3) and is not built.
+
+
+**Following** is everyone a member follows. It is `social.follows`, unchanged
+and still the source of truth, with no limit. **My Clique** is the optional
 priority group inside it, kept in the existing `social.clique_members` (no new
 table). Every existing follow and membership is kept as it is.
 
 | Rule | Where it is enforced |
 | --- | --- |
-| At most 25 Inner Clique creators, each one followed | The guard trigger on `social.clique_members`, whatever writes the rows. |
-| Removing from the Inner Clique never unfollows | `app_clique_remove` only closes the membership (`removed`). |
-| Unfollowing removes Inner Clique membership | `app_unfollow` closes it (`unfollowed`), now under the same per-member lock as add and replace, so it can't race them. |
+| At most 25 Clique creators, each one followed | The guard trigger on `social.clique_members`, whatever writes the rows. |
+| Removing from the Clique never unfollows | `app_clique_remove` only closes the membership (`removed`). |
+| Unfollowing removes Clique membership | `app_unfollow` closes it (`unfollowed`), now under the same per-member lock as add and replace, so it can't race them. |
 | At 25, a new creator replaces one the member chooses | `app_clique_replace(p_remove, p_add)`: checks, closes the old membership (`replaced`) and opens the new one in one transaction, under the per-member lock. Any failure changes nothing. The replaced creator stays followed. |
-| At most 120 Inner Clique changes an hour | The existing `social.rate_check(text, uuid)` (same signature), called by add, remove and replace after their checks. It counts memberships opened, and those closed by removing or replacing, in the last rolling hour. Add and remove pass kind `clique` (one change); replace passes `clique_replace` (two changes). A request is refused when the existing changes plus its own would go past 120: a replacement at 118 is allowed (reaching 120), at 119 it is refused, while a single add or remove at 119 is still allowed. The other limits (posts, comments, follows) cost one, so they behave exactly as before. Requests that change nothing (adding someone already there, removing someone who isn't) are not counted. A refused request (`rate_limited`) changes nothing. Unfollowing is covered by the follow limit (120 an hour), so it is never blocked by Inner Clique activity. The index `clique_by_fan_recent` keeps the count cheap. |
+| At most 120 Clique changes an hour | The existing `social.rate_check(text, uuid)` (same signature), called by add, remove and replace after their checks. It counts memberships opened, and those closed by removing or replacing, in the last rolling hour. Add and remove pass kind `clique` (one change); replace passes `clique_replace` (two changes). A request is refused when the existing changes plus its own would go past 120: a replacement at 118 is allowed (reaching 120), at 119 it is refused, while a single add or remove at 119 is still allowed. The other limits (posts, comments, follows) cost one, so they behave exactly as before. Requests that change nothing (adding someone already there, removing someone who isn't) are not counted. A refused request (`rate_limited`) changes nothing. Unfollowing is covered by the follow limit (120 an hour), so it is never blocked by Clique activity. The index `clique_by_fan_recent` keeps the count cheap. |
 
 Errors: `not_in_clique`, `already_in_clique`, `not_following`,
 `cannot_add_self`, `clique_full`, `rate_limited`. Signed-in members only, like every other
-member function. The Inner Clique changes presentation priority only: the
+member function. The Clique changes presentation priority only: the
 feed stays chronological, and nothing records Connection Points, rewards or
-money (checked). A later release can show Inner Clique creators first in the
+money (checked). A later release can show Clique creators first in the
 unseen strip by reading `in_my_clique` from `app_following`.
 
-**The page** (`/app/clique`, the existing Clique tab, no new tab): an Inner
-Clique section with the count (for example 8/25) and "Remove from Inner
-Clique", then My Clique with every followed creator, its status, "Add to
-Inner Clique" and "Unfollow". At 25, adding opens a dialog (a bottom sheet on
-phones) to choose who to replace: a labelled radio group, Escape and Cancel
-close it, focus stays inside and returns to the button. Elsewhere (profiles,
-Discover), a full Inner Clique links to `/app/clique?add=<id>`, which opens
-the same dialog.
+**The page** (`/app/clique`, the existing Clique tab, no new tab): **My Clique**
+first, with the count (for example 8/25) and "Remove from Clique", then
+**Following**, with every followed creator, a "Clique" badge on those in the
+Clique, "Add to Clique" and "Unfollow". At 25, adding opens a dialog (a bottom
+sheet on phones) to choose who to replace: a labelled radio group, Escape and
+Cancel close it, focus stays inside and returns to the button. Elsewhere
+(profiles, Discover), a full Clique links to `/app/clique?add=<id>`, which
+opens the same dialog. Posts from Clique creators carry a "Clique" badge.
 
 If a replacement fails (refused by the server, or stale because another tab
-or device changed the Inner Clique), the dialog stays open, shows the error
+or device changed the Clique), the dialog stays open, shows the error
 and moves focus to it, and refreshes the list. The chosen creator stays
-selected while still in the Inner Clique. The dialog then follows the current
+selected while still in the Clique. The dialog then follows the current
 state: if a place has opened up it offers a plain add; if the creator is
-already in the Inner Clique, or is no longer followed, it says so.
+already in the Clique, or is no longer followed, it says so.
 
 Follow and unfollow are unchanged, except that unfollow now takes the
 per-member lock. The existing follow tests (060), the new checks in 066 and
@@ -151,11 +161,11 @@ the browser journey all cover them.
 
 **Rollback (staging only):** `scripts/db/staging-rollback-inner-clique.sql`
 restores the guard at 10, the earlier `app_unfollow`, `app_clique_add`,
-`app_clique_remove` and `social.rate_check` (without the Inner Clique limit)
+`app_clique_remove` and `social.rate_check` (without the Clique limit)
 and reasons, drops `app_clique_replace` and the `clique_by_fan_recent` index,
 and deletes the record. It refuses if any member has more
-than 10 Inner Clique creators or any membership was closed as `replaced`
-(the history is append-only), so once members use the larger Inner Clique,
+than 10 Clique creators or any membership was closed as `replaced`
+(the history is append-only), so once members use the larger Clique,
 the way back is a forward fix. This restriction is accepted: after members
 use the 25-creator capacity, problems are fixed forward, not rolled back. It runs first in the rollback chain. Tested by
 `scripts/db/rollback-inner-clique-test.sh`, which also applies the migration
