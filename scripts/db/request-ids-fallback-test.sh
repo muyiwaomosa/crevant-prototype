@@ -16,7 +16,8 @@ case "$LOCAL_SUPABASE_DB_URL" in
   *@127.0.0.1:*|*@localhost:*) ;;
   *) echo "Refusing: this test only runs against a local database." >&2; exit 1 ;;
 esac
-out="$(npx vitest run src/app/api.local-supabase.test.ts 2>&1)" || { echo "$out"; exit 1; }
+# Plain text output (CI forces colour otherwise), and any colour codes removed, so the check below can read it.
+out="$(NO_COLOR=1 FORCE_COLOR=0 npx vitest run src/app/api.local-supabase.test.ts 2>&1 | sed -E 's/\x1b\[[0-9;]*m//g'; exit "${PIPESTATUS[0]}")" || { echo "$out"; exit 1; }
 echo "$out" | tail -6
 # It must actually have run (not skipped).
 grep -qE "Tests +3 passed" <<<"$out" || { echo "FAIL: the local Supabase compatibility tests did not all run" >&2; exit 1; }
