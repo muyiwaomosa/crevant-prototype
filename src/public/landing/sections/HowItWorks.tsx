@@ -9,7 +9,7 @@ const copy = HOMEPAGE_COPY.howItWorks
  * band: Cobalt with the diagonal cut, the eyebrow and headline, then the four
  * steps as the original cream cards. Each step has its own conceptual
  * drawing (no screens of the unfinished app), its approved label, title and
- * explanation; the approved Step 04 disclosure sits inside Step 04. The
+ * explanation; the approved Step 04 disclosure sits inline, right under its explanation. The
  * closing statement ends the section.
  */
 export function HowItWorks() {
@@ -35,9 +35,10 @@ export function HowItWorks() {
                 <h3 className="mt-2 font-sp-display text-[1.45rem] font-extrabold leading-tight">{s.title}</h3>
                 <p className="mt-3 text-[1.02rem] leading-relaxed text-sp-muted">{s.body}</p>
                 {i === 3 && (
-                  <div data-testid="step04-disclosure" className="mt-5 rounded-2xl bg-white p-4 ring-1 ring-sp-ink/8">
-                    <Disclosure>{PILOT_DISCLOSURES.step04}</Disclosure>
-                  </div>
+                  // Inline and discreet, right under the rewards explanation (founder decision): visible, real text, AA contrast.
+                  <Disclosure testId="step04-disclosure" className="mt-4">
+                    {PILOT_DISCLOSURES.step04}
+                  </Disclosure>
                 )}
               </div>
             </li>

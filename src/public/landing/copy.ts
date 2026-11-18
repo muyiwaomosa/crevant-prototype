@@ -26,9 +26,8 @@ export const BRAND_LINE = "Don't just post. Get your split."
 export const PILOT_DISCLOSURES = {
   /** Hero, below the call to action. */
   hero: 'Invitation-only pilot for adults 18+. No guaranteed reach, views or earnings.',
-  /** Section 4, beside Step 04. */
-  step04:
-    'During our 60-day pilot, fan rewards will be simulated. Eligible contributions may earn Connection Points, but no cash rewards will be paid to fans during the pilot. Simulated rewards are not redeemable for money.',
+  /** Section 4, beside Step 04: inline, discreet (founder decision, 2026-11-18; replaces the earlier card). */
+  step04: '60-day pilot: Fan rewards are simulated. No cash rewards will be paid to fans during the pilot. Full details will be shared by email.',
   /** Section 7, beside the final call to action. */
   invitation:
     'Splitpost is currently preparing an invitation-only, 60-day pilot. Joining the waitlist does not guarantee participation. Fan rewards and advertising shown during the pilot are simulations, not actual cash earnings. Future monetary rewards will depend on eligibility, available qualifying revenue, and applicable legal and financial requirements.',

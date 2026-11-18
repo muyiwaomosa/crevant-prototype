@@ -46,6 +46,11 @@ followers. More freedom to build the life you want."). The eyebrows of
 Sections 3, 4 and 5 are kept. The step labels ("STEP 01 — POST" and so on)
 are approved page copy.
 
+2026-11-18, founder decision: the Step 04 disclosure card was replaced by a
+discreet inline disclosure, "60-day pilot: Fan rewards are simulated. No cash rewards will be paid to fans during the pilot. Full details will be shared by email." It replaces "During our 60-day pilot, fan rewards will be simulated. Eligible contributions may earn Connection Points, but no cash rewards will be paid to fans during the pilot. Simulated rewards are not redeemable for money." on the
+website only; pilot onboarding and participant communications keep every
+legally necessary detail, and the pilot's reward rules are unchanged.
+
 ## SECTION 1 — HERO
 
 ### Headline
@@ -192,8 +197,8 @@ Don't just post. Get your split.
 ### Hero, below the CTA
 Invitation-only pilot for adults 18+. No guaranteed reach, views or earnings.
 
-### Section 4, beside Step 04
-During our 60-day pilot, fan rewards will be simulated. Eligible contributions may earn Connection Points, but no cash rewards will be paid to fans during the pilot. Simulated rewards are not redeemable for money.
+### Section 4, beside Step 04 (revised 2026-11-18)
+60-day pilot: Fan rewards are simulated. No cash rewards will be paid to fans during the pilot. Full details will be shared by email.
 
 ### Section 7, beside the final CTA
 Splitpost is currently preparing an invitation-only, 60-day pilot. Joining the waitlist does not guarantee participation. Fan rewards and advertising shown during the pilot are simulations, not actual cash earnings. Future monetary rewards will depend on eligibility, available qualifying revenue, and applicable legal and financial requirements.

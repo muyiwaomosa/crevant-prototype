@@ -170,6 +170,13 @@ describe('THE PROBLEM', () => {
     // Some creators do earn: the picture never suggests that nobody is paid.
     expect(norm(p.querySelector('figcaption'))).toMatch(/small\s+stack, another a single coin/)
   })
+  it('on phones, shows the illustration right after the headline and the two opening lines, then the rest of the copy in order', () => {
+    const p = section('problem')
+    const order = [...p.querySelectorAll('h2, [data-testid="problem-opening"], [data-testid="problem-visual"], [data-testid="problem-copy"], [data-testid="problem-transition"]')].map((e) => e.getAttribute('data-testid') ?? e.tagName)
+    expect(order).toEqual(['H2', 'problem-opening', 'problem-visual', 'problem-copy', 'problem-transition'])
+    expect([...p.querySelectorAll('[data-testid="problem-opening"] p')].map((e) => norm(e))).toEqual(HOMEPAGE_COPY.problem.body.slice(0, 2))
+    expect([...p.querySelectorAll('[data-testid="problem-copy"] p')].map((e) => norm(e))).toEqual(HOMEPAGE_COPY.problem.body.slice(2))
+  })
   it('says "But what about you?" once, in the headline, and leaves the reach example to Section 4', () => {
     const t = norm(section('problem'))
     expect(t.split('But what about you?').length - 1).toBe(1)
@@ -199,6 +206,12 @@ describe('HOW SPLITPOST WORKS (The Vision merged in)', () => {
   it('puts the approved simulated-rewards disclosure right beside Step 04, and nowhere else in the section', () => {
     const steps = [...section('how-it-works').querySelectorAll('[data-testid="step"]')]
     expect(norm(steps[3].querySelector('[data-testid="step04-disclosure"]')).trim()).toBe(PILOT_DISCLOSURES.step04)
+    // Inline and discreet: a line of text right under the explanation, not a separate card.
+    const d = steps[3].querySelector('[data-testid="step04-disclosure"]')!
+    expect(d.tagName).toBe('P')
+    expect(d.previousElementSibling?.textContent).toBe(HOMEPAGE_COPY.howItWorks.steps[3].body)
+    expect(d.className).not.toMatch(/rounded|ring-|bg-white/)
+    expect(norm(section('how-it-works'))).not.toContain('Simulated rewards are not redeemable for money.')
     for (const s of steps.slice(0, 3)) expect(s.querySelector('[data-testid="step04-disclosure"]')).toBeNull()
   })
 })

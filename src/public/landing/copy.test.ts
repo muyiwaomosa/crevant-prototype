@@ -93,9 +93,9 @@ describe('claims safeguards on the copy', () => {
   })
 
   it('describes fan rewards in the pilot as simulated, and never as cash or redeemable', () => {
-    expect(PILOT_DISCLOSURES.step04).toMatch(/fan rewards will be simulated/)
-    expect(PILOT_DISCLOSURES.step04).toMatch(/no cash rewards will be paid to fans during the pilot/)
-    expect(PILOT_DISCLOSURES.step04).toMatch(/not redeemable for money/)
+    expect(PILOT_DISCLOSURES.step04).toBe('60-day pilot: Fan rewards are simulated. No cash rewards will be paid to fans during the pilot. Full details will be shared by email.')
+    expect(PILOT_DISCLOSURES.step04).toMatch(/Fan rewards are simulated/)
+    expect(PILOT_DISCLOSURES.step04).toMatch(/No cash rewards will be paid to fans during the pilot/)
     expect(PILOT_DISCLOSURES.invitation).toMatch(/simulations, not actual cash earnings/)
     const all = allHomepageText().join('\n')
     expect(all).not.toMatch(/connection points?[^.]*\b(cash value|worth|redeem(able)? for (cash|money)|convert)/i)
