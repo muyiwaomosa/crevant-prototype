@@ -5,14 +5,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  *
  * Everything goes through the public.app_* database functions
  * (supabase/migrations/20261117000000_social_core.sql), which check who is
- * calling and enforce the rules (no self-follows, an Inner Clique only of
- * creators you follow, at most 25 of them, only your own posts and comments
- * can be deleted).
+ * calling and enforce the rules (no self-follows, a Clique only of creators
+ * you follow, at most 25 of them, only your own posts and comments can be
+ * deleted).
  *
- * My Clique is everyone the member follows (unlimited). Inner Clique is the
- * optional priority group within it (supabase/migrations/
- * 20261120000000_inner_clique.sql). Removing someone from the Inner Clique
- * never unfollows them; unfollowing removes them from both. The browser never reads the social tables directly. The one
+ * Members see two relationships: Following (everyone they follow, unlimited)
+ * and My Clique (up to 25 of them, chosen; stored in social.clique_members,
+ * supabase/migrations/20261120000000_inner_clique.sql). Removing someone from
+ * the Clique never unfollows them; unfollowing removes them from both. The browser never reads the social tables directly. The one
  * exception is the member's own profile row, which the Phase 1A own-row
  * policies already allow.
  *
@@ -100,7 +100,7 @@ export interface AppApi {
   unfollow(memberId: string): Promise<void>
   cliqueAdd(memberId: string): Promise<void>
   cliqueRemove(memberId: string): Promise<void>
-  /** Swaps one Inner Clique creator for another followed creator in one step; on failure nothing changes. */
+  /** Swaps one Clique creator for another followed creator in one step; on failure nothing changes. */
   cliqueReplace(removeId: string, addId: string): Promise<void>
   like(postId: string): Promise<void>
   unlike(postId: string): Promise<void>
@@ -152,11 +152,11 @@ const MESSAGES: Record<string, string> = {
   posts_body_valid: 'Remove any special control characters and try again.',
   comments_body_valid: 'Remove any special control characters and try again.',
   cannot_follow_self: "You can't follow yourself.",
-  cannot_add_self: "You can't add yourself to your Inner Clique.",
-  not_following: 'Follow this creator first. Your Inner Clique only includes people you follow.',
-  clique_full: 'Your Inner Clique is full (25). Choose someone to replace.',
-  not_in_clique: 'That creator is no longer in your Inner Clique. Nothing was changed.',
-  already_in_clique: 'That creator is already in your Inner Clique. Nothing was changed.',
+  cannot_add_self: "You can't add yourself to your Clique.",
+  not_following: 'Follow this creator first. Your Clique only includes people you follow.',
+  clique_full: 'Your Clique is full (25). Choose someone to replace.',
+  not_in_clique: 'That creator is no longer in your Clique. Nothing was changed.',
+  already_in_clique: 'That creator is already in your Clique. Nothing was changed.',
   rate_limited: "You're going a little fast. Please wait a moment and try again.",
   request_reused: 'Something changed while sending. Please try again.',
   not_found: "That's no longer available.",

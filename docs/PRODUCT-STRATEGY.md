@@ -69,6 +69,33 @@ The pilot tests whether limited earning eligibility changes behaviour. It is an 
 3. **Emerging creators.** Discovery Slots are the intended mitigation for a closed market. In the pilot they are open to any creator outside a user's core, and outcomes for emerging creators are tracked separately.
 4. **App stores.** Native apps may bring in-app purchase rules for paid membership. The web-only pilot avoids this.
 
+### Following and My Clique (member relationship model)
+
+Members see exactly two relationships with creators:
+
+| Concept | What it is | Status |
+| --- | --- | --- |
+| **Following** | Every creator a member follows. No limit. | Live on staging |
+| **My Clique** | Up to 25 creators the member chooses from Following. Adding, removing and replacing are deliberate choices; removing never unfollows, unfollowing also removes from the Clique. At 25, adding means choosing someone to replace. | Live on staging (internally `social.clique_members`; see docs/SOCIAL-CORE.md) |
+
+"Inner Clique" was an earlier name for My Clique and is no longer used in anything members see.
+
+### Monetary reward eligibility (future requirement, not built)
+
+When monetary rewards are introduced, a fan is eligible **only** for a **verified qualifying contribution** to a creator who was **in the fan's Clique at the time of that contribution**.
+
+- **Clique membership alone never generates a monetary reward.** Only verified qualifying contributions can.
+- **Not retroactive.** A contribution made before the creator joined the fan's Clique stays ineligible, even if they join before it is verified.
+- **Decided at the contribution time, never recalculated.** Eligibility uses the server's time of the contribution, not when it is verified; a contribution made while the creator was in the Clique stays eligible even if they are removed before verification.
+- **Removing or replacing a creator does not erase rewards already earned.** Earned rewards are permanent records, independent of later Clique changes.
+- **No minimum membership age** for the MVP. Fraud prevention focuses on verifying qualifying contributions, attribution, duplicate prevention and issuance limits.
+- **Unchanged:** Connection Points stay creator-specific, noncash and nontransferable, and the provisional 40/20/40 revenue allocation is unchanged. **No guaranteed cash value** is ever promised.
+- **Not in the member app yet:** no reward schema, eligibility function, ledger or monetary calculation exists, and the member app makes no reward or monetization claims. The social core's checks still forbid points, money and reward data in its tables.
+
+Implementation notes for when it is built: rewards live in their own private, server-only schema; eligibility is checked once, on the server, against the Clique history (a membership that started at or before the contribution and had not ended by then), and stored with the reward record together with the membership's dates, so earned rewards do not depend on that history surviving (for example, after an account deletion). It needs its own migration, checksum approval, rollback and tests, and the open definitions below.
+
+**Open before building:** what counts as a qualifying contribution and how it is verified; attribution and duplicate rules; issuance limits; what happens to unpaid rewards when a fan or creator account is deleted or suspended; legal review of the reward terms (Canada and US).
+
 ## 4. Architecture principles that must hold
 
 These are the decisions that would be expensive to reverse. PR #7 and the PR 2 migration proposal (Phase 1A) are compatible with all of them.
@@ -198,6 +225,7 @@ Every item must be complete, with evidence, and the founder must approve activat
 - [ ] Legal entity able to contract and receive payouts
 - [ ] Lawyer review (Canada and US) of creator terms, supporter terms, refund and dispute policy, partnership agreement, and disclosure rules
 - [ ] Privacy notice updated for payment data
+- [ ] Monetary reward eligibility enforced on the server as specified in section 3 (verified qualifying contribution to a creator in the fan's Clique at the time; not retroactive; earned rewards never erased), with tests, before any monetary reward is offered
 - [ ] **Participant consent wording reviewed and approved by the founder before enrollment** (experiment and payment cohort)
 - [ ] Payment provider, supported countries, currencies, minimum contribution and tiers decided for the participants' countries
 - [ ] Tax responsibilities documented (creators handle their own taxes; payment provider tax forms where required)
@@ -261,6 +289,7 @@ Every item must be complete, with evidence, and the founder must approve activat
 7. **Hosting options** will be presented at the end of Phase 1A.
 8. **Authority and safety:** the founder retains final authority over the experiment. The plan defines conditions for immediately pausing unsafe or malfunctioning features (section 5).
 9. **Consent:** participant consent wording must be reviewed before enrollment (sections 5 and 9).
+10. **Relationship model and reward eligibility:** members see only **Following** (unlimited) and **My Clique** (up to 25 chosen from Following). Future monetary rewards require a verified qualifying contribution to a creator in the fan's Clique at the time of the contribution; membership alone earns nothing, eligibility is not retroactive, and removing or replacing a creator never erases earned rewards. No minimum membership age for the MVP. Not built yet (section 3).
 
 ### Still open
 
