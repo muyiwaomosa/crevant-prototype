@@ -18,12 +18,12 @@ export const PRODUCTION_DEMO_HOSTS = ['crevant-prototype.vercel.app']
 export const TOUR_BASE = '/tour'
 
 /**
- * Where "Discover Splitpost" goes on the public site: the homepage's "What
- * we're building" introduction, which leads on to Join the Waitlist. Not the
- * sample tour, which still shows the older prototype's rules (creator invite
- * links still open it directly).
+ * Where "Discover Splitpost" and "How It Works" go on the public site: the
+ * homepage's HOW SPLITPOST WORKS section. Not the sample tour, which still
+ * shows the older prototype's rules (creator invite links still open it
+ * directly).
  */
-export const DISCOVER_PATH = '/#building'
+export const DISCOVER_PATH = '/#how-it-works'
 
 /** Prototype paths that existed before the tour moved under /tour. */
 const LEGACY_PROTOTYPE_PATHS = [

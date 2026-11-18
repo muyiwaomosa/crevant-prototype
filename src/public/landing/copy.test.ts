@@ -1,75 +1,82 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation } from './claims'
-import { allHomepageText, HOMEPAGE_COPY } from './copy'
+import { BRAND_LINE, HOMEPAGE_COPY, PILOT_DISCLOSURES, allHomepageText, briefLines, type SectionKey } from './copy'
+import { findMisleadingClaims, mentionsProvisionalAllocation } from './claims'
 
-describe('Splitpost homepage copy', () => {
-  it('the hero uses the founder-approved headline and supporting copy exactly', () => {
-    const h = HOMEPAGE_COPY.hero
-    expect(h.headline).toBe('You Create The Post. You Deserve a Split.')
-    expect(h.headlineLines.join(' ')).toBe(h.headline)
-    expect(h.body).toEqual([
-      "You put in the work. You grow your followers. But the money doesn't always follow.",
-      "We're building a social platform where your content can help you earn, and your followers can become a real community.",
-    ])
-    expect(h.primaryCta).toBe('Join the Waitlist')
-    expect(h.smallPrint).toContain(DISCLOSURES.noGuarantee)
+/**
+ * docs/website-brief.md is the approved source. It is parsed here, section by
+ * section: each `## ` heading starts a section, `### ` lines are labels, and
+ * every other non-empty line is one approved line of copy, in page order.
+ */
+function parseBrief() {
+  const text = readFileSync(join(process.cwd(), 'docs/website-brief.md'), 'utf8')
+  const sections: { title: string; lines: string[] }[] = []
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd()
+    if (line.startsWith('## ')) sections.push({ title: line.slice(3), lines: [] })
+    else if (sections.length && line && !line.startsWith('#')) sections[sections.length - 1].lines.push(line)
+  }
+  return sections
+}
+
+const ORDER: SectionKey[] = ['hero', 'problem', 'vision', 'howItWorks', 'people', 'future', 'invitation']
+const TITLES = [
+  'SECTION 1 — HERO',
+  'SECTION 2 — THE PROBLEM',
+  'SECTION 3 — THE VISION',
+  'SECTION 4 — HOW SPLITPOST WORKS',
+  'SECTION 5 — THE PEOPLE BEHIND THE POSTS',
+  'SECTION 6 — A BETTER FUTURE FOR CREATORS',
+  'SECTION 7 — THE INVITATION',
+]
+
+describe('the homepage copy is the approved brief, word for word', () => {
+  const brief = parseBrief()
+
+  it('has the seven approved sections, in order, then the approved pilot disclosures', () => {
+    expect(brief.map((s) => s.title)).toEqual([...TITLES, 'APPROVED PILOT DISCLOSURES'])
   })
 
-  it('follows the seven approved sections, in order', () => {
-    const c = HOMEPAGE_COPY
-    expect([c.problem.headline, c.building.headline, c.creators.headline, c.betterSplit.headline, c.vision.headline, c.invitation.headline]).toEqual([
-      'You Do the Work. Who Gets the Reward?',
-      'A Better Split Starts With a Better Connection.',
-      'Different Creators. The Same Problem.',
-      'More Connection. More Ways to Earn.',
-      'What If Creating Content Could Be a Real Career?',
-      'Help Us Build a Better Split.',
-    ])
+  it.each(ORDER.map((key, i) => [TITLES[i], key] as const))('%s matches line for line', (_title, key) => {
+    const i = ORDER.indexOf(key)
+    expect(briefLines(key)).toEqual(brief[i].lines)
   })
 
-  it('keeps the founder’s goal statement verbatim', () => {
-    expect(HOMEPAGE_COPY.building.goal).toBe('we want to create a platform that generates sustainable pay for content creators who have something valuable to say')
+  it('uses the four approved pilot disclosures exactly', () => {
+    expect(brief[7].lines).toEqual([PILOT_DISCLOSURES.hero, PILOT_DISCLOSURES.step04, PILOT_DISCLOSURES.invitation, PILOT_DISCLOSURES.footer])
   })
 
-  it('uses everyday sample posts, each a practical topic', () => {
-    expect(HOMEPAGE_COPY.samplePosts.map((p) => p.role)).toEqual(['Math teacher', 'Home cook', 'Leather maker', 'Tech reviewer'])
-    expect(HOMEPAGE_COPY.post.role).toBe('Content creator')
+  it('opens and closes with the brand line, which is also the footer tagline', () => {
+    expect(BRAND_LINE).toBe("Don't just post. Get your split.")
+    expect(HOMEPAGE_COPY.hero.headline).toBe(BRAND_LINE)
+    expect(HOMEPAGE_COPY.hero.headlineLines.join(' ')).toBe(BRAND_LINE)
+    expect(HOMEPAGE_COPY.invitation.brandLine).toBe(BRAND_LINE)
   })
 
-  it('keeps each limitation beside the claim it qualifies', () => {
-    expect(HOMEPAGE_COPY.building.note).toContain(DISCLOSURES.noGuarantee)
-    expect(HOMEPAGE_COPY.betterSplit.disclosures).toHaveLength(3)
-    expect(HOMEPAGE_COPY.vision.disclosure).toBe('This is our long-term vision, not a promise of income during the pilot.')
+  it('the emphasized Problem lines are approved body lines, not new copy', () => {
+    for (const e of HOMEPAGE_COPY.problem.emphasis) expect(HOMEPAGE_COPY.problem.body).toContain(e)
   })
+})
 
-  it('carries every required pilot disclosure in the invitation, near signup', () => {
-    const details = HOMEPAGE_COPY.invitation.pilotDetails.join(' ')
-    for (const k of ['invitationOnly', 'stillTesting', 'noFanCash', 'cpNoCashValue', 'cpRules', 'creatorSupportTest', 'adsAreDemos', 'pilotStart'] as const) {
-      expect(details, k).toContain(DISCLOSURES[k])
-    }
-  })
-
-  it('no sentence anywhere in the copy makes a misleading claim', () => {
-    const text = allHomepageText()
-    expect(text.length).toBeGreaterThan(40)
-    expect(text.flatMap((t) => findMisleadingClaims(t))).toEqual([])
+describe('claims safeguards on the copy', () => {
+  it('no sentence makes a misleading claim (only the two approved marketing sentences are exempt)', () => {
+    expect(allHomepageText().flatMap((t) => findMisleadingClaims(t))).toEqual([])
   })
 
   it('never publishes the provisional allocation, a statistic or a currency amount', () => {
-    const all = allHomepageText()
-    expect(all.some((t) => mentionsProvisionalAllocation(t))).toBe(false)
-    // "millions of followers" is the founder's vision copy (no one needs them), not a statistic.
-    expect(all.join(' ').replace("don't need millions of followers", '')).not.toMatch(/[$€£¥]|\d+(\.\d+)?\s?%|per ?cent|million|billion/i)
+    const all = allHomepageText().join('\n')
+    expect(mentionsProvisionalAllocation(all)).toBe(false)
+    expect(all).not.toMatch(/\d\s?%|percent|[$€£]\s?\d|\b\d[\d,.]*\s?(usd|cad|dollars?)\b/i)
   })
 
-  it('uses the new brand only', () => {
-    const text = allHomepageText().join(' ')
-    expect(text).not.toMatch(/crevant/i)
-    expect(text).toMatch(/Splitpost/)
-  })
-
-  it('reads the visitor-facing strings only, not the internal status', () => {
-    expect(allHomepageText()).not.toContain('final')
-    expect(allHomepageText({ status: 'final', a: 'x', b: ['y', { c: 'z' }] })).toEqual(['x', 'y', 'z'])
+  it('describes fan rewards in the pilot as simulated, and never as cash or redeemable', () => {
+    expect(PILOT_DISCLOSURES.step04).toMatch(/fan rewards will be simulated/)
+    expect(PILOT_DISCLOSURES.step04).toMatch(/no cash rewards will be paid to fans during the pilot/)
+    expect(PILOT_DISCLOSURES.step04).toMatch(/not redeemable for money/)
+    expect(PILOT_DISCLOSURES.invitation).toMatch(/simulations, not actual cash earnings/)
+    const all = allHomepageText().join('\n')
+    expect(all).not.toMatch(/connection points?[^.]*\b(cash value|worth|redeem(able)? for (cash|money)|convert)/i)
+    expect(all).not.toMatch(/every (like|share|comment|post)[^.]*(reward|earn|cash|paid)/i)
   })
 })

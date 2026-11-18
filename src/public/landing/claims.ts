@@ -144,10 +144,25 @@ export function sentences(text: string): string[] {
     .filter(Boolean)
 }
 
+/**
+ * The founder-approved marketing sentences (Website Redesign Master
+ * Implementation Brief, 2026-11-18) that the revenue rule would otherwise
+ * flag. Exempt only as these exact whole sentences: any change to the wording
+ * (or any other sentence about revenue) is checked by every rule as usual.
+ * Adding a sentence here needs the founder's explicit approval.
+ */
+export const APPROVED_MARKETING_SENTENCES: readonly string[] = [
+  // THE PROBLEM: how other platforms work today; it promises nothing.
+  'Your content helps platforms attract attention and generate revenue.',
+  // HOW SPLITPOST WORKS, Step 04: the long-term model, shown beside the pilot disclosure that fan rewards are simulated.
+  'When eligible content generates advertising revenue, creators receive a share, and a portion is set aside to reward qualifying fan contributions.',
+]
+
 /** Every sentence that breaks a claim rule. Empty means the text is safe to publish. */
 export function findMisleadingClaims(text: string): ClaimFinding[] {
   const out: ClaimFinding[] = []
   for (const sentence of sentences(text)) {
+    if (APPROVED_MARKETING_SENTENCES.includes(sentence)) continue
     for (const rule of RULES) {
       const match = rule.pattern.exec(sentence)
       if (match && !rule.allowed?.(sentence, match)) out.push({ rule: rule.name, sentence })

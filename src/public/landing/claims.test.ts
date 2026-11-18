@@ -3,6 +3,7 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { EARN_RULES } from '../../lib/points'
 import {
+  APPROVED_MARKETING_SENTENCES,
   DISCLOSURES,
   findMisleadingClaims,
   mentionsProvisionalAllocation,
@@ -141,4 +142,30 @@ describe('the provisional allocation appears in no published source', () => {
       expect(mentionsProvisionalAllocation(readFileSync(file, 'utf8'))).toBe(false)
     })
   }
+})
+
+describe('the approved marketing sentences (exact allow-list)', () => {
+  it('holds exactly the two founder-approved sentences', () => {
+    expect(APPROVED_MARKETING_SENTENCES).toEqual([
+      'Your content helps platforms attract attention and generate revenue.',
+      'When eligible content generates advertising revenue, creators receive a share, and a portion is set aside to reward qualifying fan contributions.',
+    ])
+  })
+
+  it('lets them through only as those exact sentences, in context too', () => {
+    for (const s of APPROVED_MARKETING_SENTENCES) expect(findMisleadingClaims(s)).toEqual([])
+    expect(findMisleadingClaims(`Your followers grow. Your views increase. ${APPROVED_MARKETING_SENTENCES[0]}`)).toEqual([])
+  })
+
+  it('still flags any change to their wording, and any other revenue promise', () => {
+    const variants = [
+      'Your content helps Splitpost attract attention and generate revenue for you.',
+      'When content generates advertising revenue, creators receive a share.',
+      'When eligible content generates advertising revenue, fans receive a share.',
+      'When eligible content generates advertising revenue, creators receive a share, and a portion is paid to fans.',
+      'Fans get a share of the revenue from every post.',
+      'Creators receive 40% of ad revenue.',
+    ]
+    for (const v of variants) expect(findMisleadingClaims(v).length, v).toBeGreaterThan(0)
+  })
 })

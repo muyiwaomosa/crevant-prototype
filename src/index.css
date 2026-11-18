@@ -157,3 +157,20 @@
   from { opacity: 0.15; }
   to { opacity: 1; }
 }
+
+/* Website redesign (2026-11-18): gentle motion for the split-post
+   illustration and the bridge arrow. Used only through Tailwind's
+   motion-safe: variant, so nothing moves when reduced motion is on. Lives
+   here because the Content Security Policy blocks inline <style> tags. */
+@keyframes sp-lift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes sp-drop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(5px); }
+}
+@keyframes sp-nudge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}

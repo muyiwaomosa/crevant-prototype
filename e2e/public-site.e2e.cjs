@@ -169,11 +169,10 @@ async function newContext(browser, options = {}) {
     }
 
     // 5b. The Splitpost homepage, from the smallest phone to a wide desktop:
-    //     every section in order, no sideways scrolling, the problem points
-    //     reflow (one per row, then two, then one beside the text), the limits
-    //     sit beside the claims they qualify, the founder photo loads, and the
-    //     concept screens can be scrolled on phones.
-    for (const width of [320, 390, 768, 1024, 1440]) {
+    //     the seven sections in order, no sideways scrolling, the headline on
+    //     two lines, every pilot disclosure visible beside its claim, no
+    //     photographs, every illustration on screen, and one logo file.
+    for (const width of [320, 375, 390, 768, 1024, 1440]) {
       const label = `${width}px`
       const ctx = await newContext(browser, { viewport: { width, height: 900 } })
       const page = await ctx.newPage()
@@ -183,7 +182,7 @@ async function newContext(browser, options = {}) {
       await page.goto(`${BASE}/`)
 
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check(`${label}: the six sections in order`, ids === 'hero,problem,building,creators,split,vision,invitation', ids)
+      check(`${label}: the seven sections in order`, ids === 'hero,problem,vision,how-it-works,people,future,invitation', ids)
       const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
       {
@@ -193,84 +192,42 @@ async function newContext(browser, options = {}) {
       }
       check(`${label}: no Crevant left on the landing page`, !/Crevant/i.test(await page.locator('body').innerText()))
 
-      const rows = await page.$$eval('[data-testid="creator-groups"] > li', (lis) => new Set(lis.map((li) => Math.round(li.getBoundingClientRect().top))).size)
-      const expectedRows = width < 768 ? 3 : 1
-      check(`${label}: the creator groups show ${expectedRows} row(s)`, rows === expectedRows, `rows=${rows}`)
-
-      // The hero headline is exactly two lines, one sentence each, below 1024px.
-      if (width < 1024) {
-        const lines = await page.evaluate(() => {
+      // The hero headline is exactly two lines, one sentence each, and fits the screen.
+      {
+        const r = await page.evaluate(() => {
           const h1 = document.querySelector('h1')
           const lh = parseFloat(getComputedStyle(h1).lineHeight)
-          return [...h1.querySelectorAll('span.block')].map((s) => Math.round(s.getBoundingClientRect().height / lh))
+          const spans = [...h1.querySelectorAll('[data-testid^="headline-"]')]
+          return {
+            lines: spans.map((s) => Math.round(s.getBoundingClientRect().height / lh)).join(),
+            fits: spans.every((s) => s.scrollWidth <= s.clientWidth + 1 && s.getBoundingClientRect().right <= document.documentElement.clientWidth),
+          }
         })
-        check(`${label}: the hero headline is exactly two lines`, lines.join() === '1,1', lines.join())
+        check(`${label}: the hero headline is exactly two lines and fits`, r.lines === '1,1' && r.fits, JSON.stringify(r))
       }
 
-      // Load every lazy image, then check each one decoded.
-      await page.evaluate(async () => {
-        for (let y = 0; y < document.body.scrollHeight; y += 500) {
-          window.scrollTo(0, y)
-          await new Promise((r) => setTimeout(r, 30))
-        }
-      })
-      const imgs = await page.$$eval('main img', (els) =>
-        Promise.all(els.map((img) => (img.complete ? img.naturalWidth : new Promise((ok) => img.addEventListener('load', () => ok(img.naturalWidth), { once: true }))))),
-      )
-      check(`${label}: every image loads (the founder photo; no stock photos until approved)`, imgs.length >= 1 && imgs.every((w) => w > 0), imgs.join(','))
+      // No photographs: the illustrations are drawn, and decorative.
+      check(`${label}: no photographs on the homepage`, (await page.locator('main img:not([data-testid="splitpost-logo"])').count()) === 0)
+      const svgs = await page.$$eval('main svg', (els) => els.filter((e) => e.getAttribute('aria-hidden') !== 'true' && !e.closest('[aria-hidden="true"]')).length)
+      check(`${label}: every illustration is decorative (hidden from screen readers)`, svgs === 0, String(svgs))
 
-      const disclosures = await Promise.all(['hero-small-print', 'building-note', 'split-disclosures', 'vision-disclosure', 'pilot-details'].map((t) => page.getByTestId(t).isVisible()))
-      check(`${label}: each limitation is visible beside its claim, and the full pilot details near signup`, disclosures.every(Boolean))
+      const disclosures = await Promise.all(['hero-disclosure', 'step04-disclosure', 'invitation-disclosure', 'footer-disclosure'].map((t) => page.getByTestId(t).isVisible()))
+      check(`${label}: each pilot disclosure is visible beside its claim`, disclosures.every(Boolean), disclosures.join())
 
-      // The three product illustrations: each fits the screen, its tag and headline show,
-      // and every numbered marker on the picture sits inside the visible phone screen.
-      const ills = await page.$$eval('[data-testid^="illustration-"]', (figs) =>
-        figs.map((f) => {
-          const r = f.getBoundingClientRect()
-          const screen = f.querySelector('.aspect-\\[9\\/18\\.5\\]')
-          const sr = screen && screen.getBoundingClientRect()
-          const markers = [...f.querySelectorAll('span[aria-hidden="true"].bg-sp-accent.absolute')].map((m) => m.getBoundingClientRect())
-          return {
-            id: f.getAttribute('data-testid'),
-            fits: r.left >= 0 && r.right <= document.documentElement.clientWidth + 0.5,
-            tagged: !!f.querySelector('[data-testid="concept-tag"]') && !!f.querySelector('h3'),
-            markers: markers.length,
-            markersInside: !sr || markers.every((m) => m.left >= sr.left - 1 && m.right <= sr.right + 1 && m.top >= sr.top - 1 && m.bottom <= sr.bottom + 1),
-          }
+      const ills = await page.$$eval('[data-testid="value-share"], [data-testid="audience-vs-earnings"], [data-testid="journey"], [data-testid="moment-effort"], [data-testid="moment-frustration"], [data-testid="moment-supporters"], [data-testid="today"], [data-testid="possible"], [data-testid="constellation"]', (els) =>
+        els.map((e) => {
+          const r = e.getBoundingClientRect()
+          return { id: e.getAttribute('data-testid'), fits: r.width > 0 && r.left >= -0.5 && r.right <= document.documentElement.clientWidth + 0.5 }
         }),
       )
-      check(`${label}: the three product illustrations are on the page`, ills.map((i) => i.id).join() === 'illustration-following,illustration-community,illustration-referral', ills.map((i) => i.id).join())
-      check(`${label}: each illustration fits the screen and carries its concept tag and headline`, ills.every((i) => i.fits && i.tagged), JSON.stringify(ills))
-      check(`${label}: every numbered marker sits inside its phone screen`, ills.filter((i) => i.id !== 'illustration-referral').every((i) => i.markers === 3 && i.markersInside), JSON.stringify(ills))
+      check(`${label}: all nine illustrations are on the page and fit the screen`, ills.length === 9 && ills.every((i) => i.fits), JSON.stringify(ills))
+      const steps = await page.$$eval('[data-testid="step"] svg', (els) => els.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right <= document.documentElement.clientWidth + 0.5 }).length)
+      check(`${label}: each of the four steps has its picture, on screen`, steps >= 4, String(steps))
 
-      // The official logo, the same file everywhere: header, footer and the six seams.
-      const logos = await page.$$eval('img[data-testid="splitpost-logo"]', (els) => els.map((e) => ({ src: e.getAttribute('src'), w: e.naturalWidth, box: Math.round(e.getBoundingClientRect().width), ratio: e.getBoundingClientRect().width / e.getBoundingClientRect().height })))
-      check(`${label}: one logo file, used in the header, footer and every seam`, logos.length >= 8 && new Set(logos.map((l) => l.src)).size === 1 && logos.every((l) => l.w > 0), `${logos.length} logos, ${new Set(logos.map((l) => l.src)).size} sources`)
+      // The official logo, the same file everywhere: header, footer and the five seams.
+      const logos = await page.$$eval('img[data-testid="splitpost-logo"]', (els) => els.map((e) => ({ src: e.getAttribute('src'), w: e.naturalWidth, ratio: e.getBoundingClientRect().width / e.getBoundingClientRect().height })))
+      check(`${label}: one logo file, used in the header, footer and every seam`, logos.length >= 7 && new Set(logos.map((l) => l.src)).size === 1 && logos.every((l) => l.w > 0), `${logos.length} logos, ${new Set(logos.map((l) => l.src)).size} sources`)
       check(`${label}: the logo keeps its proportions everywhere`, logos.every((l) => Math.abs(l.ratio - 1) < 0.02), logos.map((l) => l.ratio.toFixed(2)).join())
-      await ctx.close()
-    }
-
-    // 5b1. The hero's split post on phones: both pieces upright, fully on screen with a margin on each
-    //      side, a clear gap between them, and the apricot line kept within the pieces.
-    for (const width of [320, 360, 390, 430]) {
-      const ctx = await newContext(browser, { viewport: { width, height: 900 } })
-      const page = await ctx.newPage()
-      await page.goto(`${BASE}/`)
-      const r = await page.evaluate(() => {
-        const vw = document.documentElement.clientWidth
-        const scene = document.querySelector('[data-testid="hero-scene"]')
-        const box = (el) => el.getBoundingClientRect()
-        const creator = box(scene.querySelector('[data-testid="split-creator-piece"]'))
-        const community = box(scene.querySelector('[data-testid="split-community-piece"]'))
-        const line = [...scene.querySelectorAll('[data-testid="gold-seam"] line')].find((l) => getComputedStyle(l).display !== 'none')
-        const lb = box(line)
-        const tilted = [...scene.querySelectorAll('*')].some((el) => { const t = getComputedStyle(el).transform; return t !== 'none' && !/^matrix\(1, 0, 0, 1,/.test(t) })
-        const outside = [...scene.querySelectorAll('*')].filter((el) => { const b = box(el); return b.width > 0 && (b.left < 0 || b.right > vw) }).length
-        return { vw, tilted, outside, left: Math.round(Math.min(creator.left, community.left)), right: Math.round(vw - Math.max(creator.right, community.right)), line: [Math.round(lb.left), Math.round(lb.right)], pieces: [Math.round(Math.min(creator.left, community.left)), Math.round(Math.max(creator.right, community.right))] }
-      })
-      check(`${width}px: the hero's two post pieces stay upright`, !r.tilted, JSON.stringify(r))
-      check(`${width}px: the hero's pieces fit on screen with a margin on both sides`, r.outside === 0 && r.left >= 16 && r.right >= 16, JSON.stringify(r))
-      check(`${width}px: the apricot line stays within the pieces`, r.line[0] >= r.pieces[0] && r.line[1] <= r.pieces[1], JSON.stringify(r))
       await ctx.close()
     }
 
@@ -392,8 +349,8 @@ async function newContext(browser, options = {}) {
     }
 
     // 5c3. Every "Discover Splitpost" button, on desktop and on a phone, from
-    //      the homepage and from /join, opens the homepage introduction
-    //      ("What we're building") on this site, never the old sample tour.
+    //      the homepage and from /join, opens How Splitpost Works (Section 4)
+    //      on this site, never the old sample tour.
     for (const [label, options] of [
       ['desktop', { viewport: { width: 1280, height: 900 } }],
       ['phone', { ...devices['iPhone 13'] }],
@@ -409,29 +366,29 @@ async function newContext(browser, options = {}) {
           await page.goto(`${BASE}${start}`, { waitUntil: 'networkidle' })
           const link = page.getByRole('link', { name: 'Discover Splitpost', exact: true, includeHidden: true }).nth(i)
           const href = await link.evaluate((a) => a.href)
-          if (href !== `${new URL(BASE).origin}/#building`) failed.push(`${start} link ${i + 1} points to ${href}`)
+          if (href !== `${new URL(BASE).origin}/#how-it-works`) failed.push(`${start} link ${i + 1} points to ${href}`)
           await link.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {})
           if (!(await link.isVisible())) continue
           clicked++
           await link.click()
-          await page.waitForURL(`${BASE}/#building`, { timeout: 5000 }).catch(() => {})
-          const heading = page.locator('#building-title')
+          await page.waitForURL(`${BASE}/#how-it-works`, { timeout: 5000 }).catch(() => {})
+          const heading = page.locator('#how-title')
           await page.waitForTimeout(800)
           const box = await heading.boundingBox()
           const vh = page.viewportSize().height
           const inView = !!box && box.y < vh && box.y + box.height > 0
           const tour = await page.getByText('Sample tour.').count()
-          if (page.url() !== `${BASE}/#building` || !inView || tour) failed.push(`${start} link ${i + 1}: ${page.url()}${inView ? '' : ', introduction not on screen'}${tour ? ', showed the sample tour' : ''}`)
+          if (page.url() !== `${BASE}/#how-it-works` || !inView || tour) failed.push(`${start} link ${i + 1}: ${page.url()}${inView ? '' : ', introduction not on screen'}${tour ? ', showed the sample tour' : ''}`)
         }
       }
-      check(`${label}: each of the ${clicked} visible Discover Splitpost buttons (homepage and /join) opens the introduction on this site`, clicked >= (label === 'phone' ? 2 : 3) && failed.length === 0, failed.join(' | '))
+      check(`${label}: each of the ${clicked} visible Discover Splitpost buttons (homepage and /join) opens How It Works on this site`, clicked >= (label === 'phone' ? 1 : 2) && failed.length === 0, failed.join(' | '))
       await ctx.close()
     }
 
     // 5c4. Repeated clicks, as people really use the page (no reload between
     //      them): Discover Splitpost, then back to the top, then Discover
-    //      again, then the footer's How It Works. Each one must scroll to the
-    //      introduction. (A second click to the same #section used to do
+    //      again, then the footer's How It Works. Each one must scroll to
+    //      Section 4. (A second click to the same #section used to do
     //      nothing.)
     for (const [label, options] of [
       ['desktop', { viewport: { width: 1280, height: 900 } }],
@@ -442,10 +399,11 @@ async function newContext(browser, options = {}) {
       await page.goto(`${BASE}/`, { waitUntil: 'networkidle' })
       const onScreen = async () => {
         await page.waitForTimeout(700)
-        const box = await page.locator('#building-title').boundingBox()
+        const box = await page.locator('#how-title').boundingBox()
         return !!box && box.y >= -5 && box.y < page.viewportSize().height
       }
-      const hero = page.locator('[data-testid="hero-actions"]').getByRole('link', { name: 'Discover Splitpost' })
+      // Phones have no header Discover button, so they use the footer link twice.
+      const hero = label === 'phone' ? page.getByRole('contentinfo').getByRole('link', { name: 'How It Works' }) : page.getByRole('banner').getByRole('link', { name: 'Discover Splitpost' })
       const results = []
       await hero.click()
       results.push(['first Discover click', await onScreen()])
@@ -456,7 +414,7 @@ async function newContext(browser, options = {}) {
       await page.getByRole('contentinfo').getByRole('link', { name: 'How It Works' }).click()
       results.push(['footer How It Works', await onScreen()])
       const missed = results.filter(([, ok]) => !ok).map(([n]) => n)
-      check(`${label}: Discover Splitpost and How It Works scroll to the introduction on every click, not just the first`, missed.length === 0, missed.join(', '))
+      check(`${label}: Discover Splitpost and How It Works scroll to How It Works on every click, not just the first`, missed.length === 0, missed.join(', '))
       await ctx.close()
     }
 
