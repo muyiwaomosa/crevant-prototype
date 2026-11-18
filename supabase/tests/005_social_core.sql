@@ -56,7 +56,7 @@ declare
   expected text[] := array[
     -- app_add_comment and app_create_post have two versions each: the original,
     -- and the one with a request id (20261119000000_publishing_request_ids).
-    'app_add_comment', 'app_add_comment', 'app_clique_add', 'app_clique_remove', 'app_comments',
+    'app_add_comment', 'app_add_comment', 'app_clique_add', 'app_clique_remove', 'app_clique_replace', 'app_comments',
     'app_create_post', 'app_create_post', 'app_delete_comment', 'app_delete_post', 'app_discover', 'app_feed', 'app_follow', 'app_following',
     'app_like', 'app_me', 'app_member', 'app_member_posts', 'app_post', 'app_unfollow', 'app_unlike'
   ];
@@ -123,7 +123,7 @@ do $$
 begin
   if not exists (select 1 from pg_trigger where tgname = 'clique_members_guard'
                  and tgrelid = 'social.clique_members'::regclass and tgenabled <> 'D') then
-    raise exception 'FAIL: the Clique guard (follow required, at most 10) is missing or disabled';
+    raise exception 'FAIL: the Inner Clique guard (follow required, at most 25) is missing or disabled';
   end if;
   if not exists (select 1 from pg_trigger where tgname = 'clique_members_append_only'
                  and tgrelid = 'social.clique_members'::regclass and tgenabled <> 'D') then
@@ -140,10 +140,18 @@ begin
     raise exception 'FAIL: members could follow themselves';
   end if;
   if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                 where n.nspname = 'social' and p.proname = 'clique_members_guard' and p.prosrc ~ '>= 10') then
-    raise exception 'FAIL: the Clique limit is not 10';
+                 where n.nspname = 'social' and p.proname = 'clique_members_guard' and p.prosrc ~ '>= 25') then
+    raise exception 'FAIL: the Inner Clique limit is not 25';
   end if;
-  raise notice 'PASS: the Clique and history guards are in place';
+  if (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname in ('app_clique_add', 'app_clique_remove')
+        and p.prosrc ~ 'rate_check\(''clique''') <> 2
+     or not exists (select 1 from pg_proc where oid = 'public.app_clique_replace(uuid, uuid)'::regprocedure and prosrc ~ 'rate_check\(''clique_replace''')
+     or not exists (select 1 from pg_proc where oid = 'social.rate_check(text, uuid)'::regprocedure
+                    and prosrc ~ '''clique_replace''' and prosrc ~ 'v_cost := 2' and prosrc ~ 'n \+ v_cost > v_limit') then
+    raise exception 'FAIL: Inner Clique add, remove and replace are not all rate limited';
+  end if;
+  raise notice 'PASS: the Clique and history guards are in place, and Inner Clique changes are rate limited';
 end $$;
 
 -- 5. No Connection Points, money, email or role in Release 1.

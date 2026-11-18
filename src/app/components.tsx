@@ -5,7 +5,7 @@ import { Heart, MessageCircle, Trash2, Users } from 'lucide-react'
 import { Avatar, Card, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
-import { hueFor, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
+import { AppApiError, hueFor, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
 import { useAppApi } from './AppApiContext'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
@@ -90,7 +90,7 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
           </div>
           {post.authorInMyClique && (
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[12px] font-semibold text-brand-700">
-              <Users className="h-3.5 w-3.5" aria-hidden="true" /> In your Clique
+              <Users className="h-3.5 w-3.5" aria-hidden="true" /> Inner Clique
             </span>
           )}
         </header>
@@ -237,8 +237,11 @@ export function TextComposer({
 }
 
 /**
- * Follow and Clique buttons for one creator. Following never adds someone to
- * the Clique: that's a separate, deliberate choice, and only for people you follow.
+ * Follow and Inner Clique buttons for one creator. Following adds them to My
+ * Clique, never to the Inner Clique: that's a separate, deliberate choice, and
+ * only for people you follow. Removing from the Inner Clique never unfollows.
+ * When the Inner Clique is full, it links to the Clique page to choose who to
+ * replace.
  */
 export function RelationshipButtons({
   member,
@@ -297,24 +300,29 @@ export function RelationshipButtons({
               type="button"
               disabled={busy}
               onClick={() => run(() => api.cliqueRemove(member.id))}
-              aria-label={`Remove ${member.displayName} from your Clique`}
+              aria-label={`Remove ${member.displayName} from your Inner Clique (you keep following them)`}
               className={buttonClass('secondary', size)}
             >
-              <Users className="h-4 w-4" aria-hidden="true" /> In your Clique
+              <Users className="h-4 w-4" aria-hidden="true" /> In Inner Clique
             </button>
           ) : (
             <button
               type="button"
               disabled={busy}
               onClick={() => run(() => api.cliqueAdd(member.id))}
-              aria-label={`Add ${member.displayName} to your Clique`}
+              aria-label={`Add ${member.displayName} to your Inner Clique`}
               className={buttonClass('secondary', size)}
             >
-              <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique
+              <Users className="h-4 w-4" aria-hidden="true" /> Add to Inner Clique
             </button>
           ))}
       </div>
       {error !== null && <ErrorNote error={error} />}
+      {error instanceof AppApiError && error.code === 'clique_full' && (
+        <Link to={`/app/clique?add=${encodeURIComponent(member.id)}`} className="inline-block text-sm font-semibold text-brand-700 underline">
+          Choose who to replace
+        </Link>
+      )}
     </div>
   )
 }

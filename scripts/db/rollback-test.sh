@@ -16,7 +16,8 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Four later migrations follow the waitlist: publishing request ids
+# Later migrations follow the waitlist: the Inner Clique (20261120000000,
+# scripts/db/rollback-inner-clique-test.sh), publishing request ids
 # (20261119000000, scripts/db/rollback-publishing-requests-test.sh), creator acquisition
 # (20261116000000), the Release 1 social core (20261117000000) and platform
 # function access (20261118000000). Each rollback refuses while a later
@@ -97,9 +98,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+INNER=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261120000000')")
+if [ "$INNER" = t ]; then
+  # The newest migration (Inner Clique) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-publishing-requests.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the publishing request ids rollback refuses while the Inner Clique is recorded" \
+    || bad "the publishing request ids rollback did not refuse while the Inner Clique is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-inner-clique-test.sh; then
+    ok "the Inner Clique rollback refuses safely and restores exactly the earlier definitions"
+  else
+    bad "the Inner Clique rollback tests failed"
+  fi
+fi
 REQUESTS=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261119000000')")
 if [ "$REQUESTS" = t ]; then
-  # The newest migration (publishing request ids) goes first.
+  # Then publishing request ids.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-platform-access.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the platform function access rollback refuses while publishing request ids is recorded" \
@@ -238,17 +252,31 @@ if out=$(for f in supabase/tests/*.sql; do psql "$DB_URL" -X -q -v ON_ERROR_STOP
 else
   bad "database checks after reapplying: $(tail -3 <<<"$out" | tr '\n' ' ')"
 fi
-if [ "$REQUESTS" = t ] || [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
+if [ "$INNER" = t ] || [ "$REQUESTS" = t ] || [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
   # Everything is back: the waitlist rollback must refuse until the later ones are removed.
   out=$(rollback check ""); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "after reapplying, the waitlist rollback refuses while a later migration is recorded" \
     || bad "the waitlist rollback did not refuse while a later migration is recorded (exit $code)"
+  if [ "$INNER" = t ]; then
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-inner-clique.sql 2>&1); code=$?
+    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+      && ok "after reapplying, the Inner Clique rollback check passes again" \
+      || bad "Inner Clique rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    [ "$("${PSQL[@]}" -c "select prosrc ~ '>= 25' from pg_proc where oid = 'social.clique_members_guard()'::regprocedure")" = t ] \
+      && ok "after reapplying, the Inner Clique holds 25 again" || bad "after reapplying, the guard is not at 25"
+  fi
   if [ "$REQUESTS" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-publishing-requests.sql 2>&1); code=$?
-    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-      && ok "after reapplying, the publishing request ids rollback check passes again" \
-      || bad "publishing request ids rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    if [ "$INNER" = t ]; then
+      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+        && ok "after reapplying, the publishing request ids rollback refuses while the Inner Clique is recorded" \
+        || bad "the publishing request ids rollback did not refuse after reapply while the Inner Clique is recorded (exit $code)"
+    else
+      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+        && ok "after reapplying, the publishing request ids rollback check passes again" \
+        || bad "publishing request ids rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    fi
   fi
   if [ "$PLATFORM" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-platform-access.sql 2>&1); code=$?

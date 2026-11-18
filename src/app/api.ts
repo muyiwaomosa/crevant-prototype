@@ -5,9 +5,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  *
  * Everything goes through the public.app_* database functions
  * (supabase/migrations/20261117000000_social_core.sql), which check who is
- * calling and enforce the rules (no self-follows, a Clique only of creators
- * you follow, at most 10 of them, only your own posts and comments can be
- * deleted). The browser never reads the social tables directly. The one
+ * calling and enforce the rules (no self-follows, an Inner Clique only of
+ * creators you follow, at most 25 of them, only your own posts and comments
+ * can be deleted).
+ *
+ * My Clique is everyone the member follows (unlimited). Inner Clique is the
+ * optional priority group within it (supabase/migrations/
+ * 20261120000000_inner_clique.sql). Removing someone from the Inner Clique
+ * never unfollows them; unfollowing removes them from both. The browser never reads the social tables directly. The one
  * exception is the member's own profile row, which the Phase 1A own-row
  * policies already allow.
  *
@@ -95,6 +100,8 @@ export interface AppApi {
   unfollow(memberId: string): Promise<void>
   cliqueAdd(memberId: string): Promise<void>
   cliqueRemove(memberId: string): Promise<void>
+  /** Swaps one Inner Clique creator for another followed creator in one step; on failure nothing changes. */
+  cliqueReplace(removeId: string, addId: string): Promise<void>
   like(postId: string): Promise<void>
   unlike(postId: string): Promise<void>
   /** requestId: as for createPost. */
@@ -103,7 +110,7 @@ export interface AppApi {
 }
 
 /** Limits that match the database, so people hear about problems before sending. */
-export const LIMITS = { post: 2000, comment: 1000, clique: 10, username: { min: 3, max: 30 }, displayName: 50 } as const
+export const LIMITS = { post: 2000, comment: 1000, clique: 25, username: { min: 3, max: 30 }, displayName: 50 } as const
 
 /** Same reserved names as the profiles table (supabase/migrations/20261107000000_profiles_and_ops.sql). */
 const RESERVED_USERNAMES = new Set([
@@ -145,9 +152,11 @@ const MESSAGES: Record<string, string> = {
   posts_body_valid: 'Remove any special control characters and try again.',
   comments_body_valid: 'Remove any special control characters and try again.',
   cannot_follow_self: "You can't follow yourself.",
-  cannot_add_self: "You can't add yourself to your Clique.",
-  not_following: 'Follow this creator first. Your Clique only includes people you follow.',
-  clique_full: 'Your Clique already has 10 creators. Remove one to make room.',
+  cannot_add_self: "You can't add yourself to your Inner Clique.",
+  not_following: 'Follow this creator first. Your Inner Clique only includes people you follow.',
+  clique_full: 'Your Inner Clique is full (25). Choose someone to replace.',
+  not_in_clique: 'That creator is no longer in your Inner Clique. Nothing was changed.',
+  already_in_clique: 'That creator is already in your Inner Clique. Nothing was changed.',
   rate_limited: "You're going a little fast. Please wait a moment and try again.",
   request_reused: 'Something changed while sending. Please try again.',
   not_found: "That's no longer available.",
@@ -346,6 +355,7 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     unfollow: (id) => rpc<void>('app_unfollow', { p_creator: id }),
     cliqueAdd: (id) => rpc<void>('app_clique_add', { p_creator: id }),
     cliqueRemove: (id) => rpc<void>('app_clique_remove', { p_creator: id }),
+    cliqueReplace: (removeId, addId) => rpc<void>('app_clique_replace', { p_remove: removeId, p_add: addId }),
     like: (id) => rpc<void>('app_like', { p_post: id }),
     unlike: (id) => rpc<void>('app_unlike', { p_post: id }),
     addComment: (postId, body, requestId) =>

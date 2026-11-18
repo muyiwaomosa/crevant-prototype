@@ -60,6 +60,9 @@ done
 # Two real sessions at once: a request id is stored once (issue #48).
 scripts/db/request-ids-concurrency-test.sh
 
+# Two real sessions at once: Inner Clique changes stay within 25, never duplicated.
+scripts/db/inner-clique-concurrency-test.sh
+
 # Negative checks: each file applies one deliberate violation inside a
 # transaction that is always rolled back. The profile, ops and waitlist checks
 # must then fail with a "FAIL:" message, proving they would catch it. (Only
