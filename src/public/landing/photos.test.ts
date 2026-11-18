@@ -1,8 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { PAIN_PHOTOS, PHOTOS, SAMPLE_AVATAR } from './photos'
-import { HOMEPAGE_COPY } from './copy'
+import { FUTURE_MOSAIC, PHOTOS, PHOTO_APPROVALS, SAMPLE_AVATAR } from './photos'
 
 const PUBLIC = join(__dirname, '../../../public')
 const MEDIA = join(PUBLIC, 'media/landing')
@@ -23,9 +22,18 @@ function webpSize(buf: Buffer): { width: number; height: number } {
 describe('homepage photos', () => {
   const photos = Object.values(PHOTOS)
 
-  it('has exactly the proposed slots: the late-night creator, three pain points, the fans, and today and toward', () => {
-    expect(photos.map((p) => p.id)).toEqual(['creator-late-night', 'unpredictable-income', 'second-job', 'planning-bills', 'fans-sharing', 'future-today', 'future-toward'])
-    expect(PAIN_PHOTOS).toHaveLength(HOMEPAGE_COPY.people.pains.length)
+  it('has exactly the current slots: the creator at night, the other job, the fans, and the four creators in the mosaic', () => {
+    expect(photos.map((p) => p.id)).toEqual(['creator-at-night', 'another-job', 'fans-sharing', 'cooking-vlog', 'painter', 'craftsman', 'filmmaker'])
+    expect(FUTURE_MOSAIC.map((k) => PHOTOS[k].id)).toEqual(['cooking-vlog', 'filmmaker', 'painter', 'craftsman'])
+  })
+
+  it('lists every photo shown on the site in the approval file, and every one is still pending the founder', () => {
+    expect(Object.keys(PHOTO_APPROVALS).sort()).toEqual([...photos.map((p) => p.id), SAMPLE_AVATAR.id, 'founder'].sort())
+    for (const [id, status] of Object.entries(PHOTO_APPROVALS)) expect(status, id).toBe('pending')
+  })
+
+  it('records that these stand-ins have no model release', () => {
+    for (const p of photos) expect(p.modelRelease, p.id).toBe('none (Pexels)')
   })
 
   it.each(photos.map((p) => [p.id, p] as const))('%s records its Pexels source, credit and licence, and describes the activity', (_, p) => {
@@ -53,13 +61,13 @@ describe('homepage photos', () => {
 
   it('records each Pexels photo ID, with a credit or a clear note that it is still to be verified', () => {
     expect(photos.map((p) => [p.sourceUrl.match(/-(\d+)\/$/)![1], p.photographer])).toEqual([
-      ['4327409', 'Josue Monteiro'],
-      ['6964331', 'Credit to be verified on the Pexels listing'],
-      ['4353623', 'Credit to be verified on the Pexels listing'],
-      ['6964334', 'Credit to be verified on the Pexels listing'],
+      ['17147713', 'Credit to be verified on the Pexels listing'],
+      ['6205512', 'Credit to be verified on the Pexels listing'],
       ['6146961', 'Credit to be verified on the Pexels listing'],
-      ['7983358', 'Credit to be verified on the Pexels listing'],
-      ['8357265', 'Credit to be verified on the Pexels listing'],
+      ['7669738', 'Credit to be verified on the Pexels listing'],
+      ['22690822', 'Credit to be verified on the Pexels listing'],
+      ['3846033', 'Credit to be verified on the Pexels listing'],
+      ['36181988', 'Director Chenchi'],
     ])
   })
 

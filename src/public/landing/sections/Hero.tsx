@@ -19,8 +19,8 @@ const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:o
  * the creator made and what her community grew, settling into place once on
  * load (motion-safe only).
  *
- * Phones: headline, supporting copy, picture, then the call to action and
- * disclosure. From lg up: text left, picture right.
+ * Phones: headline, picture, supporting copy, then the call to action and
+ * disclosure (founder direction). From lg up: text left, picture right.
  */
 export function Hero() {
   const memberLinks = useMemberLinks()
@@ -28,7 +28,7 @@ export function Hero() {
     <section id="hero" aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-white text-sp-ink">
       {/* The split: one diagonal cut across the whole band, as on the original site. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(118deg,transparent_0_62%,var(--color-sp-bg)_62%_100%)]" />
-      <div className="mx-auto grid max-w-6xl px-4 pb-12 pt-6 [grid-template-areas:'title'_'body'_'scene'_'rest'] sm:px-6 sm:pb-20 sm:pt-10 lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-x-14 lg:pb-24 lg:pt-16 lg:[grid-template-areas:'top_scene'_'title_scene'_'body_scene'_'rest_scene'_'end_scene']">
+      <div className="mx-auto grid max-w-6xl px-4 pb-12 pt-6 [grid-template-areas:'title'_'scene'_'body'_'rest'] sm:px-6 sm:pb-20 sm:pt-10 lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-x-14 lg:pb-24 lg:pt-16 lg:[grid-template-areas:'top_scene'_'title_scene'_'body_scene'_'rest_scene'_'end_scene']">
         <div className="min-w-0 [grid-area:title]">
           <h1
             id="hero-title"
@@ -46,16 +46,16 @@ export function Hero() {
           </h1>
         </div>
 
-        <div data-testid="hero-body" className="mt-6 min-w-0 max-w-[34rem] space-y-3 text-[1.1rem] leading-relaxed [grid-area:body] sm:text-lg">
+        <div className="mt-7 min-w-0 [grid-area:scene] sm:mt-9 lg:mt-0 lg:self-center">
+          <SplitThePost />
+        </div>
+
+        <div data-testid="hero-body" className="mt-8 min-w-0 lg:mt-6 max-w-[34rem] space-y-3 text-[1.1rem] leading-relaxed [grid-area:body] sm:text-lg">
           <p className="font-semibold">{copy.body[0]}</p>
           <p className="text-sp-muted">{copy.body[1]}</p>
         </div>
 
-        <div className="mt-9 min-w-0 [grid-area:scene] sm:mt-10 lg:mt-0 lg:self-center">
-          <SplitThePost />
-        </div>
-
-        <div className="mt-10 min-w-0 [grid-area:rest] lg:mt-7">
+        <div className="mt-8 min-w-0 [grid-area:rest] lg:mt-7">
           <div data-testid="hero-actions">
             <Link
               to="/join"

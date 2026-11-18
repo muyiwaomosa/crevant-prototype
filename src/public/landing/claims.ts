@@ -146,16 +146,17 @@ export function sentences(text: string): string[] {
 
 /**
  * The founder-approved marketing sentences (Website Redesign Master
- * Implementation Brief, 2026-11-18) that the revenue rule would otherwise
- * flag. Exempt only as these exact whole sentences: any change to the wording
+ * Implementation Brief, revised 2026-11-18) that the money rule would
+ * otherwise flag. Exempt only as these exact whole sentences: any change to the wording
  * (or any other sentence about revenue) is checked by every rule as usual.
  * Adding a sentence here needs the founder's explicit approval.
  */
 export const APPROVED_MARKETING_SENTENCES: readonly string[] = [
-  // THE PROBLEM: how other platforms work today; it promises nothing.
-  'Your content helps platforms attract attention and generate revenue.',
-  // HOW SPLITPOST WORKS, Step 04: the long-term model, shown beside the pilot disclosure that fan rewards are simulated.
-  'When eligible content generates advertising revenue, creators receive a share, and a portion is set aside to reward qualifying fan contributions.',
+  // THE PROBLEM (revised, founder-approved 2026-11-18): how platforms make
+  // money today. They describe platforms, and promise nothing to anyone.
+  'Your content makes platforms money.',
+  'More opportunities for them to make money.',
+  'The platforms make money.',
 ]
 
 /** Every sentence that breaks a claim rule. Empty means the text is safe to publish. */

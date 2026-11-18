@@ -1,18 +1,24 @@
 import { HOMEPAGE_COPY } from '../copy'
-import { PAIN_PHOTOS } from '../photos'
+import { ChallengeArt } from '../ui/illustrations/ChallengeArt'
 import { Photo } from '../ui/Photo'
 import { Eyebrow } from '../ui/Story'
 
 const copy = HOMEPAGE_COPY.people
 
+const CHALLENGES = ['reach', 'earnings', 'business'] as const
+
 /**
  * Section 4, THE PEOPLE BEHIND THE POSTS (WHO), in the original site's
- * "Who we're building for" style: cream band, the original photo cards. The
- * creator comes first and largest: a creator working alone late at night
- * beside the opening copy, then one photo card for each approved pain point.
- * The fans follow, visibly smaller: one photo of friends sharing posts beside
- * the approved fan lines. Licensed stock photos of models (photos.ts); the
- * footer says so on every page.
+ * "Who we're building for" style: cream band and the original cards. The
+ * approved copy runs in order: the opening, the emphasized line, then three
+ * challenge cards (inconsistent reach, unpredictable earnings, building a
+ * business) holding their approved lines under drawings, then the rest of the
+ * story beside a photo of the other job. The fans follow, visibly smaller.
+ *
+ * Photos never show an identifiable person struggling (founder direction):
+ * the lead creator is seen from behind, the other job without a face, and the
+ * challenges are drawn. Licensed stock photos of models (photos.ts), pending
+ * the founder's approval; the footer says so on every page.
  */
 export function People() {
   return (
@@ -24,16 +30,16 @@ export function People() {
             <h2 id="people-title" className="mt-4 text-balance font-sp-display text-[clamp(2.2rem,7vw,4rem)] font-black leading-[0.98] tracking-[-0.02em] [font-stretch:108%]">
               {copy.headline}
             </h2>
-            <div data-testid="people-body" className="mt-6 max-w-xl space-y-3 text-[1.08rem] leading-relaxed sm:text-lg">
-              {copy.body.map((line, i) => (
-                <p key={line} className={i === copy.body.length - 1 ? 'pt-1 font-semibold' : undefined}>
+            <div data-testid="people-intro" className="mt-6 max-w-xl space-y-3 text-[1.08rem] leading-relaxed sm:text-lg">
+              {copy.intro.map((line, i) => (
+                <p key={line} className={i === copy.intro.length - 1 ? 'pt-1 font-semibold' : undefined}>
                   {line}
                 </p>
               ))}
             </div>
           </div>
           <figure className="m-0 w-full max-w-[30rem] justify-self-center overflow-hidden rounded-[28px] shadow-[0_30px_60px_-34px_rgb(0_0_0/0.45)]">
-            <Photo id="creatorLateNight" sizes="(min-width: 1024px) 480px, min(100vw - 2rem, 480px)" className="aspect-[4/5]" />
+            <Photo id="creatorAtNight" sizes="(min-width: 1024px) 480px, min(100vw - 2rem, 480px)" className="aspect-[4/5]" />
           </figure>
         </div>
 
@@ -44,18 +50,36 @@ export function People() {
           {copy.emphasis}
         </p>
 
-        <ol data-testid="pains" className="mt-10 grid gap-6 md:grid-cols-3">
-          {copy.pains.map((p, i) => (
-            <li key={p.title} className="flex flex-col overflow-hidden rounded-[28px] bg-white ring-1 ring-sp-ink/8">
-              <Photo id={PAIN_PHOTOS[i]} sizes="(min-width: 1152px) 360px, (min-width: 768px) 31vw, calc(100vw - 2rem)" className="aspect-[4/3]" />
+        <ol data-testid="challenges" className="mt-10 grid gap-6 md:grid-cols-3">
+          {copy.challenges.map((lines, i) => (
+            <li key={CHALLENGES[i]} data-testid="challenge" className="flex flex-col overflow-hidden rounded-[28px] bg-white ring-1 ring-sp-ink/8">
+              <div className="bg-sp-secondary-tint px-6 py-5">
+                <ChallengeArt kind={CHALLENGES[i]} className="mx-auto max-w-[20rem]" />
+              </div>
               <div className="p-6">
                 <p className="font-sp-display text-sm font-black text-sp-accent-text">{i + 1}</p>
-                <h3 className="mt-1 font-sp-display text-2xl font-extrabold leading-tight">{p.title}</h3>
-                <p className="mt-3 text-[1.02rem] leading-relaxed text-sp-muted">{p.body}</p>
+                <div className="mt-2 space-y-2 text-[1.05rem] font-semibold leading-relaxed">
+                  {lines.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
               </div>
             </li>
           ))}
         </ol>
+
+        <div data-testid="people-after" className="mt-14 grid items-center gap-8 md:grid-cols-[0.9fr_1.1fr] md:gap-12">
+          <figure className="m-0 overflow-hidden rounded-[28px] shadow-[0_24px_50px_-30px_rgb(0_0_0/0.4)]">
+            <Photo id="anotherJob" sizes="(min-width: 1024px) 480px, (min-width: 768px) 42vw, calc(100vw - 2rem)" className="aspect-[4/3]" />
+          </figure>
+          <div className="min-w-0 space-y-3 text-[1.08rem] leading-relaxed sm:text-lg">
+            {copy.after.map((line, i) => (
+              <p key={line} className={i < 3 ? 'font-sp-display text-xl font-extrabold' : i === copy.after.length - 1 ? 'border-l-4 border-sp-accent pl-4 font-semibold' : undefined}>
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
 
         {/* The fans: real, but visibly smaller than the creators above. */}
         <div data-testid="people-fans" className="mt-14 grid items-center gap-6 overflow-hidden rounded-[28px] bg-white p-4 ring-1 ring-sp-ink/8 sm:p-5 md:grid-cols-[0.75fr_1.25fr] md:gap-10">

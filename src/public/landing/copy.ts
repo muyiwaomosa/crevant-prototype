@@ -8,14 +8,13 @@
 // founder's approval. Design and layout may change; the words may not.
 //
 // Six sections, in order:
-//   HERO, THE PROBLEM, HOW SPLITPOST WORKS (with The Vision merged in),
-//   THE PEOPLE BEHIND THE POSTS, A BETTER FUTURE FOR CREATORS, THE INVITATION.
+//   HERO, THE PROBLEM, HOW SPLITPOST WORKS, THE PEOPLE BEHIND THE POSTS,
+//   A BETTER FUTURE FOR CREATORS, THE INVITATION.
 //
-// The Vision and How Splitpost Works were merged with the founder's approval
-// (2026-11-18, "modified Option B"): the Vision eyebrow and headline, two
-// Vision body lines and the How It Works introduction were removed; every
-// retained line is unchanged. docs/website-brief.md records exactly what was
-// removed.
+// Revision history (all founder-approved, 2026-11-18): The Vision was merged
+// into How Splitpost Works ("modified Option B"); then Sections 2 to 5 were
+// replaced with the founder's revised wording, with the specific removals
+// the founder decided. docs/website-brief.md records every change.
 //
 // The pilot disclosures (PILOT_DISCLOSURES) are the founder's approved
 // wording for the 60-day pilot, where fan rewards are simulated.
@@ -51,43 +50,60 @@ export const HOMEPAGE_COPY = {
   },
 
   problem: {
-    headline: 'You make the posts. Who gets the split?',
+    headline: 'Your content makes platforms money. But what about you?',
     body: [
-      'You spend hours creating content, growing your audience and keeping people engaged.',
-      'Your followers grow. Your views increase. Your content helps platforms attract attention and generate revenue.',
-      'But what about you?',
-      "More followers don't always mean more income. And even the people who choose to follow you don't consistently see what you post.",
-      "You did the work. But the system doesn't always reward it.",
+      'Think about how much time you spend creating content.',
+      'Planning. Recording. Editing. Posting.',
+      'You show up consistently, hoping to grow an audience and build something meaningful.',
+      'And slowly, it starts working.',
+      'Your followers grow. Your views increase. People like, comment and share your posts.',
+      'Every interaction brings more attention to the platforms. More engagement. More opportunities for them to make money.',
+      'You can have thousands of followers and still struggle to earn enough to do what you love full-time.',
+      "Even the people who chose to follow you don't always see what you post.",
+      "You're helping the platforms grow. But is all that hard work helping you build a future?",
+      'And what about the fans who help you grow?',
+      'They share your content, recommend you to friends and bring new people into your community.',
+      'Yet they rarely share financially in the success they help create.',
+      'You create the content. Your fans help it grow. The platforms make money.',
+      "But shouldn't more of that value come back to the people who helped create it?",
     ],
-    /** Visually emphasized (brief): body[2] and body[4]. */
-    emphasis: ['But what about you?', "You did the work. But the system doesn't always reward it."],
+    /** Visually emphasized (layout only): the fans' question, and the closing pair. */
+    emphasis: [
+      'And what about the fans who help you grow?',
+      'You create the content. Your fans help it grow. The platforms make money.',
+      "But shouldn't more of that value come back to the people who helped create it?",
+    ],
     transition: 'What if the split worked differently?',
   },
 
-  /** How Splitpost Works, with the two retained lines from The Vision (founder-approved merge). */
+  /** How Splitpost Works (founder-approved revision, 2026-11-18). */
   howItWorks: {
     eyebrow: 'HOW SPLITPOST WORKS',
     headline: 'Post. Connect. Grow. Split.',
-    /** From The Vision, unchanged: its first and last body lines. */
-    vision: ['Imagine a social network where growing your audience could also grow your opportunity to earn.', "That's the future we're building with Splitpost."],
-    /** The visual journey named in the brief (illustration labels). */
-    journey: ['POST', 'CONNECT', 'SPLIT'],
     steps: [
-      { number: '01', title: 'Post what you love.', body: 'Create and share content that matters to you and the people who follow you.' },
+      {
+        number: '01',
+        label: 'STEP 01 — POST',
+        title: 'Create content worth sharing.',
+        body: "You've got something to say, teach, show or create. Splitpost gives you a place to publish your content and build an audience around what matters to you.",
+      },
       {
         number: '02',
-        title: 'Connect with your people.',
-        body: 'Build a community where your followers can find your posts, stay connected and keep up with what you share.',
+        label: 'STEP 02 — CONNECT',
+        title: "Your followers shouldn't have to search for you.",
+        body: "People followed you because they want to see what you create. Splitpost is building a better way for them to find your posts, catch up on what they've missed and stay connected.",
       },
       {
         number: '03',
-        title: 'Grow together.',
-        body: 'Give your supporters a new reason to help you grow. When they bring new people into your community, their contributions can be recognized.',
+        label: 'STEP 03 — GROW',
+        title: 'Your biggest supporters deserve recognition.',
+        body: 'Your fans already help you grow. They share your content, recommend you to friends and introduce new people to your work. Splitpost is building a way to recognize qualifying contributions, starting with verified referrals.',
       },
       {
         number: '04',
-        title: 'Share in the success.',
-        body: 'When eligible content generates advertising revenue, creators receive a share, and a portion is set aside to reward qualifying fan contributions.',
+        label: 'STEP 04 — SPLIT',
+        title: 'When your content creates value, you deserve a share.',
+        body: 'Our planned model gives creators a share of net eligible advertising revenue generated around their content, while setting aside a portion for qualifying fan contributions.',
       },
     ],
     closing: "Because success is better when it's shared.",
@@ -95,37 +111,58 @@ export const HOMEPAGE_COPY = {
 
   people: {
     eyebrow: 'THE PEOPLE BEHIND THE POSTS',
-    headline: 'You keep posting. They keep earning. But what about you?',
-    body: [
-      'You spend hours creating content.',
-      'You show up, even when nobody is watching.',
-      'You keep posting, hoping that one day, all your hard work will pay off.',
-      'And slowly, people start noticing.',
-      'Your views grow. Your followers increase. The platforms benefit from the attention your content brings.',
+    headline: 'You built an audience. But can you build a future on it?',
+    /** The approved body, in order, split only where the layout changes (no words added). */
+    intro: [
+      'You did everything they told you to do.',
+      'You created content. You showed up consistently. You learned how the algorithm works. You kept posting, even when nobody was watching.',
+      'And eventually, people started following you.',
+      'Thousands of them. Maybe even hundreds of thousands.',
+      "But there's something nobody prepared you for.",
     ],
-    emphasis: "But you're still struggling to make a living doing what you love.",
-    pains: [
-      { title: "You can't depend on your income.", body: "One month you earn something. The next, you don't know what to expect." },
-      { title: "You can't afford to do it full-time.", body: 'You love creating, but you still need another job to pay the bills.' },
-      { title: "You can't plan for the future.", body: "How do you build a business when you don't know what you'll earn next month?" },
+    emphasis: "Having an audience doesn't mean you can depend on it.",
+    /**
+     * The three challenge cards, each holding its approved lines in order:
+     * inconsistent reach, unpredictable earnings, a sustainable business.
+     */
+    challenges: [
+      [
+        'One post reaches thousands of people. The next barely reaches anyone.',
+        "People follow you because they want your content, but you can't be sure they'll see it.",
+      ],
+      ["One month, your content earns something. The next, you're wondering what changed."],
+      ["How do you build a business when you can't predict who will see your work—or what you'll earn from it?"],
     ],
-    fanTransition: "And you're not the only one being left out.",
+    after: [
+      'So you keep creating.',
+      'You keep working another job to pay the bills.',
+      'You keep hoping the next post will finally change things.',
+      'And meanwhile, the platforms continue to benefit from the content you create and the attention you bring.',
+      "You shouldn't have to keep creating without a clearer path to building something sustainable.",
+    ],
+    fanTransition: 'And what about the people who helped you get here?',
     fans: [
-      'Your fans believe in you.',
-      'They share your posts. Tell their friends about you. Help new people discover your content.',
-      'They help you grow, but most of the time, all they get is a thank you.',
+      'Your fans have been sharing your posts, recommending your content and introducing new people to your work.',
+      "They've helped you grow.",
+      'But when their contributions help create value, they rarely get to share financially in the success.',
     ],
-    closing: "If we all help create the value, why shouldn't we share in the success?",
+    closing: 'What if creators and their biggest supporters could grow together—and benefit together?',
   },
 
   future: {
     eyebrow: 'A BETTER FUTURE FOR CREATORS',
     headline: 'What if your next post could help build your future?',
     body: [
-      "Imagine waking up knowing that creating content isn't just something you love. It's something you can build a life around.",
-      "A future where you have more opportunities to earn from your work, more time to focus on what you love, and more confidence to plan what's next.",
+      'Imagine waking up excited to create.',
+      "Not because you're hoping the algorithm finally notices you.",
+      "But because you're building something meaningful around what you love.",
+      'A community that chooses to stay connected.',
+      'Supporters who have a reason to help you grow.',
+      'And new opportunities to earn from the value your content creates.',
     ],
-    closing: 'Not just more followers. More freedom to build the life you want.',
+    closing: 'More than followers. More opportunities to build a future doing what you love.',
+    /** The last line, after the closing. */
+    signal: 'This is the future Splitpost is working toward.',
   },
 
   invitation: {
@@ -196,20 +233,21 @@ export function briefLines(key: SectionKey): string[] {
     case 'problem':
       return [c.problem.headline, ...c.problem.body, c.problem.transition]
     case 'howItWorks':
-      return [c.howItWorks.eyebrow, c.howItWorks.headline, ...c.howItWorks.vision, ...c.howItWorks.steps.flatMap((s) => [s.title, s.body]), c.howItWorks.closing]
+      return [c.howItWorks.eyebrow, c.howItWorks.headline, ...c.howItWorks.steps.flatMap((s) => [s.label, s.title, s.body]), c.howItWorks.closing]
     case 'people':
       return [
         c.people.eyebrow,
         c.people.headline,
-        ...c.people.body,
+        ...c.people.intro,
         c.people.emphasis,
-        ...c.people.pains.flatMap((p) => [p.title, p.body]),
+        ...c.people.challenges.flat(),
+        ...c.people.after,
         c.people.fanTransition,
         ...c.people.fans,
         c.people.closing,
       ]
     case 'future':
-      return [c.future.eyebrow, c.future.headline, ...c.future.body, c.future.closing]
+      return [c.future.eyebrow, c.future.headline, ...c.future.body, c.future.closing, c.future.signal]
     case 'invitation':
       return [c.invitation.eyebrow, c.invitation.headline, c.invitation.secondaryHeadline, ...c.invitation.body, c.invitation.cta, c.invitation.brandLine]
   }

@@ -85,10 +85,28 @@ if env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY VERCEL_ENV=producti
   exit 1
 fi
 echo "PASS  an approved Production build in the demo project (crevant-prototype) is refused"
+# While any photo is pending the founder's approval, even an approved
+# Production build is refused (scripts/check-photo-approvals.mjs).
+APPROVALS=src/public/landing/photo-approvals.json
+if grep -q '"pending"' "$APPROVALS"; then
+  if env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY VERCEL_ENV=production CREVANT_PRODUCTION_SITE_APPROVED=true \
+    VERCEL_PROJECT_ID="$SITE_PROJECT" "${VERCEL_GIT[@]}" npm run build >/dev/null 2>&1; then
+    echo "FAIL  a Production build ran with photos pending approval" >&2
+    exit 1
+  fi
+  echo "PASS  a Production build with photos pending approval is refused"
+fi
+# The simulated approved build below stands in for the day every photo is
+# approved: a temporary copy of the approval file marks them all approved,
+# and the real file is restored straight after (it is never committed).
+cp "$APPROVALS" "$APPROVALS.bak"
+trap 'mv -f "$APPROVALS.bak" "$APPROVALS" 2>/dev/null || true; kill "${preview_pid:-}" 2>/dev/null || true' EXIT
+sed -i 's/"pending"/"approved"/g' "$APPROVALS"
 env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY \
   VERCEL_ENV=production CREVANT_PRODUCTION_SITE_APPROVED=true CREVANT_ALLOW_INDEXING=true \
   VERCEL_PROJECT_ID="$SITE_PROJECT" "${VERCEL_GIT[@]}" \
   npm run build >/dev/null
+mv -f "$APPROVALS.bak" "$APPROVALS"
 node_modules/.bin/vite preview --host 127.0.0.1 --port "$APP_PORT" --strictPort >/dev/null 2>&1 &
 preview_pid=$!
 for _ in $(seq 1 60); do

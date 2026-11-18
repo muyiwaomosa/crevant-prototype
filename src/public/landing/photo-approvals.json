@@ -1,0 +1,14 @@
+{
+  "note": "Founder approval of every photograph on the public site (2026-11-18 instruction: licensed, model-released where possible; any unverified photograph stays pending and must not reach production). Change a photo to \"approved\" only after the founder confirms its source, licence and model release. scripts/check-photo-approvals.mjs fails any Vercel Production build while a photo shown on the site is pending.",
+  "photos": {
+    "creator-at-night": "pending",
+    "another-job": "pending",
+    "fans-sharing": "pending",
+    "cooking-vlog": "pending",
+    "painter": "pending",
+    "craftsman": "pending",
+    "filmmaker": "pending",
+    "priya-avatar": "pending",
+    "founder": "pending"
+  }
+}

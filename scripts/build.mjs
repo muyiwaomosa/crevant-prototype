@@ -11,7 +11,7 @@
 //   anything else              the full app, exactly as before
 //
 // The public site build runs: the Production guard, the Supabase and
-// waitlist checks, the launch checks, type checking, `vite build --mode
+// waitlist checks, the launch checks, the photo approval check, type checking, `vite build --mode
 // site`, the bundle check and the secret scan. The full app build runs the
 // guard, the Supabase check, type checking and `vite build`, as before.
 //
@@ -30,6 +30,7 @@ export function planBuild(env, argv = [], projects = VERCEL_PROJECTS) {
         ['node', 'scripts/guard-build-target.mjs'],
         ['node', 'scripts/check-supabase-target.mjs'],
         ['node', 'scripts/check-waitlist-launch.mjs'],
+        ['node', 'scripts/check-photo-approvals.mjs'],
         ['npx', 'tsc', '-b'],
         ['npx', 'vite', 'build', '--mode', 'site'],
         ['node', 'scripts/check-site-bundle.mjs', 'dist'],

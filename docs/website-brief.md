@@ -30,6 +30,22 @@ How It Works introduction: "Your content deserves more than attention.
 Here's how we're building a different way to post."
 Every retained line is unchanged.
 
+2026-11-18, founder approval ("Approved revision instructions"): Sections 2
+to 5 were replaced with the founder's revised wording, verbatim, with these
+founder decisions: in Section 2, the standalone "But what about you?" and
+"One post reaches thousands of people. The next barely reaches anyone." were
+left out of the body (the question stays in the headline; the reach line
+stays in Section 4); in Section 3, the remaining Vision lines ("Imagine a
+social network where growing your audience could also grow your opportunity
+to earn." and "That's the future we're building with Splitpost.") were
+removed, and "During the pilot, fan rewards are simulated, with no cash
+payouts." was left out of Step 04 (the approved Step 04 disclosure stays
+beside it); in Section 5, "More than followers. More opportunities to build a
+future doing what you love." replaces the previous closing ("Not just more
+followers. More freedom to build the life you want."). The eyebrows of
+Sections 3, 4 and 5 are kept. The step labels ("STEP 01 — POST" and so on)
+are approved page copy.
+
 ## SECTION 1 — HERO
 
 ### Headline
@@ -45,19 +61,28 @@ Join the Waitlist
 ## SECTION 2 — THE PROBLEM
 
 ### Headline
-You make the posts. Who gets the split?
+Your content makes platforms money. But what about you?
 
-### Body
-You spend hours creating content, growing your audience and keeping people engaged.
-Your followers grow. Your views increase. Your content helps platforms attract attention and generate revenue.
-But what about you?
-More followers don't always mean more income. And even the people who choose to follow you don't consistently see what you post.
-You did the work. But the system doesn't always reward it.
+### Supporting copy
+Think about how much time you spend creating content.
+Planning. Recording. Editing. Posting.
+You show up consistently, hoping to grow an audience and build something meaningful.
+And slowly, it starts working.
+Your followers grow. Your views increase. People like, comment and share your posts.
+Every interaction brings more attention to the platforms. More engagement. More opportunities for them to make money.
+You can have thousands of followers and still struggle to earn enough to do what you love full-time.
+Even the people who chose to follow you don't always see what you post.
+You're helping the platforms grow. But is all that hard work helping you build a future?
+And what about the fans who help you grow?
+They share your content, recommend you to friends and bring new people into your community.
+Yet they rarely share financially in the success they help create.
+You create the content. Your fans help it grow. The platforms make money.
+But shouldn't more of that value come back to the people who helped create it?
 
-### Transition
+### Closing transition
 What if the split worked differently?
 
-## SECTION 3 — HOW SPLITPOST WORKS (THE VISION MERGED IN)
+## SECTION 3 — HOW SPLITPOST WORKS
 
 ### Eyebrow
 HOW SPLITPOST WORKS
@@ -65,25 +90,25 @@ HOW SPLITPOST WORKS
 ### Headline
 Post. Connect. Grow. Split.
 
-### Body (from The Vision, unchanged)
-Imagine a social network where growing your audience could also grow your opportunity to earn.
-That's the future we're building with Splitpost.
-
 ### Step 01
-Post what you love.
-Create and share content that matters to you and the people who follow you.
+STEP 01 — POST
+Create content worth sharing.
+You've got something to say, teach, show or create. Splitpost gives you a place to publish your content and build an audience around what matters to you.
 
 ### Step 02
-Connect with your people.
-Build a community where your followers can find your posts, stay connected and keep up with what you share.
+STEP 02 — CONNECT
+Your followers shouldn't have to search for you.
+People followed you because they want to see what you create. Splitpost is building a better way for them to find your posts, catch up on what they've missed and stay connected.
 
 ### Step 03
-Grow together.
-Give your supporters a new reason to help you grow. When they bring new people into your community, their contributions can be recognized.
+STEP 03 — GROW
+Your biggest supporters deserve recognition.
+Your fans already help you grow. They share your content, recommend you to friends and introduce new people to your work. Splitpost is building a way to recognize qualifying contributions, starting with verified referrals.
 
 ### Step 04
-Share in the success.
-When eligible content generates advertising revenue, creators receive a share, and a portion is set aside to reward qualifying fan contributions.
+STEP 04 — SPLIT
+When your content creates value, you deserve a share.
+Our planned model gives creators a share of net eligible advertising revenue generated around their content, while setting aside a portion for qualifying fan contributions.
 
 ### Closing statement
 Because success is better when it's shared.
@@ -94,34 +119,33 @@ Because success is better when it's shared.
 THE PEOPLE BEHIND THE POSTS
 
 ### Headline
-You keep posting. They keep earning. But what about you?
+You built an audience. But can you build a future on it?
 
 ### Body
-You spend hours creating content.
-You show up, even when nobody is watching.
-You keep posting, hoping that one day, all your hard work will pay off.
-And slowly, people start noticing.
-Your views grow. Your followers increase. The platforms benefit from the attention your content brings.
-
-### Emphasized statement
-But you're still struggling to make a living doing what you love.
-
-### Creator pain points
-You can't depend on your income.
-One month you earn something. The next, you don't know what to expect.
-You can't afford to do it full-time.
-You love creating, but you still need another job to pay the bills.
-You can't plan for the future.
-How do you build a business when you don't know what you'll earn next month?
+You did everything they told you to do.
+You created content. You showed up consistently. You learned how the algorithm works. You kept posting, even when nobody was watching.
+And eventually, people started following you.
+Thousands of them. Maybe even hundreds of thousands.
+But there's something nobody prepared you for.
+Having an audience doesn't mean you can depend on it.
+One post reaches thousands of people. The next barely reaches anyone.
+People follow you because they want your content, but you can't be sure they'll see it.
+One month, your content earns something. The next, you're wondering what changed.
+How do you build a business when you can't predict who will see your work—or what you'll earn from it?
+So you keep creating.
+You keep working another job to pay the bills.
+You keep hoping the next post will finally change things.
+And meanwhile, the platforms continue to benefit from the content you create and the attention you bring.
+You shouldn't have to keep creating without a clearer path to building something sustainable.
 
 ### Fan transition
-And you're not the only one being left out.
-Your fans believe in you.
-They share your posts. Tell their friends about you. Help new people discover your content.
-They help you grow, but most of the time, all they get is a thank you.
+And what about the people who helped you get here?
+Your fans have been sharing your posts, recommending your content and introducing new people to your work.
+They've helped you grow.
+But when their contributions help create value, they rarely get to share financially in the success.
 
 ### Closing statement
-If we all help create the value, why shouldn't we share in the success?
+What if creators and their biggest supporters could grow together—and benefit together?
 
 ## SECTION 5 — A BETTER FUTURE FOR CREATORS
 
@@ -132,11 +156,14 @@ A BETTER FUTURE FOR CREATORS
 What if your next post could help build your future?
 
 ### Body
-Imagine waking up knowing that creating content isn't just something you love. It's something you can build a life around.
-A future where you have more opportunities to earn from your work, more time to focus on what you love, and more confidence to plan what's next.
-
-### Closing statement
-Not just more followers. More freedom to build the life you want.
+Imagine waking up excited to create.
+Not because you're hoping the algorithm finally notices you.
+But because you're building something meaningful around what you love.
+A community that chooses to stay connected.
+Supporters who have a reason to help you grow.
+And new opportunities to earn from the value your content creates.
+More than followers. More opportunities to build a future doing what you love.
+This is the future Splitpost is working toward.
 
 ## SECTION 6 — THE INVITATION
 

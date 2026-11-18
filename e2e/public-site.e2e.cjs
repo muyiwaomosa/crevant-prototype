@@ -172,7 +172,7 @@ async function newContext(browser, options = {}) {
     //     the seven sections in order, no sideways scrolling, the headline on
     //     two lines, every pilot disclosure visible beside its claim, no
     //     photographs, every illustration on screen, and one logo file.
-    for (const width of [320, 375, 390, 768, 1024, 1440]) {
+    for (const width of [320, 375, 390, 414, 768, 1024, 1440]) {
       const label = `${width}px`
       const ctx = await newContext(browser, { viewport: { width, height: 900 } })
       const page = await ctx.newPage()
@@ -189,6 +189,11 @@ async function newContext(browser, options = {}) {
         const box = await page.locator('header [data-testid="header-sign-in"]').boundingBox()
         const big = width >= 420 || (box && box.width >= 44 && box.height >= 44)
         check(`${label}: Sign In is in the header${width < 420 ? ', as an icon at least 44px square' : ''}`, !!box && big, box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'missing')
+      }
+      {
+        // The header's waitlist button always shows a label (it was empty between 390 and 419px).
+        const t = await page.evaluate(() => [...document.querySelectorAll('header a[href="/join"]')].map((a) => a.innerText.trim()).filter(Boolean).length)
+        check(`${label}: the header waitlist button shows its label`, t >= 1, String(t))
       }
       check(`${label}: no Crevant left on the landing page`, !/Crevant/i.test(await page.locator('body').innerText()))
 
@@ -216,14 +221,14 @@ async function newContext(browser, options = {}) {
       const imgs = await page.$$eval('main img:not([data-testid="splitpost-logo"])', (els) =>
         Promise.all(els.map((img) => (img.complete ? img.naturalWidth : new Promise((ok) => img.addEventListener('load', () => ok(img.naturalWidth), { once: true }))))),
       )
-      check(`${label}: every photo loads (seven licensed photos, the sample avatar twice, the founder)`, imgs.length === 10 && imgs.every((w) => w > 0), imgs.join(','))
+      check(`${label}: every photo loads (seven stand-in photos, the sample avatar twice, the founder)`, imgs.length === 10 && imgs.every((w) => w > 0), imgs.join(','))
       const svgs = await page.$$eval('main svg', (els) => els.filter((e) => e.getAttribute('aria-hidden') !== 'true' && !e.closest('[aria-hidden="true"]')).length)
       check(`${label}: every illustration is decorative (hidden from screen readers)`, svgs === 0, String(svgs))
 
       const disclosures = await Promise.all(['hero-disclosure', 'step04-disclosure', 'invitation-disclosure', 'footer-disclosure'].map((t) => page.getByTestId(t).isVisible()))
       check(`${label}: each pilot disclosure is visible beside its claim`, disclosures.every(Boolean), disclosures.join())
 
-      const ills = await page.$$eval('[data-testid="hero-scene"], [data-testid="value-capture"], [data-testid="journey"], [data-testid="pains"], [data-testid="people-fans"], [data-testid="today"], [data-testid="possible"], [data-testid="founder-signoff"], [data-testid="invitation-disclosure"]', (els) =>
+      const ills = await page.$$eval('[data-testid="hero-scene"], [data-testid="value-capture"], [data-testid="steps"], [data-testid="challenges"], [data-testid="people-after"], [data-testid="people-fans"], [data-testid="future-mosaic"], [data-testid="founder-signoff"], [data-testid="invitation-disclosure"]', (els) =>
         els.map((e) => {
           const r = e.getBoundingClientRect()
           return { id: e.getAttribute('data-testid'), fits: r.width > 0 && r.left >= -0.5 && r.right <= document.documentElement.clientWidth + 0.5 }

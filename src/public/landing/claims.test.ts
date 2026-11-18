@@ -145,24 +145,32 @@ describe('the provisional allocation appears in no published source', () => {
 })
 
 describe('the approved marketing sentences (exact allow-list)', () => {
-  it('holds exactly the two founder-approved sentences', () => {
-    expect(APPROVED_MARKETING_SENTENCES).toEqual([
-      'Your content helps platforms attract attention and generate revenue.',
-      'When eligible content generates advertising revenue, creators receive a share, and a portion is set aside to reward qualifying fan contributions.',
-    ])
+  it('holds exactly the three founder-approved sentences about platforms making money', () => {
+    expect(APPROVED_MARKETING_SENTENCES).toEqual(['Your content makes platforms money.', 'More opportunities for them to make money.', 'The platforms make money.'])
   })
 
   it('lets them through only as those exact sentences, in context too', () => {
     for (const s of APPROVED_MARKETING_SENTENCES) expect(findMisleadingClaims(s)).toEqual([])
-    expect(findMisleadingClaims(`Your followers grow. Your views increase. ${APPROVED_MARKETING_SENTENCES[0]}`)).toEqual([])
+    expect(findMisleadingClaims('Your content makes platforms money. But what about you?')).toEqual([])
+    expect(findMisleadingClaims('Every interaction brings more attention to the platforms. More engagement. More opportunities for them to make money.')).toEqual([])
+    expect(findMisleadingClaims('You create the content. Your fans help it grow. The platforms make money.')).toEqual([])
   })
 
-  it('still flags any change to their wording, and any other revenue promise', () => {
+  it('no longer exempts the retired sentences', () => {
+    for (const old of [
+      'Your content helps platforms attract attention and generate revenue.',
+      'When eligible content generates advertising revenue, creators receive a share, and a portion is set aside to reward qualifying fan contributions.',
+    ])
+      expect(findMisleadingClaims(old).length, old).toBeGreaterThan(0)
+  })
+
+  it('still flags any change to their wording, and any promise of money to creators or fans', () => {
     const variants = [
-      'Your content helps Splitpost attract attention and generate revenue for you.',
-      'When content generates advertising revenue, creators receive a share.',
-      'When eligible content generates advertising revenue, fans receive a share.',
-      'When eligible content generates advertising revenue, creators receive a share, and a portion is paid to fans.',
+      'Your content makes you money.',
+      'Your content makes creators money.',
+      'More opportunities for you to make money.',
+      'The platforms make money, and so will you.',
+      'Fans make money on Splitpost.',
       'Fans get a share of the revenue from every post.',
       'Creators receive 40% of ad revenue.',
     ]

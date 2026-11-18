@@ -24,7 +24,7 @@ const ORDER: SectionKey[] = ['hero', 'problem', 'howItWorks', 'people', 'future'
 const TITLES = [
   'SECTION 1 — HERO',
   'SECTION 2 — THE PROBLEM',
-  'SECTION 3 — HOW SPLITPOST WORKS (THE VISION MERGED IN)',
+  'SECTION 3 — HOW SPLITPOST WORKS',
   'SECTION 4 — THE PEOPLE BEHIND THE POSTS',
   'SECTION 5 — A BETTER FUTURE FOR CREATORS',
   'SECTION 6 — THE INVITATION',
@@ -53,21 +53,27 @@ describe('the homepage copy is the approved brief, word for word', () => {
     expect(HOMEPAGE_COPY.invitation.brandLine).toBe(BRAND_LINE)
   })
 
-  it('the Vision merge removed exactly the approved lines and kept the rest unchanged', () => {
+  it('the revisions removed exactly the lines the founder decided, and nothing else', () => {
     const all = allHomepageText()
     for (const removed of [
+      // The Vision merge.
       'A DIFFERENT WAY TO POST',
       'Where the people who follow you can actually find your posts.',
       "Where the fans who help you grow aren't just spectators, but have an opportunity to share in the success they help create.",
       "Your content deserves more than attention. Here's how we're building a different way to post.",
-    ])
-      expect(all, removed).not.toContain(removed)
-    // The Vision headline survives once, as The Problem's transition.
-    expect(all.filter((t) => t === 'What if the split worked differently?')).toEqual(['What if the split worked differently?'])
-    expect(HOMEPAGE_COPY.howItWorks.vision).toEqual([
+      // The revision of Sections 2 to 5.
       'Imagine a social network where growing your audience could also grow your opportunity to earn.',
       "That's the future we're building with Splitpost.",
+      'During the pilot, fan rewards are simulated, with no cash payouts.',
+      'Not just more followers. More freedom to build the life you want.',
+      'But what about you?',
     ])
+      expect(all, removed).not.toContain(removed)
+    expect(all.filter((t) => t === 'What if the split worked differently?')).toEqual(['What if the split worked differently?'])
+    expect(all.filter((t) => t === 'One post reaches thousands of people. The next barely reaches anyone.')).toHaveLength(1)
+    expect(HOMEPAGE_COPY.problem.body).not.toContain('One post reaches thousands of people. The next barely reaches anyone.')
+    expect(HOMEPAGE_COPY.problem.headline).toBe('Your content makes platforms money. But what about you?')
+    expect(HOMEPAGE_COPY.howItWorks.steps.map((s) => s.label)).toEqual(['STEP 01 — POST', 'STEP 02 — CONNECT', 'STEP 03 — GROW', 'STEP 04 — SPLIT'])
   })
 
   it('the emphasized Problem lines are approved body lines, not new copy', () => {

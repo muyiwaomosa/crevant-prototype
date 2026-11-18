@@ -100,7 +100,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
                 ) : (
                   <>
                     {/* Under 390px the full closed label doesn't fit beside the logo. */}
-                    <span aria-hidden="true" className="min-[390px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
+                    <span aria-hidden="true" className="min-[420px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
                     <span aria-hidden="true" className="hidden min-[420px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
                   </>
                 )}
