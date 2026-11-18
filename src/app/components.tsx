@@ -7,6 +7,7 @@ import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
 import { AppApiError, hueFor, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
 import { useAppApi } from './AppApiContext'
+import { useTrackView } from './ViewTracker'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
   return <Avatar name={member.displayName} hue={hueFor(member.id)} size={size} />
@@ -37,6 +38,8 @@ export function ErrorNote({ error }: { error: unknown }) {
 /** One post, with like, comment and (for your own posts) delete. Likes update straight away and roll back on failure. */
 export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; onDeleted?: (id: string) => void; linkToPost?: boolean }) {
   const api = useAppApi()
+  // Counts as viewed once at least half of it has been on screen for 2 seconds (views.ts).
+  const trackView = useTrackView(post.id, !post.isMine)
   const [liked, setLiked] = useState(post.likedByMe)
   const [likes, setLikes] = useState(post.likeCount)
   const [busy, setBusy] = useState(false)
@@ -79,7 +82,7 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
 
   return (
     <Card className="p-4 sm:p-5">
-      <article aria-label={`Post by ${post.author.displayName}`} data-testid="post">
+      <article ref={trackView} aria-label={`Post by ${post.author.displayName}`} data-testid="post">
         <header className="flex items-center gap-3">
           <MemberAvatar member={post.author} />
           <div className="min-w-0 flex-1 leading-tight">

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -19,7 +19,7 @@ import {
   type Post,
 } from './api'
 import { MemberArea } from './MemberArea'
-import { AppNotFound, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
+import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
 
 afterEach(cleanup)
 
@@ -39,6 +39,9 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null; creators?: 
   for (let i = 1; i <= (opts.creators ?? 11); i++) add(`c${i}`, `creator_${i}`, `Creator ${i}`)
   const posts: Array<{ id: string; author: string; body: string; at: number; deleted: boolean }> = []
   const follows = new Set<string>()
+  const followedAt = new Map<string, number>()
+  const views = new Set<string>()
+  const marks: Array<{ ids: string[]; basis: string }> = []
   const clique = new Set<string>()
   const likes = new Set<string>()
   const comments: Array<{ id: string; post: string; author: string; body: string; at: number; deleted: boolean }> = []
@@ -181,6 +184,7 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null; creators?: 
     },
     async follow(id) {
       if (id === meId) throw new AppApiError('cannot_follow_self')
+      if (!follows.has(key(meId, id))) followedAt.set(key(meId, id), (clock += 1))
       follows.add(key(meId, id))
     },
     async unfollow(id) {
@@ -231,13 +235,60 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null; creators?: 
       if (!c) throw new AppApiError('not_found')
       c.deleted = true
     },
+    // Viewed state, with the database's rules: unseen = published at or after
+    // the follow, not deleted, not viewed; counts capped at 10; My Clique
+    // first, then newest unseen; catch-up newest 20 shown oldest first.
+    async unseenCreators() {
+      complete()
+      return [...follows]
+        .filter((k) => k.startsWith(`${meId}>`))
+        .map((k) => k.split('>')[1])
+        .map((id) => ({ id, unseen: unseenOf(id) }))
+        .filter((c) => c.unseen.length > 0)
+        .map((c) => ({
+          ...summary(c.id),
+          inMyClique: clique.has(key(meId, c.id)),
+          unseenCount: Math.min(c.unseen.length, 10),
+          latestUnseenAt: new Date(c.unseen[0].at).toISOString(),
+        }))
+        .sort((a, b) => Number(b.inMyClique) - Number(a.inMyClique) || b.latestUnseenAt.localeCompare(a.latestUnseenAt) || a.id.localeCompare(b.id))
+    },
+    async catchUp(creatorId, before) {
+      complete()
+      maybeFail('catchUp')
+      if (!follows.has(key(meId, creatorId))) return []
+      return unseenOf(creatorId)
+        .filter((p) => !before || p.at < Date.parse(before.createdAt) || (p.at === Date.parse(before.createdAt) && p.id < before.id))
+        .slice(0, 20)
+        .reverse()
+        .map(toP)
+    },
+    async markViewed(ids, basis) {
+      complete()
+      maybeFail('markViewed')
+      marks.push({ ids: [...ids], basis })
+      if (ids.length > 50) throw new AppApiError('too_many')
+      let added = 0
+      for (const id of new Set(ids)) {
+        const p = posts.find((x) => x.id === id && !x.deleted)
+        if (!p || p.author === meId || views.has(key(meId, id))) continue
+        views.add(key(meId, id))
+        added++
+      }
+      return added
+    },
   }
-  const seedPost = (author: string, body: string) => {
-    const id = `p${++n}`
-    posts.push({ id, author, body, at: (clock += 1000), deleted: false })
+  // A creator's unseen posts for the signed-in member, newest first (ties by id).
+  const unseenOf = (creatorId: string) =>
+    posts
+      .filter((p) => p.author === creatorId && !p.deleted && p.at >= (followedAt.get(key(meId, creatorId)) ?? 0) && !views.has(key(meId, p.id)))
+      .sort((a, b) => b.at - a.at || b.id.localeCompare(a.id))
+  const seedPost = (author: string, body: string, at?: number) => {
+    const id = `p${String(++n).padStart(3, '0')}`
+    posts.push({ id, author, body, at: at ?? (clock += 1000), deleted: false })
     return id
   }
-  return { api, seedPost, follows, clique, failures, key }
+  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -262,6 +313,7 @@ function renderApp(path: string, api: AppApi) {
             <Route path="post/:id" element={<PostPage />} />
             <Route path="u/:username" element={<MemberPage />} />
             <Route path="clique" element={<CliquePage />} />
+            <Route path="catch-up/:username" element={<CatchUpPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="*" element={<AppNotFound />} />
           </Route>
@@ -794,6 +846,184 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show everyone' }))
     expect(await screen.findByRole('link', { name: 'Creator 1' })).toBeTruthy()
     expect((screen.getByLabelText('Search people by name or username') as HTMLInputElement).value).toBe('')
+  })
+})
+
+describe('Unseen-first Home', () => {
+  // c1 and c2 in the Clique, c3 and c4 followed only, c5 not followed.
+  function unseenSetup() {
+    const fake = fakeApi('me', { creators: 6 })
+    for (const c of ['c1', 'c2', 'c3', 'c4']) fake.follows.add(fake.key('me', c))
+    fake.clique.add(fake.key('me', 'c1'))
+    fake.clique.add(fake.key('me', 'c2'))
+    return fake
+  }
+  const T = Date.parse('2026-11-18T09:00:00Z')
+
+  it('the strip lists only followed creators with unseen posts, My Clique first, then newest, with 9+ badges', async () => {
+    const fake = unseenSetup()
+    for (let i = 0; i < 12; i++) fake.seedPost('c3', `c3 post ${i}`, T + i * 1000) // 12 unseen, newest of all
+    fake.seedPost('c1', 'c1 post', T - 60_000) // Clique, older
+    fake.seedPost('c2', 'c2 post', T - 30_000) // Clique, newer than c1
+    fake.seedPost('c5', 'not followed', T + 99_000)
+    renderApp('/app', fake.api)
+    const strip = within(await screen.findByRole('region', { name: 'Catch up' }))
+    const links = strip.getAllByRole('link')
+    expect(links.map((l) => l.getAttribute('aria-label'))).toEqual([
+      'Catch up with Creator 2 (in your Clique): 1 unseen post',
+      'Catch up with Creator 1 (in your Clique): 1 unseen post',
+      'Catch up with Creator 3: more than 9 unseen posts',
+    ])
+    expect(strip.getAllByTestId('unseen-badge').map((b) => b.textContent)).toEqual(['1', '1', '9+'])
+    expect(links[2].getAttribute('href')).toBe('/app/catch-up/creator_3')
+    // The main feed below is still chronological: the newest post first.
+    expect(screen.getAllByTestId('post')[0].textContent).toMatch(/c3 post 11/)
+  })
+
+  it('the strip is hidden when nothing is unseen, and posts from before the follow do not count', async () => {
+    const fake = fakeApi('me', { creators: 3 })
+    fake.seedPost('c1', 'Before the follow')
+    await fake.api.follow('c1') // follows now: the earlier post is not unseen
+    renderApp('/app', fake.api)
+    await screen.findByText('Before the follow')
+    expect(screen.queryByRole('region', { name: 'Catch up' })).toBeNull()
+  })
+
+  it('catch-up shows the newest 20 unseen posts oldest first, then earlier ones on request, without repeats', async () => {
+    const fake = unseenSetup()
+    for (let i = 1; i <= 25; i++) fake.seedPost('c4', `Unseen ${String(i).padStart(2, '0')}`, T + i * 1000)
+    renderApp('/app/catch-up/creator_4', fake.api)
+    expect(await screen.findByRole('heading', { name: 'Catching up with Creator 4' })).toBeTruthy()
+    await screen.findByText('Unseen 25')
+    let bodies = screen.getAllByTestId('post').map((p) => p.textContent?.match(/Unseen \d{2}/)?.[0])
+    expect(bodies).toEqual([...Array(20)].map((_, i) => `Unseen ${String(i + 6).padStart(2, '0')}`))
+    // Earlier unseen posts remain, so it doesn't claim to be finished yet.
+    expect(screen.queryByText("That's everything new from Creator 4")).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier unseen posts' }))
+    await screen.findByText('Unseen 01')
+    bodies = screen.getAllByTestId('post').map((p) => p.textContent?.match(/Unseen \d{2}/)?.[0])
+    expect(bodies).toEqual([...Array(25)].map((_, i) => `Unseen ${String(i + 1).padStart(2, '0')}`))
+    expect(screen.queryByRole('button', { name: 'Show earlier unseen posts' })).toBeNull()
+    expect(screen.getByText("That's everything new from Creator 4")).toBeTruthy()
+  })
+
+  it('catch-up says when you are all caught up, and asks you to follow if you do not', async () => {
+    const fake = unseenSetup()
+    fake.seedPost('c5', 'From someone I do not follow')
+    renderApp('/app/catch-up/creator_1', fake.api)
+    expect(await screen.findByText("You're all caught up")).toBeTruthy()
+    expect(screen.getByText('Nothing new from Creator 1.')).toBeTruthy()
+    cleanup()
+    renderApp('/app/catch-up/creator_5', fake.api)
+    expect(await screen.findByText('Follow Creator 5 to catch up on their new posts.')).toBeTruthy()
+  })
+
+  describe('marking posts viewed', () => {
+    type Observed = { el: Element; cb: IntersectionObserverCallback }
+    let observed: Observed[] = []
+    const original = globalThis.IntersectionObserver
+    function installObserver() {
+      observed = []
+      class FakeObserver {
+        constructor(private cb: IntersectionObserverCallback) {}
+        observe(el: Element) {
+          observed.push({ el, cb: this.cb })
+        }
+        unobserve(el: Element) {
+          observed = observed.filter((o) => o.el !== el)
+        }
+        disconnect() {}
+        takeRecords() {
+          return []
+        }
+      }
+      globalThis.IntersectionObserver = FakeObserver as unknown as typeof IntersectionObserver
+    }
+    function show(ratio: number) {
+      for (const o of observed) o.cb([{ target: o.el, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry], {} as IntersectionObserver)
+    }
+    let visibility: DocumentVisibilityState = 'visible'
+    function setVisibility(v: DocumentVisibilityState) {
+      visibility = v
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility })
+    afterEach(() => {
+      globalThis.IntersectionObserver = original
+      visibility = 'visible'
+      vi.useRealTimers()
+    })
+
+    it('time in a background tab or with the phone locked never counts; on return the full 2 seconds start again', async () => {
+      installObserver()
+      const fake = unseenSetup()
+      fake.seedPost('c3', 'Read me', T + 1000)
+      renderApp('/app', fake.api)
+      await screen.findByRole('region', { name: 'Catch up' })
+      expect(observed).toHaveLength(1)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      act(() => show(0.8))
+      await act(async () => vi.advanceTimersByTime(1500))
+      act(() => setVisibility('hidden')) // tab switched or phone locked after 1.5 s
+      await act(async () => vi.advanceTimersByTime(60_000))
+      expect(fake.marks).toHaveLength(0)
+      // Visibility changes while hidden are noted but start nothing.
+      act(() => show(0.9))
+      await act(async () => vi.advanceTimersByTime(60_000))
+      expect(fake.marks).toHaveLength(0)
+      act(() => setVisibility('visible')) // back, and the post is still on screen
+      await act(async () => vi.advanceTimersByTime(1999 + 5000))
+      expect(fake.marks).toHaveLength(0) // the 1.5 s before hiding didn't carry over
+      await act(async () => vi.advanceTimersByTime(1))
+      await act(async () => vi.advanceTimersByTime(5000))
+      expect(fake.marks).toHaveLength(1)
+      expect(fake.marks[0].ids).toEqual(['p001'])
+    })
+
+    it('a post scrolled away while hidden does not count when the page comes back', async () => {
+      installObserver()
+      const fake = unseenSetup()
+      fake.seedPost('c3', 'Gone while hidden', T + 1000)
+      renderApp('/app', fake.api)
+      await screen.findByRole('region', { name: 'Catch up' })
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      act(() => show(0.8))
+      act(() => setVisibility('hidden'))
+      act(() => show(0.2))
+      act(() => setVisibility('visible'))
+      await act(async () => vi.advanceTimersByTime(30_000))
+      expect(fake.marks).toHaveLength(0)
+    })
+
+    it('posts at least half on screen for 2 seconds are recorded in one batch; own posts never; the strip refreshes', async () => {
+      installObserver()
+      const fake = unseenSetup()
+      fake.seedPost('c3', 'One', T + 1000)
+      fake.seedPost('c3', 'Two', T + 2000)
+      fake.seedPost('me', 'My own post', T + 3000)
+      renderApp('/app', fake.api)
+      const strip = within(await screen.findByRole('region', { name: 'Catch up' }))
+      expect(strip.getByTestId('unseen-badge').textContent).toBe('2')
+      expect(observed).toHaveLength(2) // own post is not watched
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      act(() => show(0.4))
+      await act(async () => vi.advanceTimersByTime(10_000))
+      expect(fake.marks).toHaveLength(0) // under half: never counts
+      act(() => show(0.6))
+      await act(async () => vi.advanceTimersByTime(1999))
+      act(() => show(0.3)) // scrolled away just before 2 s: resets
+      await act(async () => vi.advanceTimersByTime(10_000))
+      expect(fake.marks).toHaveLength(0)
+      act(() => show(0.6))
+      await act(async () => vi.advanceTimersByTime(2000 + 5000)) // 2 continuous seconds, then the 5 s batch wait
+      expect(fake.marks).toHaveLength(1) // one request for both
+      expect(fake.marks[0].basis).toBe('visible')
+      expect([...fake.marks[0].ids].sort()).toEqual(['p001', 'p002'])
+      await act(async () => vi.advanceTimersByTime(2500)) // the strip refreshes shortly after
+      vi.useRealTimers()
+      await waitFor(() => expect(screen.queryByRole('region', { name: 'Catch up' })).toBeNull())
+      expect(fake.views.size).toBe(2)
+    })
   })
 })
 
