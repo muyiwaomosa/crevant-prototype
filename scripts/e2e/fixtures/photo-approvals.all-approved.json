@@ -1,0 +1,14 @@
+{
+  "note": "TEST FIXTURE ONLY. Used by scripts/e2e/public-site.sh to simulate the day every photo is approved, without touching the real registry (src/public/landing/photo-approvals.json). scripts/check-photo-approvals.mjs refuses any fixture on Vercel.",
+  "photos": {
+    "creator-at-night": "approved",
+    "another-job": "approved",
+    "fans-sharing": "approved",
+    "cooking-vlog": "approved",
+    "painter": "approved",
+    "craftsman": "approved",
+    "filmmaker": "approved",
+    "priya-avatar": "approved",
+    "founder": "approved"
+  }
+}

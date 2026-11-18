@@ -97,16 +97,23 @@ if grep -q '"pending"' "$APPROVALS"; then
   echo "PASS  a Production build with photos pending approval is refused"
 fi
 # The simulated approved build below stands in for the day every photo is
-# approved: a temporary copy of the approval file marks them all approved,
-# and the real file is restored straight after (it is never committed).
-cp "$APPROVALS" "$APPROVALS.bak"
-trap 'mv -f "$APPROVALS.bak" "$APPROVALS" 2>/dev/null || true; kill "${preview_pid:-}" 2>/dev/null || true' EXIT
-sed -i 's/"pending"/"approved"/g' "$APPROVALS"
+# approved. It uses an isolated test fixture (never the real registry, which
+# is never edited by tests); the guard refuses fixtures on Vercel.
 env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY \
   VERCEL_ENV=production CREVANT_PRODUCTION_SITE_APPROVED=true CREVANT_ALLOW_INDEXING=true \
+  CREVANT_PHOTO_APPROVALS_FIXTURE=scripts/e2e/fixtures/photo-approvals.all-approved.json \
   VERCEL_PROJECT_ID="$SITE_PROJECT" "${VERCEL_GIT[@]}" \
   npm run build >/dev/null
-mv -f "$APPROVALS.bak" "$APPROVALS"
+if ! git diff --quiet -- "$APPROVALS"; then
+  echo "FAIL  the real photo approval registry was changed during the tests" >&2
+  exit 1
+fi
+echo "PASS  the real photo approval registry is untouched"
+if env VERCEL=1 VERCEL_ENV=production CREVANT_PHOTO_APPROVALS_FIXTURE=scripts/e2e/fixtures/photo-approvals.all-approved.json node scripts/check-photo-approvals.mjs >/dev/null 2>&1; then
+  echo "FAIL  a test fixture was accepted on Vercel" >&2
+  exit 1
+fi
+echo "PASS  the approval fixture is refused on Vercel"
 node_modules/.bin/vite preview --host 127.0.0.1 --port "$APP_PORT" --strictPort >/dev/null 2>&1 &
 preview_pid=$!
 for _ in $(seq 1 60); do
