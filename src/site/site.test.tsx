@@ -37,6 +37,31 @@ describe('public site build', () => {
     expect(container.textContent).not.toMatch(/Sign in|Already invited|Your account/)
   })
 
+  it('offers Sign In in the header and footer, to /pilot-access only, never the member sign-in page', () => {
+    const { container } = renderSite('/')
+    const header = container.querySelector('header')!
+    const signIn = header.querySelector('[data-testid="header-sign-in"]')!
+    expect(signIn.getAttribute('href')).toBe('/pilot-access')
+    expect(signIn.getAttribute('aria-label')).toBe('Sign In')
+    const footer = [...container.querySelectorAll('footer a')].map((a) => [a.textContent?.trim(), a.getAttribute('href')])
+    expect(footer).toContainEqual(['Sign In', '/pilot-access'])
+    expect(memberHrefs(container)).toEqual([])
+  })
+
+  it('serves /pilot-access: says sign-in is coming and is invitation only, with nothing to type into', () => {
+    const { container, getByTestId } = renderSite('/pilot-access')
+    expect(getByTestId('where').textContent).toBe('/pilot-access')
+    expect(container.querySelector('h1')?.textContent).toBe('Member Sign In')
+    const note = getByTestId('pilot-access').textContent ?? ''
+    expect(note).toContain('Member sign-in is coming soon.')
+    expect(note).toContain('invitation only')
+    expect(container.querySelector('form, input, select, textarea, button[type="submit"]')).toBeNull()
+    expect(memberHrefs(container)).toEqual([])
+    const links = [...container.querySelectorAll('main a')].map((a) => a.getAttribute('href'))
+    expect(links).toEqual(['/', '/join', '/'])
+    expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex')
+  })
+
   it('serves /join, and sends the old invitation and role pages there', () => {
     for (const p of ['/join', '/join/creator', '/join/supporter', '/request-invite']) {
       const { container, getByTestId } = renderSite(p)
@@ -65,5 +90,9 @@ describe('full app (Preview and local)', () => {
       </MemoryRouter>,
     )
     expect(memberHrefs(container).filter((h) => h === '/sign-in').length).toBe(3)
+    // The header's Sign In is the real sign-in page here, never the placeholder.
+    const signIn = container.querySelector('header [data-testid="header-sign-in"]')!
+    expect([signIn.getAttribute('href'), signIn.getAttribute('aria-label')]).toEqual(['/sign-in', 'Sign In'])
+    expect(container.querySelector('a[href="/pilot-access"]')).toBeNull()
   })
 })

@@ -11,6 +11,7 @@
 const { readFileSync } = require('node:fs')
 const path = require('node:path')
 const { chromium, devices } = require('playwright')
+const AXE = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'node_modules', 'axe-core', 'axe.min.js'), 'utf8')
 
 const BASE = (process.argv[2] || 'http://localhost:4176').replace(/\/$/, '')
 // Fonts are self-hosted: no third party is allowed on the public pages.
@@ -127,6 +128,31 @@ async function newContext(browser, options = {}) {
       check(`${label}: /privacy has nothing to type into`, (await page.locator('form, input, select, textarea').count()) === 0)
       check(`${label}: /privacy is noindex`, (await page.locator('meta[name="robots"]').getAttribute('content')) === 'noindex')
 
+      // 4c. Sign In: the header links to /pilot-access, which explains that member
+      //     sign-in is coming and is invitation only. No form, never indexed.
+      await page.goto(`${BASE}/`)
+      const signIn = page.locator('header [data-testid="header-sign-in"]')
+      check(`${label}: the header offers Sign In, to /pilot-access`,
+        (await shows(signIn)) && (await signIn.getAttribute('href')) === '/pilot-access' && (await signIn.getAttribute('aria-label')) === 'Sign In')
+      let reached = false
+      let ring = ''
+      for (let i = 0; i < 10 && !reached; i++) {
+        await page.keyboard.press('Tab')
+        reached = await page.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'header-sign-in')
+        if (reached) ring = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle)
+      }
+      check(`${label}: the keyboard reaches Sign In, with a visible focus ring`, reached && ring !== 'none' && ring !== '', `outline ${ring}`)
+      await page.keyboard.press('Enter')
+      await page.waitForURL(/\/pilot-access$/)
+      check(`${label}: Sign In opens the pilot access page`, await shows(page.getByRole('heading', { level: 1, name: 'Member Sign In' })))
+      check(`${label}: /pilot-access says sign-in is coming soon and is invitation only`,
+        /Member sign-in is coming soon\./.test(await page.getByTestId('pilot-access').innerText()) && /invitation only/.test(await page.getByTestId('pilot-access').innerText()))
+      check(`${label}: /pilot-access has nothing to type into`, (await page.locator('form, input, select, textarea').count()) === 0)
+      check(`${label}: /pilot-access is noindex`, (await page.locator('meta[name="robots"]').getAttribute('content')) === 'noindex')
+      await page.evaluate(AXE)
+      const axeViolations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] })).violations.map((v) => `${v.id} x${v.nodes.length}`))
+      check(`${label}: /pilot-access has no WCAG 2.2 AA violations`, axeViolations.length === 0, axeViolations.join(', '))
+
       // 5. The sample tour still works, and old prototype links still redirect.
       await page.goto(`${BASE}/tour`)
       check(`${label}: /tour shows the sample tour`, await shows(page.getByText(/sample/i)))
@@ -160,6 +186,11 @@ async function newContext(browser, options = {}) {
       check(`${label}: the six sections in order`, ids === 'hero,problem,building,creators,split,vision,invitation', ids)
       const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
+      {
+        const box = await page.locator('header [data-testid="header-sign-in"]').boundingBox()
+        const big = width >= 420 || (box && box.width >= 44 && box.height >= 44)
+        check(`${label}: Sign In is in the header${width < 420 ? ', as an icon at least 44px square' : ''}`, !!box && big, box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'missing')
+      }
       check(`${label}: no Crevant left on the landing page`, !/Crevant/i.test(await page.locator('body').innerText()))
 
       const rows = await page.$$eval('[data-testid="creator-groups"] > li', (lis) => new Set(lis.map((li) => Math.round(li.getBoundingClientRect().top))).size)
