@@ -28,7 +28,8 @@ export function ViewTrackerProvider({ userId, children }: { userId: string; chil
   const api = useAppApi()
   const listeners = useRef(new Set<(ids: string[]) => void>())
   const queueRef = useRef<ViewQueue | null>(null)
-  const watched = useRef(new Map<Element, ReturnType<typeof createVisibilityTimer>>())
+  // Each watched post: its 2-second timer and the last visibility ratio seen.
+  const watched = useRef(new Map<Element, { timer: ReturnType<typeof createVisibilityTimer>; ratio: number }>())
   const observerRef = useRef<IntersectionObserver | null>(null)
 
   useEffect(() => {
@@ -62,18 +63,33 @@ export function ViewTrackerProvider({ userId, children }: { userId: string; chil
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return
     const map = watched.current
+    const hidden = () => document.visibilityState === 'hidden'
     const observer = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) map.get(entry.target)?.update(entry.isIntersecting ? entry.intersectionRatio : 0)
+        for (const entry of entries) {
+          const rec = map.get(entry.target)
+          if (!rec) continue
+          rec.ratio = entry.isIntersecting ? entry.intersectionRatio : 0
+          // A background tab or a locked phone never counts towards the 2 seconds.
+          if (!hidden()) rec.timer.update(rec.ratio)
+        }
       },
       { threshold: [0, 0.5, 1] },
     )
     observerRef.current = observer
     map.forEach((_, el) => observer.observe(el))
+    // Hidden: stop every pending timer. Visible again: start afresh for posts
+    // still at least half on screen (the full 2 seconds again).
+    const onVisibility = () => {
+      if (hidden()) map.forEach((r) => r.timer.cancel())
+      else map.forEach((r) => r.timer.update(r.ratio))
+    }
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
       observer.disconnect()
       observerRef.current = null
-      map.forEach((t) => t.cancel())
+      map.forEach((r) => r.timer.cancel())
     }
   }, [])
 
@@ -84,7 +100,7 @@ export function ViewTrackerProvider({ userId, children }: { userId: string; chil
       observerRef.current?.unobserve(el)
       map.delete(el)
     })
-    map.set(el, timer)
+    map.set(el, { timer, ratio: 0 })
     observerRef.current?.observe(el)
     return () => {
       timer.cancel()

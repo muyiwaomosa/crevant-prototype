@@ -322,6 +322,8 @@ export function CatchUpPage() {
               </li>
             ))}
           </ul>
+          {/* Only once no earlier unseen posts remain. */}
+          {!hasEarlier && (
           <Card className="mt-4 p-5 text-center">
             <p className="font-semibold text-ink-900">That's everything new from {m.displayName}</p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -333,6 +335,7 @@ export function CatchUpPage() {
               </Link>
             </div>
           </Card>
+          )}
         </>
       )}
     </>

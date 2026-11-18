@@ -897,6 +897,8 @@ describe('Unseen-first Home', () => {
     await screen.findByText('Unseen 25')
     let bodies = screen.getAllByTestId('post').map((p) => p.textContent?.match(/Unseen \d{2}/)?.[0])
     expect(bodies).toEqual([...Array(20)].map((_, i) => `Unseen ${String(i + 6).padStart(2, '0')}`))
+    // Earlier unseen posts remain, so it doesn't claim to be finished yet.
+    expect(screen.queryByText("That's everything new from Creator 4")).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Show earlier unseen posts' }))
     await screen.findByText('Unseen 01')
     bodies = screen.getAllByTestId('post').map((p) => p.textContent?.match(/Unseen \d{2}/)?.[0])
@@ -940,9 +942,57 @@ describe('Unseen-first Home', () => {
     function show(ratio: number) {
       for (const o of observed) o.cb([{ target: o.el, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry], {} as IntersectionObserver)
     }
+    let visibility: DocumentVisibilityState = 'visible'
+    function setVisibility(v: DocumentVisibilityState) {
+      visibility = v
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility })
     afterEach(() => {
       globalThis.IntersectionObserver = original
+      visibility = 'visible'
       vi.useRealTimers()
+    })
+
+    it('time in a background tab or with the phone locked never counts; on return the full 2 seconds start again', async () => {
+      installObserver()
+      const fake = unseenSetup()
+      fake.seedPost('c3', 'Read me', T + 1000)
+      renderApp('/app', fake.api)
+      await screen.findByRole('region', { name: 'Catch up' })
+      expect(observed).toHaveLength(1)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      act(() => show(0.8))
+      await act(async () => vi.advanceTimersByTime(1500))
+      act(() => setVisibility('hidden')) // tab switched or phone locked after 1.5 s
+      await act(async () => vi.advanceTimersByTime(60_000))
+      expect(fake.marks).toHaveLength(0)
+      // Visibility changes while hidden are noted but start nothing.
+      act(() => show(0.9))
+      await act(async () => vi.advanceTimersByTime(60_000))
+      expect(fake.marks).toHaveLength(0)
+      act(() => setVisibility('visible')) // back, and the post is still on screen
+      await act(async () => vi.advanceTimersByTime(1999 + 5000))
+      expect(fake.marks).toHaveLength(0) // the 1.5 s before hiding didn't carry over
+      await act(async () => vi.advanceTimersByTime(1))
+      await act(async () => vi.advanceTimersByTime(5000))
+      expect(fake.marks).toHaveLength(1)
+      expect(fake.marks[0].ids).toEqual(['p001'])
+    })
+
+    it('a post scrolled away while hidden does not count when the page comes back', async () => {
+      installObserver()
+      const fake = unseenSetup()
+      fake.seedPost('c3', 'Gone while hidden', T + 1000)
+      renderApp('/app', fake.api)
+      await screen.findByRole('region', { name: 'Catch up' })
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      act(() => show(0.8))
+      act(() => setVisibility('hidden'))
+      act(() => show(0.2))
+      act(() => setVisibility('visible'))
+      await act(async () => vi.advanceTimersByTime(30_000))
+      expect(fake.marks).toHaveLength(0)
     })
 
     it('posts at least half on screen for 2 seconds are recorded in one batch; own posts never; the strip refreshes', async () => {
