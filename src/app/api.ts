@@ -88,7 +88,8 @@ export interface AppApi {
   comments(postId: string): Promise<Comment[]>
   discover(query?: string): Promise<DiscoverMember[]>
   following(): Promise<FollowedCreator[]>
-  createPost(body: string): Promise<string>
+  /** requestId: the browser's id for this post, reused on retry, so it's stored once (issue #48). */
+  createPost(body: string, requestId?: string): Promise<string>
   deletePost(id: string): Promise<void>
   follow(memberId: string): Promise<void>
   unfollow(memberId: string): Promise<void>
@@ -96,7 +97,8 @@ export interface AppApi {
   cliqueRemove(memberId: string): Promise<void>
   like(postId: string): Promise<void>
   unlike(postId: string): Promise<void>
-  addComment(postId: string, body: string): Promise<string>
+  /** requestId: as for createPost. */
+  addComment(postId: string, body: string, requestId?: string): Promise<string>
   deleteComment(id: string): Promise<void>
 }
 
@@ -147,6 +149,7 @@ const MESSAGES: Record<string, string> = {
   not_following: 'Follow this creator first. Your Clique only includes people you follow.',
   clique_full: 'Your Clique already has 10 creators. Remove one to make room.',
   rate_limited: "You're going a little fast. Please wait a moment and try again.",
+  request_reused: 'Something changed while sending. Please try again.',
   not_found: "That's no longer available.",
   username_taken: 'That username is taken. Please choose another.',
   username_invalid: 'Use 3 to 30 lowercase letters, numbers or underscores, and not a reserved name.',
@@ -306,7 +309,8 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         cliqueAddedAt: (r.clique_added_at as string | null) ?? null,
       }))
     },
-    createPost: (body) => rpc<string>('app_create_post', { p_body: body }),
+    createPost: (body, requestId) =>
+      rpc<string>('app_create_post', requestId ? { p_body: body, p_request_id: requestId } : { p_body: body }),
     deletePost: (id) => rpc<void>('app_delete_post', { p_post: id }),
     follow: (id) => rpc<void>('app_follow', { p_creator: id }),
     unfollow: (id) => rpc<void>('app_unfollow', { p_creator: id }),
@@ -314,7 +318,8 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     cliqueRemove: (id) => rpc<void>('app_clique_remove', { p_creator: id }),
     like: (id) => rpc<void>('app_like', { p_post: id }),
     unlike: (id) => rpc<void>('app_unlike', { p_post: id }),
-    addComment: (postId, body) => rpc<string>('app_add_comment', { p_post: postId, p_body: body }),
+    addComment: (postId, body, requestId) =>
+      rpc<string>('app_add_comment', requestId ? { p_post: postId, p_body: body, p_request_id: requestId } : { p_post: postId, p_body: body }),
     deleteComment: (id) => rpc<void>('app_delete_comment', { p_comment: id }),
   }
 }
@@ -324,4 +329,18 @@ export function hueFor(id: string): number {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
   return h % 360
+}
+
+/**
+ * A new request id for a post or comment. The browser makes it once per text
+ * and reuses it when the person retries, so the server stores the post once
+ * even if an earlier attempt succeeded but its answer was lost.
+ */
+export function newRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
 }

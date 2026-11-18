@@ -56,6 +56,32 @@ nothing outside `social` reads its tables (checked).
 Clique memberships and follow history through the foreign keys. The
 append-only triggers let those cascades through and refuse any direct edit.
 
+## Publishing reliability (issue #48, 20261119000000)
+
+A post or comment is stored **once** per request, however often it's sent.
+
+* **In the browser:** `TextComposer` blocks a second submit at once (a ref, not
+  React state, so two submits in the same instant can't both pass). It also
+  gives each text a request id (`newRequestId()` in `src/app/api.ts`), reuses
+  it when the person retries after an error, and makes a new one once the text
+  changes or the send succeeds.
+* **In the database:** `app_create_post(p_body, p_request_id)` and
+  `app_add_comment(p_post, p_body, p_request_id)` store the id in
+  `client_request_id`, unique per author. A repeat returns the first row and
+  isn't rate limited again. The same id with other text (or another post) is
+  refused as `request_reused`. Two simultaneous requests end up as one row.
+  The original `app_create_post(text)` and `app_add_comment(uuid, text)` are
+  unchanged, so older pages keep working.
+* **Tests:** `supabase/tests-local/065_publishing_request_ids.sql`,
+  `scripts/db/request-ids-concurrency-test.sh` (two real sessions at once),
+  the app tests (a double submit, a retry after a lost answer), and the social
+  journey (a double click, and a lost answer then a retry, for a post and a
+  comment, on local Supabase).
+* **Rollback (staging):** `scripts/db/staging-rollback-publishing-requests.sql`
+  (phrase `REMOVE THE STAGING PUBLISHING REQUEST IDS`) removes only what that
+  migration added and keeps every post and comment. It's now the newest, so it
+  runs first, before the platform access rollback.
+
 ## Rollback (staging)
 
 `scripts/db/staging-rollback-social.sql`, in `check` (dry run) or `apply`

@@ -108,8 +108,8 @@ export function FeedPage() {
           placeholder="Share something with the people who follow you…"
           max={LIMITS.post}
           submitLabel="Post"
-          onSubmit={async (text) => {
-            await api.createPost(text)
+          onSubmit={async (text, requestId) => {
+            await api.createPost(text, requestId)
             await feed.reload()
           }}
         />
@@ -155,8 +155,8 @@ export function ComposePage() {
           max={LIMITS.post}
           submitLabel="Post"
           rows={6}
-          onSubmit={async (text) => {
-            const id = await api.createPost(text)
+          onSubmit={async (text, requestId) => {
+            const id = await api.createPost(text, requestId)
             navigate(`/app/post/${id}`)
           }}
         />
@@ -337,8 +337,8 @@ export function PostPage() {
             max={LIMITS.comment}
             submitLabel="Comment"
             rows={2}
-            onSubmit={async (text) => {
-              await api.addComment(p.id, text)
+            onSubmit={async (text, requestId) => {
+              await api.addComment(p.id, text, requestId)
               await Promise.all([comments.reload(), post.reload()])
             }}
           />

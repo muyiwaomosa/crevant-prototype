@@ -16,7 +16,8 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Three later migrations follow the waitlist: creator acquisition
+# Four later migrations follow the waitlist: publishing request ids
+# (20261119000000, scripts/db/rollback-publishing-requests-test.sh), creator acquisition
 # (20261116000000), the Release 1 social core (20261117000000) and platform
 # function access (20261118000000). Each rollback refuses while a later
 # migration is recorded, so they run newest first: platform access
@@ -96,6 +97,19 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+REQUESTS=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261119000000')")
+if [ "$REQUESTS" = t ]; then
+  # The newest migration (publishing request ids) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-platform-access.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the platform function access rollback refuses while publishing request ids is recorded" \
+    || bad "the platform function access rollback did not refuse while publishing request ids is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-publishing-requests-test.sh; then
+    ok "the publishing request ids rollback refuses safely and removes exactly its own objects"
+  else
+    bad "the publishing request ids rollback tests failed"
+  fi
+fi
 PLATFORM=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261118000000')")
 SOCIAL_APPLIED=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261117000000')")
 if [ "$PLATFORM" = t ]; then
@@ -224,17 +238,29 @@ if out=$(for f in supabase/tests/*.sql; do psql "$DB_URL" -X -q -v ON_ERROR_STOP
 else
   bad "database checks after reapplying: $(tail -3 <<<"$out" | tr '\n' ' ')"
 fi
-if [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
+if [ "$REQUESTS" = t ] || [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
   # Everything is back: the waitlist rollback must refuse until the later ones are removed.
   out=$(rollback check ""); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "after reapplying, the waitlist rollback refuses while a later migration is recorded" \
     || bad "the waitlist rollback did not refuse while a later migration is recorded (exit $code)"
+  if [ "$REQUESTS" = t ]; then
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-publishing-requests.sql 2>&1); code=$?
+    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+      && ok "after reapplying, the publishing request ids rollback check passes again" \
+      || bad "publishing request ids rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+  fi
   if [ "$PLATFORM" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-platform-access.sql 2>&1); code=$?
-    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-      && ok "after reapplying, the platform function access rollback check passes again" \
-      || bad "platform function access rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    if [ "$REQUESTS" = t ]; then
+      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+        && ok "after reapplying, the platform function access rollback refuses while publishing request ids is recorded" \
+        || bad "the platform function access rollback did not refuse after reapply while publishing request ids is recorded (exit $code)"
+    else
+      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+        && ok "after reapplying, the platform function access rollback check passes again" \
+        || bad "platform function access rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    fi
   fi
   if [ "$SOCIAL_APPLIED" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-social.sql 2>&1); code=$?
