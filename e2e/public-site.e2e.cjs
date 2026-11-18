@@ -172,7 +172,7 @@ async function newContext(browser, options = {}) {
     //     the seven sections in order, no sideways scrolling, the headline on
     //     two lines, every pilot disclosure visible beside its claim, no
     //     photographs, every illustration on screen, and one logo file.
-    for (const width of [320, 375, 390, 414, 420, 430, 440, 768, 1024, 1440]) {
+    for (const width of [320, 375, 390, 414, 420, 430, 440, 460, 480, 768, 1024, 1440]) {
       const label = `${width}px`
       const ctx = await newContext(browser, { viewport: { width, height: 900 } })
       const page = await ctx.newPage()
