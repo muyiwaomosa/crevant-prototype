@@ -24,7 +24,7 @@ export function PilotAccessPage() {
           <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" aria-hidden="true" />
           <div className="space-y-2 leading-relaxed">
             <p className="font-semibold text-ink-900">Member sign-in is coming soon.</p>
-            <p>Splitpost is in an invitation-only pilot. Access will be by invitation only: if you're invited, we'll email you when your account is ready.</p>
+            <p>Access to the Splitpost pilot is by invitation only. If you're invited, we'll email you when your account is ready.</p>
             <p>There's nothing to sign in to here yet, and this page doesn't collect anything.</p>
           </div>
         </div>
