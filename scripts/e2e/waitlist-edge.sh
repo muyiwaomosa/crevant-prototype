@@ -11,6 +11,8 @@
 # them again at the end, so the roles can't log in afterwards.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# Container logs are read into a string before searching: piping docker logs
+# into grep -q can fail under pipefail when grep stops reading early.
 
 DB_PORT="${DB_PORT:-54322}"
 DB_URL="postgresql://postgres:postgres@127.0.0.1:${DB_PORT}/postgres"
@@ -137,7 +139,7 @@ fi
 
 # Without a confirmed proxy hop count, the real entry point stays closed and says why.
 nohops="$(curl -s -m 60 -X POST "http://127.0.0.1:${EDGE_NOHOPS_PORT}/" -H 'Origin: https://site.test' -H 'Content-Type: application/json' -d '{"email":"nohops@e2e.test"}' || true)"
-if [ "$nohops" = '{"status":"closed"}' ] && docker logs crevant-waitlist-edge-nohops 2>&1 | grep -q 'WAITLIST_TRUSTED_PROXY_HOPS is not set'; then
+if [ "$nohops" = '{"status":"closed"}' ] && grep -q 'WAITLIST_TRUSTED_PROXY_HOPS is not set' <<<"$(docker logs crevant-waitlist-edge-nohops 2>&1)"; then
   echo "PASS  without a confirmed proxy hop count the real entry point stays closed, and logs why"
 else
   echo "FAIL  without a hop count the real entry point answered: $nohops" >&2
@@ -149,7 +151,7 @@ fi
 ign_real="$(curl -s -m 60 -X POST "http://127.0.0.1:${EDGE_IGNORE_REAL_PORT}/" -H 'Origin: https://site.test' -H 'Content-Type: application/json' -d '{"email":"ignore@e2e.test"}' || true)"
 ign_health="$(curl -s -m 30 "http://127.0.0.1:${EDGE_IGNORE_REAL_PORT}/" || true)"
 if [ "$ign_real" = '{"status":"closed"}' ] && [ "$ign_health" = '{"status":"ok"}' ] \
-   && ! docker logs crevant-waitlist-edge-ignore-real 2>&1 | grep -q 'WAITLIST_CLIENT_ADDRESS'; then
+   && ! grep -q 'WAITLIST_CLIENT_ADDRESS' <<<"$(docker logs crevant-waitlist-edge-ignore-real 2>&1)"; then
   echo "PASS  in ignore mode the real entry point starts with no hop count, stays closed without Turnstile, and its health check connects"
 else
   echo "FAIL  the ignore-mode real entry point answered: $ign_real / $ign_health" >&2
@@ -159,7 +161,7 @@ fi
 
 # Ignore AND a hop count is a contradiction: closed, and the reason is logged.
 conflict="$(curl -s -m 60 -X POST "http://127.0.0.1:${EDGE_CONFLICT_PORT}/" -H 'Origin: https://site.test' -H 'Content-Type: application/json' -d '{"email":"conflict@e2e.test"}' || true)"
-if [ "$conflict" = '{"status":"closed"}' ] && docker logs crevant-waitlist-edge-conflict 2>&1 | grep -q 'or both are set'; then
+if [ "$conflict" = '{"status":"closed"}' ] && grep -q 'or both are set' <<<"$(docker logs crevant-waitlist-edge-conflict 2>&1)"; then
   echo "PASS  ignore together with a hop count keeps the real entry point closed, and logs why"
 else
   echo "FAIL  the contradictory configuration answered: $conflict" >&2
@@ -172,7 +174,7 @@ fi
 hosted="$(curl -s -m 60 -X POST "http://127.0.0.1:${EDGE_HOSTED_PORT}/" -H 'Origin: https://site.test' -H 'Content-Type: application/json' -d '{"email":"hosted@e2e.test"}' || true)"
 hosted_health="$(curl -s -m 30 "http://127.0.0.1:${EDGE_HOSTED_PORT}/" || true)"
 if [ "$hosted" = '{"status":"closed"}' ] && [ "$hosted_health" = '{"status":"error"}' ] \
-   && docker logs crevant-waitlist-edge-hosted 2>&1 | grep -q "own Supabase project"; then
+   && grep -q "own Supabase project" <<<"$(docker logs crevant-waitlist-edge-hosted 2>&1)"; then
   echo "PASS  a function on the staging project refuses a database from anywhere else (closed, health error)"
 else
   echo "FAIL  the hosted-project instance answered: $hosted / $hosted_health" >&2
