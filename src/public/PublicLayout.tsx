@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { DISCOVER_PATH } from '../entry'
 import { useMemberLinks } from './member-links'
@@ -10,6 +10,13 @@ import { SplitpostWordmark } from './landing/ui/SplitpostWordmark'
 
 const HEADER_LINK =
   'inline-flex h-9 items-center rounded-full text-sm font-semibold text-white transition-[background-color,color,box-shadow,transform] hover:bg-white/10 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none'
+
+/**
+ * What the layout lets the page it shows change (React Router outlet context).
+ * /join hides the header's waitlist button while its success screen is shown,
+ * since the visitor has just joined. Pages outside this layout get none.
+ */
+export type PublicLayoutContext = { setHeaderCtaHidden: (hidden: boolean) => void }
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -28,6 +35,11 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
   const memberLinks = useMemberLinks()
   // noindex everywhere, except the approved pages once indexing is approved.
   useRobotsMeta()
+  const [headerCtaHidden, setHeaderCtaHidden] = useState(false)
+  // Any navigation brings the button back, whatever the page did.
+  const { pathname } = useLocation()
+  useEffect(() => setHeaderCtaHidden(false), [pathname])
+  const outletContext: PublicLayoutContext = { setHeaderCtaHidden }
   return (
     <div className="flex min-h-dvh flex-col">
       <ScrollToTop />
@@ -58,27 +70,30 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             {/* Below 420px only the logo and Join the Waitlist fit; Sign in stays in the hero and footer. */}
             {/* The account link is shared with the account pages, so it's restyled here rather than changed. */}
             {account && <span className="hidden min-[420px]:contents [&_a]:text-white [&_a:hover]:bg-white/10">{account}</span>}
-            <Link
-              to="/join"
-              aria-label={waitlistCta()}
-              className="inline-flex h-9 items-center whitespace-nowrap rounded-full bg-sp-secondary px-3 text-[13px] font-bold min-[360px]:px-4 min-[360px]:text-sm text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#bde3db] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
-            >
-              {WAITLIST_OPEN ? (
-                waitlistCta()
-              ) : (
-                <>
-                  {/* Under 390px the full closed label doesn't fit beside the logo. */}
-                  <span aria-hidden="true" className="min-[390px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
-                  <span aria-hidden="true" className="hidden min-[390px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
-                </>
-              )}
-            </Link>
+            {!headerCtaHidden && (
+              <Link
+                to="/join"
+                data-testid="header-waitlist-cta"
+                aria-label={waitlistCta()}
+                className="inline-flex h-9 items-center whitespace-nowrap rounded-full bg-sp-secondary px-3 text-[13px] font-bold min-[360px]:px-4 min-[360px]:text-sm text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#bde3db] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
+              >
+                {WAITLIST_OPEN ? (
+                  waitlistCta()
+                ) : (
+                  <>
+                    {/* Under 390px the full closed label doesn't fit beside the logo. */}
+                    <span aria-hidden="true" className="min-[390px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
+                    <span aria-hidden="true" className="hidden min-[390px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
+                  </>
+                )}
+              </Link>
+            )}
           </nav>
         </div>
       </header>
 
       <main id="main" className="flex-1">
-        <Outlet />
+        <Outlet context={outletContext} />
       </main>
 
       <footer className="bg-sp-primary text-white">

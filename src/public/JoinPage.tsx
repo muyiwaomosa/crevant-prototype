@@ -1,10 +1,14 @@
-import { Link } from 'react-router-dom'
+import { useLayoutEffect, useState } from 'react'
+import { Link, useOutletContext } from 'react-router-dom'
+import type { PublicLayoutContext } from './PublicLayout'
 import { ArrowLeft, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
 import { DISCOVER_PATH } from '../entry'
 import { BUILD_WAITLIST_ENV, readWaitlistConfig } from './waitlist/config'
 import { WAITLIST_CLOSED_COPY } from './waitlist/status'
 import { WaitlistForm } from './waitlist/WaitlistForm'
+import { JoinSuccess } from './waitlist/JoinSuccess'
+import type { MountTurnstile } from './waitlist/turnstile'
 import { InviteBanner } from './waitlist/InviteBanner'
 import { DISCLOSURES } from './landing/claims'
 import { HOMEPAGE_COPY } from './landing/copy'
@@ -19,8 +23,37 @@ import { HOMEPAGE_COPY } from './landing/copy'
  * waitlist never secures a place in the pilot; invitations go out in small
  * groups.
  */
-export function JoinPage({ env = BUILD_WAITLIST_ENV }: { env?: Record<string, unknown> }) {
+export function JoinPage({
+  env = BUILD_WAITLIST_ENV,
+  mount,
+  fetchImpl,
+}: {
+  env?: Record<string, unknown>
+  /** Test only: stand-ins for Turnstile and the network, passed to the form. */
+  mount?: MountTurnstile
+  fetchImpl?: typeof fetch
+}) {
   const waitlist = readWaitlistConfig(env)
+  const [joined, setJoined] = useState(false)
+  // While the success screen is shown, the shared header hides its waitlist
+  // button: the visitor has just joined. Restored when leaving the page. A
+  // layout effect, so the header changes before the browser paints the screen.
+  const layout = useOutletContext<PublicLayoutContext | undefined>()
+  const setHeaderCtaHidden = layout?.setHeaderCtaHidden
+  useLayoutEffect(() => {
+    if (!joined || !setHeaderCtaHidden) return
+    setHeaderCtaHidden(true)
+    return () => setHeaderCtaHidden(false)
+  }, [joined, setHeaderCtaHidden])
+  // After a confirmed signup the success screen replaces the whole page, so its
+  // one action is the only one here.
+  if (joined) {
+    return (
+      <section aria-labelledby="join-success-title" className="px-4 py-12 sm:px-6 sm:py-20">
+        <JoinSuccess />
+      </section>
+    )
+  }
   return (
     <section aria-labelledby="join-title" className="px-4 py-12 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-2xl">
@@ -40,7 +73,7 @@ export function JoinPage({ env = BUILD_WAITLIST_ENV }: { env?: Record<string, un
         {waitlist ? (
           <>
             <InviteBanner config={waitlist} />
-            <WaitlistForm config={waitlist} />
+            <WaitlistForm config={waitlist} mount={mount} fetchImpl={fetchImpl} onSuccess={() => setJoined(true)} />
           </>
         ) : (
           <div data-testid="not-open" className="mt-8 flex gap-3 rounded-3xl bg-spark-50 p-5 text-ink-700 ring-1 ring-spark-200">

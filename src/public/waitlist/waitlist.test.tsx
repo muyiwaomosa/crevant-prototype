@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { PublicLayout } from '../PublicLayout'
 import { readAcquisition, readWaitlistConfig } from './config'
 import { WaitlistForm } from './WaitlistForm'
 import { JoinPage } from '../JoinPage'
@@ -176,7 +177,129 @@ describe('waitlist form', () => {
       turnstileToken: 'turnstile-token',
       website: '',
     })
-    expect(screen.getByText("Thanks, you're on the waitlist.")).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: "You're on the list!" })).toBeTruthy()
+  })
+
+  describe('the success screen on /join', () => {
+    const renderJoin = (fetchImpl = respond('ok')) => {
+      render(
+        <MemoryRouter initialEntries={['/join']}>
+          <JoinPage env={{ ...ENV, VITE_PRIVACY_NOTICE_VERSION: '1.0' }} mount={mount} fetchImpl={fetchImpl as unknown as typeof fetch} />
+        </MemoryRouter>,
+      )
+      return fetchImpl
+    }
+
+    it('replaces the heading, introduction, form and pilot details once the server confirms', async () => {
+      renderJoin()
+      expect(screen.getByRole('heading', { level: 1, name: 'Join the Waitlist' })).toBeTruthy()
+      fillRequired()
+      await tokenReady()
+      submit()
+      await waitFor(() => expect(screen.getByTestId('waitlist-success')).toBeTruthy())
+      expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(["You're on the list!"])
+      for (const id of ['join-intro', 'join-pilot-details']) expect(screen.queryByTestId(id)).toBeNull()
+      expect(document.querySelector('form, input, select, textarea')).toBeNull()
+      expect(screen.getByText(/Thanks for joining Splitpost! We're inviting people to try the platform in small groups\. If you're selected for the pilot, we'll send you an invitation by email\./)).toBeTruthy()
+      expect(screen.getByTestId('waitlist-success-disclosure').textContent).toBe("Joining the waitlist doesn't guarantee an invitation.")
+      // One action: Explore Splitpost, to the homepage. The other links are the privacy ones.
+      const links = [...document.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')])
+      expect(links).toEqual([
+        ['Explore Splitpost', '/'],
+        ['privacy@splitpost.ca', 'mailto:privacy@splitpost.ca'],
+        ['Read our privacy notice', '/privacy'],
+      ])
+      expect(screen.getByTestId('waitlist-leave').textContent).toBe(
+        'Changed your mind? Email privacy@splitpost.ca from the address you signed up with to request deletion of your details.',
+      )
+    })
+
+    it('moves keyboard focus to the heading, without making it a tab stop', async () => {
+      renderJoin()
+      fillRequired()
+      await tokenReady()
+      submit()
+      const h = await screen.findByRole('heading', { level: 1, name: "You're on the list!" })
+      expect(document.activeElement).toBe(h)
+      expect(h.getAttribute('tabindex')).toBe('-1')
+    })
+
+    it("hides the header's waitlist button only while the success screen shows, keeping the logo, navigation and footer", async () => {
+      window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
+      render(
+        <MemoryRouter initialEntries={['/join']}>
+          <Routes>
+            <Route element={<PublicLayout />}>
+              <Route index element={<p>Home page</p>} />
+              <Route path="join" element={<JoinPage env={{ ...ENV, VITE_PRIVACY_NOTICE_VERSION: '1.0' }} mount={mount} fetchImpl={respond('ok') as unknown as typeof fetch} />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>,
+      )
+      const footerJoin = () => screen.getByRole('navigation', { name: 'Footer' }).querySelector('a[href="/join"]')
+      // The normal /join page keeps the header button.
+      expect(screen.getByTestId('header-waitlist-cta')).toBeTruthy()
+      fillRequired()
+      await tokenReady()
+      submit()
+      await screen.findByRole('heading', { level: 1, name: "You're on the list!" })
+      // Already gone when the heading appears: no frame shows both.
+      expect(screen.queryByTestId('header-waitlist-cta')).toBeNull()
+      expect(screen.getByRole('link', { name: 'Splitpost home' })).toBeTruthy()
+      expect(screen.getByRole('navigation', { name: 'Site' })).toBeTruthy()
+      expect(footerJoin()).toBeTruthy()
+      expect(document.activeElement?.textContent).toBe("You're on the list!")
+      // Leaving the success screen brings it back.
+      fireEvent.click(screen.getByRole('link', { name: 'Explore Splitpost' }))
+      await screen.findByText('Home page')
+      expect(screen.getByTestId('header-waitlist-cta')).toBeTruthy()
+    })
+
+    it('keeps the header button while a failed attempt leaves the form on screen', async () => {
+      window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
+      render(
+        <MemoryRouter initialEntries={['/join']}>
+          <Routes>
+            <Route element={<PublicLayout />}>
+              <Route path="join" element={<JoinPage env={{ ...ENV, VITE_PRIVACY_NOTICE_VERSION: '1.0' }} mount={mount} fetchImpl={respond('verification_failed', 400) as unknown as typeof fetch} />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>,
+      )
+      fillRequired()
+      await tokenReady()
+      submit()
+      await waitFor(() => expect(document.querySelector('[aria-live="polite"]')?.textContent).not.toBe(''))
+      expect(screen.getByTestId('header-waitlist-cta')).toBeTruthy()
+    })
+
+    it('shows the same screen for a repeat signup, which the server also answers ok', async () => {
+      renderJoin(respond('ok'))
+      fillRequired()
+      await tokenReady()
+      submit()
+      await waitFor(() => expect(screen.getByTestId('waitlist-success')).toBeTruthy())
+    })
+
+    it('never shows it without a confirmed ok: errors stay on the form, in its live region', async () => {
+      for (const status of ['verification_failed', 'rate_limited', 'closed', 'invalid', 'notice_changed']) {
+        renderJoin(respond(status, 400))
+        fillRequired()
+        await tokenReady()
+        submit()
+        await waitFor(() => expect(document.querySelector('[aria-live="polite"]')?.textContent).not.toBe(''))
+        expect(screen.queryByTestId('waitlist-success')).toBeNull()
+        expect(screen.getByRole('heading', { level: 1, name: 'Join the Waitlist' })).toBeTruthy()
+        cleanup()
+      }
+      const broken = vi.fn(async () => { throw new Error('offline') })
+      renderJoin(broken as unknown as ReturnType<typeof respond>)
+      fillRequired()
+      await tokenReady()
+      submit()
+      await waitFor(() => expect(document.querySelector('[aria-live="polite"]')?.textContent).toContain('Something went wrong'))
+      expect(screen.queryByTestId('waitlist-success')).toBeNull()
+    })
   })
 
   it('is one form for everyone: nobody is asked to choose creator or fan, and everyone sees the same questions', () => {
