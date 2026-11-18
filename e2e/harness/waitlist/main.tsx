@@ -12,6 +12,7 @@ import '@fontsource-variable/archivo/wdth.css'
 import './harness.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import { InviteBanner } from '../../../src/public/waitlist/InviteBanner'
 import { WaitlistForm } from '../../../src/public/waitlist/WaitlistForm'
 import type { WaitlistConfig } from '../../../src/public/waitlist/config'
@@ -35,6 +36,8 @@ const mount: MountTurnstile = async (el, _siteKey, onToken) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    {/* The real site renders the form inside its router; the success screen's links need one. */}
+    <BrowserRouter>
     <main className="px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-2xl">
         <h1 className="font-display text-[2rem] font-extrabold text-ink-900">Join the Waitlist</h1>
@@ -42,5 +45,6 @@ createRoot(document.getElementById('root')!).render(
         <WaitlistForm config={config} mount={mount} />
       </div>
     </main>
+    </BrowserRouter>
   </StrictMode>,
 )
