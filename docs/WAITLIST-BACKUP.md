@@ -7,9 +7,10 @@ founder keeps an encrypted export of the waitlist outside Supabase.
 ## What is exported
 
 The data in the `ops` schema, which is the waitlist and everything tied to
-it: entries, consent records, invitations, the switches, and the hourly
-counts. **Not** the rate limit tables (`ops.waitlist_rate_limits`,
-`ops.invite_preview_limits`), which expire in two days anyway. No schema: the
+it: entries, consent records, invitations and the hourly counts. **Not** the
+rate limit tables (`ops.waitlist_rate_limits`, `ops.invite_preview_limits`),
+which expire in two days anyway, and not the switches (`ops.settings`), which
+the migrations create closed, so a restored waitlist stays closed. No schema: the
 schema comes from the migrations, so a restore always starts from the
 reviewed migration workflow.
 
@@ -31,7 +32,7 @@ $d = Get-Date -Format yyyy-MM-dd
 ```
 
 ```powershell
-pg_dump "host=<pooler host> port=5432 dbname=postgres user=postgres.hmrliwoychnqrbbydorg sslmode=verify-full sslrootcert=C:\crevant\supabase-ca.crt" --data-only --schema=ops --exclude-table-data=ops.waitlist_rate_limits --exclude-table-data=ops.invite_preview_limits -Fc -f "C:\crevant\waitlist-$d.dump"
+pg_dump "host=<pooler host> port=5432 dbname=postgres user=postgres.hmrliwoychnqrbbydorg sslmode=verify-full sslrootcert=C:\crevant\supabase-ca.crt" --data-only --schema=ops --exclude-table-data=ops.waitlist_rate_limits --exclude-table-data=ops.invite_preview_limits --exclude-table-data=ops.settings -Fc -f "C:\crevant\waitlist-$d.dump"
 ```
 
 Encrypt it with a separate export password from your password manager
@@ -63,7 +64,8 @@ the encrypted file ever leaves your computer.
 
    Delete the decrypted `.dump` file afterwards.
 4. Run the admin workflow's `summary` and compare the counts with the last
-   ones you noted. The waitlist stays closed until you `open` it again.
+   ones you noted. The waitlist stays closed until you run
+   `set-notice-version` and `open` again.
 
 Entries deleted on request after the export was taken come back with a
 restore. Keep a private list of deletion dates and waitlist IDs (never email
