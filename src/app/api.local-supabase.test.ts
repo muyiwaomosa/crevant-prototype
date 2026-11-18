@@ -8,9 +8,10 @@
 //      fallback to the original calls.
 //   2. The new schema (the migration reapplied): the same request id sent
 //      twice is one post, through the server's request id.
-// The later Inner Clique migration (20261120000000) is rolled back first and
-// reapplied last, because each staging rollback refuses while a later
-// migration is recorded. Leaves every migration applied, as it found them.
+// The later migrations (viewed state 20261121000000, then the Inner Clique
+// 20261120000000) are rolled back first, newest first, and reapplied last,
+// oldest first, because each staging rollback refuses while a later migration
+// is recorded. Leaves every migration applied, as it found them.
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -22,17 +23,25 @@ const enabled = !!(API && ANON && SERVICE && DB && /@(127\.0\.0\.1|localhost):/.
 
 const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql'
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
-const LATER = { version: '20261120000000', name: 'inner_clique', file: 'supabase/migrations/20261120000000_inner_clique.sql', rollback: 'scripts/db/staging-rollback-inner-clique.sql', phrase: 'REMOVE THE STAGING INNER CLIQUE' }
+// Newest first.
+const LATER = [
+  { version: '20261121000000', name: 'viewed_state', file: 'supabase/migrations/20261121000000_viewed_state.sql', rollback: 'scripts/db/staging-rollback-viewed-state.sql', phrase: 'REMOVE THE STAGING VIEWED STATE' },
+  { version: '20261120000000', name: 'inner_clique', file: 'supabase/migrations/20261120000000_inner_clique.sql', rollback: 'scripts/db/staging-rollback-inner-clique.sql', phrase: 'REMOVE THE STAGING INNER CLIQUE' },
+]
 const sql = (q: string) => execFileSync('psql', [DB!, '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-c', q]).toString().trim()
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-const laterRecorded = () => sql(`select count(*) from supabase_migrations.schema_migrations where version = '${LATER.version}'`) === '1'
+const recorded = (version: string) => sql(`select count(*) from supabase_migrations.schema_migrations where version = '${version}'`) === '1'
 function removeLater() {
-  if (laterRecorded()) execFileSync('psql', [DB!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-v', 'mode=apply', '-v', `confirm=${LATER.phrase}`, '-f', LATER.rollback])
+  for (const m of LATER) {
+    if (recorded(m.version)) execFileSync('psql', [DB!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-v', 'mode=apply', '-v', `confirm=${m.phrase}`, '-f', m.rollback])
+  }
 }
 function reapplyLater() {
-  if (laterRecorded()) return
-  execFileSync('psql', [DB!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', LATER.file])
-  sql(`insert into supabase_migrations.schema_migrations (version, name) values ('${LATER.version}', '${LATER.name}')`)
+  for (const m of [...LATER].reverse()) {
+    if (recorded(m.version)) continue
+    execFileSync('psql', [DB!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', m.file])
+    sql(`insert into supabase_migrations.schema_migrations (version, name) values ('${m.version}', '${m.name}')`)
+  }
 }
 
 describe.skipIf(!enabled)('posting against the old and the new database schema (local Supabase)', () => {

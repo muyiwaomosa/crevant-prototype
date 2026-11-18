@@ -98,9 +98,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+VIEWED=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261121000000')")
+if [ "$VIEWED" = t ]; then
+  # The newest migration (viewed state) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-inner-clique.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the Inner Clique rollback refuses while viewed state is recorded" \
+    || bad "the Inner Clique rollback did not refuse while viewed state is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-viewed-state-test.sh; then
+    ok "the viewed state rollback refuses safely (including once views exist) and removes exactly its own objects"
+  else
+    bad "the viewed state rollback tests failed"
+  fi
+fi
 INNER=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261120000000')")
 if [ "$INNER" = t ]; then
-  # The newest migration (Inner Clique) goes first.
+  # Then the Inner Clique.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-publishing-requests.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the publishing request ids rollback refuses while the Inner Clique is recorded" \
@@ -252,17 +265,29 @@ if out=$(for f in supabase/tests/*.sql; do psql "$DB_URL" -X -q -v ON_ERROR_STOP
 else
   bad "database checks after reapplying: $(tail -3 <<<"$out" | tr '\n' ' ')"
 fi
-if [ "$INNER" = t ] || [ "$REQUESTS" = t ] || [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
+if [ "$VIEWED" = t ] || [ "$INNER" = t ] || [ "$REQUESTS" = t ] || [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
   # Everything is back: the waitlist rollback must refuse until the later ones are removed.
   out=$(rollback check ""); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "after reapplying, the waitlist rollback refuses while a later migration is recorded" \
     || bad "the waitlist rollback did not refuse while a later migration is recorded (exit $code)"
+  if [ "$VIEWED" = t ]; then
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-viewed-state.sql 2>&1); code=$?
+    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+      && ok "after reapplying, the viewed state rollback check passes again" \
+      || bad "viewed state rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+  fi
   if [ "$INNER" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-inner-clique.sql 2>&1); code=$?
+    if [ "$VIEWED" = t ]; then
+      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+        && ok "after reapplying, the Inner Clique rollback refuses while viewed state is recorded" \
+        || bad "the Inner Clique rollback did not refuse after reapply while viewed state is recorded (exit $code)"
+    else
     [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
       && ok "after reapplying, the Inner Clique rollback check passes again" \
       || bad "Inner Clique rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    fi
     [ "$("${PSQL[@]}" -c "select prosrc ~ '>= 25' from pg_proc where oid = 'social.clique_members_guard()'::regprocedure")" = t ] \
       && ok "after reapplying, the Inner Clique holds 25 again" || bad "after reapplying, the guard is not at 25"
   fi

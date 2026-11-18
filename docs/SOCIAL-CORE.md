@@ -189,6 +189,121 @@ place opening up, an unfollow elsewhere), and `e2e/social-journey.e2e.cjs`
 replacement made from another device while the dialog is open, phone widths
 390 and 320).
 
+## Viewed state, the foundation for Unseen-first Home (20261121000000)
+
+**Status:** proposed, staging only, not applied. The migration is not in
+`supabase/approved-migrations.sha256` until the founder approves its checksum.
+
+**What a view is.** A signal reported by the member's own browser when a post
+meets the viewing rule:
+* text and images: at least 50% visible for 2 continuous seconds;
+* video: 3 seconds of actual playback, or completion, whichever comes first.
+
+It is a client-observed UX signal, not verified engagement. **It must never be
+used to issue Connection Points or decide monetary reward eligibility** (see
+docs/PRODUCT-STRATEGY.md, section 3). A check fails if the table carries
+points, money or reward data, or if anything outside the social core reads it.
+
+| Object | Behaviour |
+| --- | --- |
+| `social.post_views (viewer_id, post_id, viewed_at, basis)` | One row per member and post, ever (primary key). `viewed_at` is the server time of the first report; `basis` is `visible` or `played`. Rows are never rewritten or deleted directly (a trigger refuses); they go only with the member's account or the post. Kept across unfollow and refollow. Private: no member access, no policies. |
+| `app_mark_viewed(p_posts uuid[], p_basis text)` | Records views for the caller. At most 50 ids per call (`too_many`), counted as sent, before repeats and nulls are removed, so padding a request with repeats can't get around it. Own, deleted and missing posts, nulls and repeats are ignored. Posts by creators the member doesn't follow are recorded too. At most 3,000 new rows per member per rolling hour: a batch that would go past it is refused (`rate_limited`) and writes nothing. A per-member advisory lock makes the count and the insert one step, so simultaneous batches can't exceed the cap or duplicate rows. Returns how many were new. |
+| `app_unseen_creators()` | The Unseen-first strip: followed creators with at least one unseen post, meaning published at or after the member's **current** follow date, not deleted, not viewed. `unseen_count` is capped at 10 (shown as 9+). My Clique creators first, then other followed creators; within each, newest unseen post first. Creators with nothing unseen are not returned. |
+| `app_catch_up(p_creator, p_before_at, p_before_id)` | Up to 20 of that creator's most recent unseen posts, returned oldest first, in the feed's shape. Older batches: pass the oldest returned post's `created_at` and `id`. Paging is a keyset on `(created_at, id)`, so equal timestamps never skip or repeat a post. Read-only: it never marks posts viewed. Returns nothing for creators the member doesn't follow. |
+
+`app_feed` is unchanged: Home stays chronological. Viewed state is shared
+because Home and catch-up both record through `app_mark_viewed`.
+
+**Unfollow and refollow.** Refollowing resets the unseen baseline to the new
+follow date, so posts from before it are not unseen. Earlier views are kept.
+
+**Performance** (`scripts/db/viewed-state-plan-test.sh`, run in CI). It
+captures the statements run inside the functions with `auto_explain`, as a
+member runs them. Timings are PostgreSQL's own duration for the function's
+main query: the median of three runs after a warm-up, with per-node timing
+off so instrumentation doesn't inflate them. Recording runs use fresh posts
+each time, so they time real inserts. It fails on any sequential scan of
+`posts` or `post_views`, or on a time limit.
+
+| Scenario | Query | Plan | Server time (limit) |
+| --- | --- | --- | --- |
+| A: a fan following 1,000 creators, 50 posts each, 60% viewed, plus 100,000 others' views | The strip | per creator: newest-first scan of `posts_live_by_author`, anti-join on `post_views_pkey`, stopping at 10 unseen (about 25 posts read per creator) | about 89 ms (500) |
+| B: a fan following 200 very active creators, 500 posts each, 95% viewed | The strip | the same plan, about 213 posts read per creator (42,500 lookups) | about 92 ms (1,000) |
+| A | A catch-up batch, the next batch (keyset) | the creator's posts since the follow, `post_views_pkey` | under 1 ms (50) |
+| B | A catch-up batch (500 posts, 95% viewed) | as above, 500 posts read | about 2.4 ms (50) |
+| A | Recording 50 new views | `posts_pkey`, `post_views_pkey`, `post_views_by_viewer_time` | about 5 ms (100) |
+
+**Scaling limitation (recorded, not addressed now).** For each followed
+creator, the strip reads that creator's posts since the follow, newest first,
+until it has found 10 unseen posts or run out. So the cost follows how many
+**already-viewed** posts sit on top of the unseen ones: about 2 microseconds
+per post read here. A creator with nothing unseen is read back to the follow
+date every time the strip loads. Rough projections from the measured rate:
+
+* 200 creators with 500 viewed posts each: about 0.2 s;
+* 1,000 creators with 500 viewed posts each: about 1 s.
+
+That's comfortable for the private pilot, where a member follows tens of
+creators with tens of posts. If real use approaches the projections, the
+forward fixes are a lookback window (for example, the last 30 days) or a
+cached per-fan count, each its own reviewed migration. Neither is built now.
+
+**How the app limits requests (built with the member experience):**
+* qualifying ids queue in memory, and a batch is sent at 10 ids, 5 seconds
+  after the first, when the page is hidden, or on leaving the page;
+* one request in flight at a time; ids already sent this session are never
+  resent; own posts are skipped;
+* failed batches go to a bounded retry queue (at most a few hundred ids, kept
+  in browser storage for the next visit), retried with backoff when
+  connectivity returns or the member comes back, and dropped after a few
+  attempts. A dropped view only means a post stays unseen.
+
+**Rollback (staging only):** `scripts/db/staging-rollback-viewed-state.sql`
+removes exactly the migration's objects and record. It refuses, changing
+nothing, if a later migration is recorded or **any viewed-state row exists**:
+viewed state is member data. It runs first in the rollback chain; tested by
+`scripts/db/rollback-viewed-state-test.sh`.
+
+**Forward-fix guidance.** Once views exist, problems are fixed with a new
+migration, never by deleting views:
+* a wrong function: `create or replace` it in a new migration (same
+  signature), or add a new versioned function and keep the old one until the
+  app has moved over;
+* a wrong limit or rule: change it in the function, in a new migration;
+* a bad row: the table refuses direct deletes on purpose. A one-off repair
+  needs its own reviewed migration that states why, and must never touch
+  rewards or points (there are none);
+* to stop the feature quickly: deploy the app without the strip and catch-up.
+  The functions can stay, unused.
+
+**Tests:**
+* `supabase/tests-local/067_viewed_state.sql` covers:
+  * anonymous refusal;
+  * the strip's membership, order and cap;
+  * the follow-date rule and deleted posts;
+  * recording once, ignoring own, missing and null ids, and validation;
+  * catch-up batches with 25 identical timestamps (newest 20, oldest first,
+    the next batch with no skips or repeats, nothing marked);
+  * shared state between catch-up and Home;
+  * views of creators you don't follow;
+  * refollow resetting the baseline while keeping views;
+  * isolation between members;
+  * the 50-id limit counted as sent (51 copies of one id, 30 repeats plus 21
+    nulls, and 1,000 copies are all refused; exactly 50 is accepted);
+  * the hourly cap at its exact boundary, with refusals writing nothing and
+    the one-hour window;
+  * permanence, and account deletion.
+* `scripts/db/viewed-state-concurrency-test.sh` uses two real sessions:
+  * the same post marked twice at once gives one row;
+  * overlapping batches produce no duplicates;
+  * two batches arriving at once at 2,996 views: one applies (2,999), the other
+    is refused and writes nothing. Without the lock this reached 3,002
+    (verified).
+* `005` checks the table is private, has its primary key, and keeps its
+  permanence trigger, batch cap, hourly cap, lock, keyset paging and
+  follow-date rule. Violations 73 and 74 prove those checks catch the trigger
+  being dropped and members being granted read access.
+
 ## Tests
 
 | Suite | What it covers |
