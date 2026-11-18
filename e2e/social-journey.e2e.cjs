@@ -133,9 +133,23 @@ async function signInAndSetUp(page, email, username, displayName) {
   check('A chose a username and display name, and the feed opened', sql(`select username || '|' || display_name from public.profiles where id = '${idA}'`) === `${userA}|Aye Teacher`)
   await pageA.getByLabel('Write a post').fill(postText)
   await pageA.getByRole('button', { name: 'Post', exact: true }).click()
-  await pageA.getByText(postText).waitFor()
+  // Wait for the post in the feed itself. A bare getByText(postText) can be
+  // satisfied by the composer: React mirrors a textarea's value into its text,
+  // so the text is on the page before the post is saved.
+  await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
   check('A\'s post appears in their own feed', true)
-  check('the post is stored once, as written', sql(`select count(*) from social.posts where author_id = '${idA}' and body = '${postText}' and deleted_at is null`) === '1')
+  {
+    const where = `author_id = '${idA}' and body = '${postText}' and deleted_at is null`
+    // The feed shows the post only after the save returns, so one read should
+    // do; polling for a few seconds still rules out a slow commit as the cause.
+    let count = sql(`select count(*) from social.posts where ${where}`)
+    for (let i = 0; count === '0' && i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 250))
+      count = sql(`select count(*) from social.posts where ${where}`)
+    }
+    const rows = count !== '0' && count !== '1' ? sql(`select string_agg(id || ' at ' || created_at, ', ' order by created_at) from social.posts where ${where}`) : ''
+    check('the post is stored once, as written', count === '1', `found ${count}${rows ? `: ${rows}` : ''}`)
+  }
 
   // 3. B finds A, follows, adds A to their Clique, likes and comments.
   const ctxB = await newContext(browser)

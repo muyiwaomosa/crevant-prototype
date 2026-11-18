@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { AuthProvider } from '../auth/AuthProvider'
@@ -311,6 +311,28 @@ describe('feed and posting', () => {
     fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: '  My first post  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     expect(await screen.findByText('My first post')).toBeTruthy()
+  })
+
+  it('sends a post once even if the form is submitted twice in the same tick', async () => {
+    const { api } = fakeApi()
+    const sent: string[] = []
+    const createPost = api.createPost.bind(api)
+    api.createPost = async (body) => {
+      sent.push(body)
+      return createPost(body)
+    }
+    renderApp('/app', api)
+    await screen.findByText('Your feed is quiet')
+    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Only once, please' } })
+    const form = screen.getByLabelText('Write a post').closest('form')!
+    // Both events land before React re-renders, as with a fast double click.
+    act(() => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    expect(await screen.findByTestId('post')).toBeTruthy()
+    expect(sent).toEqual(['Only once, please'])
+    expect(screen.getAllByTestId('post')).toHaveLength(1)
   })
 
   it('shows posts from people you follow, newest first, and lets you delete only your own', async () => {
