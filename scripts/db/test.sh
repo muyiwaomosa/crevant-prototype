@@ -57,6 +57,9 @@ for f in supabase/tests-local/[0-9]*.sql; do
   "${PSQL[@]}" -f "$f"
 done
 
+# Two real sessions at once: a request id is stored once (issue #48).
+scripts/db/request-ids-concurrency-test.sh
+
 # Negative checks: each file applies one deliberate violation inside a
 # transaction that is always rolled back. The profile, ops and waitlist checks
 # must then fail with a "FAIL:" message, proving they would catch it. (Only

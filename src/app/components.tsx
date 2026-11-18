@@ -1,11 +1,11 @@
 import clsx from 'clsx'
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Heart, MessageCircle, Trash2, Users } from 'lucide-react'
 import { Avatar, Card, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
-import { hueFor, LIMITS, messageFor, type MemberSummary, type Post } from './api'
+import { hueFor, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
 import { useAppApi } from './AppApiContext'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
@@ -173,27 +173,39 @@ export function TextComposer({
   placeholder: string
   max: number
   submitLabel: string
-  onSubmit: (text: string) => Promise<void>
+  /** requestId stays the same for the same text until it succeeds, so a retry is stored once. */
+  onSubmit: (text: string, requestId: string) => Promise<void>
   rows?: number
 }) {
   const id = useId()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  // `busy` only changes on the next render, so two submits in the same tick
+  // (a double click, Enter plus click) would both see false. The ref doesn't wait.
+  const sending = useRef(false)
+  // One request id per text: reused if the person retries the same text after
+  // an error (the first attempt may have been stored), new once the text
+  // changes or the send succeeds.
+  const request = useRef<{ text: string; id: string } | null>(null)
   const [error, setError] = useState<unknown>(null)
   const length = [...text.trim()].length
   const over = length > max
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (busy || length === 0 || over) return
+    if (sending.current || length === 0 || over) return
+    sending.current = true
     setBusy(true)
     setError(null)
+    if (!request.current || request.current.text !== text) request.current = { text, id: newRequestId() }
     try {
-      await onSubmit(text)
+      await onSubmit(text, request.current.id)
+      request.current = null
       setText('')
     } catch (err) {
       setError(err)
     } finally {
+      sending.current = false
       setBusy(false)
     }
   }

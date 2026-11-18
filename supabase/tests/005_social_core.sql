@@ -54,8 +54,10 @@ do $$
 declare
   f record;
   expected text[] := array[
-    'app_add_comment', 'app_clique_add', 'app_clique_remove', 'app_comments', 'app_create_post',
-    'app_delete_comment', 'app_delete_post', 'app_discover', 'app_feed', 'app_follow', 'app_following',
+    -- app_add_comment and app_create_post have two versions each: the original,
+    -- and the one with a request id (20261119000000_publishing_request_ids).
+    'app_add_comment', 'app_add_comment', 'app_clique_add', 'app_clique_remove', 'app_comments',
+    'app_create_post', 'app_create_post', 'app_delete_comment', 'app_delete_post', 'app_discover', 'app_feed', 'app_follow', 'app_following',
     'app_like', 'app_me', 'app_member', 'app_member_posts', 'app_post', 'app_unfollow', 'app_unlike'
   ];
   found text[];

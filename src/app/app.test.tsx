@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { AuthProvider } from '../auth/AuthProvider'
@@ -42,6 +42,7 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null } = {}) {
   const comments: Array<{ id: string; post: string; author: string; body: string; at: number; deleted: boolean }> = []
   let clock = Date.parse('2026-11-17T12:00:00Z')
   let n = 0
+  const requests = new Map<string, { id: string; body: string }>()
   const key = (a: string, b: string) => `${a}>${b}`
   const summary = (id: string) => {
     const u = users.get(id)!
@@ -156,12 +157,19 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null } = {}) {
         .map((k) => k.split('>')[1])
         .map((id) => ({ ...summary(id), followedAt: '2026-11-17T11:00:00Z', inMyClique: clique.has(key(meId, id)), cliqueAddedAt: clique.has(key(meId, id)) ? '2026-11-17T11:30:00Z' : null }))
     },
-    async createPost(body) {
+    async createPost(body, requestId) {
       complete()
       const b = body.trim()
+      // Like the server: a repeated request id returns the post it already made.
+      const seen = requestId ? requests.get(`post:${requestId}`) : undefined
+      if (seen) {
+        if (seen.body !== b) throw new AppApiError('request_reused')
+        return seen.id
+      }
       if (!b) throw new AppApiError('empty')
       const id = `p${++n}`
       posts.push({ id, author: meId, body: b, at: (clock += 1000), deleted: false })
+      if (requestId) requests.set(`post:${requestId}`, { id, body: b })
       return id
     },
     async deletePost(id) {
@@ -193,10 +201,16 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null } = {}) {
     async unlike(id) {
       likes.delete(key(meId, id))
     },
-    async addComment(postId, body) {
+    async addComment(postId, body, requestId) {
+      const seen = requestId ? requests.get(`comment:${requestId}`) : undefined
+      if (seen) {
+        if (seen.body !== `${postId}:${body.trim()}`) throw new AppApiError('request_reused')
+        return seen.id
+      }
       live(postId)
       const id = `k${++n}`
       comments.push({ id, post: postId, author: meId, body: body.trim(), at: (clock += 1000), deleted: false })
+      if (requestId) requests.set(`comment:${requestId}`, { id, body: `${postId}:${body.trim()}` })
       return id
     },
     async deleteComment(id) {
@@ -313,6 +327,84 @@ describe('feed and posting', () => {
     expect(await screen.findByText('My first post')).toBeTruthy()
   })
 
+  it('sends a post once even if the form is submitted twice in the same tick', async () => {
+    const { api } = fakeApi()
+    const sent: string[] = []
+    const createPost = api.createPost.bind(api)
+    api.createPost = async (body, requestId) => {
+      sent.push(body)
+      return createPost(body, requestId)
+    }
+    renderApp('/app', api)
+    await screen.findByText('Your feed is quiet')
+    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Only once, please' } })
+    const form = screen.getByLabelText('Write a post').closest('form')!
+    // Both events land before React re-renders, as with a fast double click.
+    act(() => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    expect(await screen.findByTestId('post')).toBeTruthy()
+    expect(sent).toEqual(['Only once, please'])
+    expect(screen.getAllByTestId('post')).toHaveLength(1)
+  })
+
+  it('a retry after a lost answer reuses the request id, so the post is stored once', async () => {
+    const { api } = fakeApi()
+    const ids: string[] = []
+    const createPost = api.createPost.bind(api)
+    let loseNext = true
+    api.createPost = async (body, requestId) => {
+      ids.push(requestId ?? 'none')
+      const id = await createPost(body, requestId)
+      // The first time, the server stores the post but the answer never arrives.
+      if (loseNext) {
+        loseNext = false
+        throw new AppApiError('network')
+      }
+      return id
+    }
+    renderApp('/app', api)
+    await screen.findByText('Your feed is quiet')
+    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Sent on a bad connection' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    expect(await screen.findByText("We couldn't reach Splitpost. Check your connection and try again.")).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    await waitFor(() => expect(ids).toHaveLength(2))
+    expect(ids[0]).toMatch(/^[0-9a-f-]{36}$/)
+    expect(ids[1]).toBe(ids[0])
+    expect(await screen.findByTestId('post')).toBeTruthy()
+    expect(screen.getAllByTestId('post')).toHaveLength(1)
+  })
+
+  it('uses a new request id once the text changes after an error, and after each success', async () => {
+    const { api } = fakeApi()
+    const ids: string[] = []
+    const createPost = api.createPost.bind(api)
+    let failNext = true
+    api.createPost = async (body, requestId) => {
+      ids.push(requestId ?? 'none')
+      if (failNext) {
+        failNext = false
+        throw new AppApiError('network')
+      }
+      return createPost(body, requestId)
+    }
+    renderApp('/app', api)
+    await screen.findByText('Your feed is quiet')
+    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'First draft' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    await screen.findByText("We couldn't reach Splitpost. Check your connection and try again.")
+    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Second draft' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    await screen.findByText('Second draft')
+    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Another post' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    await screen.findByText('Another post')
+    expect(ids).toHaveLength(3)
+    expect(new Set(ids).size).toBe(3)
+  })
+
   it('shows posts from people you follow, newest first, and lets you delete only your own', async () => {
     const { api, seedPost, follows, key } = fakeApi()
     seedPost('c1', 'Older post from Creator 1')
@@ -398,6 +490,32 @@ describe('posts, comments and profiles', () => {
     expect(screen.getByLabelText('1 comments')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Delete comment' }))
     await waitFor(() => expect(screen.queryByText('Great point, thank you.')).toBeNull())
+  })
+
+  it('a comment retried after a lost answer is stored once', async () => {
+    const { api, seedPost } = fakeApi()
+    const id = seedPost('c1', 'Discuss this')
+    const ids: string[] = []
+    const addComment = api.addComment.bind(api)
+    let loseNext = true
+    api.addComment = async (postId, body, requestId) => {
+      ids.push(requestId ?? 'none')
+      const cid = await addComment(postId, body, requestId)
+      if (loseNext) {
+        loseNext = false
+        throw new AppApiError('network')
+      }
+      return cid
+    }
+    renderApp(`/app/post/${id}`, api)
+    await screen.findByText('No comments yet.')
+    fireEvent.change(screen.getByLabelText('Write a comment'), { target: { value: 'Worth saying once.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    await screen.findByText("We couldn't reach Splitpost. Check your connection and try again.")
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
+    await waitFor(() => expect(ids).toHaveLength(2))
+    expect(ids[1]).toBe(ids[0])
+    expect(await screen.findByLabelText('1 comments')).toBeTruthy()
   })
 
   it('a missing post or member says so plainly', async () => {
