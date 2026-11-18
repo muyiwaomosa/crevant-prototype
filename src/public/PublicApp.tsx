@@ -16,7 +16,7 @@ import { SetPasswordPage } from './auth/SetPasswordPage'
 import { AccountPage } from './auth/AccountPage'
 import { RequireAuth } from './auth/AuthUi'
 import { MemberArea } from '../app/MemberArea'
-import { AppNotFound, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from '../app/pages'
+import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from '../app/pages'
 
 /**
  * The public site, invited members' account pages and the members area
@@ -63,6 +63,7 @@ export function PublicRoutes() {
           <Route path="post/:id" element={<PostPage />} />
           <Route path="u/:username" element={<MemberPage />} />
           <Route path="clique" element={<CliquePage />} />
+          <Route path="catch-up/:username" element={<CatchUpPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="*" element={<AppNotFound />} />
         </Route>

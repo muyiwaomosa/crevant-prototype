@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
+import { ArrowLeft, Check, Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, Modal, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import { LIMITS, type Comment, type DiscoverMember, type FollowedCreator, type Member, type Me, type Post } from './api'
 import { useAppApi, useMyProfile } from './AppApiContext'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
+import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
 
 /** Loads data for a page, with loading and error states and a reload function. */
@@ -104,6 +105,7 @@ export function FeedPage() {
   return (
     <>
       <PageHeader title="Home" subtitle="Posts from people you follow, newest first." />
+      <UnseenStrip />
       <Card className="mb-4 p-4 sm:p-5">
         <TextComposer
           label="Write a post"
@@ -154,6 +156,184 @@ export function FeedPage() {
           loadOlder={(before) => api.feed(before)}
           onDeleted={(id) => feed.setData((d) => d?.filter((p) => p.id !== id))}
         />
+      )}
+    </>
+  )
+}
+
+/** "9+" above nine; the server caps counts at 10 (meaning more than 9). */
+export function unseenBadge(n: number) {
+  return n > 9 ? '9+' : String(n)
+}
+
+/**
+ * Unseen-first strip: followed creators with posts you haven't seen, My Clique
+ * first (marked with a ring), newest unseen first. Only creators with unseen
+ * posts appear. Opening one starts catch-up. The feed below stays chronological.
+ */
+function UnseenStrip() {
+  const api = useAppApi()
+  const strip = useLoad(() => api.unseenCreators(), [api])
+  // Refresh a moment after views are recorded (at most every 2 seconds).
+  const refresh = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useViewsSent(() => {
+    if (refresh.current) return
+    refresh.current = setTimeout(() => {
+      refresh.current = null
+      void strip.reload()
+    }, 2000)
+  })
+  useEffect(() => () => {
+    if (refresh.current) clearTimeout(refresh.current)
+  }, [])
+  // The strip is optional: while loading, on error or when empty it takes no space.
+  if (!strip.data || strip.data.length === 0) return null
+  return (
+    <section aria-labelledby="unseen-title" className="mb-4">
+      <h2 id="unseen-title" className="mb-2 text-sm font-semibold text-ink-700">
+        Catch up
+      </h2>
+      <ul className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:px-0">
+        {strip.data.map((c) => {
+          const count = c.unseenCount > 9 ? 'more than 9' : String(c.unseenCount)
+          return (
+            <li key={c.id} className="shrink-0">
+              <Link
+                to={`/app/catch-up/${c.username}`}
+                aria-label={`Catch up with ${c.displayName}${c.inMyClique ? ' (in your Clique)' : ''}: ${count} unseen ${c.unseenCount === 1 ? 'post' : 'posts'}`}
+                className="flex w-[68px] flex-col items-center gap-1 rounded-2xl py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
+              >
+                <span className="relative">
+                  <span className={`block rounded-full p-[2px] ${c.inMyClique ? 'bg-brand-600' : 'bg-ink-200'}`}>
+                    <span className="block rounded-full bg-paper p-[2px]">
+                      <MemberAvatar member={c} size={52} />
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    data-testid="unseen-badge"
+                    className="absolute -right-1 -top-1 min-w-[22px] rounded-full bg-[#c2372b] px-1.5 text-center text-[12px] font-bold leading-[22px] text-white ring-2 ring-paper"
+                  >
+                    {unseenBadge(c.unseenCount)}
+                  </span>
+                </span>
+                <span aria-hidden="true" className="w-full truncate text-center text-[12px] text-ink-700">
+                  {c.displayName}
+                </span>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Catch-up: one creator's unseen posts, oldest first, 20 at a time.
+
+export function CatchUpPage() {
+  const api = useAppApi()
+  const { username = '' } = useParams()
+  const member = useLoad(() => api.member(username), [api, username])
+  const m = member.data
+  const [posts, setPosts] = useState<Post[] | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [hasEarlier, setHasEarlier] = useState(false)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
+
+  useEffect(() => {
+    if (!m) return
+    let live = true
+    setPosts(null)
+    setError(null)
+    api
+      .catchUp(m.id)
+      .then((p) => {
+        if (!live) return
+        setPosts(p)
+        setHasEarlier(p.length === 20)
+      })
+      .catch((e) => live && setError(e))
+    return () => {
+      live = false
+    }
+  }, [api, m])
+
+  async function showEarlier() {
+    if (!m || !posts || posts.length === 0 || loadingEarlier) return
+    setLoadingEarlier(true)
+    setError(null)
+    try {
+      const oldest = posts[0]
+      const earlier = await api.catchUp(m.id, { createdAt: oldest.createdAt, id: oldest.id })
+      const known = new Set(posts.map((p) => p.id))
+      setPosts([...earlier.filter((p) => !known.has(p.id)), ...posts])
+      setHasEarlier(earlier.length === 20)
+    } catch (e) {
+      setError(e)
+    } finally {
+      setLoadingEarlier(false)
+    }
+  }
+
+  if (member.loading && member.data === undefined) return <Loading label="Loading…" />
+  if (member.error !== null) return <ErrorNote error={member.error} />
+  if (!m) return <NotFoundPanel what="This member" />
+  return (
+    <>
+      <Link to="/app" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-700">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Home
+      </Link>
+      <div className="mb-4 flex items-center gap-3">
+        <MemberAvatar member={m} size={48} />
+        <div className="min-w-0">
+          <h1 className="truncate font-display text-xl font-extrabold text-ink-900">Catching up with {m.displayName}</h1>
+          <p className="text-sm text-ink-600">Unseen posts, oldest first. They're marked as seen as you read them.</p>
+        </div>
+      </div>
+      {posts === null && error === null && <Loading label="Loading unseen posts…" />}
+      {error !== null && <ErrorNote error={error} />}
+      {posts && posts.length === 0 && (
+        <EmptyState
+          icon={<Check className="h-7 w-7" />}
+          title="You're all caught up"
+          body={m.followedByMe || m.isMe ? `Nothing new from ${m.displayName}.` : `Follow ${m.displayName} to catch up on their new posts.`}
+          action={
+            <Link to={`/app/u/${m.username}`} className={buttonClass('secondary')}>
+              See {m.displayName}'s profile
+            </Link>
+          }
+        />
+      )}
+      {posts && posts.length > 0 && (
+        <>
+          {hasEarlier && (
+            <div className="mb-3 text-center">
+              <button type="button" onClick={showEarlier} disabled={loadingEarlier} className={buttonClass('secondary', 'sm')}>
+                {loadingEarlier ? 'Loading…' : 'Show earlier unseen posts'}
+              </button>
+            </div>
+          )}
+          <ul className="space-y-3">
+            {posts.map((p) => (
+              <li key={p.id}>
+                <PostItem post={p} />
+              </li>
+            ))}
+          </ul>
+          <Card className="mt-4 p-5 text-center">
+            <p className="font-semibold text-ink-900">That's everything new from {m.displayName}</p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Link to="/app" className={buttonClass('primary', 'sm')}>
+                Back to Home
+              </Link>
+              <Link to={`/app/u/${m.username}`} className={buttonClass('secondary', 'sm')}>
+                See profile
+              </Link>
+            </div>
+          </Card>
+        </>
       )}
     </>
   )

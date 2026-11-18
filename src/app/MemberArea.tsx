@@ -7,6 +7,7 @@ import { buttonClass } from '../components/ui'
 import { useAuth } from '../auth/AuthProvider'
 import { AuthCard, Field, Message, Spinner } from '../public/auth/AuthUi'
 import { AppApiProvider, ProfileProvider, useAppApi, useProfileGate } from './AppApiContext'
+import { ViewTrackerProvider } from './ViewTracker'
 import { displayNameProblem, messageFor, usernameProblem, type AppApi } from './api'
 
 /**
@@ -49,7 +50,9 @@ function Gate() {
   if (status.kind === 'incomplete') return <SetupProfile onSaved={reload} createdAt={status.profile.createdAt} />
   return (
     <ProfileProvider value={{ profile: status.profile, refresh: reload }}>
-      <MemberLayout username={status.profile.username} />
+      <ViewTrackerProvider userId={status.profile.id}>
+        <MemberLayout username={status.profile.username} />
+      </ViewTrackerProvider>
     </ProfileProvider>
   )
 }

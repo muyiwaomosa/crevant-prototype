@@ -79,6 +79,17 @@ export interface Me {
   postCount: number
 }
 
+/** A followed creator with posts the member hasn't seen (the Unseen-first strip). */
+export interface UnseenCreator extends MemberSummary {
+  inMyClique: boolean
+  /** Capped at 10 by the server: 10 means "more than 9" (shown as 9+). */
+  unseenCount: number
+  latestUnseenAt: string
+}
+
+/** How a view was observed: text and images 50% visible for 2 s; video 3 s of playback or completion. */
+export type ViewBasis = 'visible' | 'played'
+
 /** The member's own profile row (Phase 1A own-row read), used to decide whether setup is needed. */
 export type OwnProfile = { id: string; createdAt: string; username: string | null; displayName: string | null }
 
@@ -107,6 +118,12 @@ export interface AppApi {
   /** requestId: as for createPost. */
   addComment(postId: string, body: string, requestId?: string): Promise<string>
   deleteComment(id: string): Promise<void>
+  /** Unseen-first strip: followed creators with unseen posts, My Clique first. */
+  unseenCreators(): Promise<UnseenCreator[]>
+  /** Up to 20 of a creator's most recent unseen posts, oldest first. `before` pages to older ones. */
+  catchUp(creatorId: string, before?: { createdAt: string; id: string }): Promise<Post[]>
+  /** Records posts the member has viewed (at most 50 per call). A UX signal only, never a reward. */
+  markViewed(postIds: string[], basis: ViewBasis): Promise<number>
 }
 
 /** Limits that match the database, so people hear about problems before sending. */
@@ -158,6 +175,8 @@ const MESSAGES: Record<string, string> = {
   not_in_clique: 'That creator is no longer in your Clique. Nothing was changed.',
   already_in_clique: 'That creator is already in your Clique. Nothing was changed.',
   rate_limited: "You're going a little fast. Please wait a moment and try again.",
+  too_many: 'Something went wrong. Please try again.',
+  invalid_request: 'Something went wrong. Please try again.',
   request_reused: 'Something changed while sending. Please try again.',
   not_found: "That's no longer available.",
   username_taken: 'That username is taken. Please choose another.',
@@ -363,6 +382,26 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         ? writeOnce<string>('app_add_comment', { p_post: postId, p_body: body, p_request_id: requestId }, { p_post: postId, p_body: body })
         : rpc<string>('app_add_comment', { p_post: postId, p_body: body }),
     deleteComment: (id) => rpc<void>('app_delete_comment', { p_comment: id }),
+    async unseenCreators() {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_unseen_creators')
+      return rows.map((r) => ({
+        id: String(r.id),
+        username: String(r.username),
+        displayName: String(r.display_name),
+        inMyClique: Boolean(r.in_my_clique),
+        unseenCount: num(r.unseen_count as number),
+        latestUnseenAt: String(r.latest_unseen_at),
+      }))
+    },
+    async catchUp(creatorId, before) {
+      const rows = await rpc<PostRow[]>('app_catch_up', {
+        p_creator: creatorId,
+        p_before_at: before?.createdAt ?? null,
+        p_before_id: before?.id ?? null,
+      })
+      return rows.map(toPost)
+    },
+    markViewed: (postIds, basis) => rpc<number>('app_mark_viewed', { p_posts: postIds, p_basis: basis }),
   }
 }
 

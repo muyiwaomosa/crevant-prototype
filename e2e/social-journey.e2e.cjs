@@ -234,6 +234,40 @@ async function signInAndSetUp(page, email, username, displayName) {
   const appStorage = await pageB.evaluate(() => Object.keys(localStorage).filter((k) => !/^sb-/.test(k)))
   check('no social data is kept in browser storage', appStorage.length === 0, appStorage.join(','))
 
+  // 4b. Unseen-first: A posts after B followed, so B sees A in the catch-up
+  //     strip, opens catch-up, reads the post (2 s on screen, then the batch
+  //     is sent), and the strip empties. The feed stays chronological.
+  {
+    const unseenText = `Something new for catch-up (${RUN})`
+    sql(`insert into social.posts (author_id, body) values ('${idA}', '${unseenText}')`)
+    await pageB.goto(`${APP}/app`)
+    const strip = pageB.getByRole('region', { name: 'Catch up' })
+    await strip.waitFor()
+    const link = strip.getByRole('link', { name: 'Catch up with Aye Teacher (in your Clique): 1 unseen post' })
+    check('a followed creator with a new post appears in the catch-up strip, marked as in your Clique, with a count of 1', await link.isVisible())
+    check('the post published before the follow is not unseen', (await strip.getByRole('link').count()) === 1)
+    check('the Home feed stays chronological: the newest post first', ((await pageB.getByTestId('post').first().textContent()) || '').includes(unseenText))
+    const desktop = pageB.viewportSize()
+    for (const width of [390, 320]) {
+      await pageB.setViewportSize({ width, height: 760 })
+      const sideways = await pageB.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      check(`at ${width}px, Home with the catch-up strip has no sideways scrolling`, sideways <= 0, `${sideways}px`)
+      await pageB.screenshot({ path: `${process.env.SCREENSHOT_DIR || '/tmp'}/unseen-strip-${width}.png` })
+    }
+    if (desktop) await pageB.setViewportSize(desktop)
+    await link.click()
+    await pageB.getByRole('heading', { name: 'Catching up with Aye Teacher' }).waitFor()
+    await pageB.getByTestId('post').filter({ hasText: unseenText }).waitFor()
+    const recorded = async () => sql(`select count(*) from social.post_views v join social.posts s on s.id = v.post_id where v.viewer_id = '${idB}' and s.body = '${unseenText}'`)
+    for (let i = 0; i < 40 && (await recorded()) !== '1'; i++) await pageB.waitForTimeout(500)
+    check('reading a post in catch-up records it as viewed, once', (await recorded()) === '1', `rows: ${await recorded()}`)
+    check('your own posts are never recorded as viewed', sql(`select count(*) from social.post_views v join social.posts s on s.id = v.post_id where v.viewer_id = s.author_id`) === '0')
+    await pageB.getByRole('link', { name: 'Back to Home' }).click()
+    await pageB.getByTestId('post').first().waitFor()
+    await pageB.waitForTimeout(500)
+    check('after reading, the creator leaves the catch-up strip', (await pageB.getByRole('region', { name: 'Catch up' }).count()) === 0)
+  }
+
   // 5. Following is unlimited; My Clique holds at most 25. The database
   //    refuses a 26th even through the API, and at 25 the page offers an
   //    atomic replacement instead.
@@ -329,9 +363,10 @@ async function signInAndSetUp(page, email, username, displayName) {
   await pageA.goto(`${APP}/app/u/${userA}`)
   await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
   check('A sees one comment on their post', await pageA.getByRole('link', { name: 'Comments (1)' }).isVisible())
-  await pageA.getByRole('button', { name: 'Delete post' }).click()
-  await pageA.getByRole('button', { name: 'Delete', exact: true }).click()
-  await pageA.getByText(`You haven't posted yet.`).waitFor()
+  const postCard = pageA.getByTestId('post').filter({ hasText: postText })
+  await postCard.getByRole('button', { name: 'Delete post' }).click()
+  await postCard.getByRole('button', { name: 'Delete', exact: true }).click()
+  await postCard.waitFor({ state: 'detached' })
   check('A deleted their post (kept as deleted, never shown)', sql(`select count(*) from social.posts where author_id = '${idA}' and deleted_at is not null`) === '1')
 
   // 7b. Publishing reliability (issue #48): a double click, and a retry after
@@ -415,6 +450,10 @@ async function signInAndSetUp(page, email, username, displayName) {
       const discoverClipped = await page.evaluate(() => [...document.querySelectorAll('main button, main a')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.left < 0 || r.right > document.documentElement.clientWidth) }).length)
       check(`at ${width}px, Discover has no sideways scrolling or clipped controls`, discoverSideways <= 0 && discoverClipped === 0, `${discoverSideways}px, ${discoverClipped} clipped`)
       await page.screenshot({ path: `${process.env.SCREENSHOT_DIR || '/tmp'}/discover-${width}.png`, fullPage: false })
+      await page.goto(`${APP}/app/catch-up/${userA}`)
+      await page.getByRole('heading', { name: 'Catching up with Aye Teacher' }).waitFor()
+      const catchUpSideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      check(`at ${width}px, the catch-up page has no sideways scrolling`, catchUpSideways <= 0, `${catchUpSideways}px`)
       await page.goto(`${APP}/app/clique`)
       await page.getByRole('region', { name: 'Following' }).waitFor()
       const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
