@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { PublicLayout } from '../PublicLayout'
 import { readAcquisition, readWaitlistConfig } from './config'
 import { WaitlistForm } from './WaitlistForm'
 import { JoinPage } from '../JoinPage'
@@ -221,6 +222,55 @@ describe('waitlist form', () => {
       const h = await screen.findByRole('heading', { level: 1, name: "You're on the list!" })
       expect(document.activeElement).toBe(h)
       expect(h.getAttribute('tabindex')).toBe('-1')
+    })
+
+    it("hides the header's waitlist button only while the success screen shows, keeping the logo, navigation and footer", async () => {
+      window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
+      render(
+        <MemoryRouter initialEntries={['/join']}>
+          <Routes>
+            <Route element={<PublicLayout />}>
+              <Route index element={<p>Home page</p>} />
+              <Route path="join" element={<JoinPage env={{ ...ENV, VITE_PRIVACY_NOTICE_VERSION: '1.0' }} mount={mount} fetchImpl={respond('ok') as unknown as typeof fetch} />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>,
+      )
+      const footerJoin = () => screen.getByRole('navigation', { name: 'Footer' }).querySelector('a[href="/join"]')
+      // The normal /join page keeps the header button.
+      expect(screen.getByTestId('header-waitlist-cta')).toBeTruthy()
+      fillRequired()
+      await tokenReady()
+      submit()
+      await screen.findByRole('heading', { level: 1, name: "You're on the list!" })
+      // Already gone when the heading appears: no frame shows both.
+      expect(screen.queryByTestId('header-waitlist-cta')).toBeNull()
+      expect(screen.getByRole('link', { name: 'Splitpost home' })).toBeTruthy()
+      expect(screen.getByRole('navigation', { name: 'Site' })).toBeTruthy()
+      expect(footerJoin()).toBeTruthy()
+      expect(document.activeElement?.textContent).toBe("You're on the list!")
+      // Leaving the success screen brings it back.
+      fireEvent.click(screen.getByRole('link', { name: 'Explore Splitpost' }))
+      await screen.findByText('Home page')
+      expect(screen.getByTestId('header-waitlist-cta')).toBeTruthy()
+    })
+
+    it('keeps the header button while a failed attempt leaves the form on screen', async () => {
+      window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
+      render(
+        <MemoryRouter initialEntries={['/join']}>
+          <Routes>
+            <Route element={<PublicLayout />}>
+              <Route path="join" element={<JoinPage env={{ ...ENV, VITE_PRIVACY_NOTICE_VERSION: '1.0' }} mount={mount} fetchImpl={respond('verification_failed', 400) as unknown as typeof fetch} />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>,
+      )
+      fillRequired()
+      await tokenReady()
+      submit()
+      await waitFor(() => expect(document.querySelector('[aria-live="polite"]')?.textContent).not.toBe(''))
+      expect(screen.getByTestId('header-waitlist-cta')).toBeTruthy()
     })
 
     it('shows the same screen for a repeat signup, which the server also answers ok', async () => {

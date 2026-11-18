@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useLayoutEffect, useState } from 'react'
+import { Link, useOutletContext } from 'react-router-dom'
+import type { PublicLayoutContext } from './PublicLayout'
 import { ArrowLeft, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
 import { DISCOVER_PATH } from '../entry'
@@ -34,6 +35,16 @@ export function JoinPage({
 }) {
   const waitlist = readWaitlistConfig(env)
   const [joined, setJoined] = useState(false)
+  // While the success screen is shown, the shared header hides its waitlist
+  // button: the visitor has just joined. Restored when leaving the page. A
+  // layout effect, so the header changes before the browser paints the screen.
+  const layout = useOutletContext<PublicLayoutContext | undefined>()
+  const setHeaderCtaHidden = layout?.setHeaderCtaHidden
+  useLayoutEffect(() => {
+    if (!joined || !setHeaderCtaHidden) return
+    setHeaderCtaHidden(true)
+    return () => setHeaderCtaHidden(false)
+  }, [joined, setHeaderCtaHidden])
   // After a confirmed signup the success screen replaces the whole page, so its
   // one action is the only one here.
   if (joined) {
