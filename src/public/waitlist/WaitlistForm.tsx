@@ -4,6 +4,7 @@ import { buttonClass } from '../../components/ui'
 import { readAcquisition, type WaitlistConfig } from './config'
 import { mountTurnstile, type MountTurnstile, type TurnstileWidget } from './turnstile'
 import { PRIVACY_CONTACT } from '../privacy/contact'
+import { JoinSuccess } from './JoinSuccess'
 
 // The unified waitlist form. Rendered only when readWaitlistConfig() returns a
 // configuration, which needs the approved privacy notice (docs/WAITLIST.md).
@@ -55,11 +56,14 @@ export function WaitlistForm({
   mount = mountTurnstile,
   fetchImpl = (...a: Parameters<typeof fetch>) => fetch(...a),
   search = typeof window !== 'undefined' ? window.location.search : '',
+  onSuccess,
 }: {
   config: WaitlistConfig
   mount?: MountTurnstile
   fetchImpl?: typeof fetch
   search?: string
+  /** Called once the server confirms the signup ('ok'). The page then shows the success screen in place of everything. */
+  onSuccess?: () => void
 }) {
   const [email, setEmail] = useState('')
   const [interests, setInterests] = useState<string[]>([])
@@ -141,6 +145,7 @@ export function WaitlistForm({
       next = 'error'
     }
     setOutcome(next)
+    if (next === 'ok') onSuccess?.()
     if (next !== 'ok') {
       // A Turnstile token works once: get a fresh one for the next try.
       setToken(null)
@@ -148,23 +153,10 @@ export function WaitlistForm({
     }
   }
 
-  if (outcome === 'ok') {
-    return (
-      <div data-testid="waitlist-success" role="status" className="mt-8 rounded-3xl bg-brand-50 p-6 ring-1 ring-brand-100">
-        <p className="font-display text-xl font-bold text-ink-900">Thanks, you're on the waitlist.</p>
-        <p className="mt-2 leading-relaxed text-ink-600">
-          We're inviting people in small groups as we build and test the platform. If there's a place for you, we'll email you an invitation.
-        </p>
-        <p data-testid="waitlist-leave" className="mt-2 leading-relaxed text-ink-600">
-          Changed your mind? Email{' '}
-          <a href={`mailto:${PRIVACY_CONTACT}`} className="font-semibold text-brand-700 underline underline-offset-2">
-            {PRIVACY_CONTACT}
-          </a>{' '}
-          from this address and we'll delete your details.
-        </p>
-      </div>
-    )
-  }
+  // Only after the server confirmed the signup (a repeat signup also answers
+  // 'ok'). With onSuccess the page swaps in the success screen; on its own the
+  // form shows it in its place.
+  if (outcome === 'ok') return onSuccess ? null : <JoinSuccess />
 
   const field = 'mt-1.5 block w-full rounded-2xl border border-ink-200 bg-white px-4 py-3 text-base text-ink-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200'
   const err = (id: keyof Errors) =>
