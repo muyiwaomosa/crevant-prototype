@@ -136,6 +136,14 @@ begin
   perform pg_temp.expect_error_vs('select public.app_mark_viewed(array[gen_random_uuid()], ''liked'')', 'invalid_request', 'an unknown basis');
   perform pg_temp.expect_error_vs('select public.app_mark_viewed(array[gen_random_uuid()], null)', 'invalid_request', 'a null basis');
   perform pg_temp.expect_error_vs('select public.app_mark_viewed(array(select gen_random_uuid() from generate_series(1, 51)))', 'too_many', '51 ids in one batch');
+  -- The limit counts the request as sent: repeats and nulls don't get around it.
+  perform pg_temp.expect_error_vs(format('select public.app_mark_viewed(array_fill(%L::uuid, array[51]))', a10), 'too_many', '51 copies of one id');
+  perform pg_temp.expect_error_vs(format('select public.app_mark_viewed(array_fill(%L::uuid, array[30]) || array_fill(null::uuid, array[21]))', a11), 'too_many', '30 repeats and 21 nulls');
+  perform pg_temp.expect_error_vs(format('select public.app_mark_viewed(array_fill(%L::uuid, array[1000]))', a12), 'too_many', '1,000 copies of one id');
+  -- Exactly 50 entries, all repeats of already-viewed posts, is within the limit and records nothing.
+  if public.app_mark_viewed(array_fill(a10, array[50])) <> 0 then
+    raise exception 'FAIL: 50 repeats of a viewed post should be accepted and record nothing';
+  end if;
   -- 50 distinct ids is allowed (all missing here, so nothing recorded).
   if public.app_mark_viewed(array(select gen_random_uuid() from generate_series(1, 50))) <> 0 then
     raise exception 'FAIL: a batch of 50 missing ids should record nothing';
@@ -145,7 +153,7 @@ begin
     raise exception 'FAIL: after viewing three of A''s posts the strip is %', pg_temp.strip();
   end if;
   raise notice 'PASS: each post is recorded once per member; repeats, own, missing and null ids are ignored';
-  raise notice 'PASS: a batch is limited to 50 ids and the basis must be visible or played';
+  raise notice 'PASS: a batch is limited to 50 ids as sent (repeats and nulls count), and the basis must be visible or played';
 end $$;
 commit;
 

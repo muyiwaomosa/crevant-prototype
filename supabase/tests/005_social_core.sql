@@ -167,7 +167,7 @@ begin
                  and tgrelid = 'social.post_views'::regclass and tgenabled <> 'D') then
     raise exception 'FAIL: viewed state is not protected from being rewritten';
   end if;
-  if pg_catalog.strpos(src, 'cardinality(v_ids) > 50') = 0 or pg_catalog.strpos(src, 'v_recent + v_new > 3000') = 0
+  if pg_catalog.strpos(src, 'cardinality(coalesce(p_posts, ''{}'')) > 50') = 0 or pg_catalog.strpos(src, 'v_recent + v_new > 3000') = 0
      or pg_catalog.strpos(src, 'pg_advisory_xact_lock') = 0 or pg_catalog.strpos(src, 'on conflict (viewer_id, post_id) do nothing') = 0 then
     raise exception 'FAIL: app_mark_viewed lost its batch cap, hourly cap, lock or duplicate guard';
   end if;

@@ -19,7 +19,8 @@
 --     Kept across unfollow and refollow.
 --
 --   public.app_mark_viewed(p_posts uuid[], p_basis text) -> integer
---     Records views for the caller: at most 50 ids per call, own and deleted
+--     Records views for the caller: at most 50 ids per call (counted as sent,
+--     including repeats and nulls), own and deleted
 --     or missing posts ignored, repeats ignored. Posts by creators the member
 --     doesn't follow are recorded too. At most 3,000 new rows per member per
 --     rolling hour; a batch that would go past it is refused and writes
@@ -100,12 +101,14 @@ begin
   if p_basis is null or p_basis not in ('visible', 'played') then
     raise exception 'invalid_request' using errcode = 'P0001';
   end if;
+  -- The 50-id limit applies to the request as sent, before repeats and nulls
+  -- are removed, so an oversized request is refused however it is padded.
+  if cardinality(coalesce(p_posts, '{}')) > 50 then
+    raise exception 'too_many' using errcode = 'P0001';
+  end if;
   select coalesce(array_agg(distinct x), '{}') into v_ids from unnest(coalesce(p_posts, '{}')) as x where x is not null;
   if cardinality(v_ids) = 0 then
     return 0;
-  end if;
-  if cardinality(v_ids) > 50 then
-    raise exception 'too_many' using errcode = 'P0001';
   end if;
 
   -- One batch at a time per member, so the hourly count and the insert are a

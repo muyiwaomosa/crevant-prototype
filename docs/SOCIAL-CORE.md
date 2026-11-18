@@ -207,7 +207,7 @@ points, money or reward data, or if anything outside the social core reads it.
 | Object | Behaviour |
 | --- | --- |
 | `social.post_views (viewer_id, post_id, viewed_at, basis)` | One row per member and post, ever (primary key). `viewed_at` is the server time of the first report; `basis` is `visible` or `played`. Rows are never rewritten or deleted directly (a trigger refuses); they go only with the member's account or the post. Kept across unfollow and refollow. Private: no member access, no policies. |
-| `app_mark_viewed(p_posts uuid[], p_basis text)` | Records views for the caller. At most 50 ids per call (`too_many`). Own, deleted and missing posts, nulls and repeats are ignored. Posts by creators the member doesn't follow are recorded too. At most 3,000 new rows per member per rolling hour: a batch that would go past it is refused (`rate_limited`) and writes nothing. A per-member advisory lock makes the count and the insert one step, so simultaneous batches can't exceed the cap or duplicate rows. Returns how many were new. |
+| `app_mark_viewed(p_posts uuid[], p_basis text)` | Records views for the caller. At most 50 ids per call (`too_many`), counted as sent, before repeats and nulls are removed, so padding a request with repeats can't get around it. Own, deleted and missing posts, nulls and repeats are ignored. Posts by creators the member doesn't follow are recorded too. At most 3,000 new rows per member per rolling hour: a batch that would go past it is refused (`rate_limited`) and writes nothing. A per-member advisory lock makes the count and the insert one step, so simultaneous batches can't exceed the cap or duplicate rows. Returns how many were new. |
 | `app_unseen_creators()` | The Unseen-first strip: followed creators with at least one unseen post, meaning published at or after the member's **current** follow date, not deleted, not viewed. `unseen_count` is capped at 10 (shown as 9+). My Clique creators first, then other followed creators; within each, newest unseen post first. Creators with nothing unseen are not returned. |
 | `app_catch_up(p_creator, p_before_at, p_before_id)` | Up to 20 of that creator's most recent unseen posts, returned oldest first, in the feed's shape. Older batches: pass the oldest returned post's `created_at` and `id`. Paging is a keyset on `(created_at, id)`, so equal timestamps never skip or repeat a post. Read-only: it never marks posts viewed. Returns nothing for creators the member doesn't follow. |
 
@@ -217,24 +217,36 @@ because Home and catch-up both record through `app_mark_viewed`.
 **Unfollow and refollow.** Refollowing resets the unseen baseline to the new
 follow date, so posts from before it are not unseen. Earlier views are kept.
 
-**Performance** (`scripts/db/viewed-state-plan-test.sh`, run in CI). It captures
-the real plans of the statements inside the functions with `auto_explain`, at
-a pilot-scale dataset: a fan following 1,000 creators, 50,000 posts, about
-30,000 of the fan's views and 100,000 views by others. It fails on any
-sequential scan of `posts` or `post_views`, or on slow results. Measured
-locally:
+**Performance** (`scripts/db/viewed-state-plan-test.sh`, run in CI). It
+captures the statements run inside the functions with `auto_explain`, as a
+member runs them. Timings are PostgreSQL's own duration for the function's
+main query: the median of three runs after a warm-up, with per-node timing
+off so instrumentation doesn't inflate them. Recording runs use fresh posts
+each time, so they time real inserts. It fails on any sequential scan of
+`posts` or `post_views`, or on a time limit.
 
-| Query | Plan | Time |
-| --- | --- | --- |
-| The strip (1,000 followed creators) | per creator: `posts_live_by_author` index, anti-join on `post_views_pkey`, top 10 | about 124 ms |
-| A catch-up batch, and the next batch (keyset) | the same indexes, creator's posts since the follow only | 1 to 2 ms |
-| Recording 50 views | `posts_pkey`, `post_views_pkey`, `post_views_by_viewer_time` | about 1 ms |
+| Scenario | Query | Plan | Server time (limit) |
+| --- | --- | --- | --- |
+| A: a fan following 1,000 creators, 50 posts each, 60% viewed, plus 100,000 others' views | The strip | per creator: newest-first scan of `posts_live_by_author`, anti-join on `post_views_pkey`, stopping at 10 unseen (about 25 posts read per creator) | about 89 ms (500) |
+| B: a fan following 200 very active creators, 500 posts each, 95% viewed | The strip | the same plan, about 213 posts read per creator (42,500 lookups) | about 92 ms (1,000) |
+| A | A catch-up batch, the next batch (keyset) | the creator's posts since the follow, `post_views_pkey` | under 1 ms (50) |
+| B | A catch-up batch (500 posts, 95% viewed) | as above, 500 posts read | about 2.4 ms (50) |
+| A | Recording 50 new views | `posts_pkey`, `post_views_pkey`, `post_views_by_viewer_time` | about 5 ms (100) |
 
-The strip reads every post each followed creator published since the follow
-(not only 10), so its cost grows with how much followed creators post and
-how few of those posts the fan has viewed. At pilot scale this is small. If
-it grows, the forward fixes are a lookback window (for example, the last 30
-days) or a cached per-fan count, each its own reviewed migration.
+**Scaling limitation (recorded, not addressed now).** For each followed
+creator, the strip reads that creator's posts since the follow, newest first,
+until it has found 10 unseen posts or run out. So the cost follows how many
+**already-viewed** posts sit on top of the unseen ones: about 2 microseconds
+per post read here. A creator with nothing unseen is read back to the follow
+date every time the strip loads. Rough projections from the measured rate:
+
+* 200 creators with 500 viewed posts each: about 0.2 s;
+* 1,000 creators with 500 viewed posts each: about 1 s.
+
+That's comfortable for the private pilot, where a member follows tens of
+creators with tens of posts. If real use approaches the projections, the
+forward fixes are a lookback window (for example, the last 30 days) or a
+cached per-fan count, each its own reviewed migration. Neither is built now.
 
 **How the app limits requests (built with the member experience):**
 * qualifying ids queue in memory, and a batch is sent at 10 ids, 5 seconds
@@ -276,6 +288,8 @@ migration, never by deleting views:
   * views of creators you don't follow;
   * refollow resetting the baseline while keeping views;
   * isolation between members;
+  * the 50-id limit counted as sent (51 copies of one id, 30 repeats plus 21
+    nulls, and 1,000 copies are all refused; exactly 50 is accepted);
   * the hourly cap at its exact boundary, with refusals writing nothing and
     the one-hour window;
   * permanence, and account deletion.
