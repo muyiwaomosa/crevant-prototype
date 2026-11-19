@@ -1,3 +1,4 @@
+import { ArrowDown } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
 import { FUTURE_MOSAIC } from '../photos'
 import { Photo } from '../ui/Photo'
@@ -12,6 +13,10 @@ const copy = HOMEPAGE_COPY.future
  * filming), across ages, genders and kinds of creating. Aspirational but
  * realistic: no money, luxury or "made it" imagery, and the approved wording
  * beside it. Licensed stock photos of models, pending the founder's approval.
+ *
+ * It ends with the transition into How Splitpost Works, "What if the split
+ * worked differently?", moved here from The Problem with its styling and arrow
+ * unchanged (founder decision, 2026-11-19).
  */
 export function Future() {
   return (
@@ -39,12 +44,18 @@ export function Future() {
           ))}
         </div>
       </div>
-      <div className="px-4 pb-20 pt-6 sm:px-6 sm:pb-24">
+      <div className="px-4 pb-14 pt-6 sm:px-6">
         <p data-testid="future-closing" className="mx-auto max-w-4xl text-balance text-center font-sp-display text-[clamp(1.8rem,5.6vw,3rem)] font-black leading-[1.05] tracking-[-0.01em] text-sp-primary [font-stretch:104%]">
           {copy.closing}
         </p>
         <p data-testid="future-signal" className="mx-auto mt-5 max-w-2xl text-center text-[1.1rem] font-semibold sm:text-xl">
           {copy.signal}
+        </p>
+      </div>
+      <div className="mx-auto max-w-6xl px-4 pb-20 sm:px-6 sm:pb-24 lg:pb-28">
+        <p data-testid="future-transition" className="flex items-center gap-4 font-sp-display text-[clamp(1.6rem,5vw,2.5rem)] font-black leading-tight tracking-[-0.01em] [font-stretch:104%]">
+          <span>{copy.transition}</span>
+          <ArrowDown aria-hidden="true" className="h-8 w-8 shrink-0 text-sp-accent-text" />
         </p>
       </div>
     </section>

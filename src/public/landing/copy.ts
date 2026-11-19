@@ -8,13 +8,18 @@
 // founder's approval. Design and layout may change; the words may not.
 //
 // Six sections, in order:
-//   HERO, THE PROBLEM, HOW SPLITPOST WORKS, THE PEOPLE BEHIND THE POSTS,
-//   A BETTER FUTURE FOR CREATORS, THE INVITATION.
+//   HERO (HOOK), THE PROBLEM (WHY), THE PEOPLE BEHIND THE POSTS (WHO),
+//   A BETTER FUTURE FOR CREATORS (WHERE), HOW SPLITPOST WORKS (HOW),
+//   THE INVITATION (CTA).
 //
 // Revision history (all founder-approved, 2026-11-18): The Vision was merged
 // into How Splitpost Works ("modified Option B"); then Sections 2 to 5 were
 // replaced with the founder's revised wording, with the specific removals
-// the founder decided. docs/website-brief.md records every change.
+// the founder decided. Then (2026-11-19) the sections were put in story
+// order, HOOK, WHY, WHO, WHERE, HOW, CTA, and the transition line "What if
+// the split worked differently?" moved from the end of The Problem to the
+// end of A Better Future for Creators, just before How Splitpost Works.
+// docs/website-brief.md records every change.
 //
 // The pilot disclosures (PILOT_DISCLOSURES) are the founder's approved
 // wording for the 60-day pilot, where fan rewards are simulated.
@@ -72,7 +77,6 @@ export const HOMEPAGE_COPY = {
       'You create the content. Your fans help it grow. The platforms make money.',
       "But shouldn't more of that value come back to the people who helped create it?",
     ],
-    transition: 'What if the split worked differently?',
   },
 
   /** How Splitpost Works (founder-approved revision, 2026-11-18). */
@@ -162,6 +166,8 @@ export const HOMEPAGE_COPY = {
     closing: 'More than followers. More opportunities to build a future doing what you love.',
     /** The last line, after the closing. */
     signal: 'This is the future Splitpost is working toward.',
+    /** The transition into How Splitpost Works, after the signal (moved from The Problem, founder decision 2026-11-19). */
+    transition: 'What if the split worked differently?',
   },
 
   invitation: {
@@ -221,7 +227,7 @@ export const SITE_NAV = {
   how: 'How It Works',
 } as const
 
-export type SectionKey = 'hero' | 'problem' | 'howItWorks' | 'people' | 'future' | 'invitation'
+export type SectionKey = 'hero' | 'problem' | 'people' | 'future' | 'howItWorks' | 'invitation'
 
 /** The section's approved lines, in the brief's order (labels excluded), for the word-for-word check. */
 export function briefLines(key: SectionKey): string[] {
@@ -230,7 +236,7 @@ export function briefLines(key: SectionKey): string[] {
     case 'hero':
       return [c.hero.headline, ...c.hero.body, c.hero.cta]
     case 'problem':
-      return [c.problem.headline, ...c.problem.body, c.problem.transition]
+      return [c.problem.headline, ...c.problem.body]
     case 'howItWorks':
       return [c.howItWorks.eyebrow, c.howItWorks.headline, ...c.howItWorks.steps.flatMap((s) => [s.label, s.title, s.body]), c.howItWorks.closing]
     case 'people':
@@ -246,7 +252,7 @@ export function briefLines(key: SectionKey): string[] {
         c.people.closing,
       ]
     case 'future':
-      return [c.future.eyebrow, c.future.headline, ...c.future.body, c.future.closing, c.future.signal]
+      return [c.future.eyebrow, c.future.headline, ...c.future.body, c.future.closing, c.future.signal, c.future.transition]
     case 'invitation':
       return [c.invitation.eyebrow, c.invitation.headline, c.invitation.secondaryHeadline, ...c.invitation.body, c.invitation.cta, c.invitation.brandLine]
   }

@@ -12,14 +12,16 @@ import { Seam } from './landing/ui/Story'
 // The Splitpost homepage: six sections, one story, in the original site's
 // design (restored 2026-11-18) with the approved new copy
 // (docs/website-brief.md). The Vision is merged into How Splitpost Works,
-// with the founder's approval.
+// with the founder's approval. Story order (founder decision, 2026-11-19):
+// HOOK, WHY, WHO, WHERE, HOW, CTA.
 //
-//  #hero          HERO                          Don't just post. Get your split.
-//  #problem       THE PROBLEM                   You make the posts. Who gets the split?
-//  #how-it-works  HOW SPLITPOST WORKS           Post. Connect. Grow. Split.
-//  #people        THE PEOPLE BEHIND THE POSTS   You keep posting. They keep earning. But what about you?
-//  #future        A BETTER FUTURE FOR CREATORS  What if your next post could help build your future?
-//  #invitation    THE INVITATION                You've made enough posts for someone else's success.
+//  #hero          HOOK   HERO                          Don't just post. Get your split.
+//  #problem       WHY    THE PROBLEM                   Your content makes platforms money. But what about you?
+//  #people        WHO    THE PEOPLE BEHIND THE POSTS   You built an audience. But can you build a future on it?
+//  #future        WHERE  A BETTER FUTURE FOR CREATORS  What if your next post could help build your future?
+//                        (ends with "What if the split worked differently?")
+//  #how-it-works  HOW    HOW SPLITPOST WORKS           Post. Connect. Grow. Split.
+//  #invitation    CTA    THE INVITATION                You've made enough posts for someone else's success.
 //
 // Every word comes from landing/copy.ts, which matches the brief word for
 // word (landing/copy.test.ts). The pilot disclosures are the founder's
@@ -46,11 +48,11 @@ export function LandingPage() {
       <Seam />
       <Problem />
       <Seam />
-      <HowItWorks />
-      <Seam />
       <People />
       <Seam />
       <Future />
+      <Seam />
+      <HowItWorks />
       <Seam />
       <Invitation />
       <MobileWaitlistBar />

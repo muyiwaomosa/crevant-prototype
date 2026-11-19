@@ -182,7 +182,7 @@ async function newContext(browser, options = {}) {
       await page.goto(`${BASE}/`)
 
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check(`${label}: the six sections in order`, ids === 'hero,problem,how-it-works,people,future,invitation', ids)
+      check(`${label}: the six sections in order`, ids === 'hero,problem,people,future,how-it-works,invitation', ids)
       const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
       {

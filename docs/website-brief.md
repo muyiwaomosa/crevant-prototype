@@ -51,6 +51,16 @@ discreet inline disclosure, "60-day pilot: Fan rewards are simulated. No cash re
 website only; pilot onboarding and participant communications keep every
 legally necessary detail, and the pilot's reward rules are unchanged.
 
+2026-11-19, founder approval (story order): the sections were rearranged,
+unchanged, into the order HOOK, WHY, WHO, WHERE, HOW, CTA: Hero, The Problem,
+The People Behind the Posts, A Better Future for Creators, How Splitpost
+Works, The Invitation. The transition line "What if the split worked
+differently?" moved from the end of The Problem to the end of A Better Future
+for Creators, immediately before How Splitpost Works, with its existing
+styling and arrow. No words were added, removed or changed. The sections below
+are numbered in the new order; the disclosure labels keep the brief's original
+numbering, as explained above.
+
 ## SECTION 1 — HERO
 
 ### Headline
@@ -84,41 +94,7 @@ Yet they rarely share financially in the success they help create.
 You create the content. Your fans help it grow. The platforms make money.
 But shouldn't more of that value come back to the people who helped create it?
 
-### Closing transition
-What if the split worked differently?
-
-## SECTION 3 — HOW SPLITPOST WORKS
-
-### Eyebrow
-HOW SPLITPOST WORKS
-
-### Headline
-Post. Connect. Grow. Split.
-
-### Step 01
-STEP 01 — POST
-Create content worth sharing.
-You've got something to say, teach, show or create. Splitpost gives you a place to publish your content and build an audience around what matters to you.
-
-### Step 02
-STEP 02 — CONNECT
-Your followers shouldn't have to search for you.
-People followed you because they want to see what you create. Splitpost is building a better way for them to find your posts, catch up on what they've missed and stay connected.
-
-### Step 03
-STEP 03 — GROW
-Your biggest supporters deserve recognition.
-Your fans already help you grow. They share your content, recommend you to friends and introduce new people to your work. Splitpost is building a way to recognize qualifying contributions, starting with verified referrals.
-
-### Step 04
-STEP 04 — SPLIT
-When your content creates value, you deserve a share.
-Our planned model gives creators a share of net eligible advertising revenue generated around their content, while setting aside a portion for qualifying fan contributions.
-
-### Closing statement
-Because success is better when it's shared.
-
-## SECTION 4 — THE PEOPLE BEHIND THE POSTS
+## SECTION 3 — THE PEOPLE BEHIND THE POSTS
 
 ### Eyebrow
 THE PEOPLE BEHIND THE POSTS
@@ -152,7 +128,7 @@ But when their contributions help create value, they rarely get to share financi
 ### Closing statement
 What if creators and their biggest supporters could grow together—and benefit together?
 
-## SECTION 5 — A BETTER FUTURE FOR CREATORS
+## SECTION 4 — A BETTER FUTURE FOR CREATORS
 
 ### Eyebrow
 A BETTER FUTURE FOR CREATORS
@@ -169,6 +145,40 @@ Supporters who have a reason to help you grow.
 And new opportunities to earn from the value your content creates.
 More than followers. More opportunities to build a future doing what you love.
 This is the future Splitpost is working toward.
+
+### Closing transition
+What if the split worked differently?
+
+## SECTION 5 — HOW SPLITPOST WORKS
+
+### Eyebrow
+HOW SPLITPOST WORKS
+
+### Headline
+Post. Connect. Grow. Split.
+
+### Step 01
+STEP 01 — POST
+Create content worth sharing.
+You've got something to say, teach, show or create. Splitpost gives you a place to publish your content and build an audience around what matters to you.
+
+### Step 02
+STEP 02 — CONNECT
+Your followers shouldn't have to search for you.
+People followed you because they want to see what you create. Splitpost is building a better way for them to find your posts, catch up on what they've missed and stay connected.
+
+### Step 03
+STEP 03 — GROW
+Your biggest supporters deserve recognition.
+Your fans already help you grow. They share your content, recommend you to friends and introduce new people to your work. Splitpost is building a way to recognize qualifying contributions, starting with verified referrals.
+
+### Step 04
+STEP 04 — SPLIT
+When your content creates value, you deserve a share.
+Our planned model gives creators a share of net eligible advertising revenue generated around their content, while setting aside a portion for qualifying fan contributions.
+
+### Closing statement
+Because success is better when it's shared.
 
 ## SECTION 6 — THE INVITATION
 

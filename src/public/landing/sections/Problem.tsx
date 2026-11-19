@@ -1,4 +1,3 @@
-import { ArrowDown } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
 import { ValueCapture } from '../ui/illustrations/StoryIllustrations'
 
@@ -34,7 +33,7 @@ export function Problem() {
     )
   return (
     <section id="problem" aria-labelledby="problem-title" className="scroll-mt-16 bg-sp-bg text-sp-ink">
-      <div className="mx-auto grid max-w-6xl grid-cols-1 px-4 pb-14 pt-20 sm:px-6 sm:pt-24 lg:grid-cols-[1.05fr_0.95fr] lg:gap-x-16 lg:pt-28">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 px-4 pb-20 pt-20 sm:px-6 sm:pb-24 sm:pt-24 lg:grid-cols-[1.05fr_0.95fr] lg:gap-x-16 lg:pb-28 lg:pt-28">
         <h2 id="problem-title" className="text-balance font-sp-display text-[clamp(2.2rem,7vw,4rem)] font-black leading-[0.98] tracking-[-0.02em] [font-stretch:108%] lg:col-start-1">
           {copy.headline}
         </h2>
@@ -60,12 +59,6 @@ export function Problem() {
             </div>
           ))}
         </div>
-      </div>
-      <div className="mx-auto max-w-6xl px-4 pb-20 sm:px-6 sm:pb-24 lg:pb-28">
-        <p data-testid="problem-transition" className="flex items-center gap-4 font-sp-display text-[clamp(1.6rem,5vw,2.5rem)] font-black leading-tight tracking-[-0.01em] [font-stretch:104%]">
-          <span>{copy.transition}</span>
-          <ArrowDown aria-hidden="true" className="h-8 w-8 shrink-0 text-sp-accent-text" />
-        </p>
       </div>
     </section>
   )

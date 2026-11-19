@@ -38,14 +38,14 @@ afterEach(() => {
 const norm = (el: Element | null) => (el?.textContent || '').replace(/\s+/g, ' ')
 const landing = () => renderAt('/').container
 const section = (id: string) => landing().querySelector(`#${id}`)!
-const SECTION_ORDER = ['hero', 'problem', 'how-it-works', 'people', 'future', 'invitation']
-const SECTION_KEYS = ['hero', 'problem', 'howItWorks', 'people', 'future', 'invitation'] as const
+const SECTION_ORDER = ['hero', 'problem', 'people', 'future', 'how-it-works', 'invitation']
+const SECTION_KEYS = ['hero', 'problem', 'people', 'future', 'howItWorks', 'invitation'] as const
 const HEADINGS = [
   HOMEPAGE_COPY.hero.headline,
   HOMEPAGE_COPY.problem.headline,
-  HOMEPAGE_COPY.howItWorks.headline,
   HOMEPAGE_COPY.people.headline,
   HOMEPAGE_COPY.future.headline,
+  HOMEPAGE_COPY.howItWorks.headline,
   HOMEPAGE_COPY.invitation.headline,
 ]
 // The only allowed uses of "guarantee": these exact disclaimers.
@@ -70,7 +70,7 @@ const blocks = (el: Element) =>
     .filter(Boolean)
 
 describe('one Splitpost story, top to bottom', () => {
-  it('has the six sections, in the approved order (The Vision merged into How Splitpost Works)', () => {
+  it('has the six sections, in the approved story order: HOOK, WHY, WHO, WHERE, HOW, CTA', () => {
     expect([...landing().querySelectorAll('section')].map((sec) => sec.id)).toEqual(SECTION_ORDER)
   })
   it('uses the approved headlines, with exactly one main heading', () => {
@@ -161,19 +161,20 @@ describe('HERO', () => {
 })
 
 describe('THE PROBLEM', () => {
-  it('emphasizes approved lines only, shows how value flows today, and closes with the transition', () => {
+  it('emphasizes approved lines only and shows how value flows today; the transition line has moved to A Better Future', () => {
     const p = section('problem')
     expect([...p.querySelectorAll('[data-testid="problem-emphasis"]')].map((e) => norm(e))).toEqual([...HOMEPAGE_COPY.problem.emphasis])
     for (const e of HOMEPAGE_COPY.problem.emphasis) expect(HOMEPAGE_COPY.problem.body).toContain(e)
-    expect(norm(p.querySelector('[data-testid="problem-transition"]'))).toBe(HOMEPAGE_COPY.problem.transition)
+    expect(p.querySelector('[data-testid="problem-transition"]')).toBeNull()
+    expect(norm(p)).not.toContain('What if the split worked differently?')
     expect(p.querySelector('[data-testid="value-capture"]')).toBeTruthy()
     // Some creators do earn: the picture never suggests that nobody is paid.
     expect(norm(p.querySelector('figcaption'))).toMatch(/small\s+stack, another a single coin/)
   })
   it('on phones, shows the illustration right after the headline and the two opening lines, then the rest of the copy in order', () => {
     const p = section('problem')
-    const order = [...p.querySelectorAll('h2, [data-testid="problem-opening"], [data-testid="problem-visual"], [data-testid="problem-copy"], [data-testid="problem-transition"]')].map((e) => e.getAttribute('data-testid') ?? e.tagName)
-    expect(order).toEqual(['H2', 'problem-opening', 'problem-visual', 'problem-copy', 'problem-transition'])
+    const order = [...p.querySelectorAll('h2, [data-testid="problem-opening"], [data-testid="problem-visual"], [data-testid="problem-copy"]')].map((e) => e.getAttribute('data-testid') ?? e.tagName)
+    expect(order).toEqual(['H2', 'problem-opening', 'problem-visual', 'problem-copy'])
     expect([...p.querySelectorAll('[data-testid="problem-opening"] p')].map((e) => norm(e))).toEqual(HOMEPAGE_COPY.problem.body.slice(0, 2))
     expect([...p.querySelectorAll('[data-testid="problem-copy"] p')].map((e) => norm(e))).toEqual(HOMEPAGE_COPY.problem.body.slice(2))
   })
@@ -239,6 +240,16 @@ describe('A BETTER FUTURE FOR CREATORS', () => {
     expect([...f.querySelectorAll('[data-testid="future-mosaic"] img')].map((i) => i.getAttribute('data-photo'))).toEqual(['cooking-vlog', 'filmmaker', 'painter', 'craftsman'])
     expect(norm(f.querySelector('[data-testid="future-signal"]'))).toBe(HOMEPAGE_COPY.future.signal)
     expect(norm(f.querySelector('[data-testid="future-closing"]'))).toBe(HOMEPAGE_COPY.future.closing)
+  })
+  it('ends with the transition into How Splitpost Works, with its arrow, right after the signal line', () => {
+    const f = section('future')
+    const t = f.querySelector('[data-testid="future-transition"]')!
+    expect(norm(t)).toBe('What if the split worked differently?')
+    expect(t.querySelector('svg[aria-hidden="true"]')).toBeTruthy()
+    const order = [...f.querySelectorAll('[data-testid="future-closing"], [data-testid="future-signal"], [data-testid="future-transition"]')].map((e) => e.getAttribute('data-testid'))
+    expect(order).toEqual(['future-closing', 'future-signal', 'future-transition'])
+    const ids = [...landing().querySelectorAll('section')].map((sec) => sec.id)
+    expect(ids[ids.indexOf('future') + 1]).toBe('how-it-works')
   })
 })
 

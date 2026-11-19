@@ -20,13 +20,13 @@ function parseBrief() {
   return sections
 }
 
-const ORDER: SectionKey[] = ['hero', 'problem', 'howItWorks', 'people', 'future', 'invitation']
+const ORDER: SectionKey[] = ['hero', 'problem', 'people', 'future', 'howItWorks', 'invitation']
 const TITLES = [
   'SECTION 1 — HERO',
   'SECTION 2 — THE PROBLEM',
-  'SECTION 3 — HOW SPLITPOST WORKS',
-  'SECTION 4 — THE PEOPLE BEHIND THE POSTS',
-  'SECTION 5 — A BETTER FUTURE FOR CREATORS',
+  'SECTION 3 — THE PEOPLE BEHIND THE POSTS',
+  'SECTION 4 — A BETTER FUTURE FOR CREATORS',
+  'SECTION 5 — HOW SPLITPOST WORKS',
   'SECTION 6 — THE INVITATION',
 ]
 
