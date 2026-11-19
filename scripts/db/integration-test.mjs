@@ -164,30 +164,46 @@ let A, B, tokenA
   const mine = await rest('/profiles?select=*', { token: tokenA })
   check('A sees only their own profile', mine.status === 200 && mine.json.length === 1 && mine.json[0].id === A, `${mine.status} ${mine.json?.length}`)
   const other = await rest(`/profiles?id=eq.${B}`, { method: 'PATCH', token: tokenA, body: { display_name: 'Hacked' } })
-  check("A's update of B's profile changes nothing", other.status === 200 && Array.isArray(other.json) && other.json.length === 0, `${other.status} ${JSON.stringify(other.json)}`)
+  // Since 20261122000000 members have no direct UPDATE at all, so this is refused outright.
+  check("A's update of B's profile is refused", other.status === 401 || other.status === 403, `${other.status} ${JSON.stringify(other.json)}`)
   check("B's profile is untouched", (await profileOf(B))[0]?.display_name === 'Bob')
 
-  for (const [field, value] of [['id', B], ['created_at', '2020-01-01T00:00:00Z'], ['updated_at', '2020-01-01T00:00:00Z']]) {
+  // Since the pilot membership gate (20261122000000), members never write
+  // profiles directly: username and display name go through app_set_profile.
+  for (const [field, value] of [['id', B], ['created_at', '2020-01-01T00:00:00Z'], ['updated_at', '2020-01-01T00:00:00Z'], ['username', `direct_${RUN}`.slice(0, 30)], ['display_name', 'Direct']]) {
     const r = await rest(`/profiles?id=eq.${A}`, { method: 'PATCH', token: tokenA, body: { [field]: value } })
-    check(`A cannot change protected field ${field}`, r.status === 401 || r.status === 403, `${r.status} ${r.json?.code}`)
+    check(`A cannot change ${field} directly`, r.status === 401 || r.status === 403, `${r.status} ${r.json?.code}`)
   }
   const ins = await rest('/profiles', { method: 'POST', token: tokenA, body: { id: A } })
   check('A cannot insert a profile', ins.status === 401 || ins.status === 403, `${ins.status} ${ins.json?.code}`)
   const del = await rest(`/profiles?id=eq.${A}`, { method: 'DELETE', token: tokenA })
   check('A cannot delete their profile', (del.status === 401 || del.status === 403) && profileCount(A) === 1, `${del.status} ${del.json?.code}`)
 
+  // Signed in, but not a pilot member: A learns only their own state, and
+  // can't set a profile. (A is never granted membership here, so the
+  // rollback tests that follow in this job start with no membership data.)
+  const state = await rest('/rpc/app_access_state', { method: 'POST', token: tokenA, body: {} })
+  check("A's own access state is 'none'", state.status === 200 && state.json?.[0]?.status === 'none', `${state.status} ${JSON.stringify(state.json)}`)
+  const set = await rest('/rpc/app_set_profile', { method: 'POST', token: tokenA, body: { p_username: `alice_${RUN}`.slice(0, 30), p_display_name: 'Alice' } })
+  check('without membership, A cannot set a profile (no_pilot_access)', set.status === 400 && set.json?.message === 'no_pilot_access', `${set.status} ${JSON.stringify(set.json)}`)
+  const feed = await rest('/rpc/app_feed', { method: 'POST', token: tokenA, body: {} })
+  check('without membership, A cannot read the feed (no_pilot_access)', feed.status === 400 && feed.json?.message === 'no_pilot_access', `${feed.status} ${JSON.stringify(feed.json)}`)
+
   const before = (await profileOf(A))[0]
   await sleep(50)
-  const own = await rest(`/profiles?id=eq.${A}`, { method: 'PATCH', token: tokenA, body: { username: `alice_${RUN}`.slice(0, 30), display_name: 'Alice' } })
+  const own = await rest(`/profiles?id=eq.${A}`, { method: 'PATCH', key: SERVICE, token: SERVICE, body: { username: `alice_${RUN}`.slice(0, 30), display_name: 'Alice' } })
   const after = (await profileOf(A))[0]
-  check('A can change their own username and display name', own.status === 200 && after.display_name === 'Alice', String(own.status))
+  check("server code can set A's username and display name", own.status === 200 && after.display_name === 'Alice', String(own.status))
   check('updated_at is set by the database, created_at unchanged',
     new Date(after.updated_at) > new Date(before.updated_at) && after.created_at === before.created_at)
 }
 
-// 7. Validation through the real Data API, including Unicode edge cases.
+// 7. Validation through the real Data API, including Unicode edge cases. The
+//    profile rules are table constraints, so they hold for every writer; here
+//    through server code (members write through app_set_profile, covered by
+//    supabase/tests-local/030_validation.sql).
 {
-  const patch = (body) => rest(`/profiles?id=eq.${A}`, { method: 'PATCH', token: tokenA, body })
+  const patch = (body) => rest(`/profiles?id=eq.${A}`, { method: 'PATCH', key: SERVICE, token: SERVICE, body })
   for (const ok of ['abc', 'maya_99', 'a1_', 'z'.repeat(30)]) {
     const r = await patch({ username: ok })
     check(`username "${ok.length > 12 ? ok.slice(0, 12) + '...' : ok}" is accepted`, r.status === 200, String(r.status))

@@ -90,10 +90,25 @@ export interface UnseenCreator extends MemberSummary {
 /** How a view was observed: text and images 50% visible for 2 s; video 3 s of playback or completion. */
 export type ViewBasis = 'visible' | 'played'
 
+/**
+ * The signed-in account's own pilot membership (20261122000000_member_access).
+ * Only 'active' may use the member app; the database enforces it for every
+ * member function, so this is for explaining, not for protecting.
+ */
+export type AccessStatus = 'active' | 'none' | 'revoked' | 'expired'
+/**
+ * preGate: true only when the database has no membership gate yet (before
+ * 20261122000000 is applied), so every signed-in account is a member exactly
+ * as before. Never set for any other reason.
+ */
+export type AccessState = { status: AccessStatus; expiresAt: string | null; preGate?: true }
+
 /** The member's own profile row (Phase 1A own-row read), used to decide whether setup is needed. */
 export type OwnProfile = { id: string; createdAt: string; username: string | null; displayName: string | null }
 
 export interface AppApi {
+  /** The signed-in account's own pilot membership state (needs no membership itself). */
+  accessState(): Promise<AccessState>
   ownProfile(): Promise<OwnProfile | null>
   saveProfile(input: { username: string; displayName: string }): Promise<void>
   me(): Promise<Me>
@@ -179,6 +194,7 @@ const MESSAGES: Record<string, string> = {
   invalid_request: 'Something went wrong. Please try again.',
   request_reused: 'Something changed while sending. Please try again.',
   not_found: "That's no longer available.",
+  no_pilot_access: "Your pilot access isn't active, so this isn't available.",
   username_taken: 'That username is taken. Please choose another.',
   username_invalid: 'Use 3 to 30 lowercase letters, numbers or underscores, and not a reserved name.',
   display_name_invalid: 'Display names are 1 to 50 characters, with no special control characters.',
@@ -257,6 +273,20 @@ export function isMissingRequestIdVersion(error: { code?: string; message?: stri
   return m[2].split(',').map((p) => p.trim()).includes('p_request_id')
 }
 
+/**
+ * True only when PostgREST answers that this exact public function does not
+ * exist (PGRST202, "Could not find the function public.<fn>..."), which is
+ * what a database without the pilot membership migration returns. Any other
+ * answer (an authorization error, a database failure, a timeout, a different
+ * function, a malformed reply) is false, so it can never be mistaken for
+ * "the gate isn't there".
+ */
+export function isMissingFunction(error: { code?: string; message?: string } | null | undefined, fn: string): boolean {
+  if (!error || error.code !== 'PGRST202') return false
+  const m = /^Could not find the function public\.([a-z_]+)(?:\(| without parameters)/.exec(error.message ?? '')
+  return !!m && m[1] === fn
+}
+
 export function createSupabaseApi(client: SupabaseClient, userId: string): AppApi {
   async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
     const { data, error } = await client.rpc(fn, args)
@@ -276,6 +306,21 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     throw toAppError(error)
   }
   return {
+    async accessState() {
+      const { data, error } = await client.rpc('app_access_state')
+      if (error) {
+        // Before 20261122000000 there is no gate: every signed-in account is a
+        // member, as the database itself still treats it. Only a definite
+        // "function not found" means that; every other error is a failure.
+        if (isMissingFunction(error, 'app_access_state')) return { status: 'active', expiresAt: null, preGate: true }
+        throw toAppError(error)
+      }
+      // An unexpected reply is never treated as access.
+      const r = Array.isArray(data) ? (data[0] as { status?: unknown; expires_at?: unknown } | undefined) : undefined
+      const status = (['active', 'none', 'revoked', 'expired'] as const).find((s) => s === r?.status) ?? 'none'
+      const expiresAt = status === 'active' && typeof r?.expires_at === 'string' ? r.expires_at : null
+      return { status, expiresAt }
+    },
     async ownProfile() {
       const { data, error } = await client.from('profiles').select('id, created_at, username, display_name').eq('id', userId).maybeSingle()
       if (error) throw toAppError(error)
@@ -284,11 +329,17 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       return { id: row.id, createdAt: row.created_at, username: row.username ?? null, displayName: row.display_name ?? null }
     },
     async saveProfile({ username, displayName }) {
-      const { error } = await client
-        .from('profiles')
-        .update({ username: username.trim(), display_name: displayName.trim() })
-        .eq('id', userId)
-      if (error) throw toAppError(error)
+      const values = { username: username.trim(), displayName: displayName.trim() }
+      // Through the database function, which checks pilot membership (members
+      // no longer update the profiles table directly).
+      const { error } = await client.rpc('app_set_profile', { p_username: values.username, p_display_name: values.displayName })
+      if (!error) return
+      if (!isMissingFunction(error, 'app_set_profile')) throw toAppError(error)
+      // Before 20261122000000 only: the own-row update that database allows.
+      // Once the gate exists this path is never taken, and the database
+      // refuses direct profile updates anyway.
+      const { error: legacy } = await client.from('profiles').update({ username: values.username, display_name: values.displayName }).eq('id', userId)
+      if (legacy) throw toAppError(legacy)
     },
     async me() {
       const rows = await rpc<Array<Record<string, unknown>>>('app_me')

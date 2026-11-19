@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { CheckCircle2, Compass, Home, Plus, User, Users } from 'lucide-react'
 import { Wordmark } from '../components/Wordmark'
 import { buttonClass } from '../components/ui'
@@ -33,6 +33,14 @@ function Gate() {
       </Frame>
     )
   }
+  if (status.kind === 'no_access') return <NoPilotAccess status={status.access.status} />
+  if (status.kind === 'access_error') {
+    return (
+      <Frame>
+        <Message tone="error">We couldn't verify your access right now. Please try again.</Message>
+      </Frame>
+    )
+  }
   if (status.kind === 'missing') {
     return (
       <Frame>
@@ -54,6 +62,44 @@ function Gate() {
         <MemberLayout username={status.profile.username} />
       </ViewTrackerProvider>
     </ProfileProvider>
+  )
+}
+
+/**
+ * Signed in, but not an active pilot member (never granted, revoked or
+ * expired). The database refuses every member function for this account, so
+ * nothing else is loaded; this only explains it.
+ */
+export function NoPilotAccess({ status }: { status: 'none' | 'revoked' | 'expired' | 'active' }) {
+  const { session, client } = useAuth()
+  const navigate = useNavigate()
+  const [signingOut, setSigningOut] = useState(false)
+  // Revoked and expired read the same, so the screen never says why access ended.
+  const detail = status === 'none' ? "Your account hasn't been approved for the Splitpost pilot yet." : 'Your pilot access has ended.'
+  async function signOut() {
+    if (!client || signingOut) return
+    setSigningOut(true)
+    await client.auth.signOut({ scope: 'local' })
+    navigate('/sign-in', { replace: true })
+  }
+  return (
+    <main id="main" className="px-4 py-12 sm:py-16">
+      <AuthCard
+        title="Your pilot access isn't active"
+        intro={
+          <p>
+            Signed in as <strong className="font-semibold text-ink-900">{session?.user.email}</strong>.
+          </p>
+        }
+      >
+        <div className="space-y-5" data-testid="no-pilot-access" data-status={status}>
+          <Message tone="info">{detail}</Message>
+          <button type="button" onClick={signOut} disabled={signingOut} className={`${buttonClass('primary')} w-full`}>
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </button>
+        </div>
+      </AuthCard>
+    </main>
   )
 }
 
