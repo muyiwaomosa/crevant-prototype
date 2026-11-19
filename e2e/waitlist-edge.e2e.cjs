@@ -312,6 +312,10 @@ function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
     check('waitlist_writer cannot issue a creator link', await denied(() => writer`select waitlist_api.admin_issue_creator_link(${E2E_CREATOR})`))
     check('the admin login accepts a creator', (await admin`select waitlist_api.admin_accept_creator(${E2E_CREATOR}, '{fitness}') as r`)[0].r === 'accepted')
     const code = (await admin`select waitlist_api.admin_issue_creator_link(${E2E_CREATOR}) as c`)[0].c
+    // Pilot membership (20261122000000): a creator's link works only while the
+    // creator has active pilot access, granted by server code.
+    check("a creator's link is inactive until the creator has pilot access", (await owner`select status from ops.resolve_creator_link(${code})`)[0].status === 'creator_inactive')
+    await owner`select ops.grant_member_access(${E2E_CREATOR}, 'creator', 'waitlist-edge')`
     check('the admin login issues a 90 day link by default', /^[0-9a-f]{20}$/.test(code) &&
       (await owner`select (expires_at::date - created_at::date) as d from ops.creator_links where code = ${code}`)[0].d === 90)
     const nameless = await preview(code)
@@ -372,6 +376,12 @@ function postRawHeaders(payload, rawHeaders, url = EDGE_URL) {
     await owner`delete from ops.creator_links where creator_id = ${E2E_CREATOR}`
     await owner`delete from ops.pilot_creators where user_id = ${E2E_CREATOR}`
     await owner`delete from auth.users where id = ${E2E_CREATOR}`
+    // TEST ONLY (local throwaway database): remove this test's membership
+    // history too, so the staging rollback tests that run later in this CI
+    // job start with no membership data (they refuse once any exists, by design).
+    await owner`alter table ops.member_access_events disable trigger member_access_events_no_update`
+    await owner`delete from ops.member_access_events where user_id = ${E2E_CREATOR}`
+    await owner`alter table ops.member_access_events enable trigger member_access_events_no_update`
     await owner`delete from ops.invite_preview_limits`
     await Promise.all([owner.end(), writer.end(), admin.end()])
   }
