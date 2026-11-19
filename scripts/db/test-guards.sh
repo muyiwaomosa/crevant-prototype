@@ -271,7 +271,7 @@ guard "activation workflow: main only, started and re-run by the repository owne
 guard "activation workflow: a founder id stored outside the staging environment is refused by a job with no environment, first" \
   "grep -q '^    needs: secret-scope$' $aw && grep -q 'OUTSIDE_ENVIRONMENT: \${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}' $aw && grep -q '\[ -n \"\$OUTSIDE_ENVIRONMENT\" \]' $aw && awk '/^  secret-scope:\$/{s=1} /^  [a-z-]+:\$/ && !/secret-scope/{s=0} s && /environment:/{e=1} END{exit e}' $aw"
 guard "activation workflow: defaults to the rehearsal, and activate needs the exact phrase" \
-  "grep -A6 '      mode:' $aw | grep -q 'default: rehearse' && grep -q '\[ \"\$PHRASE\" = \"ACTIVATE STAGING MEMBER ACCESS\" \]' $aw"
+  "grep -A10 '      mode:' $aw | grep -m1 'default:' | grep -q 'default: rehearse' && grep -q '\[ \"\$PHRASE\" = \"ACTIVATE STAGING MEMBER ACCESS\" \]' $aw"
 guard "activation workflow: verifies the staging target, with verify-full, before any database connection" \
   "awk '/^        run: scripts\/db\/verify-staging-target.sh\$/{v=NR} /psql \"\\\$STAGING_DATABASE_URL\"/ && !p{p=NR} END{exit !(v && p && v<p)}' $aw && grep -q \"REQUIRE_VERIFY_FULL: '1'\" $aw && grep -q 'PGSSLMODE: verify-full' $aw"
 guard "activation workflow: uses only the STAGING_DATABASE_URL and STAGING_FOUNDER_ACCOUNT_ID secrets" \
@@ -292,8 +292,27 @@ guard "activation SQL: applies exactly the approved migration file and records i
   "grep -q '^\\\\ir ../../supabase/migrations/20261122000000_member_access.sql\$' $asql && grep -q \"values ('20261122000000', 'member_access')\" $asql"
 guard "activation SQL: never cascades, never drops anything" \
   "! grep -viE '^ *--' $asql | grep -qiE 'cascade|drop (table|function|owned|schema|view)|reassign owned|truncate'"
-guard "only the activation workflow and its local test run the activation SQL" \
-  "[ \"\$(grep -rlF 'staging-activate-member-access.sql' .github scripts | grep -v -e '^scripts/db/staging-activate-member-access.sql\$' | sort | paste -sd,)\" = '.github/workflows/staging-activate-member-access.yml,scripts/db/activation-test.sh,scripts/db/test-guards.sh' ]"
+guard "only the activation workflow and its local tests run the activation SQL" \
+  "[ \"\$(grep -rlF 'staging-activate-member-access.sql' .github scripts | grep -v -e '^scripts/db/staging-activate-member-access.sql\$' | sort | paste -sd,)\" = '.github/workflows/staging-activate-member-access.yml,scripts/db/activation-cli-compat-test.sh,scripts/db/activation-test.sh,scripts/db/test-guards.sh' ]"
+guard "activation workflow: the schema separation checks (001) run before the activation transaction, and never after it" \
+  "awk '/supabase\/tests\/001_schema_separation.sql/{c=NR} /-f scripts\/db\/staging-activate-member-access.sql/{a=NR} END{exit !(c && a && c<a)}' $aw && [ \"\$(grep -c '001_schema_separation.sql' $aw)\" = 1 ]"
+guard "activation workflow: after COMMIT only read-only steps run (read-only session), verifying the committed state" \
+  "awk '/-f scripts\/db\/staging-activate-member-access.sql/{a=1; next} a && /run: /{n++; if (\$0 !~ /staging-verify-activation.sql|^ *run: \\|\$/) bad=1} END{exit (bad || !n)}' $aw && [ \"\$(grep -c \"PGOPTIONS: '-c default_transaction_read_only=on'\" $aw)\" = 3 ] && grep -q -- '-v expect=activated -f scripts/db/staging-verify-activation.sql' $aw"
+guard "activation verification SQL: read only, rolled back, never prints the founder id" \
+  "grep -q '^begin transaction read only;\$' scripts/db/staging-verify-activation.sql && grep -q '^rollback;\$' scripts/db/staging-verify-activation.sql && ! grep -qiE '^ *(insert|update|delete|create|alter|drop|grant|revoke|truncate|commit)\\b' scripts/db/staging-verify-activation.sql && [ \"\$(grep -c \":'founder_raw'\" scripts/db/staging-verify-activation.sql)\" = 1 ] && ! grep -qE 'raise (exception|notice).*v_founder\\b' scripts/db/staging-verify-activation.sql"
+
+# The ordinary staging deploy can't apply 20261122000000 on its own.
+dw=.github/workflows/deploy-db-staging.yml
+guard "staging deploy: the pilot membership protection runs unconditionally, after the target check and before any db push" \
+  "awk '/^      - name: Pilot membership protection/{g=NR; inside=1; next} inside && /^      - /{inside=0} inside && /^        (if|continue-on-error):/{bad=1} /run: scripts\/db\/verify-staging-target.sh/{v=NR} /supabase db push/ && !p{p=NR} END{exit !(g && v && p && v<g && g<p && !bad)}' $dw && grep -q '^        id: gate\$' $dw && grep -q '^        run: scripts/db/staging-membership-gate.sh\$' $dw && grep -q 'MODE: \${{ inputs.mode }}' $dw"
+guard "staging deploy: before activation, check mode skips only the post-gate checks (002, 005, 007), never more" \
+  "grep -q 'GATE_PENDING: \${{ steps.gate.outputs.gate_pending }}' $dw && grep -q 'if \[ \"\$GATE_PENDING\" != \"false\" \]; then' $dw && grep -q '002_\*|005_\*|007_\*) echo' $dw"
+guard "staging deploy protection: refuses apply while 20261122000000 is pending, and fails closed" \
+  "grep -q '^GATE=20261122000000\$' scripts/db/staging-membership-gate.sh && grep -q 'if \[ \"\$MODE\" = apply \]; then' scripts/db/staging-membership-gate.sh && grep -q '^set -euo pipefail\$' scripts/db/staging-membership-gate.sh && grep -q 'Unknown or missing mode' scripts/db/staging-membership-gate.sh && grep -q 'default_transaction_read_only=on' scripts/db/staging-pending-migrations.sh"
+guard "no other path pushes migrations: only the staging and Production deploy workflows run a non-dry-run db push" \
+  "[ \"\$(grep -lE 'supabase .*db push' .github/workflows/*.yml | sort | paste -sd,)\" = '.github/workflows/deploy-db-production.yml,.github/workflows/deploy-db-staging.yml' ]"
+guard "Production never receives the pilot membership migration (not on the Production list)" \
+  "! grep -q '^20261122000000' supabase/production-migrations.txt && grep -q 'production-migrations.txt' .github/workflows/deploy-db-production.yml"
 
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]

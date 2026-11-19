@@ -9,8 +9,17 @@ name: Activate pilot membership on staging
 #
 # Modes:
 #   rehearse  (default) Runs the whole activation against staging, then rolls
-#             it back. Changes nothing.
-#   activate  The same, committed. Needs the phrase: ACTIVATE STAGING MEMBER ACCESS
+#             it back, and confirms nothing was left behind. Changes nothing.
+#   activate  The same, committed, then a read-only verification of the
+#             committed state. Needs the phrase: ACTIVATE STAGING MEMBER ACCESS
+#   verify    Read only: reports whether staging is activated (for example
+#             after a connection dropped at COMMIT left the result unclear).
+#
+# Order: the schema separation checks (001, which manage their own
+# transactions) run BEFORE the activation transaction; everything that
+# validates the new state runs INSIDE it; after COMMIT only a read-only
+# verification runs (scripts/db/staging-verify-activation.sql), which can't
+# change anything and never prints the founder's id.
 #
 # Safeguards, none of which depend on the others:
 #   * Started by hand only, from main, by the repository owner, and only
@@ -37,11 +46,12 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "rehearse = run everything on staging, then roll it all back (no changes). activate = commit (needs the phrase below)."
+        description: "rehearse = run everything on staging, then roll it all back (no changes). activate = commit (needs the phrase below). verify = read-only status check."
         type: choice
         options:
           - rehearse
           - activate
+          - verify
         default: rehearse
         required: true
       confirm_project_ref:
@@ -119,8 +129,22 @@ jobs:
           ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: scripts/db/activation-test.sh
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the Supabase CLI version the staging workflow pins
+        run: |
+          set -euo pipefail
+          v="$(grep -E '^  SUPABASE_CLI_VERSION:' .github/workflows/deploy-db-staging.yml | awk '{print $2}')"
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/supabase-cli" "supabase@$v"
+      - name: The activation is recognised by the standard Supabase migration tooling
+        env:
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          SUPABASE: ${{ runner.temp }}/supabase-cli/node_modules/.bin/supabase
+        run: scripts/db/activation-cli-compat-test.sh
+
   activate:
-    name: ${{ inputs.mode == 'activate' && 'Activate pilot membership on staging' || 'Rehearse the activation on staging (no changes)' }}
+    name: ${{ inputs.mode == 'activate' && 'Activate pilot membership on staging' || inputs.mode == 'verify' && 'Verify the activation state on staging (read only)' || 'Rehearse the activation on staging (no changes)' }}
     needs: verify-migrations
     if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
@@ -141,7 +165,7 @@ jobs:
           PHRASE: ${{ inputs.confirm_phrase }}
         run: |
           case "$MODE" in
-            rehearse) ;;
+            rehearse|verify) ;;
             activate) [ "$PHRASE" = "ACTIVATE STAGING MEMBER ACCESS" ] || { echo "::error::activate needs the exact confirmation phrase. Nothing was done."; exit 1; } ;;
             *) echo "::error::Unknown mode. Nothing was done."; exit 1 ;;
           esac
@@ -169,25 +193,28 @@ jobs:
           echo "STAGING_FOUNDER_ACCOUNT_ID is set (value not shown)."
 
       - name: Only 20261122000000 is waiting to be applied (read only)
+        if: inputs.mode == 'rehearse' || inputs.mode == 'activate'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           PGCONNECT_TIMEOUT: '15'
         run: |
           set -euo pipefail
-          recorded="$(psql "$STAGING_DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 -c "begin transaction read only; select version from supabase_migrations.schema_migrations order by version; rollback;" | grep -E '^[0-9]{14}$' || true)"
-          pending=""
-          for f in supabase/migrations/*.sql; do
-            v="$(basename "$f" | cut -d_ -f1)"
-            grep -qx "$v" <<<"$recorded" || pending="$pending $v"
-          done
-          pending="$(echo $pending)"
+          pending="$(scripts/db/staging-pending-migrations.sh)"
           echo "Not yet applied on staging: ${pending:-none}"
           if [ "$pending" != "20261122000000" ]; then
             echo "::error::Expected exactly 20261122000000 to be pending on staging. Nothing was done."
             exit 1
           fi
 
+      - name: Before the transaction, the schema separation checks (they manage their own transactions)
+        if: inputs.mode == 'rehearse' || inputs.mode == 'activate'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/001_schema_separation.sql
+
       - name: Run the activation in one transaction (rehearse rolls back; activate commits)
+        if: inputs.mode == 'rehearse' || inputs.mode == 'activate'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
@@ -196,23 +223,38 @@ jobs:
           PGCONNECT_TIMEOUT: '15'
         run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v mode="$MODE" -v confirm="$PHRASE" -f scripts/db/staging-activate-member-access.sql
 
-      - name: After activating, the schema separation checks (they manage their own transactions)
+      # Read only from here on: nothing below can change staging.
+      - name: After activating, verify the committed state (read only; the founder id is never printed)
         if: inputs.mode == 'activate'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
           PGCONNECT_TIMEOUT: '15'
-        run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/001_schema_separation.sql
+        run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v expect=activated -f scripts/db/staging-verify-activation.sql
 
       - name: After rehearsing, confirm nothing was left behind (read only)
         if: inputs.mode == 'rehearse'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
           PGCONNECT_TIMEOUT: '15'
         run: |
           set -euo pipefail
-          left="$(psql "$STAGING_DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 -c "begin transaction read only; select concat_ws('|', (select count(*) from supabase_migrations.schema_migrations where version = '20261122000000'), to_regclass('ops.member_access') is not null, to_regprocedure('social.current_access()') is not null); rollback;" | grep -E '^[0-9]+\|' )"
-          if [ "$left" != "0|f|f" ]; then
-            echo "::error::The rehearsal left something behind ($left). Investigate before going further."
+          out="$(psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v expect=any -f scripts/db/staging-verify-activation.sql 2>&1)"
+          echo "$out"
+          if ! grep -q 'STATE: not activated' <<<"$out"; then
+            echo "::error::The rehearsal left something behind. Investigate before going further."
             exit 1
           fi
           echo "Rehearsal left no migration record and no membership objects."
+
+      - name: Report the activation state (read only; the founder id is never printed)
+        if: inputs.mode == 'verify'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v expect=any -f scripts/db/staging-verify-activation.sql

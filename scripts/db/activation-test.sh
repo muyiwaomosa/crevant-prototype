@@ -15,7 +15,15 @@
 #     or a second activation: refused, fingerprint unchanged;
 #   * an activation applies the migration, its record and the founder's
 #     membership together, and the staging-safe checks then pass;
-#   * the founder's id never appears in any output.
+#   * the founder's id never appears in any output;
+#   * the read-only verification (staging-verify-activation.sql) reports
+#     "not activated" before and after a rehearsal, "activated" after an
+#     activation, and fails on an inconsistent state or the wrong founder,
+#     in a read-only session;
+#   * the ordinary deploy's protection (staging-membership-gate.sh) refuses
+#     apply while 20261122000000 is pending, allows plan and check, allows
+#     everything once activated, and fails closed on an unreadable history,
+#     an unknown mode or a missing setting.
 #
 # Usage: ADMIN_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres scripts/db/activation-test.sh
 set -uo pipefail
@@ -95,6 +103,16 @@ run() {
   fi
 }
 no_id_in_output() { ! grep -qiF -e "$FOUNDER" -e "$UNCONFIRMED" -e "$OTHER" <<<"$out"; }
+# verify <url> <founder> <expect>: the read-only verification, in a read-only session.
+verify() {
+  out=$(STAGING_FOUNDER_ACCOUNT_ID="$2" PGOPTIONS='-c default_transaction_read_only=on' psql "$1" -X -q -v ON_ERROR_STOP=1 -v expect="$3" -f scripts/db/staging-verify-activation.sql 2>&1); code=$?
+}
+# gate <url> <mode>: the ordinary deploy's protection; output in $out, exit code in $code, written output in $gate_out.
+gate() {
+  local tmp; tmp=$(mktemp)
+  out=$(STAGING_DATABASE_URL="$1" MODE="$2" GITHUB_OUTPUT="$tmp" scripts/db/staging-membership-gate.sh 2>&1); code=$?
+  gate_out=$(cat "$tmp"); rm -f "$tmp"
+}
 # refused <description> <expected message> <url> <founder> <mode> <confirm>
 refused() {
   local before after
@@ -182,6 +200,62 @@ fi
 
 # 7. A second activation is refused.
 refused "a second activation (already recorded)" "already recorded" "$U" "$FOUNDER" activate "$PHRASE"
+
+# 8. The read-only verification after commit (and for an ambiguous result).
+verify "$U" "$FOUNDER" activated
+[ $code -eq 0 ] && grep -q 'STATE: activated' <<<"$out" && grep -q 'memberships: 1, active: 1, founder active: t, activation grant recorded: t' <<<"$out" && no_id_in_output \
+  && ok "verification after activation: activated, the founder active, the grant recorded (read-only session, no id shown)" \
+  || bad "verification after activation (exit $code): $(grep -E 'ERROR|FAIL|STATE' <<<"$out" | head -2 | tr '\n' ' ')"
+verify "$U" "00000000-0000-4000-8000-0000000fa0ff" activated
+[ $code -ne 0 ] && grep -q "founder's membership or its activation grant is missing" <<<"$out" && ! grep -qiF "fa0ff" <<<"$out" \
+  && ok "verification refuses when the founder isn't the activated member (no id shown)" || bad "verification with another founder id (exit $code)"
+verify "$V" "$FOUNDER" any
+[ $code -eq 0 ] && grep -q 'STATE: not activated' <<<"$out" \
+  && ok "verification of a database whose activation failed: not activated (safe to try again)" || bad "verification of a not-activated database (exit $code)"
+verify "$V" "$FOUNDER" activated
+[ $code -ne 0 ] && grep -q 'not activated' <<<"$out" \
+  && ok "verification expecting activation fails on a database that wasn't activated" || bad "verification expecting activation on a not-activated database (exit $code)"
+psql "$W" -X -q -c "insert into supabase_migrations.schema_migrations (version, name) values ('20261122000000', 'member_access')" >/dev/null
+verify "$W" "$FOUNDER" any
+[ $code -ne 0 ] && grep -q 'inconsistent' <<<"$out" \
+  && ok "verification fails on an inconsistent state (recorded without its objects)" || bad "verification of an inconsistent state (exit $code)"
+psql "$W" -X -q -c "delete from supabase_migrations.schema_migrations where version = '20261122000000'" >/dev/null
+verify "$U" "" any
+[ $code -ne 0 ] && grep -q 'missing or not an account id' <<<"$out" && ok "verification refuses without the founder id" || bad "verification without the founder id (exit $code)"
+
+# 9. The ordinary staging deploy's protection.
+psql "$ADMIN_DATABASE_URL" -X -q -c "drop database if exists activation_nohist_$$" -c "create database activation_nohist_$$" >/dev/null
+for m in apply plan check; do
+  gate "$(db_url activation_nohist_$$)" "$m"
+  [ $code -ne 0 ] && grep -q "Could not read the staging migration history" <<<"$out" && [ -z "$gate_out" ] \
+    && ok "deploy protection: $m fails closed when there is no migration history to read" || bad "deploy protection: $m without a migration history (exit $code)"
+done
+gate "$P" apply
+[ $code -ne 0 ] && grep -q 'refuses to apply it' <<<"$out" && ok "deploy protection: apply is refused on a database where 20261122000000 is pending among others" || bad "deploy protection: apply with several pending (exit $code)"
+G=$(new_db staging gate) || exit 1
+gate "$G" apply
+[ $code -ne 0 ] && grep -q 'refuses to apply it' <<<"$out" && [ -z "$gate_out" ] && [ "$(psql "$G" -X -q -At -c "select count(*) from supabase_migrations.schema_migrations where version = '20261122000000'")" = 0 ] \
+  && ok "deploy protection: apply is refused while 20261122000000 is pending (nothing pushed)" || bad "deploy protection: apply while pending (exit $code): $out"
+gate "$G" plan
+[ $code -eq 0 ] && [ "$gate_out" = "gate_pending=true" ] && grep -q 'reserved for the activation workflow' <<<"$out" \
+  && ok "deploy protection: plan (a dry run) is allowed while pending, and says the migration is reserved" || bad "deploy protection: plan while pending (exit $code): $out"
+gate "$G" check
+[ $code -eq 0 ] && [ "$gate_out" = "gate_pending=true" ] \
+  && ok "deploy protection: check is allowed while pending (gate_pending=true, so post-gate checks are skipped)" || bad "deploy protection: check while pending (exit $code)"
+for f in 001 003 004 006; do
+  psql "$G" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/${f}_*.sql >/dev/null 2>&1 || bad "deploy protection: check $f should pass before activation"
+done
+ok "deploy protection: the checks check mode runs before activation (001, 003, 004, 006) pass on a pre-activation database"
+for m in apply plan check; do
+  gate "$U" "$m"
+  [ $code -eq 0 ] && [ "$gate_out" = "gate_pending=false" ] && ok "deploy protection: once activated, $m runs as before (gate_pending=false)" || bad "deploy protection: $m after activation (exit $code): $out"
+done
+gate "$G" deploy
+[ $code -ne 0 ] && grep -q 'Unknown or missing mode' <<<"$out" && ok "deploy protection: an unknown mode is refused" || bad "deploy protection: unknown mode (exit $code)"
+out=$(env -u STAGING_DATABASE_URL MODE=apply scripts/db/staging-membership-gate.sh 2>&1); code=$?
+[ $code -ne 0 ] && ok "deploy protection: a missing database setting is refused" || bad "deploy protection: missing STAGING_DATABASE_URL (exit $code)"
+out=$(STAGING_DATABASE_URL="$(db_url activation_no_such_db_$$)" MODE=plan scripts/db/staging-membership-gate.sh 2>&1); code=$?
+[ $code -ne 0 ] && grep -q "Could not read the staging migration history" <<<"$out" && ok "deploy protection: an unreachable database fails closed, even for plan" || bad "deploy protection: unreachable database (exit $code)"
 
 for name in $(psql "$ADMIN_DATABASE_URL" -X -q -At -c "select datname from pg_database where datname like 'activation\_%\_$$'"); do
   psql "$ADMIN_DATABASE_URL" -X -q -c "drop database if exists $name" >/dev/null

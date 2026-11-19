@@ -22,6 +22,12 @@ name: Deploy database to staging
 #     project can never match.
 #   - Migrations must be on the reviewed approved list with matching checksums,
 #     and must pass on a throwaway database before staging is touched.
+#   - 20261122000000 (pilot membership) is never applied here: while it is
+#     pending, apply mode is refused before anything is pushed
+#     (scripts/db/staging-membership-gate.sh). Only the "Activate pilot
+#     membership on staging" workflow applies it, together with the founder's
+#     grant. plan stays a dry run; check runs the checks that don't depend on
+#     the gate.
 
 on:
   workflow_dispatch:
@@ -110,6 +116,16 @@ jobs:
           CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
         run: scripts/db/verify-staging-target.sh
 
+      # Every mode passes here before anything reaches the database: while
+      # 20261122000000 is pending, apply is refused (fail closed).
+      - name: Pilot membership protection (20261122000000 only through the activation workflow)
+        id: gate
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          MODE: ${{ inputs.mode }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/staging-membership-gate.sh
+
       - name: Only approved, unchanged migrations are present
         run: scripts/db/check-approved-migrations.sh
 
@@ -149,10 +165,18 @@ jobs:
         if: inputs.mode == 'apply' || inputs.mode == 'check'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          GATE_PENDING: ${{ steps.gate.outputs.gate_pending }}
           PGCONNECT_TIMEOUT: '15'
         run: |
           set -euo pipefail
           for f in supabase/tests/*.sql; do
+            # Before activation, 002, 005 and 007 describe the state AFTER the
+            # gate; they run inside the activation rehearsal instead.
+            if [ "$GATE_PENDING" != "false" ]; then
+              case "$(basename "$f")" in
+                002_*|005_*|007_*) echo "Skipping $f until pilot membership is activated (it runs inside the activation rehearsal)."; continue ;;
+              esac
+            fi
             echo "Running $f"
             psql "$STAGING_DATABASE_URL" -v ON_ERROR_STOP=1 -q -X -f "$f"
           done
