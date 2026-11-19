@@ -40,9 +40,16 @@
 // scripts/check-member-app-bundle.mjs. The public site and demo rules above
 // are unchanged.
 //
-// It cannot stop "Promote to Production" on an existing preview, because that
-// reuses a build without running it again. The runtime fallback in
-// src/entry.ts covers that case for the full app. Never promote a preview.
+// "Promote to Production" on a Preview: Vercel documents that this triggers a
+// complete rebuild with Production environment variables, so this guard runs
+// on it and refuses it (a Preview is never a build of main). That is the
+// EXPECTED behaviour until it has been verified on the member app project
+// (docs/PILOT-ENVIRONMENT.md, "Promotion verification test"). What this guard
+// cannot see: rolling back or re-promoting an older Production deployment
+// (no rebuild; it already passed this guard), and a prebuilt upload from the
+// command line (no build runs). Those are controlled by access and, on a
+// paid plan, a Git-only Deployment Policy. The runtime fallback in
+// src/entry.ts still covers the demo address. Don't promote Previews.
 //
 // Removing or loosening this guard requires a reviewed pull request.
 import { VERCEL_PROJECTS, identifyProject } from './vercel-project.mjs'

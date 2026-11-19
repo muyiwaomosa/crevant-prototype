@@ -8,12 +8,14 @@ import { APPROVED_NOTICE, type ApprovedNotice } from './privacy/notice'
  * published before registration opens and that no registrations are being
  * collected. It never shows placeholder text that
  * could be mistaken for a notice, and search engines never index it.
+ * `backTo` is where its back link goes: the home page on the public site, and
+ * /app on the member app address (src/public/PublicApp.tsx).
  */
-export function PrivacyPage({ notice = APPROVED_NOTICE }: { notice?: ApprovedNotice | null }) {
+export function PrivacyPage({ notice = APPROVED_NOTICE, backTo = '/' }: { notice?: ApprovedNotice | null; backTo?: string }) {
   return (
     <section aria-labelledby="privacy-title" className="px-4 py-12 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-2xl">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-600 hover:text-ink-900">
+        <Link to={backTo} className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-600 hover:text-ink-900">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Splitpost
         </Link>
         <h1 id="privacy-title" className="mt-6 font-display text-[2rem] font-extrabold leading-tight tracking-[-0.02em] text-ink-900 sm:text-[2.5rem]">

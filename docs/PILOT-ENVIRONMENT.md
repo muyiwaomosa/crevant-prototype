@@ -60,12 +60,88 @@ build.
    path. Tests prove it (`scripts/member-app.test.mjs`).
 
 Tests: `scripts/member-app.test.mjs` (every allowed and refused build
-configuration), `src/entry.test.ts` (the address rules), and the existing
-build, guard, Supabase target and header tests, which are unchanged.
+configuration, and the pinned build command), `src/entry.test.ts` (the
+address rules), `src/public/member-host.test.tsx` (member pages only on the
+member address), and the existing build, guard, Supabase target and header
+tests, which are unchanged.
 
-Known limit, as for the public site: the build guard cannot stop **Promote to
-Production** of an existing Preview, which reuses a build without running the
-checks again. Never promote a Preview in the member app project.
+### The build command is pinned
+
+`vercel.json` sets `"buildCommand": "npm run build"`. Vercel documents that
+this overrides the Build Command in a project's dashboard settings, so a
+dashboard change can't skip the checks above. `vercel.json` is shared by
+every Vercel project that builds `main`:
+
+* **Frozen demo (Production):** unaffected. It builds the `demo` branch,
+  whose own `vercel.json` has no build command.
+* **Demo project Previews and the public site project:** the repository
+  records `npm run build` as the build command they use (README: Vercel's
+  detected defaults; `docs/PUBLIC-SITE.md`: "no build command change"). In
+  the splitpost project, `npm run build` and `npm run build:site` produce the
+  same public site build, because the build identifies that project.
+* **Dependency before merging:** the dashboards themselves can't be read
+  from the repository. Before this is merged, check Settings, Build and
+  Deployment, Build Command in both the `splitpost` and `crevant-prototype`
+  projects: the Override toggle should be off, or set to `npm run build` (or
+  `npm run build:site` in `splitpost`). If either shows anything else, stop
+  and review before merging. The Previews of this pull request in both
+  projects are a first signal: they build with the pinned command.
+
+### Promoting a Preview, rollbacks and uploads
+
+| Action | What happens | Control |
+|---|---|---|
+| Promote a Preview to Production | Vercel documents a **complete rebuild with Production environment variables**, so the guards run and refuse it (a Preview is never a build of `main`). **Expected behaviour, not yet verified on `splitpost-app`.** | Technical (the guards), pending the verification test below |
+| Roll back, or re-promote an older Production deployment | No rebuild; that deployment already passed the guards when it was built from `main` | Procedure: know which deployment you are returning to |
+| Upload a prebuilt bundle from the command line (`vercel deploy --prebuilt --prod`) | No build runs, so no checks run | Access: the founder is the only team member, with two-factor sign in, and no Vercel token exists in GitHub, CI or anywhere else. Recommended go-live control: a Git-only Deployment Policy (below) |
+| Change the Build Command in the dashboard | Overridden by `vercel.json` (pinned above) | Technical |
+| Change Production environment variables | The approval switch is meant to be changed this way | Access: founder only |
+
+**Don't promote Previews in the member app project.** Go-live happens only
+by merging to `main` with `CREVANT_MEMBER_APP_APPROVED=true` set.
+
+### Promotion verification test (future; needs the founder's approval)
+
+Run once, after the `splitpost-app` project exists and before go-live:
+
+1. Push a throwaway branch with no meaningful changes (for example
+   `verify/promotion-guard`), so Vercel builds a Preview in `splitpost-app`.
+2. In Vercel, open that Preview and choose **Promote**.
+3. **Expected:** the promotion's rebuild fails, with the guard's message
+   that Production builds only `main`, and `app.splitpost.ca` keeps serving
+   what it served before.
+4. Record the result here, delete the branch and the failed deployment, and
+   replace "expected behaviour" above with "verified on <date>".
+5. If the promotion succeeds instead, stop: don't go live, and treat
+   promotion as an unguarded path (access controls and a Git-only policy
+   become mandatory).
+
+### Recommended go-live control: Git-only Production deployments
+
+Vercel's **Deployment Policies** can restrict which sources may create
+deployments, per environment (for example: Production only from Git, never
+from the command line or deploy hooks). Vercel documents them for Pro and
+Enterprise teams, editable by Owners only. Recommended before go-live,
+**subject to confirming availability on our plan**. Not enabled yet.
+
+## The member app address only shows member pages
+
+On `app.splitpost.ca` the full app serves only the member experience
+(`src/public/PublicApp.tsx`, `MemberHostRoutes`):
+
+* sign in, password reset, the invitation link (scanner-safe, unchanged),
+  setting a password, the account page, the privacy notice (`/privacy`) and
+  the members area (`/app`);
+* every other path, **including client-side navigation** (the landing page,
+  the waitlist, the pilot access page, anything unknown), goes to `/app`,
+  which asks a signed-out visitor to sign in, with no redirect loop;
+* its own layout (`src/public/MemberHostLayout.tsx`): the logo goes to
+  `/app`; no marketing or waitlist links; a footer link to the privacy notice
+  and one labelled link, **Splitpost website**, to `https://www.splitpost.ca`.
+
+Previews and local builds still serve every page. The public site build never
+includes any of this (it doesn't use `PublicApp`), and its bundle check
+proves it carries no member route.
 
 ## Database authorization audit (read only)
 
@@ -112,6 +188,9 @@ audit's allow-list changes in the same pull request.
 
 ### Vercel
 
+0. Before merging this pull request: confirm the Build Command setting in
+   the `splitpost` and `crevant-prototype` projects (see "The build command
+   is pinned").
 1. Confirm the team's plan (Vercel, team settings, Billing). Vercel's terms
    allow Hobby for non-commercial use only; Pro is needed before real pilot
    members use the app.
@@ -129,6 +208,11 @@ audit's allow-list changes in the same pull request.
    is recorded in `config/vercel-projects.json`, `memberApp.projectId`, in a
    reviewed pull request. Until then every Production build there is refused.
 5. After DNS: add the domain `app.splitpost.ca` to this project.
+6. With approval: run the promotion verification test (above).
+7. Recommended before go-live, if the plan offers it: a Deployment Policy
+   allowing Production deployments from Git only.
+8. Keep the founder as the only team member, with two-factor sign in; create
+   no Vercel tokens.
 
 ### DNS
 

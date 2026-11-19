@@ -274,3 +274,15 @@ test('app.splitpost.ca is never indexed, on any path', async () => {
   const { headerNoindex } = await import('./vercel-robots.mjs')
   for (const p of ['/', '/app', '/app/discover', '/sign-in', '/auth/confirm', '/join', '/privacy']) assert.equal(headerNoindex(VERCEL_PROJECTS.memberApp.host, p), true, p)
 })
+
+// --- The build command is pinned (vercel.json) ----------------------------------------
+
+test('vercel.json pins the build command to npm run build, so the guards always run on Vercel', () => {
+  const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  // Vercel documents that vercel.json's buildCommand overrides the dashboard's Build Command.
+  assert.equal(vercel.buildCommand, 'npm run build')
+  assert.equal(pkg.scripts.build, 'node scripts/build.mjs')
+  // Nothing else about the build is overridden here (install, output, framework stay as detected).
+  for (const k of ['installCommand', 'outputDirectory', 'framework', 'devCommand', 'ignoreCommand']) assert.equal(vercel[k], undefined, k)
+})

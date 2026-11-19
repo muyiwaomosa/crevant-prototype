@@ -123,3 +123,10 @@ test('only the waitlist function itself is allowed, and only for the right build
   assert.notDeepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};fetch("https://hmrliwoychnqrbbydorg.supabase.co/rest/v1/x")` })), [])
   assert.notDeepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};fetch("https://hmrliwoychnqrbbydorg.supabase.co/functions/v1/join-waitlist-admin")` })), [])
 })
+
+test('the member app address code (app.splitpost.ca routes and layout) never reaches the public site', () => {
+  for (const js of ['const h=["app.splitpost.ca"]', '"data-testid":"member-host-header"', '"data-testid":"member-host-footer"', '"data-testid":"public-site-link"']) {
+    const problems = checkSiteBundle(bundle({ js: `${CLEAN_JS};${js}` }))
+    assert.ok(problems.some((p) => /member app address code/.test(p)), js)
+  }
+})
