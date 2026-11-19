@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { createSupabaseApi, type AppApi, type OwnProfile } from './api'
+import { createSupabaseApi, type AppApi, type OwnProfile, type AccessState } from './api'
 
 const ApiContext = createContext<AppApi | null>(null)
 
@@ -33,17 +33,35 @@ export function useMyProfile(): ProfileState {
 
 export type GateStatus =
   | { kind: 'loading' }
+  | { kind: 'no_access'; access: AccessState }
+  | { kind: 'access_error' }
   | { kind: 'missing' }
   | { kind: 'error' }
   | { kind: 'incomplete'; profile: OwnProfile }
   | { kind: 'ready'; profile: OwnProfile & { username: string; displayName: string } }
 
-/** Loads the member's own profile row and decides whether setup is needed. */
+/**
+ * Decides what a signed-in account sees, in the database's order: pilot
+ * membership first (an account without it gets no member data at all), then
+ * the profile (setup is needed until it has a username and display name).
+ */
 export function useProfileGate(): { status: GateStatus; reload: () => Promise<void> } {
   const api = useContext(ApiContext)
   const [status, setStatus] = useState<GateStatus>({ kind: 'loading' })
   const reload = useCallback(async () => {
     if (!api) return
+    let access: AccessState
+    try {
+      access = await api.accessState()
+    } catch {
+      // Couldn't verify membership: show nothing but the error.
+      setStatus({ kind: 'access_error' })
+      return
+    }
+    if (access.status !== 'active') {
+      setStatus({ kind: 'no_access', access })
+      return
+    }
     try {
       const p = await api.ownProfile()
       if (!p) setStatus({ kind: 'missing' })

@@ -78,6 +78,23 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/crevant_test
         run: scripts/db/test.sh
+      - name: The atomic staging activation behaves on throwaway databases
+        env:
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: scripts/db/activation-test.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the Supabase CLI version the staging workflow pins
+        run: |
+          set -euo pipefail
+          v="$(grep -E '^  SUPABASE_CLI_VERSION:' .github/workflows/deploy-db-staging.yml | awk '{print $2}')"
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/supabase-cli" "supabase@$v"
+      - name: The activation is recognised by the standard Supabase migration tooling
+        env:
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          SUPABASE: ${{ runner.temp }}/supabase-cli/node_modules/.bin/supabase
+        run: scripts/db/activation-cli-compat-test.sh
 
   integration:
     # Real local Supabase in Docker, isolated to this runner: standard local

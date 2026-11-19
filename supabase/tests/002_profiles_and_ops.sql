@@ -81,7 +81,10 @@ begin
 end $$;
 
 -- 4. profiles: row level security on; anonymous visitors have no privileges;
---    signed-in members may only read, and update username and display_name.
+--    signed-in members may only read their own row. Since the pilot
+--    membership gate (20261122000000_member_access), choosing a username and
+--    display name goes through public.app_set_profile, which checks
+--    membership, so members have no direct UPDATE at all.
 do $$
 declare
   c text;
@@ -103,39 +106,36 @@ begin
   if has_table_privilege('authenticated', 'public.profiles', 'INSERT,DELETE,TRUNCATE,REFERENCES,TRIGGER') then
     raise exception 'FAIL: authenticated may insert, delete or truncate public.profiles';
   end if;
-  foreach c in array array['username', 'display_name'] loop
-    if not has_column_privilege('authenticated', 'public.profiles', c, 'UPDATE') then
-      raise exception 'FAIL: authenticated cannot update public.profiles.%', c;
-    end if;
-  end loop;
-  foreach c in array array['id', 'created_at', 'updated_at'] loop
+  if has_table_privilege('authenticated', 'public.profiles', 'UPDATE') then
+    raise exception 'FAIL: authenticated may update public.profiles directly';
+  end if;
+  foreach c in array array['id', 'username', 'display_name', 'created_at', 'updated_at'] loop
     if has_column_privilege('authenticated', 'public.profiles', c, 'UPDATE') then
-      raise exception 'FAIL: authenticated can update protected column public.profiles.%', c;
+      raise exception 'FAIL: authenticated can update public.profiles.% directly (use public.app_set_profile)', c;
     end if;
   end loop;
   raise notice 'PASS: profile privileges are as approved';
 end $$;
 
--- 5. profiles policies: exactly the two own-row policies, for signed-in members only.
+-- 5. profiles policies: exactly one, own-row read, for signed-in members only.
 do $$
 declare
   n int;
 begin
   select count(*) into n from pg_policies where schemaname = 'public' and tablename = 'profiles';
-  if n <> 2 then
-    raise exception 'FAIL: expected 2 policies on public.profiles, found %', n;
+  if n <> 1 then
+    raise exception 'FAIL: expected 1 policy on public.profiles, found %', n;
   end if;
   if exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'profiles'
       and (roles <> '{authenticated}'::name[]
-           or cmd not in ('SELECT', 'UPDATE')
-           or coalesce(qual, '') !~ 'auth\.uid\(\)'
-           or (cmd = 'UPDATE' and coalesce(with_check, '') !~ 'auth\.uid\(\)'))
+           or cmd <> 'SELECT'
+           or coalesce(qual, '') !~ 'auth\.uid\(\)')
   ) then
-    raise exception 'FAIL: a profiles policy is not limited to the signed-in member''s own row';
+    raise exception 'FAIL: the profiles policy is not limited to reading the signed-in member''s own row';
   end if;
-  raise notice 'PASS: profiles policies allow own-row read and update only';
+  raise notice 'PASS: profiles policies allow own-row read only';
 end $$;
 
 -- 6. Trigger functions: fixed empty search path, minimum privileges, not

@@ -7,7 +7,9 @@
 #      Supabase's default grants (scripts/db/bootstrap-*.sql).
 #   2. supabase/tests-local/before-migrations.sql, if present: test identities
 #      that exist before the migrations run (for example, to test backfills).
-#   3. Every migration in supabase/migrations, in order.
+#   3. Every migration in supabase/migrations, in order. Just before each one,
+#      supabase/tests-local/before/<version>.sql if present: test data that
+#      must exist before that migration, to prove it is preserved.
 #   4. supabase/tests/*.sql: staging-safe, read-only checks. These are also
 #      the checks the staging deploy workflow runs against staging.
 #   5. supabase/tests-local/[0-9]*.sql: tests that create fake identities.
@@ -42,6 +44,13 @@ if [ -f supabase/tests-local/before-migrations.sql ]; then
 fi
 
 for f in supabase/migrations/*.sql; do
+  # Test-only data that must exist just BEFORE a given migration, to prove the
+  # migration preserves it (supabase/tests-local/before/<version>.sql).
+  hook="supabase/tests-local/before/$(basename "$f" | cut -d_ -f1).sql"
+  if [ -f "$hook" ]; then
+    echo "Creating data that exists before $(basename "$f") (test only)"
+    "${PSQL[@]}" -f "$hook"
+  fi
   echo "Applying $f"
   "${PSQL[@]}" -f "$f"
 done
@@ -74,7 +83,7 @@ scripts/db/viewed-state-plan-test.sh
 # must then fail with a "FAIL:" message, proving they would catch it. (Only
 # those checks files are replayed here: the Phase 0 file manages its own
 # transactions, which would end the wrapper's transaction early.)
-CHECKS=(supabase/tests/002_profiles_and_ops.sql supabase/tests/003_waitlist.sql supabase/tests/004_acquisition.sql supabase/tests/005_social_core.sql supabase/tests/006_platform_functions.sql)
+CHECKS=(supabase/tests/002_profiles_and_ops.sql supabase/tests/003_waitlist.sql supabase/tests/004_acquisition.sql supabase/tests/005_social_core.sql supabase/tests/006_platform_functions.sql supabase/tests/007_member_access.sql)
 for v in supabase/tests-local/violations/*.sql; do
   [ -e "$v" ] || continue
   wrapper="$(mktemp)"

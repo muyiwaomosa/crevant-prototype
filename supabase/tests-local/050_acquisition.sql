@@ -211,6 +211,20 @@ begin
 end $$;
 
 -- 3. Unusable codes fail safely, each with a clear status and no id.
+-- Pilot membership (20261122000000): a creator's link works only while the
+-- creator has active pilot access. Without it, the link is inactive.
+do $$
+declare
+  r record;
+begin
+  select * into r from ops.resolve_creator_link((select code from ops.creator_links limit 1));
+  if r.status <> 'creator_inactive' or r.link_id is not null or r.creator_id is not null then
+    raise exception 'FAIL: a creator without pilot access has a working link: %', r;
+  end if;
+  raise notice 'PASS: a creator''s link is inactive until the creator has pilot access';
+end $$;
+select ops.grant_member_access('00000000-0000-0000-0000-0000000000c1', 'creator', 'test');
+
 do $$
 declare
   v_code text := (select code from ops.creator_links limit 1);

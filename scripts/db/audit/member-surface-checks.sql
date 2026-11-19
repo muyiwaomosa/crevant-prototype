@@ -8,6 +8,7 @@
 do $$
 declare
   expected text[] := array[
+    'public.app_access_state()',
     'public.app_add_comment(uuid,text)',
     'public.app_add_comment(uuid,text,uuid)',
     'public.app_catch_up(uuid,timestamp with time zone,uuid)',
@@ -29,6 +30,7 @@ declare
     'public.app_member(text)',
     'public.app_member_posts(uuid,timestamp with time zone,integer)',
     'public.app_post(uuid)',
+    'public.app_set_profile(text,text)',
     'public.app_unfollow(uuid)',
     'public.app_unlike(uuid)',
     'public.app_unseen_creators()'
@@ -68,9 +70,16 @@ begin
 end;
 $$;
 
--- 2. Every member function runs as its owner with an empty search path, and
---    every one except app_me (which returns only the caller's own row) checks
---    the caller through social.current_member().
+-- 2. Every member function runs as its owner with an empty search path and
+--    checks the caller, including pilot membership:
+--      * app_me and app_set_profile: social.current_access() (signed in AND an
+--        active pilot membership; the profile may still be incomplete);
+--      * app_access_state: auth.uid() only, returning the caller's own state;
+--      * every other function: social.current_member() (signed in, active
+--        membership, complete profile).
+--    And the chain itself: current_member() goes through current_access(),
+--    which requires ops.member_access_active(), which reads an active,
+--    unexpired ops.member_access row.
 do $$
 declare
   r record;
@@ -86,23 +95,40 @@ begin
     if r.proconfig is null or not ('search_path=""' = any (r.proconfig) or 'search_path=' = any (r.proconfig)) then
       bad := bad || (r.proname || ': search path not empty');
     end if;
-    if r.proname <> 'app_me' and position('social.current_member()' in r.prosrc) = 0 then
+    if r.proname in ('app_me', 'app_set_profile') then
+      if position('social.current_access()' in r.prosrc) = 0 then
+        bad := bad || (r.proname || ': does not check social.current_access()');
+      end if;
+    elsif r.proname = 'app_access_state' then
+      if position('auth.uid()' in r.prosrc) = 0 or position('ops.member_access a on a.user_id = v_uid' in r.prosrc) = 0 then
+        bad := bad || (r.proname || ': does not read only the caller''s own membership');
+      end if;
+    elsif position('social.current_member()' in r.prosrc) = 0 then
       bad := bad || (r.proname || ': does not check social.current_member()');
     end if;
-    if r.proname = 'app_me' and position('auth.uid()' in r.prosrc) = 0 then
-      bad := bad || (r.proname || ': does not read the caller from auth.uid()');
-    end if;
   end loop;
+  -- The membership chain.
+  if position('social.current_access()' in coalesce((select prosrc from pg_catalog.pg_proc where oid = to_regprocedure('social.current_member()')), '')) = 0 then
+    bad := bad || 'social.current_member: does not go through social.current_access()'::text;
+  end if;
+  if position('ops.member_access_active(v_uid)' in coalesce((select prosrc from pg_catalog.pg_proc where oid = to_regprocedure('social.current_access()')), '')) = 0 then
+    bad := bad || 'social.current_access: does not require ops.member_access_active()'::text;
+  end if;
+  if coalesce((select prosrc from pg_catalog.pg_proc where oid = to_regprocedure('ops.member_access_active(uuid)')), '')
+       !~ 'ops\.member_access a\s+where a\.user_id = p_user and a\.status = ''active'' and \(a\.expires_at is null or a\.expires_at > pg_catalog\.now\(\)\)' then
+    bad := bad || 'ops.member_access_active: does not require an active, unexpired membership'::text;
+  end if;
   if cardinality(bad) > 0 then
     raise exception 'FAIL: member functions without the expected safeguards: %', bad;
   end if;
-  raise notice 'PASS: every member function runs as its owner with an empty search path and checks the caller';
+  raise notice 'PASS: every member function runs as its owner with an empty search path and checks the caller and their pilot membership';
 end;
 $$;
 
 -- 3. Tables, views and sequences in the owned schemas: anonymous visitors
---    reach none; signed-in accounts reach only public.profiles (read, and
---    update username and display_name), and only through row level security.
+--    reach none; signed-in accounts reach only public.profiles (read their own
+--    row), and only through row level security. Profile changes go through
+--    public.app_set_profile, which checks pilot membership.
 do $$
 declare
   rel_anon text[];
@@ -132,7 +158,7 @@ begin
   end if;
 
   if pg_catalog.has_table_privilege('authenticated', 'public.profiles', 'INSERT,DELETE,TRUNCATE,REFERENCES,TRIGGER') then
-    raise exception 'FAIL: signed-in accounts can insert, delete or otherwise change public.profiles beyond the two editable columns';
+    raise exception 'FAIL: signed-in accounts can insert, delete or otherwise change public.profiles';
   end if;
   if not pg_catalog.has_table_privilege('authenticated', 'public.profiles', 'SELECT') then
     raise exception 'FAIL: signed-in accounts can no longer read their own profile (expected SELECT on public.profiles)';
@@ -141,8 +167,8 @@ begin
   from pg_catalog.pg_attribute a
   where a.attrelid = 'public.profiles'::regclass and a.attnum > 0 and not a.attisdropped
     and pg_catalog.has_column_privilege('authenticated', 'public.profiles'::regclass, a.attnum, 'UPDATE');
-  if cols_update <> array['display_name', 'username'] then
-    raise exception 'FAIL: signed-in accounts can update these profile columns: % (expected only display_name and username)', cols_update;
+  if cardinality(cols_update) > 0 or pg_catalog.has_table_privilege('authenticated', 'public.profiles', 'UPDATE') then
+    raise exception 'FAIL: signed-in accounts can update profile columns directly: % (profile changes must go through public.app_set_profile)', cols_update;
   end if;
   select coalesce(array_agg(a.attname::text), '{}') into cols_insert
   from pg_catalog.pg_attribute a
@@ -151,7 +177,7 @@ begin
   if cardinality(cols_insert) > 0 then
     raise exception 'FAIL: signed-in accounts can insert or reference profile columns: %', cols_insert;
   end if;
-  raise notice 'PASS: anonymous visitors reach no tables; signed-in accounts reach only public.profiles (read, and update username and display_name)';
+  raise notice 'PASS: anonymous visitors reach no tables; signed-in accounts reach only public.profiles (read own row)';
 end;
 $$;
 
@@ -166,20 +192,20 @@ begin
   end if;
   for pol in select policyname, cmd, roles, qual, with_check, permissive from pg_catalog.pg_policies where schemaname = 'public' and tablename = 'profiles' loop
     n := n + 1;
-    if pol.cmd not in ('SELECT', 'UPDATE') then
+    if pol.cmd <> 'SELECT' then
       raise exception 'FAIL: unexpected % policy "%" on public.profiles', pol.cmd, pol.policyname;
     end if;
     if pol.roles <> array['authenticated']::name[] then
       raise exception 'FAIL: policy "%" on public.profiles applies to %, expected only authenticated', pol.policyname, pol.roles;
     end if;
-    if coalesce(pol.qual, '') !~ 'auth\.uid\(\)' or (pol.cmd = 'UPDATE' and coalesce(pol.with_check, '') !~ 'auth\.uid\(\)') then
+    if coalesce(pol.qual, '') !~ 'auth\.uid\(\)' then
       raise exception 'FAIL: policy "%" on public.profiles is not limited to the caller''s own row', pol.policyname;
     end if;
   end loop;
-  if n <> 2 then
-    raise exception 'FAIL: expected exactly 2 policies on public.profiles (read own, update own), found %', n;
+  if n <> 1 then
+    raise exception 'FAIL: expected exactly 1 policy on public.profiles (read own), found %', n;
   end if;
-  raise notice 'PASS: public.profiles has row level security on, with only read-own and update-own policies';
+  raise notice 'PASS: public.profiles has row level security on, with only the read-own policy';
 end;
 $$;
 
@@ -234,5 +260,44 @@ begin
     raise exception 'FAIL: storage policies open to members or visitors: %', pols;
   end if;
   raise notice 'PASS: no storage buckets and no storage policies for members or visitors';
+end;
+$$;
+
+-- 7. Pilot membership (20261122000000_member_access): the tables are private
+--    with row level security; only server code can grant or revoke; every
+--    change is recorded by a trigger; the history can't be edited or erased.
+do $$
+declare
+  bad text[] := '{}';
+  f text;
+begin
+  if pg_catalog.to_regclass('ops.member_access') is null or pg_catalog.to_regclass('ops.member_access_events') is null then
+    raise exception 'FAIL: the pilot membership tables are missing';
+  end if;
+  foreach f in array array['ops.grant_member_access(uuid,text,text,timestamp with time zone,text)', 'ops.revoke_member_access(uuid,text,text)', 'ops.member_access_active(uuid)'] loop
+    if to_regprocedure(f) is null then
+      bad := bad || (f || ': missing');
+    elsif pg_catalog.has_function_privilege('authenticated', to_regprocedure(f), 'EXECUTE')
+       or pg_catalog.has_function_privilege('anon', to_regprocedure(f), 'EXECUTE') then
+      bad := bad || (f || ': callable by members or visitors');
+    end if;
+  end loop;
+  if not exists (select 1 from pg_catalog.pg_trigger where tgrelid = 'ops.member_access'::regclass and tgname = 'member_access_record' and tgenabled <> 'D') then
+    bad := bad || 'ops.member_access: changes are not recorded (trigger member_access_record missing or disabled)'::text;
+  end if;
+  if not exists (select 1 from pg_catalog.pg_trigger where tgrelid = 'ops.member_access_events'::regclass and tgname = 'member_access_events_no_update' and tgenabled <> 'D') then
+    bad := bad || 'ops.member_access_events: the history can be edited or deleted'::text;
+  end if;
+  if not exists (select 1 from pg_catalog.pg_trigger where tgrelid = 'ops.member_access_events'::regclass and tgname = 'member_access_events_no_truncate' and tgenabled <> 'D') then
+    bad := bad || 'ops.member_access_events: the history can be truncated'::text;
+  end if;
+  if position('ops.member_access a on a.user_id = p.id' in coalesce(pg_catalog.pg_get_viewdef('social.visible_members'::regclass), '')) = 0
+     and position('JOIN ops.member_access a ON' in coalesce(pg_catalog.pg_get_viewdef('social.visible_members'::regclass), '')) = 0 then
+    bad := bad || 'social.visible_members: not limited to active pilot members'::text;
+  end if;
+  if cardinality(bad) > 0 then
+    raise exception 'FAIL: pilot membership safeguards missing: %', bad;
+  end if;
+  raise notice 'PASS: pilot membership is private, server-granted only, fully recorded, and its history is append-only';
 end;
 $$;

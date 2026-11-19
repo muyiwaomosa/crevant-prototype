@@ -20,6 +20,9 @@
 #                   When the social app launches, a reviewed PR adds it here
 #                   and the workflow applies it with --include-all (it is
 #                   older than 20261118000000).
+#   20261122000000  pilot membership access control. It changes the social
+#                   core's functions, so it can only follow the social core
+#                   to Production, in the same reviewed PR.
 20261106000000_foundations.sql
 20261107000000_profiles_and_ops.sql
 20261110000000_waitlist.sql
