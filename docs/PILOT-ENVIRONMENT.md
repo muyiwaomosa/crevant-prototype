@@ -124,9 +124,21 @@ from the command line or deploy hooks). Vercel documents them for Pro and
 Enterprise teams, editable by Owners only. Recommended before go-live,
 **subject to confirming availability on our plan**. Not enabled yet.
 
-## The member app address only shows member pages
+## The member app only shows member pages, on every address
 
-On `app.splitpost.ca` the full app serves only the member experience
+A **member app build** (any build in the `splitpost-app` project) serves only
+the member experience on **every address it is served from**: its protected
+Vercel Previews, the project's own `.vercel.app` address and
+`app.splitpost.ca`. A Preview therefore shows exactly what members will see.
+`scripts/build.mjs` always sets `CREVANT_MEMBER_APP_BUILD` itself (`"true"`
+only for that project, never taken from project settings), `vite.config.ts`
+compiles it in and writes a marker into the page, and
+`scripts/check-member-app-bundle.mjs` fails the build if the marker is
+missing. The public site build never sets it, and its bundle check refuses
+the marker. Any other full app build shows member-only pages on
+`app.splitpost.ca` only, as before.
+
+On those addresses the app serves only the member experience
 (`src/public/PublicApp.tsx`, `MemberHostRoutes`):
 
 * sign in, password reset, the invitation link (scanner-safe, unchanged),
@@ -139,7 +151,8 @@ On `app.splitpost.ca` the full app serves only the member experience
   `/app`; no marketing or waitlist links; a footer link to the privacy notice
   and one labelled link, **Splitpost website**, to `https://www.splitpost.ca`.
 
-Previews and local builds still serve every page. The public site build never
+Previews of the other projects and local full app builds still serve every
+page. The public site build never
 includes any of this (it doesn't use `PublicApp`), and its bundle check
 proves it carries no member route.
 

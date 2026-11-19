@@ -10,7 +10,10 @@
 //   * it must contain no other Supabase project address;
 //   * it must contain no waitlist function address (members never use the
 //     waitlist form);
-//   * it must contain nothing that looks like a secret or service key.
+//   * it must contain nothing that looks like a secret or service key;
+//   * its index.html must carry the member app build marker, proving
+//     member-only routing was compiled in (so its Previews and every other
+//     address it is served from show only member pages, never the public site).
 //
 // It reads the built files, so it catches a wrong target however it got
 // there. scripts/check-supabase-target.mjs checks the settings before the
@@ -22,6 +25,9 @@ import { join, relative } from 'node:path'
 
 const projects = JSON.parse(readFileSync(new URL('../config/supabase-projects.json', import.meta.url), 'utf8'))
 const REF = /^[a-z0-9]{20}$/
+
+/** Written into index.html by vite.config.ts in a member app build. */
+export const MEMBER_APP_MARKER = '<meta name="crevant-build" content="member-app" />'
 
 /** [label, pattern] pairs that must never appear in the member app. */
 export const FORBIDDEN = [
@@ -47,6 +53,11 @@ export function checkMemberAppBundle(texts, refs = { staging: projects.staging?.
   if (!refs.staging || !REF.test(refs.staging)) return ['the staging project reference is not configured (config/supabase-projects.json)']
   if (refs.production && refs.production === refs.staging) return ['the staging and Production project references are the same (config/supabase-projects.json)']
   const stagingHost = `${refs.staging}.supabase.co`
+  const html = Object.entries(texts).find(([p]) => p === 'index.html' || p.endsWith('/index.html'))
+  if (!html) problems.push('index.html is missing')
+  else if (!html[1].includes(MEMBER_APP_MARKER)) {
+    problems.push('index.html: the member app build marker is missing, so member-only routing was not compiled in (Previews would show public pages)')
+  }
   let sawStaging = false
   for (const [path, text] of Object.entries(texts)) {
     if (text.includes(stagingHost)) sawStaging = true

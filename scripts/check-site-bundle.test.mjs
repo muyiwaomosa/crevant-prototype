@@ -125,7 +125,7 @@ test('only the waitlist function itself is allowed, and only for the right build
 })
 
 test('the member app address code (app.splitpost.ca routes and layout) never reaches the public site', () => {
-  for (const js of ['const h=["app.splitpost.ca"]', '"data-testid":"member-host-header"', '"data-testid":"member-host-footer"', '"data-testid":"public-site-link"']) {
+  for (const js of ['const h=["app.splitpost.ca"]', '"data-testid":"member-host-header"', '"data-testid":"member-host-footer"', '"data-testid":"public-site-link"', '<meta name="crevant-build" content="member-app" />']) {
     const problems = checkSiteBundle(bundle({ js: `${CLEAN_JS};${js}` }))
     assert.ok(problems.some((p) => /member app address code/.test(p)), js)
   }

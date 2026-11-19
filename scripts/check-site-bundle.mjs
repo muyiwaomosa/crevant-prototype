@@ -25,7 +25,7 @@ export const FORBIDDEN = [
   ['member page text', /Your profile is ready|Sign out of all devices|Set your password/],
   // The member app address's routes and layout (src/public/PublicApp.tsx,
   // MemberHostLayout.tsx): full app only, never the public site.
-  ['member app address code', /app\.splitpost\.ca|member-host-(header|footer)|data-testid="public-site-link"|public-site-link/],
+  ['member app address code', /app\.splitpost\.ca|member-host-(header|footer)|data-testid="public-site-link"|public-site-link|content="member-app"/],
   // Project addresses and keys
   // The one Supabase address allowed is the waitlist function itself: the
   // form posts to it with no key. Anything else on a project is refused.

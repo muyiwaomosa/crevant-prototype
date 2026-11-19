@@ -67,11 +67,21 @@ export function planBuild(env, argv = [], projects = VERCEL_PROJECTS) {
   return { mode: site ? 'site' : 'app', target: target || 'local', steps }
 }
 
+/**
+ * The environment every build step runs with. CREVANT_MEMBER_APP_BUILD is
+ * always set here, never taken from the project's settings: "true" only for
+ * the member app build, so member-only routing is compiled in on every
+ * address it serves (vite.config.ts), and "" for every other build.
+ */
+export function stepEnv(plan, env) {
+  return { ...env, CREVANT_BUILD_MODE: plan.mode, CREVANT_MEMBER_APP_BUILD: plan.memberApp ? 'true' : '' }
+}
+
 const isMain = import.meta.url === `file://${process.argv[1]}`
 if (isMain) {
   const plan = planBuild(process.env, process.argv.slice(2))
   console.log(`Building the ${plan.memberApp ? 'member app' : plan.mode === 'site' ? 'public site' : 'full app'} (target: ${plan.target}).`)
-  const env = { ...process.env, CREVANT_BUILD_MODE: plan.mode }
+  const env = stepEnv(plan, process.env)
   for (const [cmd, ...args] of plan.steps) {
     const r = spawnSync(cmd, args, { stdio: 'inherit', env })
     if (r.status !== 0) process.exit(r.status ?? 1)

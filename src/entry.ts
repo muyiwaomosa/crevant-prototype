@@ -1,3 +1,4 @@
+import { MEMBER_APP_BUILD } from './build-flags'
 /**
  * Decides which app a page load gets. Kept free of React so it can be tested
  * directly.
@@ -70,6 +71,15 @@ export function isMemberAppHost(hostname: string): boolean {
   return MEMBER_APP_HOSTS.includes(hostname.toLowerCase())
 }
 
+/**
+ * True when this page is the member app: on app.splitpost.ca, or anywhere a
+ * member app build is served (its protected Previews and the project's own
+ * .vercel.app address), so those never show a public page either.
+ */
+export function isMemberApp(hostname: string, memberAppBuild: boolean = MEMBER_APP_BUILD): boolean {
+  return memberAppBuild || isMemberAppHost(hostname)
+}
+
 export function isTourPath(pathname: string): boolean {
   return pathname === TOUR_BASE || pathname.startsWith(`${TOUR_BASE}/`)
 }
@@ -84,12 +94,13 @@ export function resolveEntry(
   loc: { hostname: string; pathname: string; search: string; hash: string },
   { demoFallback = true }: { demoFallback?: boolean } = {},
 ): Entry {
-  if (demoFallback && isProductionDemoHost(loc.hostname)) return { kind: 'demo-fallback' }
   // The member app rule exists only in the full app build: the public site
   // build (--mode site) leaves it out entirely, so it carries no member route.
-  if (import.meta.env.MODE !== 'site' && isMemberAppHost(loc.hostname)) {
+  // It comes first, so a member app build never shows the demo or the tour.
+  if (import.meta.env.MODE !== 'site' && isMemberApp(loc.hostname)) {
     return MEMBER_APP_PATHS.some((re) => re.test(loc.pathname)) ? { kind: 'member' } : { kind: 'member', redirectTo: MEMBER_APP_HOME }
   }
+  if (demoFallback && isProductionDemoHost(loc.hostname)) return { kind: 'demo-fallback' }
   if (isTourPath(loc.pathname)) return { kind: 'tour' }
   if (LEGACY_PROTOTYPE_PATHS.some((re) => re.test(loc.pathname))) {
     return { kind: 'tour', redirectTo: `${TOUR_BASE}${loc.pathname}${loc.search}${loc.hash}` }

@@ -20,6 +20,7 @@ const SITE_EXCLUDED_ENV = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY']
 function publicSiteBuild(): Plugin {
   let site = false
   let flags = { productionSite: false, allowIndexing: false }
+  let memberApp = false
   return {
     name: 'crevant-public-site-build',
     config(_config, env) {
@@ -28,10 +29,14 @@ function publicSiteBuild(): Plugin {
       // the site bundle, whatever the build environment has set.
       if (site) for (const k of SITE_EXCLUDED_ENV) delete process.env[k]
       flags = indexingFlags(process.env, site ? 'site' : 'app')
+      // Member-only routing on every address (scripts/build.mjs sets this only
+      // in the splitpost-app project). Never in the public site build.
+      memberApp = !site && (process.env.CREVANT_MEMBER_APP_BUILD || '').trim() === 'true'
       return {
         define: {
           __CREVANT_PRODUCTION_SITE__: JSON.stringify(flags.productionSite),
           __CREVANT_ALLOW_INDEXING__: JSON.stringify(flags.allowIndexing),
+          __CREVANT_MEMBER_APP_BUILD__: JSON.stringify(memberApp),
         },
       }
     },
@@ -45,7 +50,10 @@ function publicSiteBuild(): Plugin {
         // document.querySelector('meta[name="splitpost-commit"]').content
         const sha = (process.env.VERCEL_GIT_COMMIT_SHA || '').trim().toLowerCase()
         const commit = `<meta name="splitpost-commit" content="${/^[0-9a-f]{7,40}$/.test(sha) ? sha.slice(0, 7) : 'local'}" />`
-        if (!site) return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    ${robots}\n    ${commit}`)
+        // A member app build says so in its page, so scripts/check-member-app-bundle.mjs
+        // can confirm member-only routing was compiled in.
+        const member = memberApp ? '<meta name="crevant-build" content="member-app" />\n    ' : ''
+        if (!site) return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    ${member}${robots}\n    ${commit}`)
         const out = html
           .replace('<script type="module" src="/src/main.tsx"></script>', '<script type="module" src="/src/site/main.tsx"></script>')
           .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta name="crevant-build" content="public-site" />\n    ${robots}\n    ${commit}`)

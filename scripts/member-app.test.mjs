@@ -5,10 +5,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { planBuild } from './build.mjs'
+import { planBuild, stepEnv } from './build.mjs'
 import { checkBuildTarget } from './guard-build-target.mjs'
 import { checkSupabaseTarget, PROJECTS as REFS, STAGING_SUPABASE_URL } from './check-supabase-target.mjs'
-import { checkMemberAppBundle } from './check-member-app-bundle.mjs'
+import { MEMBER_APP_MARKER, checkMemberAppBundle } from './check-member-app-bundle.mjs'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, relative } from 'node:path'
 import { VERCEL_PROJECTS, hasDuplicateProjectIds, identifyProject } from './vercel-project.mjs'
 
 // Stand-in IDs for the tests only. The real member app ID is recorded only
@@ -99,6 +103,40 @@ test('the member app project always builds the member app, with the bundle and s
       'scripts/check-bundle-secrets.sh',
     ])
   }
+})
+
+test('member-only routing is compiled in for the member app build only, and never taken from project settings', () => {
+  const member = planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: APP_ID }, [], PROJECTS)
+  assert.equal(stepEnv(member, {}).CREVANT_MEMBER_APP_BUILD, 'true')
+  // A value set in a project's settings is overwritten: off everywhere else, on in the member app project.
+  assert.equal(stepEnv(member, { CREVANT_MEMBER_APP_BUILD: 'false' }).CREVANT_MEMBER_APP_BUILD, 'true')
+  for (const env of [{ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: SITE_ID }, { VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: DEMO_ID }, { VERCEL_ENV: 'preview' }, { VERCEL_ENV: 'production', VERCEL_PROJECT_ID: SITE_ID }]) {
+    const plan = planBuild(env, [], PROJECTS)
+    assert.equal(stepEnv(plan, { CREVANT_MEMBER_APP_BUILD: 'true' }).CREVANT_MEMBER_APP_BUILD, '', JSON.stringify(env))
+  }
+  assert.equal(stepEnv(member, {}).CREVANT_BUILD_MODE, 'app')
+})
+
+test('a real member app build carries the marker and passes the bundle check; a full app build without the flag does not', () => {
+  const build = (flag) => {
+    const out = mkdtempSync(join(tmpdir(), 'member-build-'))
+    const r = spawnSync('npx', ['vite', 'build', '--outDir', out, '--emptyOutDir', '--logLevel', 'error'], {
+      cwd: new URL('..', import.meta.url).pathname,
+      env: { ...process.env, CREVANT_MEMBER_APP_BUILD: flag, VITE_SUPABASE_URL: STAGING_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB, VERCEL_ENV: '' },
+      encoding: 'utf8',
+    })
+    assert.equal(r.status, 0, r.stderr)
+    const walk = (d) => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]))
+    const texts = Object.fromEntries(walk(out).filter((p) => /\.(js|css|html|txt)$/.test(p)).map((p) => [relative(out, p), readFileSync(p, 'utf8')]))
+    rmSync(out, { recursive: true, force: true })
+    return texts
+  }
+  const member = build('true')
+  assert.ok(member['index.html'].includes(MEMBER_APP_MARKER))
+  assert.deepEqual(checkMemberAppBundle(member), [])
+  const full = build('')
+  assert.equal(full['index.html'].includes(MEMBER_APP_MARKER), false)
+  assert.ok(checkMemberAppBundle(full).some((p) => /marker is missing/.test(p)))
 })
 
 test('the public site and demo projects keep their existing builds', () => {
@@ -226,8 +264,16 @@ test('the existing rules for other projects are unchanged', () => {
 
 const stagingHost = `${REFS.staging}.supabase.co`
 
-test('bundle: passes when it points only at the staging (pilot) project', () => {
-  assert.deepEqual(checkMemberAppBundle({ 'assets/index.js': `const u="https://${stagingHost}";const k="${PUB}";` }), [])
+const HTML = `<!doctype html><html><head>${MEMBER_APP_MARKER}</head></html>`
+
+test('bundle: passes when it points only at the staging (pilot) project, with member-only routing compiled in', () => {
+  assert.deepEqual(checkMemberAppBundle({ 'index.html': HTML, 'assets/index.js': `const u="https://${stagingHost}";const k="${PUB}";` }), [])
+})
+
+test('bundle: refused when member-only routing was not compiled in (its Previews would show public pages)', () => {
+  const js = { 'assets/index.js': `const u="https://${stagingHost}";` }
+  assert.ok(checkMemberAppBundle({ 'index.html': '<!doctype html><html><head></head></html>', ...js }).some((p) => /member app build marker is missing/.test(p)))
+  assert.ok(checkMemberAppBundle(js).some((p) => /index\.html is missing/.test(p)))
 })
 
 test('bundle: refused when the Production project reference appears anywhere', () => {
