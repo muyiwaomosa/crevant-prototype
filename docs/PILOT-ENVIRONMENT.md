@@ -13,7 +13,7 @@ manual step below needs the founder's explicit approval at the time.
 | Address | Vercel project | What it serves | Supabase project |
 |---|---|---|---|
 | `www.splitpost.ca` | `splitpost` | The public site only (no sign in, no member code) | Production (waitlist only) |
-| `app.splitpost.ca` | `splitpost-app` (to be created) | The member app: sign in, invitations, the members area | **Staging (the pilot database)** |
+| `app.splitpost.ca` | `splitpost-app` (`prj_FWOmj8cCOMBpQZFA36e1mKId557n`, created 2026-11-19) | The member app: sign in, invitations, the members area | **Staging (the pilot database)** |
 | `crevant-prototype.vercel.app` | `crevant-prototype` | The frozen demo (`demo` branch) | none |
 
 The member app must never use the Production (waitlist) project, and the
@@ -27,9 +27,10 @@ build.
 
 1. **Project identity** (`config/vercel-projects.json`, `scripts/vercel-project.mjs`).
    The member app project is recognised only by its exact Vercel project ID.
-   That ID is `null` until the project exists; while it is `null`, no build
-   is treated as the member app and its Production build is refused. If two
-   projects are ever given the same ID, no project is recognised at all.
+   It is recorded (`prj_FWOmj8cCOMBpQZFA36e1mKId557n`); recording it does not
+   enable Production, which also needs the approval switch and a Git build of
+   `main`. If two projects are ever given the same ID, no project is
+   recognised at all.
 2. **Which build** (`scripts/build.mjs`). In the member app project every
    build (Preview and Production) is the member app, whatever else is set.
    The public site and demo projects keep their existing builds.
@@ -211,15 +212,24 @@ audit's allow-list changes in the same pull request.
    branch `main`, default build command (`npm run build`). Keep
    "Automatically expose System Environment Variables" on, so the build can
    identify the project.
-3. Environment variables, for Production and Preview:
+   **Done 2026-11-19 (founder):** project created; Vercel Authentication with
+   Standard Protection on; Ignored Build Step set (temporary, until this PR
+   merges) to build only the `claude/pilot-m1-environment` branch:
+   `[ "$VERCEL_GIT_COMMIT_REF" != "claude/pilot-m1-environment" ]`; the
+   staging variables below set for **Preview only**, restricted to that
+   branch; system environment variables on; the first Production build of
+   `main` failed as expected; no domain, no approval switch.
+3. Environment variables (today Preview only, on that branch; Production
+   values are added only at go-live, with approval):
    * `VITE_SUPABASE_URL`: the staging project's address;
    * `VITE_SUPABASE_PUBLISHABLE_KEY`: the staging **publishable** key;
    * leave `CREVANT_MEMBER_APP_APPROVED` **unset** until go-live is approved;
    * never set `CREVANT_PRODUCTION_SITE_APPROVED` or `VITE_WAITLIST_ENDPOINT`
      in this project (the build refuses them).
-4. Send the project's ID (Settings, General, Project ID; not a secret). It
-   is recorded in `config/vercel-projects.json`, `memberApp.projectId`, in a
-   reviewed pull request. Until then every Production build there is refused.
+4. The project's ID is recorded in `config/vercel-projects.json`,
+   `memberApp.projectId` (done in this PR). Every Production build there is
+   still refused until go-live is approved. When this PR merges, remove the
+   temporary Ignored Build Step and widen the Preview variables.
 5. After DNS: add the domain `app.splitpost.ca` to this project.
 6. With approval: run the promotion verification test (above).
 7. Recommended before go-live, if the plan offers it: a Deployment Policy

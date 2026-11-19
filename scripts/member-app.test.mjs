@@ -45,21 +45,62 @@ const without = (k) => Object.fromEntries(Object.entries(APPROVED).filter(([key]
 
 // --- The committed configuration -------------------------------------------------
 
-test('the committed config records the member app project, with no ID until the project exists', () => {
+// The splitpost-app project's ID, as the founder confirmed it in Vercel (Settings, General, Project ID).
+const REAL_APP_ID = 'prj_FWOmj8cCOMBpQZFA36e1mKId557n'
+
+test('the committed config records the member app project with its exact, unique ID', () => {
   assert.equal(VERCEL_PROJECTS.memberApp.name, 'splitpost-app')
   assert.equal(VERCEL_PROJECTS.memberApp.host, 'app.splitpost.ca')
-  assert.ok(VERCEL_PROJECTS.memberApp.projectId === null || /^prj_[A-Za-z0-9]{10,64}$/.test(VERCEL_PROJECTS.memberApp.projectId))
-  assert.notEqual(VERCEL_PROJECTS.memberApp.projectId, DEMO_ID)
-  if (VERCEL_PROJECTS.memberApp.projectId) assert.notEqual(VERCEL_PROJECTS.memberApp.projectId, VERCEL_PROJECTS.publicSite.projectId)
+  assert.equal(VERCEL_PROJECTS.memberApp.projectId, REAL_APP_ID)
+  assert.match(VERCEL_PROJECTS.memberApp.projectId, /^prj_[A-Za-z0-9]{10,64}$/)
+  assert.notEqual(VERCEL_PROJECTS.memberApp.projectId, VERCEL_PROJECTS.demo.projectId)
+  assert.notEqual(VERCEL_PROJECTS.memberApp.projectId, VERCEL_PROJECTS.publicSite.projectId)
   assert.equal(hasDuplicateProjectIds(), false)
 })
 
-test('with the committed config (no member app ID yet), nothing is recognised as the member app and its Production build is refused', () => {
-  if (VERCEL_PROJECTS.memberApp.projectId) return
-  assert.notEqual(identifyProject({ VERCEL_PROJECT_ID: APP_ID }), 'memberApp')
-  // The member app approval alone, in an unrecognised project, never builds anything for Production.
-  const r = checkBuildTarget({ ...APPROVED })
-  assert.equal(r.ok, false, r.message)
+test('with the committed config, only the real splitpost-app project is the member app, and only it builds the member app', () => {
+  assert.equal(identifyProject({ VERCEL_PROJECT_ID: REAL_APP_ID }), 'memberApp')
+  assert.equal(identifyProject({ VERCEL_PROJECT_ID: VERCEL_PROJECTS.publicSite.projectId }), 'publicSite')
+  assert.equal(identifyProject({ VERCEL_PROJECT_ID: VERCEL_PROJECTS.demo.projectId }), 'demo')
+  for (const id of [REAL_APP_ID.toLowerCase(), `${REAL_APP_ID}x`, REAL_APP_ID.slice(0, -1), 'splitpost-app', '']) {
+    assert.notEqual(identifyProject({ VERCEL_PROJECT_ID: id }), 'memberApp', id)
+  }
+  const preview = planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: REAL_APP_ID })
+  assert.equal(preview.memberApp, true)
+  assert.equal(stepEnv(preview, {}).CREVANT_MEMBER_APP_BUILD, 'true')
+  assert.ok(commands(preview).includes('node scripts/check-member-app-bundle.mjs dist'))
+})
+
+test('with the committed config, a Preview in splitpost-app passes the guard; Production stays refused without approval, from a branch, or with the site approval', () => {
+  const git = { VERCEL_PROJECT_ID: REAL_APP_ID, VERCEL_GIT_REPO_OWNER: 'muyiwaomosa', VERCEL_GIT_REPO_SLUG: 'crevant-prototype' }
+  assert.equal(checkBuildTarget({ ...git, VERCEL_ENV: 'preview', CREVANT_BUILD_MODE: 'app', VERCEL_GIT_COMMIT_REF: 'claude/pilot-m1-environment' }).ok, true)
+  // Today: no approval switch in the project, so every Production build is refused.
+  assert.equal(checkBuildTarget({ ...git, VERCEL_ENV: 'production', CREVANT_BUILD_MODE: 'app', VERCEL_GIT_COMMIT_REF: 'main' }).ok, false)
+  // Even with approval: only main, never a branch, never with the public site approval, never a site build.
+  const approved = { ...git, VERCEL_ENV: 'production', CREVANT_BUILD_MODE: 'app', CREVANT_MEMBER_APP_APPROVED: 'true' }
+  assert.equal(checkBuildTarget({ ...approved, VERCEL_GIT_COMMIT_REF: 'claude/pilot-m1-environment' }).ok, false)
+  assert.equal(checkBuildTarget({ ...approved, VERCEL_GIT_COMMIT_REF: 'main', CREVANT_PRODUCTION_SITE_APPROVED: 'true' }).ok, false)
+  assert.equal(checkBuildTarget({ ...approved, VERCEL_GIT_COMMIT_REF: 'main', CREVANT_BUILD_MODE: 'site' }).ok, false)
+  // The approval switch set in another project never makes it the member app.
+  assert.equal(checkBuildTarget({ ...approved, VERCEL_GIT_COMMIT_REF: 'main', VERCEL_PROJECT_ID: 'prj_SomeOtherProject00000000' }).ok, false)
+})
+
+test('with the committed config, a splitpost-app Preview may use only the staging project and its publishable key', () => {
+  const ok = checkSupabaseTarget({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: REAL_APP_ID, VITE_SUPABASE_URL: STAGING_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB }, { project: 'memberApp' })
+  assert.equal(ok.ok, true, ok.message)
+  for (const bad of [{ VITE_SUPABASE_URL: PRODUCTION_URL }, { VITE_SUPABASE_URL: '' }, { VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_abcdefgh12345' }]) {
+    const r = checkSupabaseTarget({ VERCEL_ENV: 'preview', VITE_SUPABASE_URL: STAGING_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB, ...bad }, { project: 'memberApp' })
+    assert.equal(r.ok, false, JSON.stringify(bad))
+  }
+})
+
+test('if the real member app ID were ever copied onto another project entry, nothing is recognised (fail closed)', () => {
+  for (const k of ['publicSite', 'demo']) {
+    const projects = { ...VERCEL_PROJECTS, [k]: { ...VERCEL_PROJECTS[k], projectId: REAL_APP_ID } }
+    assert.equal(hasDuplicateProjectIds(projects), true)
+    assert.equal(identifyProject({ VERCEL_PROJECT_ID: REAL_APP_ID }, projects), 'unknown')
+    assert.equal(planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: REAL_APP_ID }, [], projects).memberApp, undefined)
+  }
 })
 
 test('the member app host in the config matches the host the app recognises', () => {
