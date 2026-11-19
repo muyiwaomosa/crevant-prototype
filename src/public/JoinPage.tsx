@@ -10,8 +10,7 @@ import { WaitlistForm } from './waitlist/WaitlistForm'
 import { JoinSuccess } from './waitlist/JoinSuccess'
 import type { MountTurnstile } from './waitlist/turnstile'
 import { InviteBanner } from './waitlist/InviteBanner'
-import { DISCLOSURES } from './landing/claims'
-import { HOMEPAGE_COPY } from './landing/copy'
+import { PILOT_DISCLOSURES } from './landing/copy'
 
 /**
  * /join: the one Splitpost waitlist. Everyone can create, discover, follow,
@@ -86,13 +85,11 @@ export function JoinPage({
           </div>
         )}
 
-        {/* The same pilot disclosures as the homepage invitation, word for word. */}
-        <h2 className="mt-10 font-display text-xl font-bold text-ink-900">{HOMEPAGE_COPY.invitation.pilotDetailsTitle}</h2>
-        <ul data-testid="join-pilot-details" className="mt-3 space-y-1.5 leading-relaxed text-ink-600">
-          {[...HOMEPAGE_COPY.invitation.pilotDetails, DISCLOSURES.noGuarantee].map((d) => (
-            <li key={d}>{d}</li>
-          ))}
-        </ul>
+        {/* The approved pilot disclosure, the same words as beside the homepage's final call to action. */}
+        <h2 className="mt-10 font-display text-xl font-bold text-ink-900">Pilot details</h2>
+        <p data-testid="join-pilot-details" className="mt-3 leading-relaxed text-ink-600">
+          {PILOT_DISCLOSURES.invitation}
+        </p>
 
         <div className="mt-10 rounded-3xl bg-white p-6 ring-1 ring-ink-100">
           {/* Draft copy, pending founder approval. */}

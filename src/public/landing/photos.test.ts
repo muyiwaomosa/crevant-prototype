@@ -1,8 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { CREATOR_GROUP_PHOTOS, PHOTOS, SAMPLE_AVATAR } from './photos'
-import { HOMEPAGE_COPY } from './copy'
+import { FUTURE_MOSAIC, PHOTOS, PHOTO_APPROVALS, SAMPLE_AVATAR } from './photos'
 
 const PUBLIC = join(__dirname, '../../../public')
 const MEDIA = join(PUBLIC, 'media/landing')
@@ -23,9 +22,18 @@ function webpSize(buf: Buffer): { width: number; height: number } {
 describe('homepage photos', () => {
   const photos = Object.values(PHOTOS)
 
-  it('has exactly the four approved slots: three creator groups and the vision', () => {
-    expect(photos.map((p) => p.id)).toEqual(['creator-editing', 'teacher-recording', 'metalworker', 'filmmaker'])
-    expect(CREATOR_GROUP_PHOTOS).toHaveLength(HOMEPAGE_COPY.creators.groups.length)
+  it('has exactly the current slots: the creator at night, the other job, the fans, and the four creators in the mosaic', () => {
+    expect(photos.map((p) => p.id)).toEqual(['creator-at-night', 'another-job', 'fans-sharing', 'cooking-vlog', 'painter', 'craftsman', 'filmmaker'])
+    expect(FUTURE_MOSAIC.map((k) => PHOTOS[k].id)).toEqual(['cooking-vlog', 'filmmaker', 'painter', 'craftsman'])
+  })
+
+  it('lists every photo shown on the site in the approval file, and every one is still pending the founder', () => {
+    expect(Object.keys(PHOTO_APPROVALS).sort()).toEqual([...photos.map((p) => p.id), SAMPLE_AVATAR.id, 'founder'].sort())
+    for (const [id, status] of Object.entries(PHOTO_APPROVALS)) expect(status, id).toBe('pending')
+  })
+
+  it('records that these stand-ins have no model release', () => {
+    for (const p of photos) expect(p.modelRelease, p.id).toBe('none (Pexels)')
   })
 
   it.each(photos.map((p) => [p.id, p] as const))('%s records its Pexels source, credit and licence, and describes the activity', (_, p) => {
@@ -34,7 +42,6 @@ describe('homepage photos', () => {
     expect(p.licenceUrl).toBe('https://www.pexels.com/license/')
     expect(p.sourceUrl).toMatch(/^https:\/\/www\.pexels\.com\/photo\/[a-z0-9-]+-\d+\/$/)
     expect(p.photographer.length).toBeGreaterThan(2)
-    expect(p.photographer).not.toMatch(/pending/i)
     expect(p.alt.length).toBeGreaterThan(30)
   })
 
@@ -52,11 +59,14 @@ describe('homepage photos', () => {
     },
   )
 
-  it('credits the verified photographer for each photo', () => {
+  it('records each Pexels photo ID, with a credit or a clear note that it is still to be verified', () => {
     expect(photos.map((p) => [p.sourceUrl.match(/-(\d+)\/$/)![1], p.photographer])).toEqual([
-      ['7014401', 'George Milton'],
-      ['9040544', 'Alena Darmel'],
-      ['23638660', 'Yunus Tuğ'],
+      ['17147713', 'Credit to be verified on the Pexels listing'],
+      ['6205512', 'Credit to be verified on the Pexels listing'],
+      ['6146961', 'Credit to be verified on the Pexels listing'],
+      ['7669738', 'Credit to be verified on the Pexels listing'],
+      ['22690822', 'Credit to be verified on the Pexels listing'],
+      ['3846033', 'Credit to be verified on the Pexels listing'],
       ['36181988', 'Director Chenchi'],
     ])
   })

@@ -129,6 +129,16 @@ const RULES: Rule[] = [
     allowed: denied,
   },
   {
+    // Fans get their split through Connection Points, never money or a share
+    // of revenue (founder decision, 2026-11-19). Catches "fans … revenue",
+    // "a portion for qualifying fan contributions" and "share financially",
+    // and still allows "fans get their split through Connection Points".
+    name: 'fans described as getting money or a share of revenue',
+    pattern:
+      /\b(fans?|supporters?)\b[^.;]{0,50}\b(revenue|financial(ly)?|money|cash|paid|payouts?|income|dollars?|earnings)\b|\b(revenue|money|cash|income|earnings|portion|percent(age)?|cut)\b[^.;]{0,20}\b(for|to|with)\b[^.;]{0,25}\b(fans?|supporters?)\b|\bshare\w* financially\b|\bfinancial(ly)? (share|stake|returns?)\b/i,
+    allowed: denied,
+  },
+  {
     name: 'revenue sharing described as existing today',
     pattern: /\b(revenue|ad(vertising)? (revenue|income)|profits?)\b/i,
     // A vision marker or a denial anywhere in the sentence: "Revenue sharing is not part of the pilot."
@@ -144,10 +154,26 @@ export function sentences(text: string): string[] {
     .filter(Boolean)
 }
 
+/**
+ * The founder-approved marketing sentences (Website Redesign Master
+ * Implementation Brief, revised 2026-11-18) that the money rule would
+ * otherwise flag. Exempt only as these exact whole sentences: any change to the wording
+ * (or any other sentence about revenue) is checked by every rule as usual.
+ * Adding a sentence here needs the founder's explicit approval.
+ */
+export const APPROVED_MARKETING_SENTENCES: readonly string[] = [
+  // THE PROBLEM (revised, founder-approved 2026-11-18): how platforms make
+  // money today. They describe platforms, and promise nothing to anyone.
+  'Your content makes platforms money.',
+  'More opportunities for them to make money.',
+  'The platforms make money.',
+]
+
 /** Every sentence that breaks a claim rule. Empty means the text is safe to publish. */
 export function findMisleadingClaims(text: string): ClaimFinding[] {
   const out: ClaimFinding[] = []
   for (const sentence of sentences(text)) {
+    if (APPROVED_MARKETING_SENTENCES.includes(sentence)) continue
     for (const rule of RULES) {
       const match = rule.pattern.exec(sentence)
       if (match && !rule.allowed?.(sentence, match)) out.push({ rule: rule.name, sentence })

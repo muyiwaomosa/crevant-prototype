@@ -1,13 +1,21 @@
-// Photographs on the homepage: licensed stock photos from Pexels, chosen as a
-// set so that, together, they show different kinds of creative work, working
-// environments, visible ages and genders. They show models, never Splitpost
-// members, and are never presented as users, testimonials or endorsements:
-// the page says so (HOMEPAGE_COPY.peopleNote and the footer). Alt text
-// describes what the person is doing, not who they are.
+// Photographs on the homepage. Every one is PENDING the founder's approval
+// (photo-approvals.json): a Vercel Production build fails while any photo is
+// pending (scripts/check-photo-approvals.mjs), so these can be reviewed on a
+// Preview but never reach production unapproved.
 //
-// Each file is cropped for its slot from the Pexels original, resized,
-// converted to WebP and stripped of metadata. The Pexels License allows free
-// commercial use without attribution; we keep the source and credit anyway.
+// The founder's direction (2026-11-18): licensed, model-released commercial
+// photography where possible; no identifiable person shown experiencing the
+// financial difficulties the copy describes; diverse creators across
+// ethnicity, gender, age and kinds of creating; joyful, realistic creating in
+// the future section. These stand-ins are Pexels photos (free licence, no
+// model release); the paid, model-released shortlist is in the PR for the
+// founder to choose from. They show models, never Splitpost members, and the
+// footer says so on every page (PRODUCT_IMAGES_DISCLOSURE).
+//
+// Each file is cropped for its slot from the original, resized, converted to
+// WebP and stripped of metadata.
+
+import approvals from './photo-approvals.json'
 
 export interface StockPhoto {
   id: string
@@ -19,46 +27,78 @@ export interface StockPhoto {
   alt: string
   source: 'Pexels'
   sourceUrl: string
-  /** The photographer as credited on the Pexels page (verified by the founder on each listing). */
+  /** The photographer as credited on the source page. */
   photographer: string
   licence: 'Pexels License'
   licenceUrl: 'https://www.pexels.com/license/'
+  /** Pexels gives no model release. */
+  modelRelease: 'none (Pexels)'
 }
 
-const pexels = (p: Omit<StockPhoto, 'source' | 'licence' | 'licenceUrl'>): StockPhoto => ({
+const TO_VERIFY = 'Credit to be verified on the Pexels listing'
+
+const pexels = (p: Omit<StockPhoto, 'source' | 'licence' | 'licenceUrl' | 'modelRelease'>): StockPhoto => ({
   ...p,
   source: 'Pexels',
   licence: 'Pexels License',
   licenceUrl: 'https://www.pexels.com/license/',
+  modelRelease: 'none (Pexels)',
 })
 
 export const PHOTOS = {
-  creatorEditing: pexels({
-    id: 'creator-editing',
-    base: '/media/landing/photos/creator-editing',
-    widths: [640, 1200],
-    ratio: '4/3',
-    alt: 'A creator editing photos on a laptop at a bright desk at home, a camera on the table beside it.',
-    sourceUrl: 'https://www.pexels.com/photo/focused-female-freelancer-editing-photos-on-laptop-7014401/',
-    photographer: 'George Milton',
+  creatorAtNight: pexels({
+    id: 'creator-at-night',
+    base: '/media/landing/photos/creator-at-night',
+    widths: [600, 960],
+    ratio: '4/5',
+    alt: 'A creator, seen from behind, editing video on two screens late at night.',
+    sourceUrl: 'https://www.pexels.com/photo/video-editor-working-in-dark-17147713/',
+    photographer: TO_VERIFY,
   }),
-  teacherRecording: pexels({
-    id: 'teacher-recording',
-    base: '/media/landing/photos/teacher-recording',
+  anotherJob: pexels({
+    id: 'another-job',
+    base: '/media/landing/photos/another-job',
     widths: [640, 1200],
     ratio: '4/3',
-    alt: 'A teacher recording a lesson to a camera on a tripod, notebook in hand.',
-    sourceUrl: 'https://www.pexels.com/photo/teacher-recording-herself-teaching-9040544/',
-    photographer: 'Alena Darmel',
+    alt: 'A café worker in an apron at the counter, taking an order on a tablet.',
+    sourceUrl: 'https://www.pexels.com/photo/crop-cafe-coworkers-using-app-on-smartphone-at-work-6205512/',
+    photographer: TO_VERIFY,
   }),
-  metalworker: pexels({
-    id: 'metalworker',
-    base: '/media/landing/photos/metalworker',
+  fansSharing: pexels({
+    id: 'fans-sharing',
+    base: '/media/landing/photos/fans-sharing',
     widths: [640, 1200],
     ratio: '4/3',
-    alt: 'A metalworker grinding a piece of steel in a crowded workshop, sparks flying.',
-    sourceUrl: 'https://www.pexels.com/photo/man-sitting-and-working-at-workshop-23638660/',
-    photographer: 'Yunus Tuğ',
+    alt: 'Three friends laughing together outdoors as they share something on their phones.',
+    sourceUrl: 'https://www.pexels.com/photo/laughing-diverse-friends-with-smartphones-in-park-6146961/',
+    photographer: TO_VERIFY,
+  }),
+  cookingVlog: pexels({
+    id: 'cooking-vlog',
+    base: '/media/landing/photos/cooking-vlog',
+    widths: [600, 960],
+    ratio: '4/5',
+    alt: 'A woman smiling and waving to her phone on a small tripod as she films a cooking video in her kitchen.',
+    sourceUrl: 'https://www.pexels.com/photo/a-woman-waving-her-hand-at-her-smartphone-while-recording-a-video-7669738/',
+    photographer: TO_VERIFY,
+  }),
+  painter: pexels({
+    id: 'painter',
+    base: '/media/landing/photos/painter',
+    widths: [600, 960],
+    ratio: '4/5',
+    alt: 'A painter in her studio with a palette of watercolours, smiling beside her canvas.',
+    sourceUrl: 'https://www.pexels.com/photo/a-woman-sitting-in-an-art-studio-22690822/',
+    photographer: TO_VERIFY,
+  }),
+  craftsman: pexels({
+    id: 'craftsman',
+    base: '/media/landing/photos/craftsman',
+    widths: [600, 960],
+    ratio: '4/5',
+    alt: 'A craftsman laughing in his workshop among his tools and machines.',
+    sourceUrl: 'https://www.pexels.com/photo/happy-elderly-worker-smiling-in-workshop-3846033/',
+    photographer: TO_VERIFY,
   }),
   filmmaker: pexels({
     id: 'filmmaker',
@@ -73,8 +113,11 @@ export const PHOTOS = {
 
 export type PhotoKey = keyof typeof PHOTOS
 
-/** Which photo goes with each creator group in WHO WE'RE BUILDING FOR, in order. */
-export const CREATOR_GROUP_PHOTOS: readonly PhotoKey[] = ['creatorEditing', 'teacherRecording', 'metalworker']
+/** The four creators in A BETTER FUTURE FOR CREATORS, in mosaic order. */
+export const FUTURE_MOSAIC: readonly PhotoKey[] = ['cookingVlog', 'filmmaker', 'painter', 'craftsman']
+
+/** Every photo's approval status, from photo-approvals.json (the founder changes it, nobody else). */
+export const PHOTO_APPROVALS: Readonly<Record<string, 'pending' | 'approved'>> = approvals.photos as Record<string, 'pending' | 'approved'>
 
 /**
  * The profile photo on the hero's sample post. Priya Raman is a fictional
@@ -88,8 +131,7 @@ export const SAMPLE_AVATAR = {
   size: 160,
   source: 'Pexels',
   sourceUrl: 'https://www.pexels.com/photo/1239291/',
-  /** To be confirmed by the founder on the Pexels listing, as with the four photos above. */
-  photographer: 'Credit to be verified on the Pexels listing',
+  photographer: TO_VERIFY,
   licence: 'Pexels License',
   licenceUrl: 'https://www.pexels.com/license/',
 } as const

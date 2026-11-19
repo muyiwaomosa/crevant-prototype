@@ -20,6 +20,12 @@ import { Avatar, ReachArt } from './SamplePost'
  * each end of the line. The accent always sits BEHIND both pieces, so it only
  * shows in the gap and never crosses the content. No money, no amounts, no
  * percentages: only the post and the people.
+ *
+ * Entrance (founder decision, 2026-11-18): once, on load, the two pieces
+ * settle into place from just above and just below, and the apricot line
+ * fades in after them. It runs once and stops; with reduced motion it doesn't
+ * run at all (motion-safe), and every piece ends exactly where it sits
+ * without the animation (keyframes in src/index.css end at transform: none).
  */
 
 const post = HOMEPAGE_COPY.post
@@ -34,7 +40,7 @@ export function SplitThePost({ className }: { className?: string }) {
     <figure data-testid="hero-scene" className={clsx('relative m-0 mx-auto w-full max-w-[25rem] px-2 sm:px-0 lg:max-w-[28rem]', className)}>
       <div aria-hidden="true" className="relative sm:-rotate-[1.5deg]">
         {/* Upper piece: the creator's content. */}
-        <div data-testid="split-creator-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(0_0_0/0.4))]">
+        <div data-testid="split-creator-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(27_36_48/0.28))] motion-safe:animate-[sp-settle-down_800ms_cubic-bezier(0.22,1,0.36,1)_both]">
           <div
             className="rounded-[22px] bg-sp-bg px-4 pt-7 text-sp-ink sm:px-5 sm:pt-8"
             style={{ clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${CUT}px), 0 100%)`, paddingBottom: CUT + 8 }}
@@ -68,7 +74,7 @@ export function SplitThePost({ className }: { className?: string }) {
             aria-hidden="true"
             viewBox="0 0 100 10"
             preserveAspectRatio="none"
-            className="pointer-events-none absolute inset-x-0 -z-10 w-full overflow-visible"
+            className="pointer-events-none absolute inset-x-0 -z-10 w-full overflow-visible motion-safe:animate-[sp-seam-in_500ms_ease-out_550ms_both]"
             style={{ top: -GAP / 2, height: CUT }}
           >
             {/* Phones: the line follows the cut but stops short of both edges, so it stays between the pieces. */}
@@ -78,7 +84,7 @@ export function SplitThePost({ className }: { className?: string }) {
           <span aria-hidden="true" className="absolute -left-4 hidden h-2.5 w-2.5 rounded-full bg-sp-accent sm:block" style={{ top: CUT - GAP / 2 - 5 }} />
           <span aria-hidden="true" className="absolute -right-4 hidden h-2.5 w-2.5 rounded-full bg-sp-accent sm:block" style={{ top: -GAP / 2 - 5 }} />
 
-          <div data-testid="split-community-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(0_0_0/0.4))]">
+          <div data-testid="split-community-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(27_36_48/0.28))] motion-safe:animate-[sp-settle-up_800ms_cubic-bezier(0.22,1,0.36,1)_80ms_both]">
             <div
               className="rounded-[22px] bg-sp-secondary px-4 pb-4 text-sp-ink sm:px-5 sm:pb-5"
               style={{ clipPath: `polygon(0 ${CUT}px, 100% 0, 100% 100%, 0 100%)`, paddingTop: CUT + 10 }}
