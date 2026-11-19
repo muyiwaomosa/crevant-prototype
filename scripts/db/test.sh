@@ -97,4 +97,32 @@ for v in supabase/tests-local/violations/*.sql; do
   fi
   echo "PASS: checks caught $(basename "$v" .sql) ($(grep -o 'FAIL: [^"]*' <<<"$out" | head -1 | cut -c1-90))"
 done
+# The member authorization surface audit (pilot milestone M1): read only,
+# against the database the migrations built. Then each deliberate violation in
+# scripts/db/audit/violations/ is applied inside a rolled-back transaction and
+# the audit must catch it with a "FAIL:" message.
+echo "Running the member authorization surface audit"
+"${PSQL[@]}" -f scripts/db/audit/member-surface.sql
+for v in scripts/db/audit/violations/*.sql; do
+  [ -e "$v" ] || continue
+  wrapper="$(mktemp)"
+  {
+    echo "begin;"
+    echo "\\i $v"
+    echo "\\i scripts/db/audit/member-surface-checks.sql"
+    echo "rollback;"
+  } > "$wrapper"
+  if out="$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -X -f "$wrapper" 2>&1)"; then
+    rm -f "$wrapper"
+    echo "FAIL: the member surface audit did not catch the deliberate violation in $v" >&2
+    exit 1
+  fi
+  rm -f "$wrapper"
+  if ! grep -q "FAIL:" <<<"$out"; then
+    echo "FAIL: $v errored without the member surface audit catching it:" >&2
+    echo "$out" >&2
+    exit 1
+  fi
+  echo "PASS: member surface audit caught $(basename "$v" .sql) ($(grep -o 'FAIL: [^"]*' <<<"$out" | head -1 | cut -c1-90))"
+done
 echo "Database checks passed"

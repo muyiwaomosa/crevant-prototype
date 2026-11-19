@@ -1,0 +1,276 @@
+// Tests for the member app (splitpost-app, app.splitpost.ca) build rules:
+// which build it gets, when Vercel Production may build it, which Supabase
+// project it may use, and the check on the finished bundle. Every refusal
+// must fail closed. Run with: node --test scripts/*.test.mjs
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { planBuild } from './build.mjs'
+import { checkBuildTarget } from './guard-build-target.mjs'
+import { checkSupabaseTarget, PROJECTS as REFS, STAGING_SUPABASE_URL } from './check-supabase-target.mjs'
+import { checkMemberAppBundle } from './check-member-app-bundle.mjs'
+import { VERCEL_PROJECTS, hasDuplicateProjectIds, identifyProject } from './vercel-project.mjs'
+
+// Stand-in IDs for the tests only. The real member app ID is recorded only
+// once the founder has created the project (a reviewed change).
+const DEMO_ID = 'prj_kHLgZpZPCD5QMegqwCwISuV37hge'
+const SITE_ID = 'prj_SplitpostTestOnly0000000001'
+const APP_ID = 'prj_MemberAppTestOnly000000001'
+const PROJECTS = {
+  repository: { owner: 'muyiwaomosa', slug: 'crevant-prototype', productionBranch: 'main' },
+  demo: { name: 'crevant-prototype', projectId: DEMO_ID },
+  publicSite: { name: 'splitpost', projectId: SITE_ID },
+  memberApp: { name: 'splitpost-app', projectId: APP_ID, host: 'app.splitpost.ca' },
+}
+const PUB = 'sb_publishable_f_Rjmc-I3QYgSiqYd5bIUw_P-vQxvUz'
+const PRODUCTION_URL = `https://${REFS.production}.supabase.co`
+const jwt = (role) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.sig`
+const commands = (plan) => plan.steps.map((s) => s.join(' '))
+
+// Everything Vercel sets for an approved Git build of main in the member app project.
+const APPROVED = {
+  VERCEL_ENV: 'production',
+  CREVANT_BUILD_MODE: 'app',
+  CREVANT_MEMBER_APP_APPROVED: 'true',
+  VERCEL_PROJECT_ID: APP_ID,
+  VERCEL_GIT_REPO_OWNER: 'muyiwaomosa',
+  VERCEL_GIT_REPO_SLUG: 'crevant-prototype',
+  VERCEL_GIT_COMMIT_REF: 'main',
+}
+const without = (k) => Object.fromEntries(Object.entries(APPROVED).filter(([key]) => key !== k))
+
+// --- The committed configuration -------------------------------------------------
+
+test('the committed config records the member app project, with no ID until the project exists', () => {
+  assert.equal(VERCEL_PROJECTS.memberApp.name, 'splitpost-app')
+  assert.equal(VERCEL_PROJECTS.memberApp.host, 'app.splitpost.ca')
+  assert.ok(VERCEL_PROJECTS.memberApp.projectId === null || /^prj_[A-Za-z0-9]{10,64}$/.test(VERCEL_PROJECTS.memberApp.projectId))
+  assert.notEqual(VERCEL_PROJECTS.memberApp.projectId, DEMO_ID)
+  if (VERCEL_PROJECTS.memberApp.projectId) assert.notEqual(VERCEL_PROJECTS.memberApp.projectId, VERCEL_PROJECTS.publicSite.projectId)
+  assert.equal(hasDuplicateProjectIds(), false)
+})
+
+test('with the committed config (no member app ID yet), nothing is recognised as the member app and its Production build is refused', () => {
+  if (VERCEL_PROJECTS.memberApp.projectId) return
+  assert.notEqual(identifyProject({ VERCEL_PROJECT_ID: APP_ID }), 'memberApp')
+  // The member app approval alone, in an unrecognised project, never builds anything for Production.
+  const r = checkBuildTarget({ ...APPROVED })
+  assert.equal(r.ok, false, r.message)
+})
+
+test('the member app host in the config matches the host the app recognises', () => {
+  const entry = readFileSync(new URL('../src/entry.ts', import.meta.url), 'utf8')
+  assert.match(entry, new RegExp(`MEMBER_APP_HOSTS = \\['${VERCEL_PROJECTS.memberApp.host.replace(/\./g, '\\.')}'\\]`))
+})
+
+// --- Project identification ------------------------------------------------------
+
+test('identifies each project only by its own exact ID', () => {
+  assert.equal(identifyProject({ VERCEL_PROJECT_ID: APP_ID }, PROJECTS), 'memberApp')
+  assert.equal(identifyProject({ VERCEL_PROJECT_ID: SITE_ID }, PROJECTS), 'publicSite')
+  assert.equal(identifyProject({ VERCEL_PROJECT_ID: DEMO_ID }, PROJECTS), 'demo')
+  for (const id of ['prj_SomeOtherProject00000000', APP_ID.toLowerCase(), `${APP_ID}x`, 'splitpost-app']) {
+    assert.notEqual(identifyProject({ VERCEL_PROJECT_ID: id }, PROJECTS), 'memberApp', id)
+  }
+})
+
+test('if two projects are ever given the same ID, nothing is recognised (fail closed)', () => {
+  for (const clash of [SITE_ID, DEMO_ID]) {
+    const projects = { ...PROJECTS, memberApp: { ...PROJECTS.memberApp, projectId: clash } }
+    assert.equal(hasDuplicateProjectIds(projects), true)
+    assert.equal(identifyProject({ VERCEL_PROJECT_ID: clash }, projects), 'unknown')
+    assert.equal(checkBuildTarget({ ...APPROVED, VERCEL_PROJECT_ID: clash }, projects).ok, false)
+  }
+})
+
+// --- Which build ------------------------------------------------------------------
+
+test('the member app project always builds the member app, with the bundle and secret checks', () => {
+  for (const env of [{ VERCEL_ENV: 'production' }, { VERCEL_ENV: 'preview' }, { VERCEL_ENV: 'preview', CREVANT_BUILD: 'site' }, { VERCEL_ENV: 'production', CREVANT_BUILD: 'site' }]) {
+    const plan = planBuild({ ...env, VERCEL_PROJECT_ID: APP_ID }, [], PROJECTS)
+    assert.equal(plan.mode, 'app', JSON.stringify(env))
+    assert.equal(plan.memberApp, true)
+    assert.deepEqual(commands(plan), [
+      'node scripts/guard-build-target.mjs',
+      'node scripts/check-supabase-target.mjs',
+      'npx tsc -b',
+      'npx vite build',
+      'node scripts/check-member-app-bundle.mjs dist',
+      'scripts/check-bundle-secrets.sh',
+    ])
+  }
+})
+
+test('the public site and demo projects keep their existing builds', () => {
+  assert.equal(planBuild({ VERCEL_ENV: 'production', VERCEL_PROJECT_ID: SITE_ID }, [], PROJECTS).mode, 'site')
+  assert.equal(planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: SITE_ID }, [], PROJECTS).mode, 'site')
+  assert.equal(planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: DEMO_ID }, [], PROJECTS).mode, 'app')
+  assert.equal(planBuild({ VERCEL_ENV: 'production', VERCEL_PROJECT_ID: DEMO_ID }, [], PROJECTS).mode, 'site')
+  for (const id of [SITE_ID, DEMO_ID]) assert.equal(planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: id }, [], PROJECTS).memberApp, undefined)
+})
+
+// --- Vercel Production guard -------------------------------------------------------
+
+test('allowed: the approved member app, in its own project, from a Git build of main', () => {
+  const r = checkBuildTarget(APPROVED, PROJECTS)
+  assert.equal(r.ok, true, r.message)
+  assert.match(r.message, /member app \(approved\), project splitpost-app, muyiwaomosa\/crevant-prototype@main/)
+})
+
+test('refused: no approval, or anything but exactly "true"', () => {
+  assert.equal(checkBuildTarget(without('CREVANT_MEMBER_APP_APPROVED'), PROJECTS).ok, false)
+  for (const v of ['TRUE', '1', 'yes', 'false', '', ' ']) assert.equal(checkBuildTarget({ ...APPROVED, CREVANT_MEMBER_APP_APPROVED: v }, PROJECTS).ok, false, JSON.stringify(v))
+})
+
+test('refused: the public site build in the member app project, or no build mode at all', () => {
+  assert.equal(checkBuildTarget({ ...APPROVED, CREVANT_BUILD_MODE: 'site' }, PROJECTS).ok, false)
+  assert.equal(checkBuildTarget(without('CREVANT_BUILD_MODE'), PROJECTS).ok, false)
+})
+
+test('refused: the public site approval set in the member app project (a project mix up)', () => {
+  for (const v of ['true', 'false', 'TRUE']) {
+    const r = checkBuildTarget({ ...APPROVED, CREVANT_PRODUCTION_SITE_APPROVED: v }, PROJECTS)
+    assert.equal(r.ok, false, v)
+    assert.match(r.message, /belongs only to the splitpost project/)
+  }
+})
+
+test('refused: another repository, an upload, or any branch but main', () => {
+  for (const k of ['VERCEL_GIT_REPO_OWNER', 'VERCEL_GIT_REPO_SLUG', 'VERCEL_GIT_COMMIT_REF']) assert.equal(checkBuildTarget(without(k), PROJECTS).ok, false, k)
+  assert.equal(checkBuildTarget({ ...APPROVED, VERCEL_GIT_REPO_OWNER: 'someone-else' }, PROJECTS).ok, false)
+  assert.equal(checkBuildTarget({ ...APPROVED, VERCEL_GIT_REPO_SLUG: 'a-fork' }, PROJECTS).ok, false)
+  for (const ref of ['demo', 'claude/pilot-m1-environment', 'Main', 'main2', 'develop']) {
+    const r = checkBuildTarget({ ...APPROVED, VERCEL_GIT_COMMIT_REF: ref }, PROJECTS)
+    assert.equal(r.ok, false, ref)
+    assert.match(r.message, /Production builds only `main`/)
+  }
+})
+
+test('refused: the member app approval in any other project never builds the member app for Production', () => {
+  for (const id of [SITE_ID, DEMO_ID, 'prj_SomeOtherProject00000000', '']) {
+    const r = checkBuildTarget({ ...APPROVED, VERCEL_PROJECT_ID: id }, PROJECTS)
+    assert.equal(r.ok, false, id)
+  }
+  // The public site's own rule is unchanged: with its approval, in its project, it still builds.
+  const site = { ...APPROVED, CREVANT_BUILD_MODE: 'site', CREVANT_PRODUCTION_SITE_APPROVED: 'true', VERCEL_PROJECT_ID: SITE_ID }
+  delete site.CREVANT_MEMBER_APP_APPROVED
+  assert.equal(checkBuildTarget(site, PROJECTS).ok, true)
+})
+
+test('Previews in the member app project are not blocked by the Production guard', () => {
+  assert.equal(checkBuildTarget({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: APP_ID, CREVANT_BUILD_MODE: 'app' }, PROJECTS).ok, true)
+})
+
+// --- Supabase target ------------------------------------------------------------------
+
+const memberEnv = (target, extra = {}) => ({ VERCEL_ENV: target, VERCEL_PROJECT_ID: APP_ID, VITE_SUPABASE_URL: STAGING_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB, ...extra })
+const supa = (env) => checkSupabaseTarget(env, { project: 'memberApp' })
+
+test('allowed: the staging (pilot) project with a publishable key, in Preview and Production', () => {
+  for (const target of ['production', 'preview']) {
+    const r = supa(memberEnv(target))
+    assert.equal(r.ok, true, r.message)
+    assert.match(r.message, /staging \(pilot\) project/)
+  }
+  assert.equal(supa(memberEnv('production', { VITE_SUPABASE_URL: `${STAGING_SUPABASE_URL}/` })).ok, true)
+})
+
+test('refused: the Production waitlist project, in any form, in any environment', () => {
+  for (const target of ['production', 'preview', '']) {
+    for (const url of [PRODUCTION_URL, `${PRODUCTION_URL}/`, `https://${REFS.production}.supabase.com`]) {
+      const r = supa(memberEnv(target, { VITE_SUPABASE_URL: url }))
+      assert.equal(r.ok, false, `${target} ${url}`)
+      assert.match(r.message, /never use the Production waitlist project/)
+    }
+  }
+})
+
+test('refused: no Supabase values, another project, a local stack, or a missing key', () => {
+  for (const extra of [
+    { VITE_SUPABASE_URL: '', VITE_SUPABASE_PUBLISHABLE_KEY: '' },
+    { VITE_SUPABASE_URL: 'https://abcdefghijabcdefghij.supabase.co' },
+    { VITE_SUPABASE_URL: 'http://127.0.0.1:54321' },
+    { VITE_SUPABASE_URL: 'https://evil.example' },
+    { VITE_SUPABASE_PUBLISHABLE_KEY: '' },
+    { VITE_SUPABASE_PUBLISHABLE_KEY: jwt('anon') },
+  ]) {
+    for (const target of ['production', 'preview']) assert.equal(supa(memberEnv(target, extra)).ok, false, `${target} ${JSON.stringify(extra)}`)
+  }
+})
+
+test('refused: secret or service keys', () => {
+  for (const key of ['sb_secret_abc12345678', jwt('service_role'), 'not.a.jwt']) assert.equal(supa(memberEnv('production', { VITE_SUPABASE_PUBLISHABLE_KEY: key })).ok, false, key)
+})
+
+test('refused: any waitlist address (members never use the waitlist form), staging or Production', () => {
+  for (const ep of [`${STAGING_SUPABASE_URL}/functions/v1/join-waitlist`, `${PRODUCTION_URL}/functions/v1/join-waitlist`]) {
+    const r = supa(memberEnv('production', { VITE_WAITLIST_ENDPOINT: ep }))
+    assert.equal(r.ok, false, ep)
+  }
+})
+
+test('refused: a broken project list (missing staging, or staging the same as Production)', () => {
+  const env = memberEnv('production')
+  assert.equal(checkSupabaseTarget(env, { project: 'memberApp', refs: { staging: null, production: REFS.production } }).ok, false)
+  assert.equal(checkSupabaseTarget(env, { project: 'memberApp', refs: { staging: REFS.staging, production: REFS.staging } }).ok, false)
+})
+
+test('the existing rules for other projects are unchanged', () => {
+  // Outside the member app project, Production still must have no Supabase values.
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'production', VITE_SUPABASE_URL: STAGING_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB }, { project: 'publicSite' }).ok, false)
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'production' }, { project: 'publicSite' }).ok, true)
+  assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'preview', VITE_SUPABASE_URL: STAGING_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB }, { project: 'demo' }).ok, true)
+})
+
+// --- The finished bundle --------------------------------------------------------------
+
+const stagingHost = `${REFS.staging}.supabase.co`
+
+test('bundle: passes when it points only at the staging (pilot) project', () => {
+  assert.deepEqual(checkMemberAppBundle({ 'assets/index.js': `const u="https://${stagingHost}";const k="${PUB}";` }), [])
+})
+
+test('bundle: refused when the Production project reference appears anywhere', () => {
+  for (const text of [`"https://${REFS.production}.supabase.co"`, `ref:"${REFS.production}"`, `https://${stagingHost} ${REFS.production}`]) {
+    const problems = checkMemberAppBundle({ 'assets/index.js': `"https://${stagingHost}" ${text}` })
+    assert.ok(problems.some((p) => /Production project reference/.test(p)), text)
+  }
+})
+
+test('bundle: refused when it does not point at staging, or points at any other project', () => {
+  assert.ok(checkMemberAppBundle({ 'assets/index.js': 'no supabase here' }).some((p) => /does not point at the staging/.test(p)))
+  assert.ok(checkMemberAppBundle({ 'assets/index.js': `"https://${stagingHost}" "https://abcdefghijabcdefghij.supabase.co"` }).some((p) => /other than staging/.test(p)))
+})
+
+test('bundle: refused when it carries a waitlist address or anything secret', () => {
+  for (const leak of ['/functions/v1/join-waitlist', 'sb_secret_abcdefgh12345', 'service_role', 'postgresql://u:p@db.example:5432/x', '-----BEGIN PRIVATE KEY-----']) {
+    assert.ok(checkMemberAppBundle({ 'a.js': `"https://${stagingHost}" ${leak}` }).length > 0, leak)
+  }
+})
+
+test('bundle: refused when the project list itself is broken', () => {
+  assert.ok(checkMemberAppBundle({ 'a.js': stagingHost }, { staging: null, production: REFS.production }).length > 0)
+  assert.ok(checkMemberAppBundle({ 'a.js': stagingHost }, { staging: REFS.staging, production: REFS.staging }).length > 0)
+})
+
+// --- Headers on app.splitpost.ca (vercel.json, unchanged) -----------------------------
+
+test('app.splitpost.ca gets the staging-only security policy and the other security headers', async () => {
+  const { VERCEL } = await import('./vercel-robots.mjs')
+  const host = VERCEL_PROJECTS.memberApp.host
+  const applies = (rule) => (!rule.has || rule.has.every((c) => c.type === 'host' && c.value === host)) && (!rule.missing || !rule.missing.some((c) => c.type === 'host' && c.value === host))
+  const headers = VERCEL.headers.filter(applies).flatMap((r) => r.headers)
+  const csps = headers.filter((h) => h.key === 'Content-Security-Policy').map((h) => h.value)
+  assert.equal(csps.length, 1, 'exactly one security policy applies')
+  const connect = csps[0].split(';').map((d) => d.trim()).find((d) => d.startsWith('connect-src')).split(/\s+/).slice(1)
+  assert.deepEqual(connect, ["'self'", `https://${REFS.staging}.supabase.co`])
+  assert.ok(!csps[0].includes(REFS.production), 'the Production project is never reachable from the member app address')
+  for (const [k, v] of [['X-Frame-Options', 'DENY'], ['X-Content-Type-Options', 'nosniff'], ['Referrer-Policy', 'strict-origin-when-cross-origin']]) {
+    assert.ok(headers.some((h) => h.key === k && h.value === v), k)
+  }
+})
+
+test('app.splitpost.ca is never indexed, on any path', async () => {
+  const { headerNoindex } = await import('./vercel-robots.mjs')
+  for (const p of ['/', '/app', '/app/discover', '/sign-in', '/auth/confirm', '/join', '/privacy']) assert.equal(headerNoindex(VERCEL_PROJECTS.memberApp.host, p), true, p)
+})
