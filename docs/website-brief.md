@@ -61,6 +61,28 @@ styling and arrow. No words were added, removed or changed. The sections below
 are numbered in the new order; the disclosure labels keep the brief's original
 numbering, as explained above.
 
+2026-11-19, founder approval (WHY and fan rewards): The Problem was shortened
+so the platform problem comes first. "You create the content. Your fans help
+it grow. The platforms make money." moved up to follow "Planning. Recording.
+Editing. Posting.", and the value-flow illustration follows it. Removed from
+The Problem, because The People Behind the Posts tells them in full: "You show
+up consistently, hoping to grow an audience and build something meaningful.",
+"And slowly, it starts working.", "You can have thousands of followers and
+still struggle to earn enough to do what you love full-time.", "Even the
+people who chose to follow you don't always see what you post." and "You're
+helping the platforms grow. But is all that hard work helping you build a
+future?". Product clarification: fans get their split through Connection
+Points earned for qualifying contributions, not a share of revenue. So
+"Yet they rarely share financially in the success they help create." became
+"They're helping you grow. But where's their split?"; the hero's "can share in
+the success" became "can be recognized and rewarded"; The People Behind the
+Posts' "they rarely get to share financially in the success" became "they
+rarely get recognized or rewarded for it"; Step 04's "while setting aside a
+portion for qualifying fan contributions" became "while fans get their split
+through Connection Points earned for qualifying contributions"; and the Step 04
+and final pilot disclosures now describe Connection Points (earned and
+accumulated during the pilot, simulated reward fulfillment, no cash value).
+
 ## SECTION 1 — HERO
 
 ### Headline
@@ -68,7 +90,7 @@ Don't just post. Get your split.
 
 ### Supporting copy
 You create the content. You grow the audience. But are you getting your share of the value you create?
-We're building a social network where creators have a new opportunity to earn—and the people who help them grow can share in the success.
+We're building a social network where creators have a new opportunity to earn—and the people who help them grow can be recognized and rewarded.
 
 ### CTA
 Join the Waitlist
@@ -81,17 +103,12 @@ Your content makes platforms money. But what about you?
 ### Supporting copy
 Think about how much time you spend creating content.
 Planning. Recording. Editing. Posting.
-You show up consistently, hoping to grow an audience and build something meaningful.
-And slowly, it starts working.
+You create the content. Your fans help it grow. The platforms make money.
 Your followers grow. Your views increase. People like, comment and share your posts.
 Every interaction brings more attention to the platforms. More engagement. More opportunities for them to make money.
-You can have thousands of followers and still struggle to earn enough to do what you love full-time.
-Even the people who chose to follow you don't always see what you post.
-You're helping the platforms grow. But is all that hard work helping you build a future?
 And what about the fans who help you grow?
 They share your content, recommend you to friends and bring new people into your community.
-Yet they rarely share financially in the success they help create.
-You create the content. Your fans help it grow. The platforms make money.
+They're helping you grow. But where's their split?
 But shouldn't more of that value come back to the people who helped create it?
 
 ## SECTION 3 — THE PEOPLE BEHIND THE POSTS
@@ -123,7 +140,7 @@ You shouldn't have to keep creating without a clearer path to building something
 And what about the people who helped you get here?
 Your fans have been sharing your posts, recommending your content and introducing new people to your work.
 They've helped you grow.
-But when their contributions help create value, they rarely get to share financially in the success.
+But when their contributions help create value, they rarely get recognized or rewarded for it.
 
 ### Closing statement
 What if creators and their biggest supporters could grow together—and benefit together?
@@ -175,7 +192,7 @@ Your fans already help you grow. They share your content, recommend you to frien
 ### Step 04
 STEP 04 — SPLIT
 When your content creates value, you deserve a share.
-Our planned model gives creators a share of net eligible advertising revenue generated around their content, while setting aside a portion for qualifying fan contributions.
+Our planned model gives creators a share of net eligible advertising revenue generated around their content, while fans get their split through Connection Points earned for qualifying contributions.
 
 ### Closing statement
 Because success is better when it's shared.
@@ -207,11 +224,11 @@ Don't just post. Get your split.
 ### Hero, below the CTA
 Invitation-only pilot for adults 18+. No guaranteed reach, views or earnings.
 
-### Section 4, beside Step 04 (revised 2026-11-18)
-60-day pilot: Fan rewards are simulated. No cash rewards will be paid to fans during the pilot. Full details will be shared by email.
+### Section 4, beside Step 04 (revised 2026-11-19)
+60-day pilot: Fans can earn and accumulate Connection Points for qualifying contributions. Reward fulfillment is simulated, and Connection Points have no cash value. Full details will be shared by email.
 
-### Section 7, beside the final CTA
-Splitpost is currently preparing an invitation-only, 60-day pilot. Joining the waitlist does not guarantee participation. Fan rewards and advertising shown during the pilot are simulations, not actual cash earnings. Future monetary rewards will depend on eligibility, available qualifying revenue, and applicable legal and financial requirements.
+### Section 7, beside the final CTA (revised 2026-11-19)
+Splitpost is currently preparing an invitation-only, 60-day pilot. Joining the waitlist does not guarantee participation. During the pilot, fans can earn and accumulate Connection Points for qualifying contributions. Reward fulfillment and advertising shown during the pilot are simulated, and Connection Points have no cash value. Future creator earnings will depend on eligibility, available qualifying revenue, and applicable legal and financial requirements.
 
 ### Footer
 An invitation-only pilot for adults 18 and older.

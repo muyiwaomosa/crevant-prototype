@@ -19,6 +19,9 @@
 // order, HOOK, WHY, WHO, WHERE, HOW, CTA, and the transition line "What if
 // the split worked differently?" moved from the end of The Problem to the
 // end of A Better Future for Creators, just before How Splitpost Works.
+// Later the same day: WHY was shortened so the platform problem comes first,
+// and every line about fans now says they get their split through Connection
+// Points, not a share of revenue (founder decision, 2026-11-19).
 // docs/website-brief.md records every change.
 //
 // The pilot disclosures (PILOT_DISCLOSURES) are the founder's approved
@@ -32,10 +35,11 @@ export const PILOT_DISCLOSURES = {
   /** Hero, below the call to action. */
   hero: 'Invitation-only pilot for adults 18+. No guaranteed reach, views or earnings.',
   /** Section 4, beside Step 04: inline, discreet (founder decision, 2026-11-18; replaces the earlier card). */
-  step04: '60-day pilot: Fan rewards are simulated. No cash rewards will be paid to fans during the pilot. Full details will be shared by email.',
+  step04:
+    '60-day pilot: Fans can earn and accumulate Connection Points for qualifying contributions. Reward fulfillment is simulated, and Connection Points have no cash value. Full details will be shared by email.',
   /** Section 7, beside the final call to action. */
   invitation:
-    'Splitpost is currently preparing an invitation-only, 60-day pilot. Joining the waitlist does not guarantee participation. Fan rewards and advertising shown during the pilot are simulations, not actual cash earnings. Future monetary rewards will depend on eligibility, available qualifying revenue, and applicable legal and financial requirements.',
+    'Splitpost is currently preparing an invitation-only, 60-day pilot. Joining the waitlist does not guarantee participation. During the pilot, fans can earn and accumulate Connection Points for qualifying contributions. Reward fulfillment and advertising shown during the pilot are simulated, and Connection Points have no cash value. Future creator earnings will depend on eligibility, available qualifying revenue, and applicable legal and financial requirements.',
   /** Footer, on every public page. */
   footer: 'An invitation-only pilot for adults 18 and older.',
 } as const
@@ -47,7 +51,7 @@ export const HOMEPAGE_COPY = {
     headlineLines: ["Don't just post.", 'Get your split.'],
     body: [
       'You create the content. You grow the audience. But are you getting your share of the value you create?',
-      "We're building a social network where creators have a new opportunity to earn—and the people who help them grow can share in the success.",
+      "We're building a social network where creators have a new opportunity to earn—and the people who help them grow can be recognized and rewarded.",
     ],
     /** Shown as "Waitlist Opens Soon" while registration is closed (waitlist/status.ts). */
     cta: 'Join the Waitlist',
@@ -55,26 +59,22 @@ export const HOMEPAGE_COPY = {
 
   problem: {
     headline: 'Your content makes platforms money. But what about you?',
+    /** Shortened WHY (founder approval, 2026-11-19): the platform problem comes in the opening three lines. */
     body: [
       'Think about how much time you spend creating content.',
       'Planning. Recording. Editing. Posting.',
-      'You show up consistently, hoping to grow an audience and build something meaningful.',
-      'And slowly, it starts working.',
+      'You create the content. Your fans help it grow. The platforms make money.',
       'Your followers grow. Your views increase. People like, comment and share your posts.',
       'Every interaction brings more attention to the platforms. More engagement. More opportunities for them to make money.',
-      'You can have thousands of followers and still struggle to earn enough to do what you love full-time.',
-      "Even the people who chose to follow you don't always see what you post.",
-      "You're helping the platforms grow. But is all that hard work helping you build a future?",
       'And what about the fans who help you grow?',
       'They share your content, recommend you to friends and bring new people into your community.',
-      'Yet they rarely share financially in the success they help create.',
-      'You create the content. Your fans help it grow. The platforms make money.',
+      "They're helping you grow. But where's their split?",
       "But shouldn't more of that value come back to the people who helped create it?",
     ],
-    /** Visually emphasized (layout only): the fans' question, and the closing pair. */
+    /** Visually emphasized (layout only), in page order: the imbalance, the fans' question, and the final question. */
     emphasis: [
-      'And what about the fans who help you grow?',
       'You create the content. Your fans help it grow. The platforms make money.',
+      'And what about the fans who help you grow?',
       "But shouldn't more of that value come back to the people who helped create it?",
     ],
   },
@@ -106,7 +106,7 @@ export const HOMEPAGE_COPY = {
         number: '04',
         label: 'STEP 04 — SPLIT',
         title: 'When your content creates value, you deserve a share.',
-        body: 'Our planned model gives creators a share of net eligible advertising revenue generated around their content, while setting aside a portion for qualifying fan contributions.',
+        body: 'Our planned model gives creators a share of net eligible advertising revenue generated around their content, while fans get their split through Connection Points earned for qualifying contributions.',
       },
     ],
     closing: "Because success is better when it's shared.",
@@ -147,7 +147,7 @@ export const HOMEPAGE_COPY = {
     fans: [
       'Your fans have been sharing your posts, recommending your content and introducing new people to your work.',
       "They've helped you grow.",
-      'But when their contributions help create value, they rarely get to share financially in the success.',
+      'But when their contributions help create value, they rarely get recognized or rewarded for it.',
     ],
     closing: 'What if creators and their biggest supporters could grow together—and benefit together?',
   },

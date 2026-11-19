@@ -42,6 +42,46 @@ describe('misleading financial claims are caught', () => {
   }
 })
 
+describe('fans are never described as getting money or a share of revenue (founder decision, 2026-11-19)', () => {
+  const misleading = [
+    // The website's earlier wording, now retired.
+    'Yet they rarely share financially in the success they help create.',
+    'But when their contributions help create value, they rarely get to share financially in the success.',
+    'Our planned model gives creators a share of net eligible advertising revenue generated around their content, while setting aside a portion for qualifying fan contributions.',
+    // Other ways it could creep back in, including as a future vision.
+    "We're working toward a future where creators and fans can share in advertising revenue from the posts they create and support.",
+    'Our long-term goal is a model where creators and fans could share in advertising revenue.',
+    'Fans will get a share of the revenue.',
+    'A portion of the revenue goes to fans.',
+    'Supporters earn income when the creators they back grow.',
+    'Fans get a financial share of every post.',
+    'Part of the money goes to your supporters.',
+  ]
+  for (const text of misleading) {
+    it(`flags: ${text}`, () => {
+      expect(findMisleadingClaims(text).some((f) => f.rule === 'fans described as getting money or a share of revenue'), JSON.stringify(findMisleadingClaims(text))).toBe(true)
+    })
+  }
+
+  const allowed = [
+    "Don't just post. Get your split.",
+    "They're helping you grow. But where's their split?",
+    'Our planned model gives creators a share of net eligible advertising revenue generated around their content, while fans get their split through Connection Points earned for qualifying contributions.',
+    'Fans can earn and accumulate Connection Points for qualifying contributions.',
+    'Your fans help it grow.',
+    'And what about the fans who help you grow?',
+    'Yet the platforms rarely recognize or reward them for helping creators grow.',
+    'But when their contributions help create value, they rarely get recognized or rewarded for it.',
+    "We're building a social network where creators have a new opportunity to earn—and the people who help them grow can be recognized and rewarded.",
+    'Supporters who have a reason to help you grow.',
+  ]
+  for (const text of allowed) {
+    it(`allows: ${text}`, () => {
+      expect(findMisleadingClaims(text)).toEqual([])
+    })
+  }
+})
+
 describe('the provisional 40/20/40 allocation is caught in any form', () => {
   const forms = [
     '40/20/40',
@@ -70,8 +110,7 @@ describe('the provisional 40/20/40 allocation is caught in any form', () => {
 describe('accurate disclosures and the future vision are allowed', () => {
   const accurate = [
     ...Object.values(DISCLOSURES),
-    "We're working toward a future where creators and fans can share in advertising revenue from the posts they create and support.",
-    'Our long-term goal is a model where creators and fans could share in advertising revenue.',
+    "We're working toward a future where creators can share in advertising revenue from the posts they create.",
     'Revenue sharing is not part of the pilot.',
     'Fans receive no cash rewards during the pilot.',
     "Connection Points can't be converted to cash.",

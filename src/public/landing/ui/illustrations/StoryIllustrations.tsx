@@ -107,9 +107,22 @@ function Check({ x, y, r = 8, fill = C.primary }: { x: number; y: number; r?: nu
  *   02 CONNECT  the post arriving with each follower, who is caught up.
  *   03 GROW     a supporter bringing a new person in: a verified referral.
  *   04 SPLIT    advertising value flowing into the split post, then on to the
- *               creator and to a pool for qualifying fan contributions. The
- *               streams are drawn the same width: no ratio is implied.
+ *               creator, whose split is drawn as a small coin (eligible
+ *               advertising revenue); and, as a dotted line, to the fans, whose
+ *               split is a Connection Points star badge in brand blue, never a
+ *               coin or anything cash-like (founder direction, 2026-11-19). No
+ *               ratio or amount is implied.
  */
+/** A five-pointed star centred on (cx, cy), for the Connection Points badge. */
+function star(cx: number, cy: number, outer: number, inner: number): string {
+  const pts = Array.from({ length: 10 }, (_, i) => {
+    const r = i % 2 === 0 ? outer : inner
+    const a = -Math.PI / 2 + (i * Math.PI) / 5
+    return `${(cx + r * Math.cos(a)).toFixed(2)} ${(cy + r * Math.sin(a)).toFixed(2)}`
+  })
+  return `M${pts.join(' L')} Z`
+}
+
 export function StepArt({ step, className }: { step: 0 | 1 | 2 | 3; className?: string }) {
   const frame = (children: React.ReactNode) => (
     <svg viewBox="0 0 240 180" {...svgProps} data-testid={`step-art-${step + 1}`} className={clsx('h-auto w-full', className)}>
@@ -184,14 +197,23 @@ export function StepArt({ step, className }: { step: 0 | 1 | 2 | 3; className?: 
       <path d="M54 37 q5 6 0 12" fill="none" stroke={C.primary} strokeWidth="2.5" strokeLinecap="round" />
       <Thread d="M72 44 C 82 44, 88 46, 94 50" width={3} opacity={0.5} />
       <SplitPost x={96} y={18} w={70} h={84} gap={7} />
-      {/* Then on to the creator, and to a pool for qualifying fan contributions. */}
+      {/* Then on to the creator, whose split is eligible advertising revenue: a small coin. */}
       <Thread d="M112 106 C 104 122, 82 132, 66 136" width={3} opacity={0.5} />
-      <Thread d="M150 106 C 158 122, 176 130, 186 134" width={3} opacity={0.5} />
       <Person x={56} y={168} size={1.2} fill={C.primary} />
+      <g data-testid="step-art-creator-split">
+        <ellipse cx="88" cy="160" rx="10" ry="3.6" fill="#d98a52" />
+        <ellipse cx="88" cy="157.5" rx="10" ry="3.6" fill={C.accent} stroke="#d98a52" strokeWidth="1" />
+      </g>
+      {/* And to the fans, whose split is Connection Points: a blue star badge, never a coin. */}
+      <Thread d="M150 106 C 158 122, 176 130, 186 134" width={3} opacity={0.5} dashed />
       <circle cx="190" cy="150" r="26" fill={C.tint} stroke={C.primary} strokeOpacity="0.3" strokeDasharray="3 5" />
       <Person x={180} y={160} size={0.55} fill={C.primaryRaised} />
       <Person x={200} y={160} size={0.55} fill={C.primary} />
       <Person x={190} y={146} size={0.5} fill={C.primaryRaised} />
+      <g data-testid="step-art-connection-points">
+        <circle cx="214" cy="126" r="12" fill={C.white} stroke={C.primary} strokeWidth="2" />
+        <path d={star(214, 126, 7.5, 3.2)} fill={C.primary} />
+      </g>
     </g>,
   )
 }

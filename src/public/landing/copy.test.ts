@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { BRAND_LINE, HOMEPAGE_COPY, PILOT_DISCLOSURES, allHomepageText, briefLines, type SectionKey } from './copy'
-import { findMisleadingClaims, mentionsProvisionalAllocation } from './claims'
+import { findMisleadingClaims, mentionsProvisionalAllocation, sentences } from './claims'
 
 /**
  * docs/website-brief.md is the approved source. It is parsed here, section by
@@ -67,8 +67,23 @@ describe('the homepage copy is the approved brief, word for word', () => {
       'During the pilot, fan rewards are simulated, with no cash payouts.',
       'Not just more followers. More freedom to build the life you want.',
       'But what about you?',
+      // The shortened WHY and the fan rewards clarification (2026-11-19).
+      'You show up consistently, hoping to grow an audience and build something meaningful.',
+      'And slowly, it starts working.',
+      'You can have thousands of followers and still struggle to earn enough to do what you love full-time.',
+      "Even the people who chose to follow you don't always see what you post.",
+      "You're helping the platforms grow. But is all that hard work helping you build a future?",
+      'Yet they rarely share financially in the success they help create.',
+      'But when their contributions help create value, they rarely get to share financially in the success.',
     ])
       expect(all, removed).not.toContain(removed)
+    // The shortened WHY opens on the platform problem, in its first three lines.
+    expect(HOMEPAGE_COPY.problem.body.slice(0, 3)).toEqual([
+      'Think about how much time you spend creating content.',
+      'Planning. Recording. Editing. Posting.',
+      'You create the content. Your fans help it grow. The platforms make money.',
+    ])
+    expect(HOMEPAGE_COPY.problem.body.filter((t) => t === 'You create the content. Your fans help it grow. The platforms make money.')).toHaveLength(1)
     expect(all.filter((t) => t === 'What if the split worked differently?')).toEqual(['What if the split worked differently?'])
     expect(all.filter((t) => t === 'One post reaches thousands of people. The next barely reaches anyone.')).toHaveLength(1)
     expect(HOMEPAGE_COPY.problem.body).not.toContain('One post reaches thousands of people. The next barely reaches anyone.')
@@ -92,13 +107,22 @@ describe('claims safeguards on the copy', () => {
     expect(all).not.toMatch(/\d\s?%|percent|[$€£]\s?\d|\b\d[\d,.]*\s?(usd|cad|dollars?)\b/i)
   })
 
-  it('describes fan rewards in the pilot as simulated, and never as cash or redeemable', () => {
-    expect(PILOT_DISCLOSURES.step04).toBe('60-day pilot: Fan rewards are simulated. No cash rewards will be paid to fans during the pilot. Full details will be shared by email.')
-    expect(PILOT_DISCLOSURES.step04).toMatch(/Fan rewards are simulated/)
-    expect(PILOT_DISCLOSURES.step04).toMatch(/No cash rewards will be paid to fans during the pilot/)
-    expect(PILOT_DISCLOSURES.invitation).toMatch(/simulations, not actual cash earnings/)
+  it('describes the pilot accurately: fans earn Connection Points, fulfillment is simulated, and points have no cash value', () => {
+    expect(PILOT_DISCLOSURES.step04).toBe(
+      '60-day pilot: Fans can earn and accumulate Connection Points for qualifying contributions. Reward fulfillment is simulated, and Connection Points have no cash value. Full details will be shared by email.',
+    )
+    for (const d of [PILOT_DISCLOSURES.step04, PILOT_DISCLOSURES.invitation]) {
+      expect(d).toMatch(/fans can earn and accumulate Connection Points for qualifying contributions/i)
+      expect(d).toMatch(/Reward fulfillment (and advertising shown during the pilot )?(is|are) simulated/)
+      expect(d).toMatch(/Connection Points have no cash value/)
+    }
+    // Future money is described for creators only, never as fan rewards.
+    expect(PILOT_DISCLOSURES.invitation).toMatch(/Future creator earnings will depend on/)
+    expect(PILOT_DISCLOSURES.invitation).not.toMatch(/monetary rewards|cash earnings/)
     const all = allHomepageText().join('\n')
-    expect(all).not.toMatch(/connection points?[^.]*\b(cash value|worth|redeem(able)? for (cash|money)|convert)/i)
+    // Connection Points only ever appear beside cash as "no cash value".
+    for (const s of sentences(all).filter((x) => /connection points?[^.]*\b(cash|worth|redeem|convert)/i.test(x))) expect(s).toMatch(/Connection Points have no cash value\.$/)
+    expect(all).not.toMatch(/connection points?[^.]*\b(worth|redeem(able)? for (cash|money)|convert)/i)
     expect(all).not.toMatch(/every (like|share|comment|post)[^.]*(reward|earn|cash|paid)/i)
   })
 })

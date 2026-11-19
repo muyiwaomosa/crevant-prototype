@@ -129,6 +129,16 @@ const RULES: Rule[] = [
     allowed: denied,
   },
   {
+    // Fans get their split through Connection Points, never money or a share
+    // of revenue (founder decision, 2026-11-19). Catches "fans … revenue",
+    // "a portion for qualifying fan contributions" and "share financially",
+    // and still allows "fans get their split through Connection Points".
+    name: 'fans described as getting money or a share of revenue',
+    pattern:
+      /\b(fans?|supporters?)\b[^.;]{0,50}\b(revenue|financial(ly)?|money|cash|paid|payouts?|income|dollars?|earnings)\b|\b(revenue|money|cash|income|earnings|portion|percent(age)?|cut)\b[^.;]{0,20}\b(for|to|with)\b[^.;]{0,25}\b(fans?|supporters?)\b|\bshare\w* financially\b|\bfinancial(ly)? (share|stake|returns?)\b/i,
+    allowed: denied,
+  },
+  {
     name: 'revenue sharing described as existing today',
     pattern: /\b(revenue|ad(vertising)? (revenue|income)|profits?)\b/i,
     // A vision marker or a denial anywhere in the sentence: "Revenue sharing is not part of the pilot."

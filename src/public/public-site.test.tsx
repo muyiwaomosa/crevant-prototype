@@ -171,12 +171,25 @@ describe('THE PROBLEM', () => {
     // Some creators do earn: the picture never suggests that nobody is paid.
     expect(norm(p.querySelector('figcaption'))).toMatch(/small\s+stack, another a single coin/)
   })
-  it('on phones, shows the illustration right after the headline and the two opening lines, then the rest of the copy in order', () => {
+  it('on phones, shows the illustration right after the headline and the three opening lines, then the rest of the copy in order', () => {
     const p = section('problem')
     const order = [...p.querySelectorAll('h2, [data-testid="problem-opening"], [data-testid="problem-visual"], [data-testid="problem-copy"]')].map((e) => e.getAttribute('data-testid') ?? e.tagName)
     expect(order).toEqual(['H2', 'problem-opening', 'problem-visual', 'problem-copy'])
-    expect([...p.querySelectorAll('[data-testid="problem-opening"] p')].map((e) => norm(e))).toEqual(HOMEPAGE_COPY.problem.body.slice(0, 2))
-    expect([...p.querySelectorAll('[data-testid="problem-copy"] p')].map((e) => norm(e))).toEqual(HOMEPAGE_COPY.problem.body.slice(2))
+    expect([...p.querySelectorAll('[data-testid="problem-opening"] p')].map((e) => norm(e))).toEqual(HOMEPAGE_COPY.problem.body.slice(0, 3))
+    expect(norm(p.querySelector('[data-testid="problem-opening"] p:last-child'))).toBe('You create the content. Your fans help it grow. The platforms make money.')
+    expect([...p.querySelectorAll('[data-testid="problem-copy"] p')].map((e) => norm(e))).toEqual(HOMEPAGE_COPY.problem.body.slice(3))
+  })
+  it('on desktop, centres the illustration vertically beside the copy (no new illustration)', () => {
+    const p = section('problem')
+    const fig = p.querySelector('[data-testid="problem-visual"]')!
+    expect(fig.className).toMatch(/lg:self-center/)
+    expect(fig.className).not.toMatch(/lg:sticky|lg:self-start/)
+    expect(p.querySelectorAll('svg[data-testid]')).toHaveLength(1)
+  })
+  it("closes the fans' beat by asking where their split is, then the final question", () => {
+    const p = section('problem')
+    const lines = [...p.querySelectorAll('[data-testid="problem-copy"] p')].map((e) => norm(e))
+    expect(lines.slice(-2)).toEqual(["They're helping you grow. But where's their split?", "But shouldn't more of that value come back to the people who helped create it?"])
   })
   it('says "But what about you?" once, in the headline, and leaves the reach example to Section 4', () => {
     const t = norm(section('problem'))
@@ -203,6 +216,15 @@ describe('HOW SPLITPOST WORKS (The Vision merged in)', () => {
     expect(steps.map((s) => norm(s.querySelector('h3')))).toEqual(HOMEPAGE_COPY.howItWorks.steps.map((s) => s.title))
     expect(steps.map((s) => s.querySelector('svg')?.getAttribute('data-testid'))).toEqual(['step-art-1', 'step-art-2', 'step-art-3', 'step-art-4'])
     expect(norm(h.querySelector('[data-testid="how-closing"]'))).toBe(HOMEPAGE_COPY.howItWorks.closing)
+  })
+  it("draws Step 04's two splits: a coin for the creator, a Connection Points star (never a coin) for the fans", () => {
+    const art = section('how-it-works').querySelector('[data-testid="step-art-4"]')!
+    expect(art.querySelector('[data-testid="step-art-creator-split"] ellipse')).toBeTruthy()
+    const cp = art.querySelector('[data-testid="step-art-connection-points"]')!
+    expect(cp.querySelector('path')).toBeTruthy()
+    // No coin shapes or apricot (coin) colours in the fans' badge.
+    expect(cp.querySelector('ellipse')).toBeNull()
+    expect(cp.innerHTML).not.toMatch(/#f6b888|#d98a52/i)
   })
   it('puts the approved simulated-rewards disclosure right beside Step 04, and nowhere else in the section', () => {
     const steps = [...section('how-it-works').querySelectorAll('[data-testid="step"]')]
@@ -278,7 +300,7 @@ describe('the pilot disclosures', () => {
   })
   it('replace the older, duplicated pilot disclosures', () => {
     const t = norm(landing())
-    for (const old of [DISCLOSURES.noFanCash, DISCLOSURES.cpNoCashValue, DISCLOSURES.creatorSupportTest, DISCLOSURES.adsAreDemos, DISCLOSURES.pilotStart, 'Fans will not receive cash rewards during the pilot.', 'Future revenue sharing depends on']) {
+    for (const old of [DISCLOSURES.noFanCash, DISCLOSURES.creatorSupportTest, DISCLOSURES.adsAreDemos, DISCLOSURES.pilotStart, 'Fans will not receive cash rewards during the pilot.', 'Future revenue sharing depends on']) {
       expect(t, old).not.toContain(old)
     }
   })

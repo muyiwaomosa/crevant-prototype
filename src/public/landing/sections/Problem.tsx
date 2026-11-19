@@ -5,20 +5,22 @@ const copy = HOMEPAGE_COPY.problem
 
 /**
  * The approved body, in order, grouped into story beats for spacing only (no
- * words added, removed or moved): the opening pair, the creator's effort, the
- * creator's struggle, the fans, and the closing pair.
+ * words added, removed or moved): the opening three lines (the effort, then
+ * the imbalance), how the platforms profit, the fans, and the final question.
  */
-const BEATS = [copy.body.slice(0, 2), copy.body.slice(2, 6), copy.body.slice(6, 9), copy.body.slice(9, 12), copy.body.slice(12)] as const
+const BEATS = [copy.body.slice(0, 3), copy.body.slice(3, 5), copy.body.slice(5, 8), copy.body.slice(8)] as const
 
 /**
  * Section 2, THE PROBLEM, in the original site's layout. On phones the
- * value-flow illustration comes right after the headline and the two opening
- * lines (founder direction), then the rest of the story in short beats. On
- * desktop the copy stays on the left and the illustration on the right,
- * staying in view while the copy scrolls past.
+ * value-flow illustration comes right after the headline and the three
+ * opening lines, which end on the imbalance it pictures (founder direction,
+ * 2026-11-19), then the rest of the story in short beats. On desktop the copy
+ * stays on the left and the illustration on the right, centred vertically
+ * beside it.
  */
 export function Problem() {
-  const [fansQuestion, ...closingPair] = copy.emphasis as readonly string[]
+  const [imbalance, fansQuestion, finalQuestion] = copy.emphasis as readonly string[]
+  const closingPair = [imbalance, finalQuestion]
   const line = (p: string) =>
     p === fansQuestion ? (
       <p key={p} data-testid="problem-emphasis" className="font-sp-display text-2xl font-extrabold leading-snug text-sp-primary">
@@ -41,7 +43,7 @@ export function Problem() {
           {BEATS[0].map(line)}
         </div>
 
-        <figure data-testid="problem-visual" className="m-0 mx-auto mt-8 w-full max-w-[32rem] lg:sticky lg:top-24 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-0 lg:self-start">
+        <figure data-testid="problem-visual" className="m-0 mx-auto mt-8 w-full max-w-[32rem] lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-0 lg:self-center">
           <div className="rounded-[28px] bg-white p-4 shadow-[0_30px_60px_-34px_rgb(18_48_45/0.45)] ring-1 ring-sp-ink/8 sm:p-7">
             <ValueCapture />
           </div>
