@@ -419,6 +419,37 @@ begin
   raise notice 'PASS: grants, revocations, restorations and changes are recorded with actor and reason, and the history can''t be edited, deleted or truncated';
 end $$;
 
+-- The database records who really made each change, whatever the typed actor
+-- label says: this test runs as the 'postgres' login without switching role,
+-- and server code switching to service_role is recorded as such.
+do $$
+begin
+  if (select count(*) from ops.member_access_events where user_id::text like '00000000-0000-4000-8000-000000000b0_') < 6
+     or exists (select 1 from ops.member_access_events
+                where user_id::text like '00000000-0000-4000-8000-000000000b0_'
+                  and (db_session_user is distinct from 'postgres' or db_role is distinct from 'none')) then
+    raise exception 'FAIL: a change made as postgres (no role switch) was not recorded as such';
+  end if;
+end $$;
+begin;
+set local role service_role;
+-- The typed label claims 'postgres', but the database records the role really used.
+select ops.grant_member_access('00000000-0000-4000-8000-000000000b01', 'creator', 'postgres', null, 'regranted by server code');
+commit;
+do $$
+declare
+  r record;
+begin
+  select action, actor, db_session_user, db_role into r
+  from ops.member_access_events where user_id = '00000000-0000-4000-8000-000000000b01' order by id desc limit 1;
+  if r.action <> 'changed' or r.actor <> 'postgres' or r.db_session_user <> 'postgres' or r.db_role <> 'service_role' then
+    raise exception 'FAIL: a change by server code as service_role was recorded as %', r;
+  end if;
+  perform pg_temp.expect_error($q$insert into ops.member_access_events (user_id, action, actor) values ('00000000-0000-4000-8000-000000000b01', 'granted', 'x')$q$,
+    'db_session_user', 'a history row without the database login');
+  raise notice 'PASS: every change records the real database login and role alongside the typed actor label (a label can''t impersonate the role used)';
+end $$;
+
 -- Deleting an account removes its membership; the history keeps the record.
 set role supabase_auth_admin;
 delete from auth.users where id = '00000000-0000-4000-8000-000000000b03';
@@ -428,7 +459,7 @@ begin
   if exists (select 1 from ops.member_access where user_id = '00000000-0000-4000-8000-000000000b03') then
     raise exception 'FAIL: a deleted account kept its membership';
   end if;
-  if (select action || ':' || actor from ops.member_access_events where user_id = '00000000-0000-4000-8000-000000000b03' order by id desc limit 1) <> 'removed:account_deleted' then
+  if (select action || ':' || actor || ':' || db_role from ops.member_access_events where user_id = '00000000-0000-4000-8000-000000000b03' order by id desc limit 1) <> 'removed:account_deleted:supabase_auth_admin' then
     raise exception 'FAIL: deleting the account was not recorded';
   end if;
   raise notice 'PASS: deleting an account removes its membership and records the removal';

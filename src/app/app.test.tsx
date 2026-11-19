@@ -367,11 +367,11 @@ describe('data layer helpers', () => {
 
 describe('pilot membership (20261122000000): signed in is not enough', () => {
   for (const [status, text] of [
-    ['none', /isn't part of the Splitpost pilot yet/],
-    ['revoked', /access to the Splitpost pilot has ended/],
-    ['expired', /pilot access period has ended/],
+    ['none', "Your account hasn't been approved for the Splitpost pilot yet."],
+    ['revoked', 'Your pilot access has ended.'],
+    ['expired', 'Your pilot access has ended.'],
   ] as const) {
-    it(`${status}: explains why, loads no profile or member data, and offers the account page`, async () => {
+    it(`${status}: explains it, loads no profile or member data, and offers a Sign out button`, async () => {
       const { api, access } = fakeApi()
       access.status = status
       const ownProfile = vi.spyOn(api, 'ownProfile')
@@ -381,7 +381,9 @@ describe('pilot membership (20261122000000): signed in is not enough', () => {
       expect(await screen.findByRole('heading', { name: "Your pilot access isn't active" })).toBeTruthy()
       expect(screen.getByTestId('no-pilot-access').getAttribute('data-status')).toBe(status)
       expect(screen.getByText(text)).toBeTruthy()
-      expect(screen.getByRole('link', { name: 'Your account' }).getAttribute('href')).toBe('/app/account')
+      expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy()
+      // Revoked and expired read the same: the screen never says why access ended.
+      expect(document.body.textContent).not.toMatch(/revoked|expired|removed/i)
       expect(screen.queryByRole('heading', { name: 'Home' })).toBeNull()
       expect(screen.queryByLabelText('Username')).toBeNull()
       expect(ownProfile).not.toHaveBeenCalled()
@@ -406,12 +408,26 @@ describe('pilot membership (20261122000000): signed in is not enough', () => {
     expect(await screen.findByText('Your profile is ready')).toBeTruthy()
   })
 
-  it('if the membership check itself fails, nothing is shown but an error', async () => {
-    const { api, failures } = fakeApi()
-    failures.accessState = new AppApiError('network')
+  it('if the membership check itself fails, nothing is shown but an error, and no profile or member data is loaded', async () => {
+    for (const code of ['network', 'unknown', 'no_pilot_access'] as const) {
+      const { api, failures } = fakeApi()
+      failures.accessState = new AppApiError(code)
+      const ownProfile = vi.spyOn(api, 'ownProfile')
+      const feed = vi.spyOn(api, 'feed')
+      const { unmount } = renderApp('/app', api)
+      expect(await screen.findByText("We couldn't verify your access right now. Please try again."), code).toBeTruthy()
+      expect(screen.queryByRole('heading', { name: 'Home' })).toBeNull()
+      expect(ownProfile).not.toHaveBeenCalled()
+      expect(feed).not.toHaveBeenCalled()
+      unmount()
+    }
+  })
+
+  it('a database without the gate yet (pre-gate) behaves as before: straight to the feed', async () => {
+    const { api, access } = fakeApi()
+    ;(access as { preGate?: true }).preGate = true
     renderApp('/app', api)
-    expect(await screen.findByText(/couldn't check your profile/)).toBeTruthy()
-    expect(screen.queryByRole('heading', { name: 'Home' })).toBeNull()
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
   })
 
   it('a refused member action says pilot access is not active, in plain words', () => {

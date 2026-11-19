@@ -34,6 +34,7 @@ export function useMyProfile(): ProfileState {
 export type GateStatus =
   | { kind: 'loading' }
   | { kind: 'no_access'; access: AccessState }
+  | { kind: 'access_error' }
   | { kind: 'missing' }
   | { kind: 'error' }
   | { kind: 'incomplete'; profile: OwnProfile }
@@ -49,12 +50,19 @@ export function useProfileGate(): { status: GateStatus; reload: () => Promise<vo
   const [status, setStatus] = useState<GateStatus>({ kind: 'loading' })
   const reload = useCallback(async () => {
     if (!api) return
+    let access: AccessState
     try {
-      const access = await api.accessState()
-      if (access.status !== 'active') {
-        setStatus({ kind: 'no_access', access })
-        return
-      }
+      access = await api.accessState()
+    } catch {
+      // Couldn't verify membership: show nothing but the error.
+      setStatus({ kind: 'access_error' })
+      return
+    }
+    if (access.status !== 'active') {
+      setStatus({ kind: 'no_access', access })
+      return
+    }
+    try {
       const p = await api.ownProfile()
       if (!p) setStatus({ kind: 'missing' })
       else if (p.username && p.displayName) setStatus({ kind: 'ready', profile: { ...p, username: p.username, displayName: p.displayName } })

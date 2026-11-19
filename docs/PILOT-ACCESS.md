@@ -34,10 +34,31 @@ The database checks the layers in order for **every** member function:
   restored.
 * A creator's invite link works only while the creator has active membership.
 
-The app (`src/app/MemberArea.tsx`) asks for the access state first and shows
-"Your pilot access isn't active" (with a link to the account page to sign out)
-instead of loading anything. That screen is for explanation only: the
-database refuses every member function regardless of what the app does.
+The app (`src/app/MemberArea.tsx`) asks for the access state first. Without
+active membership it loads nothing else and shows:
+
+| State | Wording |
+|---|---|
+| Heading (all states) | "Your pilot access isn't active" |
+| Not granted | "Your account hasn't been approved for the Splitpost pilot yet." |
+| Revoked | "Your pilot access has ended." |
+| Expired | "Your pilot access has ended." (the same, so the screen never says why) |
+| The check itself failed | "We couldn't verify your access right now. Please try again." |
+
+with a **Sign out** button (this device). That screen is for explanation
+only: the database refuses every member function regardless of what the app
+does.
+
+**Before the migration is applied** (compatibility, so the member app can be
+deployed first): if PostgREST answers that `app_access_state` or
+`app_set_profile` does not exist (PGRST202 naming that exact function), the
+app behaves as before the gate (every signed-in account is a member, which is
+exactly what such a database enforces) and saves profiles with the old
+own-row update. Any other answer (an authorization error, a database
+failure, a timeout, another function, an unexpected reply) is a failure or
+"no access", never a reason to skip the gate. Once the migration is applied
+the functions exist, the fallback is never taken, and the database refuses
+direct profile updates anyway.
 
 ## Records and audit
 
@@ -50,6 +71,14 @@ database refuses every member function regardless of what the app does.
   edited, deleted or truncated, even by the table owner.
 * No email addresses: actors and reasons refuse `@`. Use labels such as
   `founder`.
+* Each history row also records, set by the database rather than typed:
+  `db_session_user` (the database login that made the change, for example
+  `postgres` for the SQL Editor or the staging workflow) and `db_role` (a role
+  it had switched to, for example `service_role`, or `none`). A typed actor
+  label can't impersonate them.
+* The history protects against mistakes and members, not against the
+  database owner, who can disable triggers. Owner-level access (the SQL Editor
+  and the GitHub `staging` secret) stays with the founder only, with MFA.
 * Members and visitors can't read, write or call any of it.
 * **Retention:** the history has no foreign key, so it outlives a deleted
   account (the removal itself is recorded). The retention period must be

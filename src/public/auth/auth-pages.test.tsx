@@ -253,8 +253,16 @@ describe('signed-in pages', () => {
     const client = makeClient({ session: SESSION, access: 'none' })
     renderAt('/app', client)
     expect(await screen.findByRole('heading', { name: "Your pilot access isn't active" })).toBeTruthy()
-    expect(client.rpc).toHaveBeenCalledWith('app_access_state', undefined)
+    expect(client.rpc).toHaveBeenCalledWith('app_access_state')
     expect(client.from).not.toHaveBeenCalled()
+  })
+
+  it('the no-access screen signs out on this device and goes to sign in', async () => {
+    const client = makeClient({ session: SESSION, access: 'revoked' })
+    renderAt('/app', client)
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+    await waitFor(() => expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'local' }))
+    await waitFor(() => expect(where.startsWith('/sign-in')).toBe(true))
   })
 
   it('home explains when the profile is not there yet', async () => {

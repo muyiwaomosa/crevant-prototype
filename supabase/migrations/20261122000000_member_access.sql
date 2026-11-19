@@ -11,7 +11,8 @@
 -- What this migration does:
 --   * ops.member_access (one row per account) and ops.member_access_events
 --     (append-only history of every change, written by a trigger, so no
---     change can skip the record);
+--     change can skip the record; each entry also records the database login
+--     and role that made it, not just the typed actor label);
 --   * ops.grant_member_access / ops.revoke_member_access, server only;
 --   * social.current_access() (identity + membership) and
 --     social.current_member() (identity + membership + complete profile).
@@ -62,6 +63,12 @@ create table ops.member_access_events (
   expires_at  timestamptz,
   actor       text not null,
   reason      text,
+  -- Recorded by the database, not typed by whoever makes the change: the
+  -- database login that made it (session_user, e.g. 'postgres' for the SQL
+  -- Editor or the staging workflow) and any role it had switched to
+  -- (e.g. 'service_role'; 'none' when it hadn't).
+  db_session_user text not null,
+  db_role         text not null,
   occurred_at timestamptz not null default pg_catalog.now()
 );
 create index member_access_events_user on ops.member_access_events (user_id, occurred_at);
@@ -85,8 +92,9 @@ declare
   v_action text;
 begin
   if tg_op = 'DELETE' then
-    insert into ops.member_access_events (user_id, action, cohort, status, expires_at, actor, reason)
-    values (old.user_id, 'removed', old.cohort, old.status, old.expires_at, 'account_deleted', null);
+    insert into ops.member_access_events (user_id, action, cohort, status, expires_at, actor, reason, db_session_user, db_role)
+    values (old.user_id, 'removed', old.cohort, old.status, old.expires_at, 'account_deleted', null,
+            session_user, pg_catalog.current_setting('role'));
     return old;
   end if;
   if tg_op = 'INSERT' then
@@ -98,8 +106,11 @@ begin
   else
     v_action := 'changed';
   end if;
-  insert into ops.member_access_events (user_id, action, cohort, status, expires_at, actor, reason)
-  values (new.user_id, v_action, new.cohort, new.status, new.expires_at, new.updated_by, new.reason);
+  -- session_user and the role setting are unaffected by this function running
+  -- as its owner, so they show who really made the change.
+  insert into ops.member_access_events (user_id, action, cohort, status, expires_at, actor, reason, db_session_user, db_role)
+  values (new.user_id, v_action, new.cohort, new.status, new.expires_at, new.updated_by, new.reason,
+          session_user, pg_catalog.current_setting('role'));
   return new;
 end;
 $$;

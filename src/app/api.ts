@@ -96,7 +96,12 @@ export type ViewBasis = 'visible' | 'played'
  * member function, so this is for explaining, not for protecting.
  */
 export type AccessStatus = 'active' | 'none' | 'revoked' | 'expired'
-export type AccessState = { status: AccessStatus; expiresAt: string | null }
+/**
+ * preGate: true only when the database has no membership gate yet (before
+ * 20261122000000 is applied), so every signed-in account is a member exactly
+ * as before. Never set for any other reason.
+ */
+export type AccessState = { status: AccessStatus; expiresAt: string | null; preGate?: true }
 
 /** The member's own profile row (Phase 1A own-row read), used to decide whether setup is needed. */
 export type OwnProfile = { id: string; createdAt: string; username: string | null; displayName: string | null }
@@ -268,6 +273,20 @@ export function isMissingRequestIdVersion(error: { code?: string; message?: stri
   return m[2].split(',').map((p) => p.trim()).includes('p_request_id')
 }
 
+/**
+ * True only when PostgREST answers that this exact public function does not
+ * exist (PGRST202, "Could not find the function public.<fn>..."), which is
+ * what a database without the pilot membership migration returns. Any other
+ * answer (an authorization error, a database failure, a timeout, a different
+ * function, a malformed reply) is false, so it can never be mistaken for
+ * "the gate isn't there".
+ */
+export function isMissingFunction(error: { code?: string; message?: string } | null | undefined, fn: string): boolean {
+  if (!error || error.code !== 'PGRST202') return false
+  const m = /^Could not find the function public\.([a-z_]+)(?:\(| without parameters)/.exec(error.message ?? '')
+  return !!m && m[1] === fn
+}
+
 export function createSupabaseApi(client: SupabaseClient, userId: string): AppApi {
   async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
     const { data, error } = await client.rpc(fn, args)
@@ -288,10 +307,19 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
   }
   return {
     async accessState() {
-      const rows = await rpc<Array<{ status?: string; expires_at?: string | null }>>('app_access_state')
-      const r = rows?.[0]
+      const { data, error } = await client.rpc('app_access_state')
+      if (error) {
+        // Before 20261122000000 there is no gate: every signed-in account is a
+        // member, as the database itself still treats it. Only a definite
+        // "function not found" means that; every other error is a failure.
+        if (isMissingFunction(error, 'app_access_state')) return { status: 'active', expiresAt: null, preGate: true }
+        throw toAppError(error)
+      }
+      // An unexpected reply is never treated as access.
+      const r = Array.isArray(data) ? (data[0] as { status?: unknown; expires_at?: unknown } | undefined) : undefined
       const status = (['active', 'none', 'revoked', 'expired'] as const).find((s) => s === r?.status) ?? 'none'
-      return { status, expiresAt: status === 'active' ? (r?.expires_at ?? null) : null }
+      const expiresAt = status === 'active' && typeof r?.expires_at === 'string' ? r.expires_at : null
+      return { status, expiresAt }
     },
     async ownProfile() {
       const { data, error } = await client.from('profiles').select('id, created_at, username, display_name').eq('id', userId).maybeSingle()
@@ -301,9 +329,17 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       return { id: row.id, createdAt: row.created_at, username: row.username ?? null, displayName: row.display_name ?? null }
     },
     async saveProfile({ username, displayName }) {
+      const values = { username: username.trim(), displayName: displayName.trim() }
       // Through the database function, which checks pilot membership (members
       // no longer update the profiles table directly).
-      await rpc<void>('app_set_profile', { p_username: username.trim(), p_display_name: displayName.trim() })
+      const { error } = await client.rpc('app_set_profile', { p_username: values.username, p_display_name: values.displayName })
+      if (!error) return
+      if (!isMissingFunction(error, 'app_set_profile')) throw toAppError(error)
+      // Before 20261122000000 only: the own-row update that database allows.
+      // Once the gate exists this path is never taken, and the database
+      // refuses direct profile updates anyway.
+      const { error: legacy } = await client.from('profiles').update({ username: values.username, display_name: values.displayName }).eq('id', userId)
+      if (legacy) throw toAppError(legacy)
     },
     async me() {
       const rows = await rpc<Array<Record<string, unknown>>>('app_me')

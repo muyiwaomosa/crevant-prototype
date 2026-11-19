@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { CheckCircle2, Compass, Home, Plus, User, Users } from 'lucide-react'
 import { Wordmark } from '../components/Wordmark'
 import { buttonClass } from '../components/ui'
@@ -34,6 +34,13 @@ function Gate() {
     )
   }
   if (status.kind === 'no_access') return <NoPilotAccess status={status.access.status} />
+  if (status.kind === 'access_error') {
+    return (
+      <Frame>
+        <Message tone="error">We couldn't verify your access right now. Please try again.</Message>
+      </Frame>
+    )
+  }
   if (status.kind === 'missing') {
     return (
       <Frame>
@@ -64,13 +71,17 @@ function Gate() {
  * nothing else is loaded; this only explains it.
  */
 export function NoPilotAccess({ status }: { status: 'none' | 'revoked' | 'expired' | 'active' }) {
-  const { session } = useAuth()
-  const detail =
-    status === 'revoked'
-      ? 'Your access to the Splitpost pilot has ended.'
-      : status === 'expired'
-        ? 'Your pilot access period has ended.'
-        : "This account isn't part of the Splitpost pilot yet. The pilot is invitation only."
+  const { session, client } = useAuth()
+  const navigate = useNavigate()
+  const [signingOut, setSigningOut] = useState(false)
+  // Revoked and expired read the same, so the screen never says why access ended.
+  const detail = status === 'none' ? "Your account hasn't been approved for the Splitpost pilot yet." : 'Your pilot access has ended.'
+  async function signOut() {
+    if (!client || signingOut) return
+    setSigningOut(true)
+    await client.auth.signOut({ scope: 'local' })
+    navigate('/sign-in', { replace: true })
+  }
   return (
     <main id="main" className="px-4 py-12 sm:py-16">
       <AuthCard
@@ -83,12 +94,9 @@ export function NoPilotAccess({ status }: { status: 'none' | 'revoked' | 'expire
       >
         <div className="space-y-5" data-testid="no-pilot-access" data-status={status}>
           <Message tone="info">{detail}</Message>
-          <p className="text-sm">
-            <Link to="/app/account" className="font-semibold text-brand-700 underline underline-offset-2">
-              Your account
-            </Link>{' '}
-            (sign out here)
-          </p>
+          <button type="button" onClick={signOut} disabled={signingOut} className={`${buttonClass('primary')} w-full`}>
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </button>
         </div>
       </AuthCard>
     </main>

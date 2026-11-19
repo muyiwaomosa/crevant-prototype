@@ -67,9 +67,18 @@ begin
   raise notice 'PASS: only server code can grant or revoke pilot membership';
 end $$;
 
--- 3. Every change is recorded, and the record can't be edited or erased.
+-- 3. Every change is recorded, with the database login and role that made
+--    it, and the record can't be edited or erased.
 do $$
 begin
+  if (select count(*) from information_schema.columns
+      where table_schema = 'ops' and table_name = 'member_access_events'
+        and column_name in ('db_session_user', 'db_role') and is_nullable = 'NO') <> 2 then
+    raise exception 'FAIL: the membership history does not record the database login and role';
+  end if;
+  if position('session_user' in (select prosrc from pg_proc where oid = 'ops.member_access_record()'::regprocedure)) = 0 then
+    raise exception 'FAIL: the membership history trigger does not record session_user';
+  end if;
   if not exists (select 1 from pg_trigger where tgrelid = 'ops.member_access'::regclass and tgname = 'member_access_record' and tgenabled <> 'D') then
     raise exception 'FAIL: changes to ops.member_access are not recorded';
   end if;
