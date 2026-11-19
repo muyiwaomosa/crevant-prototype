@@ -1,5 +1,5 @@
 {
-  "_comment": "Vercel project identities (not secrets). The public site may build for Vercel Production only in publicSite, from main of repository, and never in demo. Changing these requires a reviewed pull request. publicSite.projectId is the splitpost project's ID (Settings, General, Project ID), as Vercel reported it on PR #39; confirm it in the dashboard. Recording it does not enable Production: CREVANT_PRODUCTION_SITE_APPROVED=true must also be set in that project.",
+  "_comment": "Vercel project identities (not secrets). The public site may build for Vercel Production only in publicSite, from main of repository, and never in demo. Changing these requires a reviewed pull request. publicSite.projectId is the splitpost project's ID (Settings, General, Project ID), as Vercel reported it on PR #39; confirm it in the dashboard. Recording it does not enable Production: CREVANT_PRODUCTION_SITE_APPROVED=true must also be set in that project. memberApp is the member app project (app.splitpost.ca, pilot milestone M1), created by the founder on 2026-11-19; projectId is its ID from Settings, General, Project ID. Recording it does not enable Production: CREVANT_MEMBER_APP_APPROVED=true must also be set in that project, and the build must be a Git build of main.",
   "repository": {
     "owner": "muyiwaomosa",
     "slug": "crevant-prototype",
@@ -12,5 +12,10 @@
   "publicSite": {
     "name": "splitpost",
     "projectId": "prj_Noj2RuAiisoZ89KjizmQxkAtb9QM"
+  },
+  "memberApp": {
+    "name": "splitpost-app",
+    "projectId": "prj_FWOmj8cCOMBpQZFA36e1mKId557n",
+    "host": "app.splitpost.ca"
   }
 }

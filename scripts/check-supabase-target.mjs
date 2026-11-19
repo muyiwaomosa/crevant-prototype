@@ -11,6 +11,12 @@
 //                       While the Production project reference is unset
 //                       (config/supabase-projects.json), any address fails:
 //                       Production fails closed.
+//   Member app project  (splitpost-app, app.splitpost.ca) Preview and
+//                       Production alike: exactly the staging (pilot)
+//                       project and a publishable key, never the Production
+//                       waitlist project, and no waitlist address at all
+//                       (members never use the waitlist form). Anything
+//                       else, or a misconfigured project list, fails.
 //   Local builds        staging, a local development stack, or nothing.
 //   Any build           fails if the key looks like a secret or service key.
 //
@@ -18,6 +24,7 @@
 // requires a reviewed pull request.
 
 import { readFileSync } from 'node:fs'
+import { identifyProject } from './vercel-project.mjs'
 
 const projects = JSON.parse(readFileSync(new URL('../config/supabase-projects.json', import.meta.url), 'utf8'))
 const REF = /^[a-z0-9]{20}$/
@@ -59,12 +66,31 @@ function waitlistEndpointProblem(target, endpoint, refs) {
   return `VITE_WAITLIST_ENDPOINT must be the staging waitlist function (${staging}).`
 }
 
+/** The member app project: staging (pilot) only, publishable key only, no waitlist address. Fails closed. */
+function checkMemberApp(env, target, refs) {
+  const url = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '')
+  const key = (env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim()
+  const fail = (message) => ({ ok: false, message: `Member app: ${message}` })
+  if (!refs.staging || !REF.test(refs.staging)) return fail('the staging project reference is not configured (config/supabase-projects.json).')
+  if (refs.production && refs.production === refs.staging) return fail('the staging and Production project references are the same (config/supabase-projects.json).')
+  const stagingUrl = `https://${refs.staging}.supabase.co`
+  if (refs.production && REF.test(refs.production) && url.includes(refs.production)) {
+    return fail('it must never use the Production waitlist project. Use the staging (pilot) project.')
+  }
+  if ((env.VITE_WAITLIST_ENDPOINT || '').trim()) return fail('VITE_WAITLIST_ENDPOINT must not be set. Members never use the waitlist form.')
+  if (url !== stagingUrl) return fail(`VITE_SUPABASE_URL must be exactly the staging (pilot) project (${stagingUrl}).`)
+  if (key && isPrivilegedKey(key)) return fail('VITE_SUPABASE_PUBLISHABLE_KEY looks like a secret or service key. Only the publishable key may be used in the browser.')
+  if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return fail('VITE_SUPABASE_PUBLISHABLE_KEY must be the staging publishable key (sb_publishable_...).')
+  return { ok: true, message: `Supabase: staging (pilot) project (${refs.staging}), publishable key, member app (${target || 'local'}).` }
+}
+
 /**
  * @param env  the build environment
- * @param opts { mode: 'app' | 'site', refs: { staging, production } } (refs default to config)
+ * @param opts { mode: 'app' | 'site', refs: { staging, production }, project } (refs default to config; project to the Vercel project this build runs in)
  */
-export function checkSupabaseTarget(env, { mode = env.CREVANT_BUILD_MODE === 'site' ? 'site' : 'app', refs = PROJECTS } = {}) {
+export function checkSupabaseTarget(env, { mode = env.CREVANT_BUILD_MODE === 'site' ? 'site' : 'app', refs = PROJECTS, project = identifyProject(env) } = {}) {
   const target = (env.VERCEL_ENV || '').trim().toLowerCase()
+  if (project === 'memberApp') return checkMemberApp(env, target, refs)
   const url = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '')
   const key = (env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim()
   const fail = (message) => ({ ok: false, message })

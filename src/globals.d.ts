@@ -3,3 +3,6 @@
 // everywhere else (Previews, local, tests) they are false.
 declare const __CREVANT_PRODUCTION_SITE__: boolean
 declare const __CREVANT_ALLOW_INDEXING__: boolean
+// True only in a member app build (the splitpost-app project; scripts/build.mjs
+// sets CREVANT_MEMBER_APP_BUILD for it). Always false in the public site build.
+declare const __CREVANT_MEMBER_APP_BUILD__: boolean

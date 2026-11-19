@@ -236,5 +236,30 @@ guard "only the three Production workflows name Production; no staging, rollback
 guard "the Production admin and health workflows never name the staging project" \
   "! grep -q 'kpudeppgokpjhvaqrprn' .github/workflows/waitlist-admin-production.yml .github/workflows/waitlist-health-production.yml"
 
+# Member authorization surface audit runner (pilot milestone M1): it refuses
+# every wrong target before connecting (no network here), and the audit is
+# never placed where the staging deploy workflow would run it automatically.
+audit_refuses() { # audit_refuses <description> <env assignments...>
+  local desc=$1; shift
+  if env -u DATABASE_URL -u STAGING_DATABASE_URL "$@" scripts/db/audit-member-surface.sh >/dev/null 2>&1; then
+    echo "FAIL  $desc (the audit runner did not refuse)"; failed=$((failed+1))
+  else
+    echo "PASS  $desc"; pass=$((pass+1))
+  fi
+}
+PROD=hmrliwoychnqrbbydorg
+audit_refuses "member surface audit: no target given"                  AUDIT_TARGET=
+audit_refuses "member surface audit: there is no Production target"    AUDIT_TARGET=production DATABASE_URL="postgresql://postgres:$PW@db.$PROD.supabase.co:5432/postgres"
+audit_refuses "member surface audit: a local run may not point at Supabase" AUDIT_TARGET=local DATABASE_URL="postgresql://postgres:$PW@db.$REF.supabase.co:5432/postgres"
+audit_refuses "member surface audit: a staging run naming the Production project" AUDIT_TARGET=staging EXPECTED_PROJECT_REF=$REF SUPABASE_PROJECT_REF=$REF CONFIRM_PROJECT_REF=$REF STAGING_DATABASE_URL="postgresql://postgres.$PROD:$PW@$POOL:5432/postgres"
+audit_refuses "member surface audit: a staging run without the typed confirmation" AUDIT_TARGET=staging EXPECTED_PROJECT_REF=$REF SUPABASE_PROJECT_REF=$REF CONFIRM_PROJECT_REF=wrong STAGING_DATABASE_URL="postgresql://postgres.$REF:$PW@$POOL:5432/postgres"
+audit_refuses "member surface audit: a staging run expecting another project" AUDIT_TARGET=staging EXPECTED_PROJECT_REF=abcdefghijabcdefghij SUPABASE_PROJECT_REF=$REF CONFIRM_PROJECT_REF=$REF STAGING_DATABASE_URL="postgresql://postgres.$REF:$PW@$POOL:5432/postgres"
+guard "member surface audit: not in supabase/tests (the staging deploy workflow runs every file there)" \
+  "! grep -rlq 'member authorization surface' supabase/tests"
+guard "member surface audit: runs in a read only transaction that is rolled back, in a read only session" \
+  "grep -q '^begin transaction read only;' scripts/db/audit/member-surface.sql && grep -q '^rollback;' scripts/db/audit/member-surface.sql && grep -q 'default_transaction_read_only=on' scripts/db/audit-member-surface.sh"
+guard "member surface audit: no workflow runs it against a hosted project yet" \
+  "! grep -lq 'audit-member-surface' .github/workflows/*.yml"
+
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]
