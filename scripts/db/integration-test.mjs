@@ -164,7 +164,8 @@ let A, B, tokenA
   const mine = await rest('/profiles?select=*', { token: tokenA })
   check('A sees only their own profile', mine.status === 200 && mine.json.length === 1 && mine.json[0].id === A, `${mine.status} ${mine.json?.length}`)
   const other = await rest(`/profiles?id=eq.${B}`, { method: 'PATCH', token: tokenA, body: { display_name: 'Hacked' } })
-  check("A's update of B's profile changes nothing", other.status === 200 && Array.isArray(other.json) && other.json.length === 0, `${other.status} ${JSON.stringify(other.json)}`)
+  // Since 20261122000000 members have no direct UPDATE at all, so this is refused outright.
+  check("A's update of B's profile is refused", other.status === 401 || other.status === 403, `${other.status} ${JSON.stringify(other.json)}`)
   check("B's profile is untouched", (await profileOf(B))[0]?.display_name === 'Bob')
 
   // Since the pilot membership gate (20261122000000), members never write
