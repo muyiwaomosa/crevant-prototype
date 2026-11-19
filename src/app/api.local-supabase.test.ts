@@ -8,8 +8,9 @@
 //      fallback to the original calls.
 //   2. The new schema (the migration reapplied): the same request id sent
 //      twice is one post, through the server's request id.
-// The later migrations (viewed state 20261121000000, then the Inner Clique
-// 20261120000000) are rolled back first, newest first, and reapplied last,
+// The later migrations (pilot membership 20261122000000, viewed state
+// 20261121000000, then the Inner Clique 20261120000000) are rolled back
+// first, newest first, and reapplied last,
 // oldest first, because each staging rollback refuses while a later migration
 // is recorded. Leaves every migration applied, as it found them.
 import { execFileSync } from 'node:child_process'
@@ -25,6 +26,7 @@ const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
 // Newest first.
 const LATER = [
+  { version: '20261122000000', name: 'member_access', file: 'supabase/migrations/20261122000000_member_access.sql', rollback: 'scripts/db/staging-rollback-member-access.sql', phrase: 'REMOVE THE STAGING MEMBER ACCESS' },
   { version: '20261121000000', name: 'viewed_state', file: 'supabase/migrations/20261121000000_viewed_state.sql', rollback: 'scripts/db/staging-rollback-viewed-state.sql', phrase: 'REMOVE THE STAGING VIEWED STATE' },
   { version: '20261120000000', name: 'inner_clique', file: 'supabase/migrations/20261120000000_inner_clique.sql', rollback: 'scripts/db/staging-rollback-inner-clique.sql', phrase: 'REMOVE THE STAGING INNER CLIQUE' },
 ]
@@ -103,6 +105,10 @@ describe.skipIf(!enabled)('posting against the old and the new database schema (
     execFileSync('psql', [DB!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', MIGRATION])
     sql("insert into supabase_migrations.schema_migrations (version, name) values ('20261119000000', 'publishing_request_ids')")
     reapplyLater()
+    // With pilot membership back (20261122000000), posting needs an active
+    // membership. Granted only now, after every rollback in this job has run:
+    // membership history is audit data, and the rollbacks refuse once it exists.
+    sql(`select ops.grant_member_access('${userId}', 'tester', 'integration-test')`)
     await waitForSchema(true)
     const rid = newRequestId()
     const a = await api.createPost('Sent twice to the new schema', rid)

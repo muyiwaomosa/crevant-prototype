@@ -13,7 +13,7 @@ const TOKEN = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c'
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'user-1', email: 'me@example.test' } }
 
 type Fake = ReturnType<typeof makeClient>
-function makeClient({ session = null as unknown, profile = { id: 'user-1', created_at: '2026-11-06T12:00:00Z' } as unknown } = {}) {
+function makeClient({ session = null as unknown, profile = { id: 'user-1', created_at: '2026-11-06T12:00:00Z' } as unknown, access = 'active' } = {}) {
   let listener: ((event: string, s: unknown) => void) | null = null
   const maybeSingle = vi.fn(async () => ({ data: profile, error: null }))
   const eq = vi.fn(() => ({ maybeSingle }))
@@ -34,6 +34,8 @@ function makeClient({ session = null as unknown, profile = { id: 'user-1', creat
       signInWithOtp: vi.fn(),
     },
     from: vi.fn(() => ({ select })),
+    // Pilot membership (20261122000000): the account's own access state.
+    rpc: vi.fn(async (fn: string) => (fn === 'app_access_state' ? { data: [{ status: access, expires_at: null }], error: null } : { data: null, error: null })),
     emit: (event: string, s: unknown) => listener?.(event, s),
     calls: { select, eq, maybeSingle },
   }
@@ -245,6 +247,14 @@ describe('signed-in pages', () => {
     expect(client.from).toHaveBeenCalledWith('profiles')
     expect(client.calls.eq).toHaveBeenCalledWith('id', 'user-1')
     expect(document.body.textContent).toContain('me@example.test')
+  })
+
+  it('home, signed in without pilot membership, explains it and never reads the profile', async () => {
+    const client = makeClient({ session: SESSION, access: 'none' })
+    renderAt('/app', client)
+    expect(await screen.findByRole('heading', { name: "Your pilot access isn't active" })).toBeTruthy()
+    expect(client.rpc).toHaveBeenCalledWith('app_access_state', undefined)
+    expect(client.from).not.toHaveBeenCalled()
   })
 
   it('home explains when the profile is not there yet', async () => {

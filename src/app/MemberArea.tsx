@@ -33,6 +33,7 @@ function Gate() {
       </Frame>
     )
   }
+  if (status.kind === 'no_access') return <NoPilotAccess status={status.access.status} />
   if (status.kind === 'missing') {
     return (
       <Frame>
@@ -54,6 +55,43 @@ function Gate() {
         <MemberLayout username={status.profile.username} />
       </ViewTrackerProvider>
     </ProfileProvider>
+  )
+}
+
+/**
+ * Signed in, but not an active pilot member (never granted, revoked or
+ * expired). The database refuses every member function for this account, so
+ * nothing else is loaded; this only explains it.
+ */
+export function NoPilotAccess({ status }: { status: 'none' | 'revoked' | 'expired' | 'active' }) {
+  const { session } = useAuth()
+  const detail =
+    status === 'revoked'
+      ? 'Your access to the Splitpost pilot has ended.'
+      : status === 'expired'
+        ? 'Your pilot access period has ended.'
+        : "This account isn't part of the Splitpost pilot yet. The pilot is invitation only."
+  return (
+    <main id="main" className="px-4 py-12 sm:py-16">
+      <AuthCard
+        title="Your pilot access isn't active"
+        intro={
+          <p>
+            Signed in as <strong className="font-semibold text-ink-900">{session?.user.email}</strong>.
+          </p>
+        }
+      >
+        <div className="space-y-5" data-testid="no-pilot-access" data-status={status}>
+          <Message tone="info">{detail}</Message>
+          <p className="text-sm">
+            <Link to="/app/account" className="font-semibold text-brand-700 underline underline-offset-2">
+              Your account
+            </Link>{' '}
+            (sign out here)
+          </p>
+        </div>
+      </AuthCard>
+    </main>
   )
 }
 

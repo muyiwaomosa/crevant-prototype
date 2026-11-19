@@ -90,10 +90,20 @@ export interface UnseenCreator extends MemberSummary {
 /** How a view was observed: text and images 50% visible for 2 s; video 3 s of playback or completion. */
 export type ViewBasis = 'visible' | 'played'
 
+/**
+ * The signed-in account's own pilot membership (20261122000000_member_access).
+ * Only 'active' may use the member app; the database enforces it for every
+ * member function, so this is for explaining, not for protecting.
+ */
+export type AccessStatus = 'active' | 'none' | 'revoked' | 'expired'
+export type AccessState = { status: AccessStatus; expiresAt: string | null }
+
 /** The member's own profile row (Phase 1A own-row read), used to decide whether setup is needed. */
 export type OwnProfile = { id: string; createdAt: string; username: string | null; displayName: string | null }
 
 export interface AppApi {
+  /** The signed-in account's own pilot membership state (needs no membership itself). */
+  accessState(): Promise<AccessState>
   ownProfile(): Promise<OwnProfile | null>
   saveProfile(input: { username: string; displayName: string }): Promise<void>
   me(): Promise<Me>
@@ -179,6 +189,7 @@ const MESSAGES: Record<string, string> = {
   invalid_request: 'Something went wrong. Please try again.',
   request_reused: 'Something changed while sending. Please try again.',
   not_found: "That's no longer available.",
+  no_pilot_access: "Your pilot access isn't active, so this isn't available.",
   username_taken: 'That username is taken. Please choose another.',
   username_invalid: 'Use 3 to 30 lowercase letters, numbers or underscores, and not a reserved name.',
   display_name_invalid: 'Display names are 1 to 50 characters, with no special control characters.',
@@ -276,6 +287,12 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     throw toAppError(error)
   }
   return {
+    async accessState() {
+      const rows = await rpc<Array<{ status?: string; expires_at?: string | null }>>('app_access_state')
+      const r = rows?.[0]
+      const status = (['active', 'none', 'revoked', 'expired'] as const).find((s) => s === r?.status) ?? 'none'
+      return { status, expiresAt: status === 'active' ? (r?.expires_at ?? null) : null }
+    },
     async ownProfile() {
       const { data, error } = await client.from('profiles').select('id, created_at, username, display_name').eq('id', userId).maybeSingle()
       if (error) throw toAppError(error)
@@ -284,11 +301,9 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       return { id: row.id, createdAt: row.created_at, username: row.username ?? null, displayName: row.display_name ?? null }
     },
     async saveProfile({ username, displayName }) {
-      const { error } = await client
-        .from('profiles')
-        .update({ username: username.trim(), display_name: displayName.trim() })
-        .eq('id', userId)
-      if (error) throw toAppError(error)
+      // Through the database function, which checks pilot membership (members
+      // no longer update the profiles table directly).
+      await rpc<void>('app_set_profile', { p_username: username.trim(), p_display_name: displayName.trim() })
     },
     async me() {
       const rows = await rpc<Array<Record<string, unknown>>>('app_me')

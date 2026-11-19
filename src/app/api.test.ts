@@ -116,3 +116,39 @@ describe('commenting with a request id', () => {
     }
   })
 })
+
+describe('pilot membership (20261122000000)', () => {
+  it('reads the account\'s own access state, and treats anything unexpected as no access', async () => {
+    const { api, calls } = fakeClient([
+      { data: [{ status: 'active', expires_at: '2026-12-31T00:00:00Z' }] },
+      { data: [{ status: 'revoked', expires_at: null }] },
+      { data: [{ status: 'expired', expires_at: '2026-11-01T00:00:00Z' }] },
+      { data: [{ status: 'something-new' }] },
+      { data: [] },
+    ])
+    expect(await api.accessState()).toEqual({ status: 'active', expiresAt: '2026-12-31T00:00:00Z' })
+    expect(await api.accessState()).toEqual({ status: 'revoked', expiresAt: null })
+    expect(await api.accessState()).toEqual({ status: 'expired', expiresAt: null })
+    expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null })
+    expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null })
+    expect(calls.every((c) => c.fn === 'app_access_state')).toBe(true)
+  })
+
+  it('saves the profile through app_set_profile (never a direct table update), trimmed', async () => {
+    const { api, calls } = fakeClient([{ data: null }])
+    await api.saveProfile({ username: ' mia ', displayName: '  Mia Chen ' })
+    expect(calls).toEqual([{ fn: 'app_set_profile', args: { p_username: 'mia', p_display_name: 'Mia Chen' } }])
+  })
+
+  it('a refused profile save without membership surfaces as no_pilot_access', async () => {
+    const { api } = fakeClient([{ error: { code: 'P0001', message: 'no_pilot_access', details: 'Your pilot access is not active.' } }])
+    await expect(api.saveProfile({ username: 'mia', displayName: 'Mia' })).rejects.toMatchObject({ code: 'no_pilot_access' })
+  })
+
+  it('a taken username still says it is taken', async () => {
+    const { api } = fakeClient([{ error: { code: '23505', message: 'duplicate key value violates unique constraint "profiles_username_unique"' } }])
+    await expect(api.saveProfile({ username: 'mia', displayName: 'Mia' })).rejects.toBeInstanceOf(AppApiError)
+    const { api: api2 } = fakeClient([{ error: { code: '23505', message: 'duplicate key value violates unique constraint "profiles_username_unique"' } }])
+    await expect(api2.saveProfile({ username: 'mia', displayName: 'Mia' })).rejects.toMatchObject({ code: 'username_taken' })
+  })
+})

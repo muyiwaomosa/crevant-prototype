@@ -16,7 +16,9 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: the Inner Clique (20261120000000,
+# Later migrations follow the waitlist: pilot membership (20261122000000,
+# scripts/db/rollback-member-access-test.sh, the newest, so it goes first),
+# viewed state (20261121000000), the Inner Clique (20261120000000,
 # scripts/db/rollback-inner-clique-test.sh), publishing request ids
 # (20261119000000, scripts/db/rollback-publishing-requests-test.sh), creator acquisition
 # (20261116000000), the Release 1 social core (20261117000000) and platform
@@ -98,9 +100,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+MEMBER=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261122000000')")
+if [ "$MEMBER" = t ]; then
+  # The newest migration (pilot membership) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-viewed-state.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the viewed state rollback refuses while pilot membership is recorded" \
+    || bad "the viewed state rollback did not refuse while pilot membership is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-member-access-test.sh; then
+    ok "the pilot membership rollback refuses safely (including once membership or its history exists) and restores exactly the previous state"
+  else
+    bad "the pilot membership rollback tests failed"
+  fi
+fi
 VIEWED=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261121000000')")
 if [ "$VIEWED" = t ]; then
-  # The newest migration (viewed state) goes first.
+  # Then viewed state.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-inner-clique.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the Inner Clique rollback refuses while viewed state is recorded" \
@@ -265,17 +280,29 @@ if out=$(for f in supabase/tests/*.sql; do psql "$DB_URL" -X -q -v ON_ERROR_STOP
 else
   bad "database checks after reapplying: $(tail -3 <<<"$out" | tr '\n' ' ')"
 fi
-if [ "$VIEWED" = t ] || [ "$INNER" = t ] || [ "$REQUESTS" = t ] || [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
+if [ "$MEMBER" = t ] || [ "$VIEWED" = t ] || [ "$INNER" = t ] || [ "$REQUESTS" = t ] || [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
   # Everything is back: the waitlist rollback must refuse until the later ones are removed.
   out=$(rollback check ""); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "after reapplying, the waitlist rollback refuses while a later migration is recorded" \
     || bad "the waitlist rollback did not refuse while a later migration is recorded (exit $code)"
+  if [ "$MEMBER" = t ]; then
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-member-access.sql 2>&1); code=$?
+    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+      && ok "after reapplying, the pilot membership rollback check passes again" \
+      || bad "pilot membership rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+  fi
   if [ "$VIEWED" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-viewed-state.sql 2>&1); code=$?
+    if [ "$MEMBER" = t ]; then
+      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+        && ok "after reapplying, the viewed state rollback refuses while pilot membership is recorded" \
+        || bad "the viewed state rollback did not refuse after reapply while pilot membership is recorded (exit $code)"
+    else
     [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
       && ok "after reapplying, the viewed state rollback check passes again" \
       || bad "viewed state rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    fi
   fi
   if [ "$INNER" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-inner-clique.sql 2>&1); code=$?

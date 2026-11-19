@@ -215,8 +215,16 @@ async function shows(locator, timeout = 5000) {
       await pageA.getByLabel('Type it again', { exact: true }).fill(PASSWORD)
       await pageA.getByRole('button', { name: 'Save password' }).click()
       await pageA.waitForURL(`${APP}/app`)
+      // Pilot membership (20261122000000): accepting an invitation creates the
+      // account, but access is granted separately by server code.
+      await pageA.getByRole('heading', { name: "Your pilot access isn't active" }).waitFor()
+      check('signed in without pilot membership, home says access is not active (no profile setup, no member data)',
+        !(await pageA.locator('main').innerText()).includes('Your profile is ready'))
+      const idA = userBy(emailA).split('|')[0]
+      sql(`select ops.grant_member_access('${idA}', 'tester', 'auth-journey')`)
+      await pageA.reload()
       await pageA.getByText('Your profile is ready').waitFor()
-      check('home shows "Your profile is ready"', true)
+      check('once granted, home shows "Your profile is ready"', true)
       check('home shows the signed-in email', (await pageA.locator('main').innerText()).includes(emailA))
       await pageA.goto(`${APP}/`)
       check('header offers "Your account" when signed in', await shows(pageA.getByRole('banner').getByRole('link', { name: 'Your account' })))

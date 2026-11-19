@@ -1,5 +1,6 @@
 -- TEST ONLY (throwaway databases). Username and display name rules, tested
--- as the signed-in member A, the way the app will write them.
+-- as the signed-in member A (a pilot member since 020), the way the app
+-- writes them: through public.app_set_profile.
 
 begin;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
@@ -12,7 +13,7 @@ declare
   bad text;
 begin
   foreach ok in array array['abc', 'maya_99', '___', 'a1_', repeat('z', 30)] loop
-    update public.profiles set username = ok where id = '00000000-0000-4000-8000-000000000001';
+    perform public.app_set_profile(ok, 'Aye');
   end loop;
   foreach bad in array array[
     'ab', repeat('z', 31), 'Alice', 'al ice', 'al-ice', 'al.ice', 'émile', 'maya!', '',
@@ -20,7 +21,7 @@ begin
     'root', 'system', 'api', 'app', 'auth', 'tour', 'sign_in', 'settings', 'null'
   ] loop
     begin
-      update public.profiles set username = bad where id = '00000000-0000-4000-8000-000000000001';
+      perform public.app_set_profile(bad, 'Aye');
       raise exception 'FAIL: username % was accepted', bad;
     exception when check_violation then
       null;
@@ -28,7 +29,7 @@ begin
   end loop;
   -- Taken by B (case-insensitive by construction: only lowercase is allowed).
   begin
-    update public.profiles set username = 'bee_profile' where id = '00000000-0000-4000-8000-000000000001';
+    perform public.app_set_profile('bee_profile', 'Aye');
     raise exception 'FAIL: duplicate username was accepted';
   exception when unique_violation then
     null;
@@ -57,7 +58,7 @@ begin
     array[repeat('x', 50), repeat('x', 50)],
     array[repeat(E'\U0001F331', 50), repeat(E'\U0001F331', 50)]
   ] loop
-    update public.profiles set display_name = pair[1] where id = '00000000-0000-4000-8000-000000000001';
+    perform public.app_set_profile('aye_profile', pair[1]);
     select display_name into got from public.profiles where id = '00000000-0000-4000-8000-000000000001';
     if got is distinct from pair[2] then
       raise exception 'FAIL: display name % was stored as % (expected %)', pair[1], got, pair[2];
@@ -70,7 +71,7 @@ begin
     repeat('x', 51), repeat(E'\U0001F331', 51)
   ] loop
     begin
-      update public.profiles set display_name = bad where id = '00000000-0000-4000-8000-000000000001';
+      perform public.app_set_profile('aye_profile', bad);
       raise exception 'FAIL: display name % was accepted', bad;
     exception when check_violation then
       null;
@@ -78,7 +79,7 @@ begin
   end loop;
 
   -- Clearing a display name is allowed.
-  update public.profiles set display_name = null where id = '00000000-0000-4000-8000-000000000001';
+  perform public.app_set_profile('aye_profile', null);
   raise notice 'PASS: display names allow any language and emoji, are trimmed, and reject invisible-only, control characters and over 50 code points';
 end $$;
 rollback;
