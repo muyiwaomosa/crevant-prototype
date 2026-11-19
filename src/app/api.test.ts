@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { AppApiError, createSupabaseApi, isMissingRequestIdVersion } from './api'
+import { AppApiError, createSupabaseApi, isMissingFunction, isMissingRequestIdVersion } from './api'
 
 // The exact answers local Supabase gave when the request id versions were not
 // deployed (PostgREST lists the parameters it searched for, alphabetically).
@@ -29,6 +29,21 @@ function fakeClient(answers: Answer[]) {
       if (!a) throw new Error('unexpected extra call')
       if (a instanceof Error) throw a
       return { data: a.data ?? null, error: a.error ?? null }
+    },
+    // The legacy own-row profile update (only before 20261122000000).
+    from(table: string) {
+      return {
+        update(values: Record<string, unknown>) {
+          return {
+            async eq(col: string, val: unknown) {
+              calls.push({ fn: `update ${table}`, args: { ...values, [col]: val } })
+              const a = answers.shift()
+              if (!a || a instanceof Error) throw new Error('unexpected extra call')
+              return { data: a.data ?? null, error: a.error ?? null }
+            },
+          }
+        },
+      }
     },
   }
   return { api: createSupabaseApi(client as unknown as SupabaseClient, 'u1'), calls }
@@ -113,6 +128,119 @@ describe('commenting with a request id', () => {
       const { api, calls } = fakeClient([answer])
       await expect(api.addComment('p1', 'Nice', 'rq-c2')).rejects.toBeInstanceOf(Error)
       expect(calls).toHaveLength(1)
+    }
+  })
+})
+
+describe('pilot membership (20261122000000)', () => {
+  it('reads the account\'s own access state, and treats anything unexpected as no access', async () => {
+    const { api, calls } = fakeClient([
+      { data: [{ status: 'active', expires_at: '2026-12-31T00:00:00Z' }] },
+      { data: [{ status: 'revoked', expires_at: null }] },
+      { data: [{ status: 'expired', expires_at: '2026-11-01T00:00:00Z' }] },
+      { data: [{ status: 'something-new' }] },
+      { data: [] },
+    ])
+    expect(await api.accessState()).toEqual({ status: 'active', expiresAt: '2026-12-31T00:00:00Z' })
+    expect(await api.accessState()).toEqual({ status: 'revoked', expiresAt: null })
+    expect(await api.accessState()).toEqual({ status: 'expired', expiresAt: null })
+    expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null })
+    expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null })
+    expect(calls.every((c) => c.fn === 'app_access_state')).toBe(true)
+  })
+
+  it('saves the profile through app_set_profile (never a direct table update), trimmed', async () => {
+    const { api, calls } = fakeClient([{ data: null }])
+    await api.saveProfile({ username: ' mia ', displayName: '  Mia Chen ' })
+    expect(calls).toEqual([{ fn: 'app_set_profile', args: { p_username: 'mia', p_display_name: 'Mia Chen' } }])
+  })
+
+  it('a refused profile save without membership surfaces as no_pilot_access', async () => {
+    const { api } = fakeClient([{ error: { code: 'P0001', message: 'no_pilot_access', details: 'Your pilot access is not active.' } }])
+    await expect(api.saveProfile({ username: 'mia', displayName: 'Mia' })).rejects.toMatchObject({ code: 'no_pilot_access' })
+  })
+
+  it('a taken username still says it is taken', async () => {
+    const { api } = fakeClient([{ error: { code: '23505', message: 'duplicate key value violates unique constraint "profiles_username_unique"' } }])
+    await expect(api.saveProfile({ username: 'mia', displayName: 'Mia' })).rejects.toBeInstanceOf(AppApiError)
+    const { api: api2 } = fakeClient([{ error: { code: '23505', message: 'duplicate key value violates unique constraint "profiles_username_unique"' } }])
+    await expect(api2.saveProfile({ username: 'mia', displayName: 'Mia' })).rejects.toMatchObject({ code: 'username_taken' })
+  })
+})
+
+// What PostgREST answers when the membership functions don't exist yet (a
+// database before 20261122000000): PGRST202, naming the exact function.
+const NO_ACCESS_FN = { code: 'PGRST202', message: 'Could not find the function public.app_access_state without parameters in the schema cache', details: '', hint: null }
+const NO_SET_PROFILE_FN = {
+  code: 'PGRST202',
+  message: 'Could not find the function public.app_set_profile(p_display_name, p_username) in the schema cache',
+  details: 'Searched for the function public.app_set_profile with parameters p_display_name, p_username or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.',
+  hint: null,
+}
+
+describe('before the membership migration (compatibility, never a bypass)', () => {
+  it('recognises only a definite "function not found" for that exact function', () => {
+    expect(isMissingFunction(NO_ACCESS_FN, 'app_access_state')).toBe(true)
+    expect(isMissingFunction(NO_SET_PROFILE_FN, 'app_set_profile')).toBe(true)
+    // Not the same function, not PGRST202, or not a "not found" message: never.
+    expect(isMissingFunction(NO_ACCESS_FN, 'app_set_profile')).toBe(false)
+    expect(isMissingFunction({ ...NO_ACCESS_FN, message: 'Could not find the function public.app_access_states without parameters in the schema cache' }, 'app_access_state')).toBe(false)
+    expect(isMissingFunction({ code: 'PGRST203', message: NO_ACCESS_FN.message }, 'app_access_state')).toBe(false)
+    expect(isMissingFunction({ code: '42501', message: 'permission denied for function app_access_state' }, 'app_access_state')).toBe(false)
+    expect(isMissingFunction({ code: 'P0001', message: 'no_pilot_access' }, 'app_access_state')).toBe(false)
+    expect(isMissingFunction({ code: 'PGRST202', message: 'see: Could not find the function public.app_access_state' }, 'app_access_state')).toBe(false)
+    expect(isMissingFunction(null, 'app_access_state')).toBe(false)
+  })
+
+  it('a database without the gate yet: every signed-in account is active (pre-gate), as the database itself treats it', async () => {
+    const { api } = fakeClient([{ error: NO_ACCESS_FN }])
+    expect(await api.accessState()).toEqual({ status: 'active', expiresAt: null, preGate: true })
+  })
+
+  it('any other failure is a failure, never access', async () => {
+    for (const error of [
+      { code: '42501', message: 'permission denied for function app_access_state' },
+      { code: 'P0001', message: 'not_signed_in' },
+      { code: 'PGRST000', message: 'Could not connect to the database' },
+      { code: '57014', message: 'canceling statement due to statement timeout' },
+      { code: 'PGRST202', message: 'Could not find the function public.app_other without parameters in the schema cache' },
+      NETWORK,
+    ]) {
+      const { api } = fakeClient([{ error }])
+      await expect(api.accessState(), error.message).rejects.toBeInstanceOf(AppApiError)
+    }
+    const thrown = fakeClient([new Error('socket hang up')])
+    await expect(thrown.api.accessState()).rejects.toThrow()
+  })
+
+  it('an unexpected reply is never access', async () => {
+    for (const data of [null, {}, 'active', [{}], [{ status: 'ACTIVE' }], [{ status: true }], [{ status: 'admin' }]]) {
+      const { api } = fakeClient([{ data }])
+      expect((await api.accessState()).status, JSON.stringify(data)).toBe('none')
+    }
+    const { api } = fakeClient([{ data: [{ status: 'active', expires_at: 12345 }] }])
+    expect(await api.accessState()).toEqual({ status: 'active', expiresAt: null })
+  })
+
+  it('profile setup falls back to the own-row update only when app_set_profile does not exist', async () => {
+    const { api, calls } = fakeClient([{ error: NO_SET_PROFILE_FN }, { data: null }])
+    await api.saveProfile({ username: ' mia ', displayName: ' Mia ' })
+    expect(calls).toEqual([
+      { fn: 'app_set_profile', args: { p_username: 'mia', p_display_name: 'Mia' } },
+      { fn: 'update profiles', args: { username: 'mia', display_name: 'Mia', id: 'u1' } },
+    ])
+  })
+
+  it('profile setup never falls back on any other error (no_pilot_access, permission, network, timeout)', async () => {
+    for (const error of [
+      { code: 'P0001', message: 'no_pilot_access' },
+      { code: '42501', message: 'permission denied for function app_set_profile' },
+      { code: 'PGRST000', message: 'Could not connect to the database' },
+      NETWORK,
+    ]) {
+      const { api, calls } = fakeClient([{ error }])
+      await expect(api.saveProfile({ username: 'mia', displayName: 'Mia' })).rejects.toBeInstanceOf(AppApiError)
+      expect(calls.map((c) => c.fn), error.message).toEqual(['app_set_profile'])
     }
   })
 })

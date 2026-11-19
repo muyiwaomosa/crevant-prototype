@@ -56,9 +56,10 @@ declare
   expected text[] := array[
     -- app_add_comment and app_create_post have two versions each: the original,
     -- and the one with a request id (20261119000000_publishing_request_ids).
-    'app_add_comment', 'app_add_comment', 'app_catch_up', 'app_clique_add', 'app_clique_remove', 'app_clique_replace', 'app_comments',
+    -- app_access_state and app_set_profile: the pilot membership gate (20261122000000).
+    'app_access_state', 'app_add_comment', 'app_add_comment', 'app_catch_up', 'app_clique_add', 'app_clique_remove', 'app_clique_replace', 'app_comments',
     'app_create_post', 'app_create_post', 'app_delete_comment', 'app_delete_post', 'app_discover', 'app_feed', 'app_follow', 'app_following',
-    'app_like', 'app_mark_viewed', 'app_me', 'app_member', 'app_member_posts', 'app_post', 'app_unfollow', 'app_unlike', 'app_unseen_creators'
+    'app_like', 'app_mark_viewed', 'app_me', 'app_member', 'app_member_posts', 'app_post', 'app_set_profile', 'app_unfollow', 'app_unlike', 'app_unseen_creators'
   ];
   found text[];
 begin
@@ -112,7 +113,7 @@ begin
     end if;
   end loop;
   if (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'social')
-     <> array['clique_members_guard', 'current_member', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check'] then
+     <> array['clique_members_guard', 'current_access', 'current_member', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check'] then
     raise exception 'FAIL: the social helper and trigger functions are not the approved set (found %)', n;
   end if;
   raise notice 'PASS: social helpers and triggers are not callable by members';
@@ -196,12 +197,16 @@ begin
   raise notice 'PASS: Release 1 stores no points, money, email or role';
 end $$;
 
--- 6. Separation from private data.
+-- 6. Separation from private data. The one exception is pilot membership
+--    (20261122000000_member_access): the access check may read
+--    ops.member_access (no personal data: account id, cohort, status, dates)
+--    through ops.member_access_active(). Any other reference into ops (the
+--    waitlist, invitations, admins, acquisition) still fails.
 do $$
 begin
   if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
              where (n.nspname = 'social' or (n.nspname = 'public' and p.proname like 'app\_%'))
-               and p.prosrc ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
+               and regexp_replace(p.prosrc, 'ops\.member_access(_active)?\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (

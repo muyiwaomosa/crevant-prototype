@@ -182,6 +182,10 @@ async function axe(page) {
     admin(`select waitlist_api.admin_accept_creator('${CREATOR_ID}', '{fitness}')`)
     admin(`select waitlist_api.admin_set_creator_public_name('${CREATOR_ID}', 'Priya Raman')`)
     const code = admin(`select waitlist_api.admin_issue_creator_link('${CREATOR_ID}', 90, 'journey')`)
+    // Pilot membership (20261122000000): a creator's link works only while the
+    // creator has active pilot access, granted by server code.
+    check("a creator's link is inactive until the creator has pilot access", sql(`select status from ops.resolve_creator_link('${code}')`) === 'creator_inactive')
+    sql(`select ops.grant_member_access('${CREATOR_ID}', 'creator', 'waitlist-journey')`)
     await open(page, `?ref=${code}`)
     const banner = page.getByText('Priya Raman invited you to Splitpost.')
     check('an invitation link shows the creator\'s agreed name', await banner.isVisible().catch(() => false))

@@ -74,11 +74,17 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null; creators?: 
     return p
   }
   const failures: Partial<Record<keyof AppApi, AppApiError>> = {}
+  // Pilot membership (20261122000000): active unless a test says otherwise.
+  const access: { status: 'active' | 'none' | 'revoked' | 'expired'; expiresAt: string | null } = { status: 'active', expiresAt: null }
   const maybeFail = (name: keyof AppApi) => {
     if (failures[name]) throw failures[name]
   }
 
   const api: AppApi = {
+    async accessState() {
+      maybeFail('accessState')
+      return { status: access.status, expiresAt: access.expiresAt }
+    },
     async ownProfile(): Promise<OwnProfile | null> {
       const u = users.get(meId)
       return u ? { id: u.id, createdAt: u.createdAt, username: u.username, displayName: u.displayName } : null
@@ -288,7 +294,7 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null; creators?: 
     posts.push({ id, author, body, at: at ?? (clock += 1000), deleted: false })
     return id
   }
-  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt }
+  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -356,6 +362,77 @@ describe('data layer helpers', () => {
       like_count: '3', comment_count: 2, liked_by_me: true, author_in_my_clique: false, is_mine: false,
     })
     expect(p).toMatchObject({ likeCount: 3, commentCount: 2, author: { username: 'aye', displayName: 'Aye' } })
+  })
+})
+
+describe('pilot membership (20261122000000): signed in is not enough', () => {
+  for (const [status, text] of [
+    ['none', "Your account hasn't been approved for the Splitpost pilot yet."],
+    ['revoked', 'Your pilot access has ended.'],
+    ['expired', 'Your pilot access has ended.'],
+  ] as const) {
+    it(`${status}: explains it, loads no profile or member data, and offers a Sign out button`, async () => {
+      const { api, access } = fakeApi()
+      access.status = status
+      const ownProfile = vi.spyOn(api, 'ownProfile')
+      const feed = vi.spyOn(api, 'feed')
+      const me = vi.spyOn(api, 'me')
+      renderApp('/app', api)
+      expect(await screen.findByRole('heading', { name: "Your pilot access isn't active" })).toBeTruthy()
+      expect(screen.getByTestId('no-pilot-access').getAttribute('data-status')).toBe(status)
+      expect(screen.getByText(text)).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy()
+      // Revoked and expired read the same: the screen never says why access ended.
+      expect(document.body.textContent).not.toMatch(/revoked|expired|removed/i)
+      expect(screen.queryByRole('heading', { name: 'Home' })).toBeNull()
+      expect(screen.queryByLabelText('Username')).toBeNull()
+      expect(ownProfile).not.toHaveBeenCalled()
+      expect(feed).not.toHaveBeenCalled()
+      expect(me).not.toHaveBeenCalled()
+    })
+  }
+
+  it('the same for every member page, not just the feed', async () => {
+    for (const path of ['/app/discover', '/app/new', '/app/clique', '/app/profile', '/app/u/creator_1', '/app/post/p1']) {
+      const { api, access } = fakeApi()
+      access.status = 'none'
+      const { unmount } = renderApp(path, api)
+      expect(await screen.findByRole('heading', { name: "Your pilot access isn't active" }), path).toBeTruthy()
+      unmount()
+    }
+  })
+
+  it('an active member with no profile yet goes on to choose one', async () => {
+    const { api } = fakeApi('me', { profile: { username: null, displayName: null } })
+    renderApp('/app', api)
+    expect(await screen.findByText('Your profile is ready')).toBeTruthy()
+  })
+
+  it('if the membership check itself fails, nothing is shown but an error, and no profile or member data is loaded', async () => {
+    for (const code of ['network', 'unknown', 'no_pilot_access'] as const) {
+      const { api, failures } = fakeApi()
+      failures.accessState = new AppApiError(code)
+      const ownProfile = vi.spyOn(api, 'ownProfile')
+      const feed = vi.spyOn(api, 'feed')
+      const { unmount } = renderApp('/app', api)
+      expect(await screen.findByText("We couldn't verify your access right now. Please try again."), code).toBeTruthy()
+      expect(screen.queryByRole('heading', { name: 'Home' })).toBeNull()
+      expect(ownProfile).not.toHaveBeenCalled()
+      expect(feed).not.toHaveBeenCalled()
+      unmount()
+    }
+  })
+
+  it('a database without the gate yet (pre-gate) behaves as before: straight to the feed', async () => {
+    const { api, access } = fakeApi()
+    ;(access as { preGate?: true }).preGate = true
+    renderApp('/app', api)
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
+  })
+
+  it('a refused member action says pilot access is not active, in plain words', () => {
+    expect(toAppError({ message: 'no_pilot_access', code: 'P0001' }).code).toBe('no_pilot_access')
+    expect(messageFor(new AppApiError('no_pilot_access'))).toMatch(/pilot access isn't active/)
   })
 })
 

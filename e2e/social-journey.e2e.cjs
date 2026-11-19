@@ -44,11 +44,18 @@ function rowsReport(table, where, cols = 'id, created_at, left(body, 40) as body
 }
 const adminHeaders = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' }
 
-async function createMember(email) {
+// A confirmed account. Pilot membership (20261122000000) is granted separately,
+// by server code, as the founder will: signing in alone is never enough.
+async function createAccount(email) {
   const r = await fetch(`${API}/auth/v1/admin/users`, { method: 'POST', headers: adminHeaders, body: JSON.stringify({ email, password: PASSWORD, email_confirm: true }) })
   const body = await r.json()
   if (!r.ok) throw new Error(`could not create ${email}: ${JSON.stringify(body)}`)
   return body.id
+}
+async function createMember(email) {
+  const id = await createAccount(email)
+  sql(`select ops.grant_member_access('${id}', 'tester', 'social-journey')`)
+  return id
 }
 async function tokenFor(email) {
   const r = await fetch(`${API}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: PUB, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: PASSWORD }) })
@@ -160,6 +167,14 @@ async function signInAndSetUp(page, email, username, displayName) {
     check('anonymous visitors cannot call the member functions', anonFeed.status === 401 || anonFeed.status === 403 || anonFeed.status === 404, String(anonFeed.status))
     const direct = await fetch(`${API}/rest/v1/posts?select=*`, { headers: { apikey: PUB, Authorization: `Bearer ${tokenB}`, 'Accept-Profile': 'social' } })
     check('members cannot read the social tables through the Data API', !direct.ok, String(direct.status))
+    // Signed in, but never granted pilot membership: refused by the database itself.
+    const idN = await createAccount(`nomember-${RUN}@example.test`)
+    const tokenN = await tokenFor(`nomember-${RUN}@example.test`)
+    const refused = await rpc(tokenN, 'app_feed')
+    check('a signed-in account without pilot membership is refused by the database (no_pilot_access)', refused.status >= 400 && JSON.stringify(refused.body).includes('no_pilot_access'), JSON.stringify(refused.body).slice(0, 80))
+    const state = await rpc(tokenN, 'app_access_state')
+    check("that account can learn only its own state: 'none'", state.status === 200 && state.body?.[0]?.status === 'none', JSON.stringify(state.body).slice(0, 80))
+    check('nothing was granted to it', sql(`select count(*) from ops.member_access where user_id = '${idN}'`) === '0')
     const early = await rpc(tokenB, 'app_feed')
     check('a member without a username is asked to finish their profile first', early.status >= 400 && JSON.stringify(early.body).includes('profile_incomplete'), JSON.stringify(early.body).slice(0, 80))
   }

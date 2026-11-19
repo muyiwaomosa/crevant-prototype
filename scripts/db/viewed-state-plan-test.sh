@@ -37,6 +37,8 @@ select ('00000000-0000-4000-8000-0000' || lpad(to_hex(40960 + n), 8, '0'))::uuid
 insert into auth.users (id, email, email_confirmed_at)
 select ('00000000-0000-4000-8000-0000' || lpad(to_hex(45056 + n), 8, '0'))::uuid, 'planb' || n || '@example.test', now() from generate_series(0, 200) as n;
 reset role;
+-- Pilot membership (20261122000000): every plan member has active access.
+select count(ops.grant_member_access(u.id, 'tester', 'test')) from auth.users u where u.email like 'plan_%@example.test';
 update public.profiles set username = 'plan_' || right(replace(id::text, '-', ''), 6), display_name = 'Plan ' || right(id::text, 4)
 where username is null and id::text between '00000000-0000-4000-8000-00000000a000' and '00000000-0000-4000-8000-00000000b0c8';
 

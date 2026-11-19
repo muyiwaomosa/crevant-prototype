@@ -14,6 +14,8 @@ insert into auth.users (id, email, email_confirmed_at)
 select ('00000000-0000-4000-8000-000000000' || n::text)::uuid, 'views' || n || '@example.test', now()
 from generate_series(901, 909) as n;
 reset role;
+-- Pilot membership (20261122000000): these test members are granted access.
+select ops.grant_member_access(u.id, 'tester', 'test') from auth.users u where u.email like 'views%@example.test';
 update public.profiles p set username = 'views_' || right(p.id::text, 3), display_name = 'Views ' || right(p.id::text, 3)
 where p.id::text between '00000000-0000-4000-8000-000000000901' and '00000000-0000-4000-8000-000000000909';
 

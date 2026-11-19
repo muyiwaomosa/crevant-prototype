@@ -5,16 +5,17 @@ comments, stored in the database and used through the members area at `/app`.
 This document is the review guide for the migration
 `supabase/migrations/20261117000000_social_core.sql`.
 
-**Status:** proposed. The migration is **not** in
-`supabase/approved-migrations.sha256`, so CI's Database job stops at the
-approval gate by design, and it has not been applied to staging or
-Production. Adding its checksum is a separate founder approval.
+**Status:** approved (its checksum is in `supabase/approved-migrations.sha256`)
+and applied to staging, with every later migration through 20261121000000
+(confirmed by the staging read-only check run of 2026-11-18). Not in
+Production. Since 20261122000000 (pilot membership, `docs/PILOT-ACCESS.md`),
+every member function also requires an active pilot membership.
 
 ## What members can do
 
 | Action | Rule (enforced in the database) |
 | --- | --- |
-| Choose a username and display name | Required before anything else. Uses the existing own-row profile update. |
+| Choose a username and display name | Required before anything else, after pilot membership. Through `public.app_set_profile` (since 20261122000000; members no longer update the profiles table directly). |
 | Post | Text, 1 to 2,000 characters, no control characters. 20 posts an hour at most. |
 | Delete a post or comment | Own only. Kept as deleted (`deleted_at`) and never shown again. |
 | Follow / unfollow | Not yourself; only members with a complete profile. Following twice records nothing new. Every change is kept in `social.follow_events`. |
@@ -191,8 +192,8 @@ replacement made from another device while the dialog is open, phone widths
 
 ## Viewed state, the foundation for Unseen-first Home (20261121000000)
 
-**Status:** proposed, staging only, not applied. The migration is not in
-`supabase/approved-migrations.sha256` until the founder approves its checksum.
+**Status:** approved and applied to staging (confirmed by the staging
+read-only check run of 2026-11-18). Not in Production.
 
 **What a view is.** A signal reported by the member's own browser when a post
 meets the viewing rule:
