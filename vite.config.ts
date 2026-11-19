@@ -64,5 +64,5 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), publicSiteBuild()],
   // Local preview only: lets the browser tests (scripts/e2e/public-site.sh)
   // load a build at the production address, mapped to this machine.
-  preview: { allowedHosts: ['crevant-prototype.vercel.app'] },
+  preview: { allowedHosts: ['crevant-prototype.vercel.app', 'www.splitpost.ca'] },
 })
