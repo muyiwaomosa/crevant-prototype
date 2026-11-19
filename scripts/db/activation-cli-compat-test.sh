@@ -15,6 +15,9 @@
 #   4. A later test migration (written only into the temporary copy) is
 #      applied by `supabase db push`, alone, and the history lists it.
 #
+# Every CLI call asks for JSON output (--output-format json), so the checks
+# don't depend on the environment's default output format.
+#
 # Usage: SUPABASE=<path to the pinned supabase CLI> ADMIN_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres scripts/db/activation-cli-compat-test.sh
 set -uo pipefail
 cd "$(dirname "$0")/../.."
@@ -53,7 +56,7 @@ for f in supabase/migrations/*.sql; do
 done
 
 # 1. Staging today, through the standard tooling.
-if out=$("$SUPABASE" db push --db-url "$CLI_DB" --workdir "$WORK/before" --yes 2>&1) \
+if out=$("$SUPABASE" db push --output-format json --db-url "$CLI_DB" --workdir "$WORK/before" --yes 2>&1) \
    && [ "$(psql "$DB" -X -q -At -c "select count(*) from supabase_migrations.schema_migrations where version <= '20261121000000'")" = "$(ls "$WORK/before/supabase/migrations" | wc -l | tr -d ' ')" ]; then
   ok "the CLI applied every migration through 20261121000000 and created its own history table"
 else
@@ -67,10 +70,10 @@ out=$(STAGING_FOUNDER_ACCOUNT_ID="$F" psql "$DB" -X -q -v ON_ERROR_STOP=1 -v mod
 grep -q '^Activated' <<<"$out" && ok "the activation committed" || { bad "activation: $(grep -E 'ERROR|FAIL' <<<"$out" | head -2 | tr '\n' ' ')"; exit 1; }
 
 # 3. The CLI sees it as applied, and won't apply it again.
-out=$("$SUPABASE" migration list --db-url "$CLI_DB" --workdir "$WORK/after" 2>&1)
+out=$("$SUPABASE" migration list --output-format json --db-url "$CLI_DB" --workdir "$WORK/after" 2>&1)
 grep -q '"local":"20261122000000","remote":"20261122000000"' <<<"$out" \
   && ok "supabase migration list shows 20261122000000 applied (local = remote)" || bad "migration list: $(tail -2 <<<"$out" | tr '\n' ' ')"
-out=$("$SUPABASE" db push --db-url "$CLI_DB" --workdir "$WORK/after" --dry-run 2>&1)
+out=$("$SUPABASE" db push --output-format json --db-url "$CLI_DB" --workdir "$WORK/after" --dry-run 2>&1)
 grep -q '"upToDate":true' <<<"$out" \
   && ok "supabase db push --dry-run reports the database is up to date (it won't re-apply 20261122000000)" || bad "dry run after activation: $(tail -2 <<<"$out" | tr '\n' ' ')"
 
@@ -80,17 +83,17 @@ cat > "$WORK/after/supabase/migrations/20991231000000_followup_test.sql" <<'SQL'
 create function ops.followup_test() returns int language sql set search_path = '' as 'select (select count(*) from ops.member_access)::int';
 revoke all on function ops.followup_test() from public, anon, authenticated;
 SQL
-out=$("$SUPABASE" db push --db-url "$CLI_DB" --workdir "$WORK/after" --dry-run 2>&1)
+out=$("$SUPABASE" db push --output-format json --db-url "$CLI_DB" --workdir "$WORK/after" --dry-run 2>&1)
 grep -q '"migrations":\["20991231000000_followup_test.sql"\]' <<<"$out" \
   && ok "a dry run lists only the later migration" || bad "dry run with a later migration: $(tail -2 <<<"$out" | tr '\n' ' ')"
-out=$("$SUPABASE" db push --db-url "$CLI_DB" --workdir "$WORK/after" --yes 2>&1); code=$?
+out=$("$SUPABASE" db push --output-format json --db-url "$CLI_DB" --workdir "$WORK/after" --yes 2>&1); code=$?
 if [ $code -eq 0 ] && grep -q 'Applying migration 20991231000000_followup_test.sql' <<<"$out" && ! grep -q 'Applying migration 20261122000000' <<<"$out" \
    && [ "$(psql "$DB" -X -q -At -c "select ops.followup_test()")" = 1 ]; then
   ok "supabase db push applied the later migration alone, on top of the activation"
 else
   bad "db push of a later migration (exit $code): $(tail -3 <<<"$out" | tr '\n' ' ')"
 fi
-out=$("$SUPABASE" migration list --db-url "$CLI_DB" --workdir "$WORK/after" 2>&1)
+out=$("$SUPABASE" migration list --output-format json --db-url "$CLI_DB" --workdir "$WORK/after" 2>&1)
 grep -q '"local":"20991231000000","remote":"20991231000000"' <<<"$out" && grep -q '"local":"20261122000000","remote":"20261122000000"' <<<"$out" \
   && ok "the history lists both, in order" || bad "final migration list: $(tail -2 <<<"$out" | tr '\n' ' ')"
 
