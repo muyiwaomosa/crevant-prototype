@@ -1,0 +1,260 @@
+name: Activate pilot membership on staging
+
+# Applies 20261122000000_member_access to the STAGING Supabase project and
+# makes the founder's account an active pilot member IN ONE DATABASE
+# TRANSACTION (scripts/db/staging-activate-member-access.sql): the migration,
+# its migration record, the founder's membership and the critical security
+# checks succeed together or not at all. There is no moment when the gate is
+# on and the founder is locked out, and no partial activation.
+#
+# Modes:
+#   rehearse  (default) Runs the whole activation against staging, then rolls
+#             it back, and confirms nothing was left behind. Changes nothing.
+#   activate  The same, committed, then a read-only verification of the
+#             committed state. Needs the phrase: ACTIVATE STAGING MEMBER ACCESS
+#   verify    Read only: reports whether staging is activated (for example
+#             after a connection dropped at COMMIT left the result unclear).
+#
+# Order: the schema separation checks (001, which manage their own
+# transactions) run BEFORE the activation transaction; everything that
+# validates the new state runs INSIDE it; after COMMIT only a read-only
+# verification runs (scripts/db/staging-verify-activation.sql), which can't
+# change anything and never prints the founder's id.
+#
+# Safeguards, none of which depend on the others:
+#   * Started by hand only, from main, by the repository owner, and only
+#     re-run by the repository owner (github.actor and github.triggering_actor).
+#   * The staging environment (and its approval rule, where configured).
+#   * The typed project reference must match the staging project, as must the
+#     environment variable and the project inside the connection string
+#     (scripts/db/verify-staging-target.sh). A Production project can never
+#     match; the SQL also refuses any database without the staging social core.
+#   * Full TLS certificate and hostname verification (sslmode=verify-full).
+#   * Migrations must be on the approved list with matching checksums, pass
+#     on a throwaway database (with the activation tests) first, and
+#     20261122000000 must be the only migration not yet applied to staging.
+#   * The founder's account id comes only from the staging environment secret
+#     STAGING_FOUNDER_ACCOUNT_ID. A first job with no environment refuses if
+#     that name is visible at repository or organization level. The id is
+#     passed to psql through the environment only (never a command-line
+#     argument), is never printed, and must belong to an existing account with
+#     a confirmed email, checked inside the transaction before anything changes.
+#   * Only the STAGING_DATABASE_URL and STAGING_FOUNDER_ACCOUNT_ID secrets.
+#   * Shares the database deploy queue, so it never overlaps a deploy or rollback.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "rehearse = run everything on staging, then roll it all back (no changes). activate = commit (needs the phrase below). verify = read-only status check."
+        type: choice
+        options:
+          - rehearse
+          - activate
+          - verify
+        default: rehearse
+        required: true
+      confirm_project_ref:
+        description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
+        type: string
+        required: true
+      confirm_phrase:
+        description: "For activate only, type exactly: ACTIVATE STAGING MEMBER ACCESS"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-staging
+  cancel-in-progress: false
+
+env:
+  # The one project this workflow may ever touch. Changing it requires a reviewed PR.
+  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
+
+jobs:
+  # No environment on purpose: this job sees only repository and organization
+  # secrets, never the staging environment's.
+  secret-scope:
+    name: Refuse a founder id stored outside the staging environment
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Refuse if STAGING_FOUNDER_ACCOUNT_ID exists at repository or organization level
+        env:
+          OUTSIDE_ENVIRONMENT: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+        run: |
+          if [ -n "$OUTSIDE_ENVIRONMENT" ]; then
+            echo "::error::STAGING_FOUNDER_ACCOUNT_ID is set at repository or organization level. Only the staging environment may hold it. Delete that secret. Nothing was done."
+            exit 1
+          fi
+
+  verify-migrations:
+    name: Verify migrations and the activation on throwaway databases
+    needs: secret-scope
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: crevant_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard tests (target check and approved list)
+        run: scripts/db/test-guards.sh
+
+      - name: Only approved, unchanged migrations are present
+        run: scripts/db/check-approved-migrations.sh
+
+      - name: Migrations and security checks pass on an empty database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/crevant_test
+        run: scripts/db/test.sh
+
+      - name: The atomic activation behaves on throwaway databases
+        env:
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: scripts/db/activation-test.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the Supabase CLI version the staging workflow pins
+        run: |
+          set -euo pipefail
+          v="$(grep -E '^  SUPABASE_CLI_VERSION:' .github/workflows/deploy-db-staging.yml | awk '{print $2}')"
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/supabase-cli" "supabase@$v"
+      - name: The activation is recognised by the standard Supabase migration tooling
+        env:
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          SUPABASE: ${{ runner.temp }}/supabase-cli/node_modules/.bin/supabase
+        run: scripts/db/activation-cli-compat-test.sh
+
+  activate:
+    name: ${{ inputs.mode == 'activate' && 'Activate pilot membership on staging' || inputs.mode == 'verify' && 'Verify the activation state on staging (read only)' || 'Rehearse the activation on staging (no changes)' }}
+    needs: verify-migrations
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    # Full certificate and host name verification for every hosted database
+    # connection in this job, against Supabase's public root CA committed at
+    # config/certs. REQUIRE_VERIFY_FULL makes the target check refuse a URL
+    # that would override them.
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - name: Refuse an unknown mode, or activate without the confirmation phrase
+        env:
+          MODE: ${{ inputs.mode }}
+          PHRASE: ${{ inputs.confirm_phrase }}
+        run: |
+          case "$MODE" in
+            rehearse|verify) ;;
+            activate) [ "$PHRASE" = "ACTIVATE STAGING MEMBER ACCESS" ] || { echo "::error::activate needs the exact confirmation phrase. Nothing was done."; exit 1; } ;;
+            *) echo "::error::Unknown mode. Nothing was done."; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved staging project, with full TLS verification
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-staging-target.sh
+
+      - name: Only approved, unchanged migrations are present
+        run: scripts/db/check-approved-migrations.sh
+
+      - name: The founder account id is set in the staging environment (its value is never printed)
+        env:
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+        run: |
+          if [ -z "$STAGING_FOUNDER_ACCOUNT_ID" ]; then
+            echo "::error::The staging environment secret STAGING_FOUNDER_ACCOUNT_ID is not set. Nothing was done."
+            exit 1
+          fi
+          echo "STAGING_FOUNDER_ACCOUNT_ID is set (value not shown)."
+
+      - name: Only 20261122000000 is waiting to be applied (read only)
+        if: inputs.mode == 'rehearse' || inputs.mode == 'activate'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          pending="$(scripts/db/staging-pending-migrations.sh)"
+          echo "Not yet applied on staging: ${pending:-none}"
+          if [ "$pending" != "20261122000000" ]; then
+            echo "::error::Expected exactly 20261122000000 to be pending on staging. Nothing was done."
+            exit 1
+          fi
+
+      - name: Before the transaction, the schema separation checks (they manage their own transactions)
+        if: inputs.mode == 'rehearse' || inputs.mode == 'activate'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/001_schema_separation.sql
+
+      - name: Run the activation in one transaction (rehearse rolls back; activate commits)
+        if: inputs.mode == 'rehearse' || inputs.mode == 'activate'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+          MODE: ${{ inputs.mode }}
+          PHRASE: ${{ inputs.confirm_phrase }}
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v mode="$MODE" -v confirm="$PHRASE" -f scripts/db/staging-activate-member-access.sql
+
+      # Read only from here on: nothing below can change staging.
+      - name: After activating, verify the committed state (read only; the founder id is never printed)
+        if: inputs.mode == 'activate'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v expect=activated -f scripts/db/staging-verify-activation.sql
+
+      - name: After rehearsing, confirm nothing was left behind (read only)
+        if: inputs.mode == 'rehearse'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          out="$(psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v expect=any -f scripts/db/staging-verify-activation.sql 2>&1)"
+          echo "$out"
+          if ! grep -q 'STATE: not activated' <<<"$out"; then
+            echo "::error::The rehearsal left something behind. Investigate before going further."
+            exit 1
+          fi
+          echo "Rehearsal left no migration record and no membership objects."
+
+      - name: Report the activation state (read only; the founder id is never printed)
+        if: inputs.mode == 'verify'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v expect=any -f scripts/db/staging-verify-activation.sql
