@@ -83,12 +83,44 @@ To revoke: `select ops.revoke_moderator('<account id>', 'founder', '<reason>');`
   audit trail. **It is not a timer:** if nobody reports or opens the queue,
   nothing is erased until someone does. Operational task: if the queue hasn't
   been opened for a month, the founder opens it once (or runs
-  `select ops.purge_expired_report_data();` in the SQL Editor). A scheduled
-  job (pg_cron) can replace this later, with approval.
+  `select ops.purge_expired_report_data();` in the SQL Editor). See "Known
+  limitation" below for the proposed scheduled job.
 * **Holds:** `select ops.set_report_hold('<report id>', true, 'founder', '<reason>');`
   keeps a report's details and copy past 90 days (legal or safety reasons);
   `false` lifts it. Both are recorded. Report ids are visible in the
   moderation page's address.
+
+## Known limitation: retention is event-triggered, not scheduled
+
+The 90-day erasure only runs when someone reports something or a moderator
+loads the queue. If neither happens, resolved reports' details and copies
+stay past 90 days until the next report or queue load. Until a scheduled job
+exists, the founder's monthly task is to open the moderation queue once (or
+run `select ops.purge_expired_report_data();` in the SQL Editor). Each run
+that erases anything is recorded in `ops.moderation_actions`.
+
+### Proposed for a later stage: a scheduled purge with pg_cron
+
+Recommended: Supabase's **pg_cron** extension, running inside the staging
+database itself, so it needs no secret, no GitHub runner and no approval per
+run.
+
+1. Enable pg_cron for the staging project (Dashboard > Database >
+   Extensions), with the founder's approval.
+2. A small reviewed migration schedules one job, daily at a quiet hour:
+   `select cron.schedule('purge-report-data', '17 3 * * *', 'select ops.purge_expired_report_data()');`
+3. A staging check confirms the job exists, is active, and runs exactly that
+   statement; `cron.job_run_details` shows each run and any error, and the
+   purge records what it erased in the audit trail.
+4. A weekly read-only check (the existing health workflow pattern) fails if
+   the last successful run is older than two days, so a stopped job is
+   noticed.
+5. The event-triggered purge stays as a second safety net.
+
+Why not a scheduled GitHub workflow: staging jobs need the founder's
+environment approval for every run, so an unattended schedule would simply
+wait. An Edge Function on a timer would need a service key and a manual
+deploy, which this repository avoids.
 
 ## Operational notes for the pilot
 

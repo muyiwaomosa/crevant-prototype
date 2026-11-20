@@ -956,6 +956,31 @@ describe('reporting and moderation (20261124000000)', () => {
   })
 })
 
+describe('accessible names match what is visible (WCAG 2.5.3)', () => {
+  it('Like, comments and catch-up are named from their visible text, with no aria-label overriding it', async () => {
+    const f = fakeApi()
+    f.follows.add(f.key('me', 'c1'))
+    f.followedAt.set(f.key('me', 'c1'), 0)
+    const id = f.seedPost('c1', 'Named from what you see')
+    renderApp('/app', f.api)
+    const post = within((await screen.findAllByTestId('post')).find((p) => p.textContent?.includes('Named from what you see'))!)
+    const like = post.getByRole('button', { name: 'Like, 0 likes' })
+    const comments = post.getByRole('link', { name: '0 comments' })
+    for (const el of [like, comments]) {
+      expect(el.getAttribute('aria-label')).toBeNull()
+      // The visible count is part of the name.
+      expect(el.textContent).toContain('0')
+    }
+    fireEvent.click(like)
+    expect(await post.findByRole('button', { name: 'Unlike, 1 like' })).toBeTruthy()
+    const strip = within(await screen.findByRole('region', { name: 'Catch up' }))
+    const link = strip.getByRole('link', { name: 'Catch up: 1 unseen post from Creator 1' })
+    expect(link.getAttribute('aria-label')).toBeNull()
+    expect(link.textContent).toContain('Creator 1')
+    expect(id).toBeTruthy()
+  })
+})
+
 describe('feed and posting', () => {
   it('starts quiet, points to Discover, and shows your own post after posting', async () => {
     const { api } = fakeApi()
@@ -1072,13 +1097,13 @@ describe('feed and posting', () => {
       await waitFor(() => expect(btn.disabled).toBe(false))
       return btn
     }
-    fireEvent.click(await ready('Like (0 likes)'))
-    fireEvent.click(await ready('Unlike (1 likes)'))
-    await ready('Like (0 likes)')
+    fireEvent.click(await ready('Like, 0 likes'))
+    fireEvent.click(await ready('Unlike, 1 like'))
+    await ready('Like, 0 likes')
     failures.like = new AppApiError('not_found')
-    fireEvent.click(await ready('Like (0 likes)'))
+    fireEvent.click(await ready('Like, 0 likes'))
     expect((await screen.findByRole('alert')).textContent).toMatch(/no longer available/)
-    expect(await ready('Like (0 likes)')).toBeTruthy()
+    expect(await ready('Like, 0 likes')).toBeTruthy()
   })
 })
 
@@ -1441,11 +1466,15 @@ describe('Unseen-first Home', () => {
     renderApp('/app', fake.api)
     const strip = within(await screen.findByRole('region', { name: 'Catch up' }))
     const links = strip.getAllByRole('link')
-    expect(links.map((l) => l.getAttribute('aria-label'))).toEqual([
-      'Catch up with Creator 2 (in your Clique): 1 unseen post',
-      'Catch up with Creator 1 (in your Clique): 1 unseen post',
-      'Catch up with Creator 3: more than 9 unseen posts',
-    ])
+    // Named from what is visible (WCAG 2.5.3): no aria-label overriding the text.
+    expect(links.map((l) => l.getAttribute('aria-label'))).toEqual([null, null, null])
+    ;[
+      'Catch up: 1 unseen post from Creator 2 (in your Clique)',
+      'Catch up: 1 unseen post from Creator 1 (in your Clique)',
+      'Catch up: more than 9 unseen posts from Creator 3',
+    ].forEach((name, i) => expect(strip.getByRole('link', { name })).toBe(links[i]))
+    // The visible name is part of the accessible name.
+    links.forEach((l) => expect(l.textContent).toMatch(/Creator \d/))
     expect(strip.getAllByTestId('unseen-badge').map((b) => b.textContent)).toEqual(['1', '1', '9+'])
     expect(links[2].getAttribute('href')).toBe('/app/catch-up/creator_3')
     // The main feed below is still chronological: the newest post first.
@@ -1678,7 +1707,7 @@ describe('posts, comments and profiles', () => {
     fireEvent.change(screen.getByLabelText('Write a comment'), { target: { value: 'Great point, thank you.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
     expect(await screen.findByText('Great point, thank you.')).toBeTruthy()
-    expect(screen.getByLabelText('1 comments')).toBeTruthy()
+    expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '1 comment' && el.querySelector('svg') !== null)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Delete comment' }))
     await waitFor(() => expect(screen.queryByText('Great point, thank you.')).toBeNull())
   })
@@ -1706,7 +1735,7 @@ describe('posts, comments and profiles', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
     await waitFor(() => expect(ids).toHaveLength(2))
     expect(ids[1]).toBe(ids[0])
-    expect(await screen.findByLabelText('1 comments')).toBeTruthy()
+    expect(await screen.findByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '1 comment' && el.querySelector('svg') !== null)).toBeTruthy()
   })
 
   it('a missing post or member says so plainly', async () => {

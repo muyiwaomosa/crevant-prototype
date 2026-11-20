@@ -200,12 +200,13 @@ function UnseenStrip() {
           const count = c.unseenCount > 9 ? 'more than 9' : String(c.unseenCount)
           return (
             <li key={c.id} className="shrink-0">
+              {/* Named "Catch up: 3 unseen posts from <name> (in your Clique)" from the visible
+                  name plus screen-reader text, so speech and sight match (WCAG 2.5.3). */}
               <Link
                 to={`/app/catch-up/${c.username}`}
-                aria-label={`Catch up with ${c.displayName}${c.inMyClique ? ' (in your Clique)' : ''}: ${count} unseen ${c.unseenCount === 1 ? 'post' : 'posts'}`}
                 className="flex w-[68px] flex-col items-center gap-1 rounded-2xl py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
               >
-                <span className="relative">
+                <span className="relative" aria-hidden="true">
                   <span className={`block rounded-full p-[2px] ${c.inMyClique ? 'bg-brand-600' : 'bg-ink-200'}`}>
                     <span className="block rounded-full bg-paper p-[2px]">
                       <MemberAvatar member={c} size={52} />
@@ -219,8 +220,10 @@ function UnseenStrip() {
                     {unseenBadge(c.unseenCount)}
                   </span>
                 </span>
-                <span aria-hidden="true" className="w-full truncate text-center text-[12px] text-ink-700">
+                <span className="w-full truncate text-center text-[12px] text-ink-700">
+                  <span className="sr-only">{`Catch up: ${count} unseen ${c.unseenCount === 1 ? 'post' : 'posts'} from `}</span>
                   {c.displayName}
+                  {c.inMyClique && <span className="sr-only"> (in your Clique)</span>}
                 </span>
               </Link>
             </li>
