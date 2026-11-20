@@ -14,6 +14,8 @@ import {
   toPost,
   usernameProblem,
   type AppApi,
+  type FeedbackEntry,
+  type FeedbackItem,
   type Comment,
   type MyDetails,
   type OwnProfile,
@@ -22,6 +24,7 @@ import {
 } from './api'
 import { MemberArea } from './MemberArea'
 import { ModerationQueuePage, ModerationReportPage } from './moderation'
+import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage, featureFor } from './feedback'
 import { clampOffset, coverScale, sourceRect } from './avatars'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
 
@@ -42,6 +45,9 @@ function fakeApi(
     /** Moderation (20261124000000): 'absent' for a database without it. */
     moderation?: 'present' | 'absent'
     moderator?: boolean
+    /** Feedback (20261126000000): 'absent' for a database without it. */
+    feedback?: 'present' | 'absent'
+    founder?: boolean
   } = {},
 ) {
   const users = new Map<string, Row>()
@@ -120,6 +126,15 @@ function fakeApi(
     if (!isModerator.value) throw new AppApiError('not_moderator')
   }
   const hiddenProfiles = new Set<string>()
+  // Feedback, with the database's rules.
+  const feedbackPresent = opts.feedback !== 'absent'
+  const isFounder = { value: opts.founder ?? false }
+  const feedback: Array<FeedbackItem & { requestId: string; notes: FeedbackEntry['notes']; history: FeedbackEntry['history'] }> = []
+  const feedbackCalls: Array<{ category: string; feature: string; body: string; requestId: string }> = []
+  const requireFounder = () => {
+    complete()
+    if (!isFounder.value) throw new AppApiError('not_founder')
+  }
   // Profile pictures: id -> link. Uploads and removals are recorded.
   const pictures = new Map<string, string>()
   const pictureCalls: string[] = []
@@ -239,6 +254,63 @@ function fakeApi(
       if (detailsMode === 'absent') return null
       complete()
       return users.get(id)?.displayName ? detailsOf(id) : null
+    },
+    async feedbackAccess() {
+      if (!feedbackPresent) return { available: false, founder: false }
+      complete()
+      return { available: true, founder: isFounder.value }
+    },
+    async sendFeedback(input, requestId) {
+      feedbackCalls.push({ ...input, requestId })
+      maybeFail('sendFeedback')
+      if (!feedbackPresent) throw new AppApiError('not_available')
+      complete()
+      const body = input.body.trim()
+      if (!['problem', 'improvement', 'praise'].includes(input.category)) throw new AppApiError('invalid_category')
+      if ([...body].length < 10) throw new AppApiError('feedback_too_short')
+      if ([...body].length > 1000) throw new AppApiError('too_long')
+      const same = feedback.find((f) => f.requestId === requestId)
+      if (same) return same.id
+      if (feedback.filter((f) => f.submitterUsername === users.get(meId)!.username).length >= 3) throw new AppApiError('rate_limited')
+      clock += 1000
+      const at = new Date(clock).toISOString()
+      const u = users.get(meId)!
+      const id = `fb${++n}`
+      feedback.unshift({
+        id, category: input.category, feature: input.feature, body, status: 'new', cohort: 'tester',
+        submitterUsername: u.username, submitterName: u.displayName, noteCount: 0, createdAt: at, updatedAt: at,
+        requestId, notes: [], history: [],
+      })
+      return id
+    },
+    async feedbackInbox(filters) {
+      requireFounder()
+      return feedback
+        .filter((f) => (!filters.category || f.category === filters.category) && (!filters.status || f.status === filters.status) && (!filters.cohort || f.cohort === filters.cohort))
+        .map(({ requestId: _r, notes, history: _h, ...f }) => ({ ...f, noteCount: notes.length }))
+    },
+    async feedbackEntry(id) {
+      requireFounder()
+      const f = feedback.find((x) => x.id === id)
+      if (!f) return null
+      const { requestId: _r, noteCount: _n, ...rest } = f
+      return { ...rest, notes: [...f.notes], history: [...f.history] }
+    },
+    async setFeedbackStatus(id, status) {
+      requireFounder()
+      const f = feedback.find((x) => x.id === id)
+      if (!f) throw new AppApiError('not_found')
+      if (f.status === status) return
+      f.history.push({ action: 'status_changed', from: f.status, to: status, by: 'Mia', at: new Date(clock).toISOString() })
+      f.status = status
+    },
+    async addFeedbackNote(id, note) {
+      requireFounder()
+      const f = feedback.find((x) => x.id === id)
+      if (!f) throw new AppApiError('not_found')
+      if (!note.trim()) throw new AppApiError('note_required')
+      f.notes.push({ body: note.trim(), author: 'Mia', createdAt: new Date(clock).toISOString() })
+      f.history.push({ action: 'note_added', from: null, to: null, by: 'Mia', at: new Date(clock).toISOString() })
     },
     async moderationAccess() {
       if (!moderationPresent) return { available: false, moderator: false }
@@ -509,7 +581,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
+  return { api, feedback, feedbackCalls, isFounder, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -538,6 +610,9 @@ function renderApp(path: string, api: AppApi) {
             <Route path="profile" element={<ProfilePage />} />
             <Route path="moderation" element={<ModerationQueuePage />} />
             <Route path="moderation/:id" element={<ModerationReportPage />} />
+            <Route path="feedback" element={<FeedbackPage />} />
+            <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
+            <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />
             <Route path="*" element={<AppNotFound />} />
           </Route>
         </Routes>
@@ -2028,5 +2103,162 @@ describe('the members area', () => {
       expect(document.body.textContent).not.toMatch(/Connection Points|\bCP\b|reward|cash|\$/i)
       cleanup()
     }
+  })
+})
+
+describe('feedback (Build 5.2c)', () => {
+  const sendLinks = () => screen.getAllByRole('link', { name: 'Send feedback' })
+
+  it('names the part of the app from a fixed list, never the address, a post or a person', () => {
+    expect(featureFor('/app')).toBe('home')
+    expect(featureFor('/app/')).toBe('home')
+    expect(featureFor('/app/discover')).toBe('discover')
+    expect(featureFor('/app/profile')).toBe('profile')
+    expect(featureFor('/app/u/someone')).toBe('profile')
+    expect(featureFor('/app/clique')).toBe('clique')
+    expect(featureFor('/app/post/1234-abcd')).toBe('post')
+    expect(featureFor('/app/new')).toBe('create')
+    expect(featureFor('/app/catch-up/someone')).toBe('catch_up')
+    expect(featureFor('/app/moderation/abc')).toBe('other')
+    expect(featureFor('/app/account')).toBe('other')
+    expect(featureFor('/app/feedback')).toBeNull()
+    expect(featureFor('/app/feedback/inbox/x')).toBeNull()
+  })
+
+  it('Send feedback is in the phone header and the sidebar, and the form says where it came from', async () => {
+    const f = fakeApi()
+    renderApp('/app/discover', f.api)
+    await waitFor(() => expect(sendLinks()).toHaveLength(2))
+    fireEvent.click(sendLinks()[0])
+    expect(await screen.findByRole('heading', { name: 'Help us improve Splitpost' })).toBeTruthy()
+    expect(screen.getByText('Your feedback helps us build a better experience for creators and fans.')).toBeTruthy()
+    expect((await screen.findByText(/^Sent from:/)).textContent).toMatch(/^Sent from: Discover\./)
+    for (const label of ['Report a problem', 'Suggest an improvement', 'Share something I like']) expect(screen.getByRole('radio', { name: label })).toBeTruthy()
+    // The founder's inbox link is only for the founder.
+    expect(screen.queryByRole('link', { name: 'Open the feedback inbox' })).toBeNull()
+  })
+
+  it('validates before sending, sends once, and shows the approved confirmation', async () => {
+    const f = fakeApi()
+    renderApp('/app', f.api)
+    await waitFor(() => expect(sendLinks()).toHaveLength(2))
+    fireEvent.click(sendLinks()[1])
+    await screen.findByRole('heading', { name: 'Help us improve Splitpost' })
+    const submit = screen.getByRole('button', { name: 'Submit feedback' })
+    fireEvent.click(submit)
+    expect((await screen.findByRole('alert')).textContent).toBe('Choose what kind of feedback this is.')
+    fireEvent.click(screen.getByRole('radio', { name: 'Report a problem' }))
+    const box = screen.getByRole('textbox', { name: 'Tell us more' }) as HTMLTextAreaElement
+    expect(box.placeholder).toMatch(/What happened, and what did you expect/)
+    fireEvent.change(box, { target: { value: '  too short ' } })
+    fireEvent.click(submit)
+    expect((await screen.findByRole('alert')).textContent).toBe('Please write at least 10 characters.')
+    expect(f.feedbackCalls).toHaveLength(0)
+    fireEvent.change(box, { target: { value: 'x'.repeat(1001) } })
+    fireEvent.click(submit)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/1,000 characters/)
+    fireEvent.click(screen.getByRole('radio', { name: 'Share something I like' }))
+    expect(box.placeholder).toMatch(/working well/)
+    fireEvent.change(box, { target: { value: '  Catch up makes it easy to see what I missed.  ' } })
+    fireEvent.click(submit)
+    fireEvent.click(submit)
+    expect(await screen.findByText('Thanks for sharing! Your feedback has been received.')).toBeTruthy()
+    expect(f.feedbackCalls).toHaveLength(1)
+    expect(f.feedbackCalls[0]).toMatchObject({ category: 'praise', feature: 'home', body: 'Catch up makes it easy to see what I missed.' })
+    expect(f.feedback).toHaveLength(1)
+  })
+
+  it('a retry after a failed send reuses the same request id (stored once); the next message gets a new one', async () => {
+    const f = fakeApi()
+    f.failures.sendFeedback = new AppApiError('network')
+    renderApp('/app/clique', f.api)
+    await waitFor(() => expect(sendLinks()).toHaveLength(2))
+    fireEvent.click(sendLinks()[0])
+    await screen.findByRole('heading', { name: 'Help us improve Splitpost' })
+    fireEvent.click(screen.getByRole('radio', { name: 'Suggest an improvement' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tell us more' }), { target: { value: 'Let me reorder the people in my Clique.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit feedback' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/couldn't reach Splitpost/)
+    delete f.failures.sendFeedback
+    fireEvent.click(screen.getByRole('button', { name: 'Submit feedback' }))
+    await screen.findByText('Thanks for sharing! Your feedback has been received.')
+    expect(f.feedbackCalls.map((c) => c.feature)).toEqual(['clique', 'clique'])
+    expect(f.feedbackCalls[1].requestId).toBe(f.feedbackCalls[0].requestId)
+    fireEvent.click(screen.getByRole('button', { name: 'Send more feedback' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Report a problem' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tell us more' }), { target: { value: 'A different message entirely.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit feedback' }))
+    await screen.findByText('Thanks for sharing! Your feedback has been received.')
+    expect(f.feedbackCalls[2].requestId).not.toBe(f.feedbackCalls[0].requestId)
+    expect(f.feedback).toHaveLength(2)
+  })
+
+  it('the server\'s limits are explained plainly (rate limit)', async () => {
+    const f = fakeApi()
+    f.failures.sendFeedback = new AppApiError('rate_limited')
+    renderApp('/app', f.api)
+    await waitFor(() => expect(sendLinks()).toHaveLength(2))
+    fireEvent.click(sendLinks()[0])
+    await screen.findByRole('heading', { name: 'Help us improve Splitpost' })
+    fireEvent.click(screen.getByRole('radio', { name: 'Report a problem' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Tell us more' }), { target: { value: 'Something broke on Home today.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit feedback' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/going a little fast/)
+  })
+
+  it('opened directly (no link), the form records "other"; the inbox is closed to members', async () => {
+    const f = fakeApi()
+    renderApp('/app/feedback', f.api)
+    await screen.findByRole('heading', { name: 'Help us improve Splitpost' })
+    expect((await screen.findByText(/^Sent from:/)).textContent).toMatch(/^Sent from: Another page\./)
+    cleanup()
+    renderApp('/app/feedback/inbox', f.api)
+    expect(await screen.findByRole('heading', { name: "This page isn't available" })).toBeTruthy()
+    cleanup()
+    renderApp('/app/feedback/inbox/fb1', f.api)
+    expect(await screen.findByRole('heading', { name: "This page isn't available" })).toBeTruthy()
+  })
+
+  it('on a database without feedback, there is no entry point and the page says it isn\'t available', async () => {
+    const f = fakeApi('me', { feedback: 'absent' })
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'Home' })
+    await act(async () => {})
+    expect(screen.queryByRole('link', { name: 'Send feedback' })).toBeNull()
+    cleanup()
+    renderApp('/app/feedback', f.api)
+    expect(await screen.findByText("This isn't available yet. Please try again later.")).toBeTruthy()
+  })
+
+  it('the founder reviews the inbox: newest first, filters, status changes and private notes', async () => {
+    const f = fakeApi('me', { founder: true })
+    await f.api.sendFeedback({ category: 'problem', feature: 'home', body: 'The feed did not refresh after posting.' }, 'r1')
+    await f.api.sendFeedback({ category: 'praise', feature: 'discover', body: 'I love browsing by interest here.' }, 'r2')
+    renderApp('/app/feedback', f.api)
+    fireEvent.click(await screen.findByRole('link', { name: 'Open the feedback inbox' }))
+    const list = await screen.findByRole('list', { name: 'Feedback, newest first' })
+    const items = within(list).getAllByRole('listitem')
+    expect(items[0].textContent).toMatch(/I love browsing/)
+    expect(items[1].textContent).toMatch(/did not refresh/)
+    expect(items[1].textContent).toMatch(/Mia \(@mia\) · Tester · Home/)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Category' }), { target: { value: 'problem' } })
+    await waitFor(() => expect(within(screen.getByRole('list', { name: 'Feedback, newest first' })).getAllByRole('listitem')).toHaveLength(1))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), { target: { value: 'closed' } })
+    expect(await screen.findByRole('heading', { name: 'Nothing matches these filters' })).toBeTruthy()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), { target: { value: '' } })
+    fireEvent.click(await screen.findByRole('link', { name: /did not refresh/ }))
+    await screen.findByRole('heading', { name: 'Problem' })
+    expect(screen.getByText('Role when sent').nextSibling?.textContent).toBe('Tester')
+    fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), { target: { value: 'planned' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save status' }))
+    expect(await screen.findByText('Status changed to Planned.')).toBeTruthy()
+    expect(f.feedback.find((x) => x.body.startsWith('The feed'))!.status).toBe('planned')
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Write a note first.')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Add a note' }), { target: { value: 'Reproduced on iPhone.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    expect(await screen.findByText('Reproduced on iPhone.')).toBeTruthy()
+    expect(screen.getByText(/Status New to Planned by Mia/)).toBeTruthy()
+    expect(screen.getByText(/Note added by Mia/)).toBeTruthy()
   })
 })
