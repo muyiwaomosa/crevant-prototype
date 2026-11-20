@@ -55,4 +55,5 @@ done
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/social-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/moderation-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/avatar-journey.e2e.cjs
+APP_URL="http://127.0.0.1:$APP_PORT" node e2e/feedback-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/auth-journey.e2e.cjs

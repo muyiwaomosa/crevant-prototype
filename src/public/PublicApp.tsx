@@ -20,6 +20,7 @@ import { RequireAuth } from './auth/AuthUi'
 import { MemberArea } from '../app/MemberArea'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from '../app/pages'
 import { ModerationQueuePage, ModerationReportPage } from '../app/moderation'
+import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from '../app/feedback'
 
 /**
  * The public site, invited members' account pages and the members area
@@ -61,6 +62,9 @@ function memberAreaRoute() {
       <Route path="profile" element={<ProfilePage />} />
       <Route path="moderation" element={<ModerationQueuePage />} />
       <Route path="moderation/:id" element={<ModerationReportPage />} />
+      <Route path="feedback" element={<FeedbackPage />} />
+      <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
+      <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />
       <Route path="*" element={<AppNotFound />} />
     </Route>
   )

@@ -8,7 +8,7 @@
 //      fallback to the original calls.
 //   2. The new schema (the migration reapplied): the same request id sent
 //      twice is one post, through the server's request id.
-// The later migrations (profile pictures 20261125000000, moderation 20261124000000, profile details 20261123000000, pilot membership 20261122000000, viewed state
+// The later migrations (feedback 20261126000000, profile pictures 20261125000000, moderation 20261124000000, profile details 20261123000000, pilot membership 20261122000000, viewed state
 // 20261121000000, then the Inner Clique 20261120000000) are rolled back
 // first, newest first, and reapplied last,
 // oldest first, because each staging rollback refuses while a later migration
@@ -26,6 +26,7 @@ const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
 // Newest first.
 const LATER = [
+  { version: '20261126000000', name: 'feedback', file: 'supabase/migrations/20261126000000_feedback.sql', rollback: 'scripts/db/staging-rollback-feedback.sql', phrase: 'REMOVE THE STAGING FEEDBACK' },
   { version: '20261125000000', name: 'avatars', file: 'supabase/migrations/20261125000000_avatars.sql', rollback: 'scripts/db/staging-rollback-avatars.sql', phrase: 'REMOVE THE STAGING AVATARS' },
   { version: '20261124000000', name: 'moderation', file: 'supabase/migrations/20261124000000_moderation.sql', rollback: 'scripts/db/staging-rollback-moderation.sql', phrase: 'REMOVE THE STAGING MODERATION' },
   { version: '20261123000000', name: 'profile_details', file: 'supabase/migrations/20261123000000_profile_details.sql', rollback: 'scripts/db/staging-rollback-profile-details.sql', phrase: 'REMOVE THE STAGING PROFILE DETAILS' },

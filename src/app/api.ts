@@ -191,6 +191,33 @@ export type AvatarLink = { url: string; updatedAt: string | null }
 /** A storage cleanup dry run (moderators only), valid for 15 minutes. */
 export type StoragePlan = { planId: string; fileCount: number; totalBytes: number; confirmPhrase: string; expiresAt: string }
 
+/** Feedback (20261126000000). */
+export type FeedbackCategory = 'problem' | 'improvement' | 'praise'
+/** Where the member was when they opened the form: a fixed list, never a URL or an id. */
+export type FeedbackFeature = 'home' | 'discover' | 'profile' | 'clique' | 'post' | 'create' | 'catch_up' | 'other'
+export type FeedbackStatus = 'new' | 'reviewing' | 'planned' | 'resolved' | 'closed'
+export type Cohort = 'founder' | 'creator' | 'fan' | 'tester'
+/** Whether feedback exists on this database, and whether the member is the founder (sees the inbox). */
+export type FeedbackAccess = { available: boolean; founder: boolean }
+export interface FeedbackItem {
+  id: string
+  category: FeedbackCategory
+  feature: FeedbackFeature
+  body: string
+  status: FeedbackStatus
+  cohort: Cohort | null
+  submitterUsername: string | null
+  submitterName: string | null
+  noteCount: number
+  createdAt: string
+  updatedAt: string
+}
+export interface FeedbackEntry extends Omit<FeedbackItem, 'noteCount'> {
+  notes: Array<{ body: string; author: string; createdAt: string }>
+  history: Array<{ action: 'status_changed' | 'note_added'; from: FeedbackStatus | null; to: FeedbackStatus | null; by: string; at: string }>
+}
+export type FeedbackFilters = { category?: FeedbackCategory; status?: FeedbackStatus; cohort?: Cohort }
+
 export interface AppApi {
   /** The signed-in account's own pilot membership state (needs no membership itself). */
   accessState(): Promise<AccessState>
@@ -235,6 +262,17 @@ export interface AppApi {
   removeAvatar(): Promise<void>
   modStoragePreview(): Promise<StoragePlan>
   modStorageCleanup(planId: string, confirm: string): Promise<{ deleted: number; confirmed: number }>
+  /**
+   * Feedback (20261126000000). Sending needs pilot membership; the inbox
+   * needs the founder cohort. Both are enforced by the database.
+   */
+  feedbackAccess(): Promise<FeedbackAccess>
+  /** requestId: the form's id for this message, reused on retry, so it's stored once. */
+  sendFeedback(input: { category: FeedbackCategory; feature: FeedbackFeature; body: string }, requestId: string): Promise<string>
+  feedbackInbox(filters: FeedbackFilters, before?: { createdAt: string; id: string }): Promise<FeedbackItem[]>
+  feedbackEntry(id: string): Promise<FeedbackEntry | null>
+  setFeedbackStatus(id: string, status: FeedbackStatus): Promise<void>
+  addFeedbackNote(id: string, note: string): Promise<void>
   following(): Promise<FollowedCreator[]>
   /** requestId: the browser's id for this post, reused on retry, so it's stored once (issue #48). */
   createPost(body: string, requestId?: string): Promise<string>
@@ -260,6 +298,9 @@ export interface AppApi {
 
 /** Limits that match the database, so people hear about problems before sending. */
 export const LIMITS = {
+  feedbackMin: 10,
+  feedbackMax: 1000,
+  feedbackNote: 1000,
   post: 2000,
   comment: 1000,
   clique: 25,
@@ -361,6 +402,11 @@ const MESSAGES: Record<string, string> = {
   avatar_limit: 'You can change your picture 10 times a day. Please try again tomorrow.',
   plan_expired: 'That check is more than 15 minutes old. Run it again.',
   confirmation_mismatch: 'Type the confirmation exactly as shown.',
+  feedback_too_short: 'Please write at least 10 characters.',
+  invalid_category: 'Choose what kind of feedback this is.',
+  invalid_status: 'Choose a status from the list.',
+  note_required: 'Write a note first.',
+  not_founder: 'Only the founder can see this.',
   network: "We couldn't reach Splitpost. Check your connection and try again.",
   unknown: 'Something went wrong. Please try again.',
 }
@@ -490,6 +536,22 @@ async function functionError(error: unknown): Promise<AppApiError> {
     return new AppApiError(ctx.status >= 500 ? 'storage_unavailable' : 'unknown')
   }
   return new AppApiError('network')
+}
+
+function toFeedbackItem(r: Record<string, unknown>): FeedbackItem {
+  return {
+    id: String(r.id),
+    category: r.category as FeedbackCategory,
+    feature: r.feature as FeedbackFeature,
+    body: String(r.body ?? ''),
+    status: r.status as FeedbackStatus,
+    cohort: (r.cohort as Cohort | null) ?? null,
+    submitterUsername: (r.submitter_username as string | null) ?? null,
+    submitterName: (r.submitter_display_name as string | null) ?? null,
+    noteCount: num(r.note_count as number),
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
+  }
 }
 
 export function createSupabaseApi(client: SupabaseClient, userId: string): AppApi {
@@ -657,6 +719,61 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       if (!error) return
       if (isMissingFunction(error, 'app_report')) throw new AppApiError('not_available')
       throw toAppError(error)
+    },
+    async feedbackAccess() {
+      const { data, error } = await client.rpc('app_is_founder')
+      if (error) {
+        if (isMissingFunction(error, 'app_is_founder')) return { available: false, founder: false }
+        throw toAppError(error)
+      }
+      return { available: true, founder: data === true }
+    },
+    async sendFeedback(input, requestId) {
+      const { data, error } = await client.rpc('app_feedback_submit', {
+        p_category: input.category,
+        p_feature: input.feature,
+        p_body: input.body,
+        p_request_id: requestId,
+      })
+      if (!error) return String(data)
+      if (isMissingFunction(error, 'app_feedback_submit')) throw new AppApiError('not_available')
+      throw toAppError(error)
+    },
+    async feedbackInbox(filters, before) {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_founder_feedback_list', {
+        p_category: filters.category ?? null,
+        p_status: filters.status ?? null,
+        p_cohort: filters.cohort ?? null,
+        p_before: before?.createdAt ?? null,
+        p_before_id: before?.id ?? null,
+        p_limit: 50,
+      })
+      return rows.map(toFeedbackItem)
+    },
+    async feedbackEntry(id) {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_founder_feedback', { p_id: id })
+      const r = rows[0]
+      if (!r) return null
+      const notes = Array.isArray(r.notes) ? (r.notes as Array<Record<string, unknown>>) : []
+      const history = Array.isArray(r.history) ? (r.history as Array<Record<string, unknown>>) : []
+      const { noteCount: _ignored, ...item } = toFeedbackItem({ ...r, note_count: notes.length })
+      return {
+        ...item,
+        notes: notes.map((n) => ({ body: String(n.body), author: String(n.author), createdAt: String(n.created_at) })),
+        history: history.map((h) => ({
+          action: h.action as 'status_changed' | 'note_added',
+          from: (h.from as FeedbackStatus | null) ?? null,
+          to: (h.to as FeedbackStatus | null) ?? null,
+          by: String(h.by),
+          at: String(h.at),
+        })),
+      }
+    },
+    async setFeedbackStatus(id, status) {
+      await rpc('app_founder_feedback_set_status', { p_id: id, p_status: status })
+    },
+    async addFeedbackNote(id, note) {
+      await rpc('app_founder_feedback_add_note', { p_id: id, p_note: note })
     },
     async modQueue(status) {
       const rows = await rpc<Array<Record<string, unknown>>>('app_mod_queue', { p_status: status })

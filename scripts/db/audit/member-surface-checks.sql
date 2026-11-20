@@ -64,6 +64,15 @@ declare
     'public.app_mod_storage_cleanup_start(uuid,text)',
     'public.app_mod_storage_preview()'
   ];
+  -- Feedback (20261126000000), once applied.
+  feedback text[] := array[
+    'public.app_feedback_submit(text,text,text,uuid)',
+    'public.app_founder_feedback(uuid)',
+    'public.app_founder_feedback_add_note(uuid,text)',
+    'public.app_founder_feedback_list(text,text,text,timestamp with time zone,uuid,integer)',
+    'public.app_founder_feedback_set_status(uuid,text)',
+    'public.app_is_founder()'
+  ];
   actual text[];
   extra text[];
   missing text[];
@@ -77,6 +86,9 @@ begin
   end if;
   if to_regclass('social.avatars') is not null then
     expected := expected || avatars;
+  end if;
+  if to_regclass('ops.feedback') is not null then
+    expected := expected || feedback;
   end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
@@ -142,6 +154,11 @@ begin
       if position('social.current_moderator()' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': does not check social.current_moderator()');
       end if;
+    elsif r.proname like 'app\_founder\_%' then
+      -- The founder only (20261126000000): membership AND the founder cohort.
+      if position('social.current_founder()' in r.prosrc) = 0 then
+        bad := bad || (r.proname || ': does not check social.current_founder()');
+      end if;
     elsif r.proname = 'app_access_state' then
       if position('auth.uid()' in r.prosrc) = 0 or position('ops.member_access a on a.user_id = v_uid' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': does not read only the caller''s own membership');
@@ -155,6 +172,12 @@ begin
      and (position('social.current_member()' in (select prosrc from pg_catalog.pg_proc where oid = pg_catalog.to_regprocedure('social.current_moderator()'))) = 0
           or position('ops.moderator_active(v_uid)' in (select prosrc from pg_catalog.pg_proc where oid = pg_catalog.to_regprocedure('social.current_moderator()'))) = 0) then
     bad := bad || 'social.current_moderator: does not require membership and an active moderator row'::text;
+  end if;
+  -- The founder check goes through the membership check.
+  if pg_catalog.to_regprocedure('social.current_founder()') is not null
+     and (position('social.current_member()' in (select prosrc from pg_catalog.pg_proc where oid = pg_catalog.to_regprocedure('social.current_founder()'))) = 0
+          or position('a.cohort = ''founder''' in (select prosrc from pg_catalog.pg_proc where oid = pg_catalog.to_regprocedure('social.current_founder()'))) = 0) then
+    bad := bad || 'social.current_founder: does not require membership and the founder cohort'::text;
   end if;
   -- The membership chain.
   if position('social.current_access()' in coalesce((select prosrc from pg_catalog.pg_proc where oid = to_regprocedure('social.current_member()')), '')) = 0 then

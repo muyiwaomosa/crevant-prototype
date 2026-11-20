@@ -11,6 +11,7 @@ import { ViewTrackerProvider } from './ViewTracker'
 import { displayNameProblem, messageFor, usernameProblem, type AppApi, type MyDetails } from './api'
 import { DetailsSetup, SETUP_STEPS, SetupProgress } from './profileDetails'
 import { ModerationProvider } from './moderation'
+import { FeedbackProvider, SendFeedbackLink } from './feedback'
 import { AvatarProvider } from './avatars'
 
 /**
@@ -64,9 +65,11 @@ function Gate() {
       <AvatarProvider>
         <FirstTimeSetup>
           <ModerationProvider>
-            <ViewTrackerProvider userId={status.profile.id}>
-              <MemberLayout username={status.profile.username} />
-            </ViewTrackerProvider>
+            <FeedbackProvider>
+              <ViewTrackerProvider userId={status.profile.id}>
+                <MemberLayout username={status.profile.username} />
+              </ViewTrackerProvider>
+            </FeedbackProvider>
           </ModerationProvider>
         </FirstTimeSetup>
       </AvatarProvider>
@@ -312,6 +315,7 @@ function MemberLayout({ username }: { username: string }) {
               )}
             </NavLink>
           ))}
+          <SendFeedbackLink variant="sidebar" />
         </nav>
         <div className="mt-auto space-y-2">
           <p className="hidden text-[13px] font-semibold text-ink-700 lg:block">@{username}</p>
@@ -328,9 +332,12 @@ function MemberLayout({ username }: { username: string }) {
             <Link to="/app" aria-label="Splitpost home">
               <Wordmark size="sm" />
             </Link>
-            <Link to="/app/account" className="text-[13px] font-semibold text-brand-700">
-              Your account
-            </Link>
+            <div className="flex items-center gap-4">
+              <SendFeedbackLink variant="header" />
+              <Link to="/app/account" className="text-[13px] font-semibold text-brand-700">
+                Your account
+              </Link>
+            </div>
           </div>
         </header>
         <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[680px] px-4 pb-28 pt-5 outline-none sm:px-6 md:pb-12 md:pt-8">
