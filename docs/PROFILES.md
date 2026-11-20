@@ -40,61 +40,35 @@ applied anywhere. Nothing is deployed.
 * The UI says so: "This only describes you. Everyone can post, follow and build
   a Clique, whatever you choose."
 
-## Proposed topic taxonomy (needs product approval)
+## Topic taxonomy (approved)
 
-The list lives in the database (`social.topics`), and the app reads it through
-`app_topics()`; nothing is hard-coded in the app. The rows in the migration
-are a **proposal**. Change them before the migration is approved, or later
-with a small data migration (retire a topic with `active = false`; never delete
-one members have chosen).
+Approved by the founder: 17 topics, at most 5 per member, at least 3
+encouraged but never required. The list lives in the database
+(`social.topics`), and the app reads it through `app_topics()`; nothing is
+hard-coded in the app. Change it later with a small reviewed data migration
+(retire a topic with `active = false`; never delete one members have chosen).
 
-| Slug | Label | Note |
+| Order | Slug | Label |
 |---|---|---|
-| food | Food & cooking | from the pilot creator categories |
-| money | Money & business | widened from "money" |
-| tech | Tech | |
-| learning | Learning | new: teachers, explainers |
-| music | Music | |
-| film | Film & TV | new |
-| gaming | Gaming | new |
-| art | Art & design | |
-| style | Fashion & beauty | new |
-| books | Books & writing | |
-| fitness | Fitness & sport | |
-| wellness | Health & wellness | |
-| travel | Travel | |
-| family | Family & parenting | new |
+| 10 | food | Food & cooking |
+| 20 | money | Money & business |
+| 30 | tech | Tech |
+| 40 | learning | Learning |
+| 50 | music | Music |
+| 60 | film | Film & TV |
+| 70 | comedy | Comedy |
+| 80 | gaming | Gaming |
+| 90 | art | Art & design |
+| 100 | style | Fashion & beauty |
+| 110 | books | Books & writing |
+| 120 | fitness | Fitness |
+| 130 | sports | Sports |
+| 140 | wellness | Health & wellness |
+| 150 | faith | Faith & Spirituality |
+| 160 | travel | Travel |
+| 170 | family | Family & parenting |
 
-### Recommended revision (not applied until approved)
-
-Seventeen topics: the 14 above, with "Fitness & sport" split in two, and
-Faith and Comedy added. The migration still holds the 14; once the list is
-approved it changes in this PR, before the migration is applied anywhere.
-
-| Order | Slug | Label | Change |
-|---|---|---|---|
-| 10 | food | Food & cooking | |
-| 20 | money | Money & business | |
-| 30 | tech | Tech | |
-| 40 | learning | Learning | |
-| 50 | music | Music | |
-| 60 | film | Film & TV | |
-| 70 | comedy | Comedy | **new** |
-| 80 | gaming | Gaming | |
-| 90 | art | Art & design | |
-| 100 | style | Fashion & beauty | |
-| 110 | books | Books & writing | |
-| 120 | fitness | Fitness | **renamed** from "Fitness & sport" |
-| 130 | sports | Sports | **new**, split from fitness |
-| 140 | wellness | Health & wellness | |
-| 150 | faith | Faith & spirituality | **new** |
-| 160 | travel | Travel | |
-| 170 | family | Family & parenting | |
-
-Still open: the exact label for Faith ("Faith & spirituality" or "Faith"),
-and whether 17 is too many to scan comfortably on a phone (to be checked
-with screenshots once the list is approved). The waitlist and pilot
-creator categories stay as they are for now.
+The waitlist and pilot creator categories stay as they are for now.
 
 ## Database
 
@@ -153,7 +127,7 @@ creator categories stay as they are for now.
 Each step needs the founder's go-ahead. Nothing here touches Production, the
 public website's content or the frozen demo.
 
-**Before:** the topic list approved and committed in this PR, CI green on
+**Before:** the approved topic list committed in this PR (done), CI green on
 the final commit, and the pending read-only verify run approved or cancelled
 (it shares the staging deploy queue).
 

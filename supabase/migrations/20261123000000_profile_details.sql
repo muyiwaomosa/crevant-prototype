@@ -3,7 +3,7 @@
 --
 -- What this migration adds:
 --   * social.topics: the topic list members choose interests from. The rows
---     below are the PROPOSED taxonomy (docs/PROFILES.md); the app reads the
+--     below are the APPROVED taxonomy (17 topics, docs/PROFILES.md); the app reads the
 --     list from the database and never hard-codes it, so changing it is a
 --     small reviewed data migration, not an app release.
 --   * social.profile_details: one row per member with an optional identity
@@ -33,23 +33,26 @@ create table social.topics (
   sort_order  integer not null unique,
   active      boolean not null default true
 );
-comment on table social.topics is 'The topics members choose interests from. Proposed list, pending product approval (docs/PROFILES.md). Retire a topic with active = false rather than deleting it.';
+comment on table social.topics is 'The topics members choose interests from (approved list, docs/PROFILES.md). Retire a topic with active = false rather than deleting it.';
 
 insert into social.topics (slug, label, sort_order) values
-  ('food',     'Food & cooking',      10),
-  ('money',    'Money & business',    20),
-  ('tech',     'Tech',                30),
-  ('learning', 'Learning',            40),
-  ('music',    'Music',               50),
-  ('film',     'Film & TV',           60),
-  ('gaming',   'Gaming',              70),
-  ('art',      'Art & design',        80),
-  ('style',    'Fashion & beauty',    90),
-  ('books',    'Books & writing',    100),
-  ('fitness',  'Fitness & sport',    110),
-  ('wellness', 'Health & wellness',  120),
-  ('travel',   'Travel',             130),
-  ('family',   'Family & parenting', 140);
+  ('food',     'Food & cooking',        10),
+  ('money',    'Money & business',      20),
+  ('tech',     'Tech',                  30),
+  ('learning', 'Learning',              40),
+  ('music',    'Music',                 50),
+  ('film',     'Film & TV',             60),
+  ('comedy',   'Comedy',                70),
+  ('gaming',   'Gaming',                80),
+  ('art',      'Art & design',          90),
+  ('style',    'Fashion & beauty',     100),
+  ('books',    'Books & writing',      110),
+  ('fitness',  'Fitness',              120),
+  ('sports',   'Sports',               130),
+  ('wellness', 'Health & wellness',    140),
+  ('faith',    'Faith & Spirituality', 150),
+  ('travel',   'Travel',               160),
+  ('family',   'Family & parenting',   170);
 
 -- ---------------------------------------------------------------------------
 -- 2. Profile details and interests (private: reached only through functions).

@@ -104,10 +104,14 @@ declare
   d record;
   n int;
 begin
-  select count(*) into n from public.app_topics();
-  if n < 1 or (select slug from public.app_topics() limit 1) <> 'food' then
-    raise exception 'FAIL: the topic list is empty or out of order';
+  -- The approved taxonomy, exactly, in order.
+  if (select string_agg(slug || '=' || label, ',') from public.app_topics())
+     <> 'food=Food & cooking,money=Money & business,tech=Tech,learning=Learning,music=Music,film=Film & TV,comedy=Comedy,gaming=Gaming,'
+        || 'art=Art & design,style=Fashion & beauty,books=Books & writing,fitness=Fitness,sports=Sports,wellness=Health & wellness,'
+        || 'faith=Faith & Spirituality,travel=Travel,family=Family & parenting' then
+    raise exception 'FAIL: the topic list is not the approved 17, in order: %', (select string_agg(slug, ',') from public.app_topics());
   end if;
+  select count(*) into n from public.app_topics();
 
   select * into d from public.app_my_details();
   if d.identity is not null or d.bio is not null or d.follow_reason is not null or d.topics <> '{}' or d.onboarded then
