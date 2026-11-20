@@ -1,5 +1,5 @@
 -- TEST ONLY (throwaway databases). Pilot membership (20261122000000), as real
--- (Member function counts include the six profile detail functions of 20261123000000 and the seven moderation functions of 20261124000000.)
+-- (Member function counts include the six profile detail functions of 20261123000000 the seven moderation functions of 20261124000000 and the six profile picture functions of 20261125000000.)
 -- signed-in accounts calling the same functions the app calls.
 --
 --   P1, P2, P3 = ...0a01..0a03: accounts that existed BEFORE the migration
@@ -133,14 +133,14 @@ begin
     raise exception 'FAIL: N''s access state is %', st;
   end if;
   n := pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']);
-  if n <> 38 then
-    raise exception 'FAIL: expected 38 member functions to refuse, checked %', n;
+  if n <> 44 then
+    raise exception 'FAIL: expected 44 member functions to refuse, checked %', n;
   end if;
   perform pg_temp.expect_error('select count(*) from social.posts', 'permission denied', 'N reading social.posts directly');
   perform pg_temp.expect_error('select count(*) from ops.member_access', 'permission denied', 'N reading memberships');
   perform pg_temp.expect_error('select count(*) from social.visible_members', 'permission denied', 'N reading the visible member list');
   perform pg_temp.expect_error('update public.profiles set display_name = ''x'' where id = auth.uid()', 'permission denied', 'N writing their profile directly');
-  raise notice 'PASS: signed in without pilot membership, all 38 member functions refuse (no_pilot_access) and no table is reachable';
+  raise notice 'PASS: signed in without pilot membership, all 44 member functions refuse (no_pilot_access) and no table is reachable';
 end $$;
 commit;
 
@@ -150,7 +150,7 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000
 set local role authenticated;
 do $$
 begin
-  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 38 then
+  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 44 then
     raise exception 'FAIL: not every member function was checked';
   end if;
   raise notice 'PASS: an account with no profile and no membership is refused by every member function';
@@ -163,10 +163,10 @@ set local role anon;
 do $$
 begin
   perform pg_temp.expect_error('select * from public.app_access_state()', 'permission denied', 'anon reading an access state');
-  if pg_temp.every_member_function_refuses('permission denied', array[]::text[]) <> 39 then
+  if pg_temp.every_member_function_refuses('permission denied', array[]::text[]) <> 45 then
     raise exception 'FAIL: not every member function was checked for anon';
   end if;
-  raise notice 'PASS: anonymous visitors can call none of the 39 member functions';
+  raise notice 'PASS: anonymous visitors can call none of the 45 member functions';
 end $$;
 commit;
 
@@ -328,10 +328,10 @@ begin
   if (select status from public.app_access_state()) <> 'revoked' then
     raise exception 'FAIL: N''s state is not revoked';
   end if;
-  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 38 then
+  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 44 then
     raise exception 'FAIL: not every member function was checked after revocation';
   end if;
-  raise notice 'PASS: revocation takes effect on the next request, for all 38 member functions';
+  raise notice 'PASS: revocation takes effect on the next request, for all 44 member functions';
 end $$;
 commit;
 
@@ -365,10 +365,10 @@ begin
   if st.status <> 'expired' then
     raise exception 'FAIL: B''s state is % after expiry', st;
   end if;
-  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 38 then
+  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 44 then
     raise exception 'FAIL: not every member function was checked after expiry';
   end if;
-  raise notice 'PASS: an expired membership is refused by all 38 member functions, and the account sees "expired"';
+  raise notice 'PASS: an expired membership is refused by all 44 member functions, and the account sees "expired"';
 end $$;
 commit;
 begin;

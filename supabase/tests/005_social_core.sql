@@ -43,7 +43,9 @@ begin
     where n.nspname = 'social' and c.relkind in ('r', 'p')
       and c.relname not in ('posts', 'follows', 'follow_events', 'clique_members', 'likes', 'comments', 'post_views',
                             -- profile details (20261123000000), once applied
-                            'topics', 'profile_details', 'member_topics')
+                            'topics', 'profile_details', 'member_topics',
+                            -- profile pictures (20261125000000), once applied
+                            'avatars', 'avatar_uploads', 'avatar_events')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -70,6 +72,8 @@ declare
   details text[] := array['app_discover_people', 'app_member_details', 'app_my_details', 'app_set_profile_details', 'app_suggested_creators', 'app_topics'];
   -- Moderation (20261124000000), once applied.
   moderation text[] := array['app_is_moderator', 'app_mod_dismiss', 'app_mod_hide', 'app_mod_queue', 'app_mod_report', 'app_mod_restore', 'app_report'];
+  -- Profile pictures (20261125000000), once applied.
+  avatars text[] := array['app_avatar_begin', 'app_avatar_remove', 'app_avatars', 'app_mod_storage_cleanup_finish', 'app_mod_storage_cleanup_start', 'app_mod_storage_preview'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -77,6 +81,9 @@ begin
   end if;
   if to_regclass('ops.content_reports') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || moderation) x);
+  end if;
+  if to_regclass('social.avatars') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || avatars) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -131,7 +138,10 @@ begin
      <> case when to_regclass('ops.content_reports') is null
           then array['clique_members_guard', 'current_access', 'current_member', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
           -- Moderation (20261124000000) adds social.current_moderator().
-          else array['clique_members_guard', 'current_access', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
+          when to_regclass('social.avatars') is null
+          then array['clique_members_guard', 'current_access', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
+          -- Profile pictures (20261125000000) add the avatar lock and rate check.
+          else array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
         end) then
     raise exception 'FAIL: the social helper and trigger functions are not the approved set (found %)', n;
   end if;
@@ -227,7 +237,7 @@ begin
              where (n.nspname = 'social' or (n.nspname = 'public' and p.proname like 'app\_%'))
                -- Also allowed: the moderation objects of 20261124000000 (reports, the
                -- audit trail, moderators, the retention purge, the note check).
-               and regexp_replace(p.prosrc, 'ops\.(member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
+               and regexp_replace(p.prosrc, 'ops\.(member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (
