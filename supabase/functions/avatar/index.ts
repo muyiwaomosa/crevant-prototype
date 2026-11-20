@@ -2,8 +2,10 @@
 // remove, signed links, and the moderator's storage cleanup.
 //
 // STAGING ONLY. Deployed by hand by the founder after the database migration
-// (docs/AVATARS.md), with JWT verification on (the default):
-//   supabase functions deploy avatar --project-ref kpudeppgokpjhvaqrprn
+// (docs/AVATARS.md), with the platform's gateway JWT check off, because the
+// function verifies every caller itself with Supabase Auth (handler.ts),
+// which supports staging's ES256 signing keys and refuses signed-out sessions:
+//   supabase functions deploy avatar --no-verify-jwt --project-ref kpudeppgokpjhvaqrprn
 // It refuses to run in any other hosted project (see PROJECT below), so a
 // deploy to Production would serve nothing.
 //
@@ -11,9 +13,13 @@
 // secret is created for it, and none is stored in the repository, GitHub or
 // Vercel:
 //   SUPABASE_URL               the project (checked against PROJECT)
-//   SUPABASE_ANON_KEY          sent with the CALLER's token for their own checks
+//   SUPABASE_ANON_KEY          fallback project key for the caller's own calls,
+//                              used only if the request carries no publishable
+//                              key (the app always sends staging's publishable key)
 //   SUPABASE_SERVICE_ROLE_KEY  used only for Storage and the two service-only
 //                              database steps, after the caller's checks pass
+// (These are the legacy keys, enabled on staging. If they are ever disabled
+// the function refuses to run, and needs updating first: docs/AVATARS.md.)
 //
 // Routes (POST, signed-in members only; the database decides everything):
 //   /avatar/upload   body: the cropped 512 x 512 JPEG
@@ -40,6 +46,23 @@ const local = LOCAL.test(url)
 const configured = (url === HOSTED || local) && anon !== '' && service !== ''
 const log = (event: string, detail: Record<string, string | number | boolean> = {}) => console.log(JSON.stringify({ fn: 'avatar', event, ...detail }))
 if (!configured) log('refusing_to_run', { reason: url === '' ? 'no SUPABASE_URL' : url === HOSTED || local ? 'missing keys' : 'not the staging project' })
+
+// Supabase Auth checks the token: signature (current ES256 key or the previous
+// HS256 key), expiry, and that its session still exists. Only a signed-in
+// user passes; the anon or service key used as a token does not.
+async function verifyUser(token: string, key: string | null): Promise<boolean> {
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: key ?? anon, Authorization: `Bearer ${token}` } })
+    if (!res.ok) {
+      await res.body?.cancel()
+      return false
+    }
+    const user = (await res.json()) as { id?: unknown; aud?: unknown; role?: unknown }
+    return typeof user.id === 'string' && /^[0-9a-f-]{36}$/.test(user.id) && user.aud === 'authenticated' && user.role === 'authenticated'
+  } catch {
+    return false
+  }
+}
 
 async function rpc(key: string, token: string, fn: string, body: Record<string, unknown>): Promise<RpcResult> {
   try {
@@ -68,7 +91,8 @@ const storage = (path: string, init: RequestInit) =>
   fetch(`${url}/storage/v1${path}`, { ...init, headers: { apikey: service, Authorization: `Bearer ${service}`, ...(init.headers ?? {}) } })
 
 const deps: Deps = {
-  userRpc: (token, fn, body) => rpc(anon, token, fn, body),
+  verifyUser,
+  userRpc: (token, fn, body, key) => rpc(key ?? anon, token, fn, body),
   serviceRpc: (fn, body) => rpc(service, service, fn, body),
   async upload(path, bytes) {
     try {

@@ -13,7 +13,11 @@ const env = (k) => {
 }
 const API = env('API_URL')
 const DB = env('DB_URL')
-const PUB = env('ANON_KEY')
+// The app sends staging's publishable key; the legacy anon key is only the function's fallback.
+const PUB = env('PUBLISHABLE_KEY')
+const ANON = env('ANON_KEY')
+const JWT_SECRET = env('JWT_SECRET') // the local project's PREVIOUS (HS256) signing secret, for an expired-token test
+const crypto = require('node:crypto')
 const SERVICE = env('SERVICE_ROLE_KEY')
 const GUARD = env('GUARD_URL') // the same function, started with the PRODUCTION project's address
 if (!/^http:\/\/(127\.0\.0\.1|localhost):/.test(API)) throw new Error('Refusing: not a local Supabase')
@@ -80,10 +84,56 @@ function frame(b) {
   const M = await account('picm', { moderator: true })
   const N = await account('picn', { member: false })
 
+  // 0. Authentication: the function itself verifies every caller with Supabase
+  //    Auth (the gateway check is off; local Auth signs with ES256, like staging).
+  {
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
+    const [h, p] = A.token.split('.')
+    const header = JSON.parse(Buffer.from(h, 'base64url'))
+    const claims = JSON.parse(Buffer.from(p, 'base64url'))
+    check('local Auth issues ES256 tokens, like staging', header.alg === 'ES256', header.alg)
+    const forgedES = `${b64(header)}.${b64({ ...claims, exp: Math.floor(Date.now() / 1000) + 3600 })}.${crypto.randomBytes(64).toString('base64url')}`
+    const hs = (c, secret) => {
+      const body = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64(c)}`
+      return `${body}.${crypto.createHmac('sha256', secret).update(body).digest('base64url')}`
+    }
+    const forgedHS = hs({ ...claims, exp: Math.floor(Date.now() / 1000) + 3600 }, 'not-the-project-secret-not-the-project-secret')
+    const expired = hs({ ...claims, iat: Math.floor(Date.now() / 1000) - 7200, exp: Math.floor(Date.now() / 1000) - 60 }, JWT_SECRET)
+    const auth = await fetch(`${API}/auth/v1/user`, { headers: { apikey: PUB, Authorization: `Bearer ${expired}` } })
+    check('the expired test token is correctly signed but expired (Supabase Auth says so)', auth.status === 403 && /expired/i.test(await auth.text()))
+    // A session that was signed out (revoked) on the server.
+    const R = await account('picr')
+    await fetch(`${API}/auth/v1/logout?scope=global`, { method: 'POST', headers: { apikey: PUB, Authorization: `Bearer ${R.token}` } })
+    const db = await fetch(`${API}/rest/v1/rpc/app_access_state`, { method: 'POST', headers: { apikey: PUB, Authorization: `Bearer ${R.token}`, 'Content-Type': 'application/json' }, body: '{}' })
+    check('(the database alone would still accept a signed-out token until it expires)', db.status === 200, String(db.status))
+    const cases = [
+      ['no Authorization header', null],
+      ['a malformed token', 'not-a-jwt'],
+      ['a forged ES256 token (real header and claims, wrong signature)', forgedES],
+      ['a forged HS256 token (signed with the wrong secret)', forgedHS],
+      ['an expired token', expired],
+      ['a signed-out (revoked) session', R.token],
+      ['the anon key used as a token', ANON],
+      ['the service role key used as a token', SERVICE],
+    ]
+    for (const [what, token] of cases) {
+      const up = await upload(token, fixture('good.jpg'))
+      const links = await urls(token, [A.id])
+      const clean = await call('cleanup', token, JSON.stringify({ plan: '00000000-0000-4000-8000-000000000000', confirm: 'DELETE 0 FILES' }), { contentType: 'application/json' })
+      const rm = await call('remove', token, null)
+      check(`${what} is refused (401) for upload, links, remove and cleanup`, [up, links, clean, rm].every((r) => r.status === 401 && r.json?.error === 'not_signed_in'),
+        [up, links, clean, rm].map((r) => r.status).join(','))
+    }
+    check('nothing was stored or authorised by any refused request', filesOf(A.id) === 0 && filesOf(R.id) === 0
+      && sql(`select count(*) from social.avatar_uploads where user_id in ('${A.id}', '${R.id}')`) === '0')
+    const fallback = await fetch(`${FN}/urls`, { method: 'POST', headers: { Authorization: `Bearer ${B.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [A.id] }) })
+    check('a valid session works without the publishable key header too (the function falls back to its own project key)', fallback.status === 200, String(fallback.status))
+  }
+
   // 1. Who can call it.
   {
     const r = await call('upload', null, fixture('good.jpg'), { contentType: 'image/jpeg' })
-    check('without a sign-in, the platform refuses before the function runs', r.status === 401, String(r.status))
+    check('without a sign-in, the function refuses (not_signed_in)', r.status === 401 && r.json?.error === 'not_signed_in', String(r.status))
     const g = await call('upload', A.token, fixture('good.jpg'), { url: GUARD, contentType: 'image/jpeg' })
     check('started with the Production project address, the function refuses everything (503) and touches nothing', g.status === 503 && g.json?.error === 'unavailable' && filesOf(A.id) === 0, `${g.status} ${JSON.stringify(g.json)}`)
     const n = await upload(N.token, fixture('good.jpg'))

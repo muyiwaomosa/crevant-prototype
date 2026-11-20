@@ -3,7 +3,8 @@
 // 1. The vendored jpeg-js 0.4.4 is the reviewed upstream code, byte for byte,
 //    plus one export line per file.
 // 2. The entry point serves only the staging project (or local Supabase),
-//    reads only the keys Supabase provides, and keeps JWT verification on.
+//    reads only the keys Supabase provides, and verifies every caller with
+//    Supabase Auth itself (the gateway JWT check is off for ES256 sessions).
 // 3. The handler never trusts a member id or storage path from the browser,
 //    asks the database as the caller before any privileged step, and keeps
 //    the approved limits.
@@ -47,20 +48,35 @@ test('the entry point serves only the staging project, with the provided keys on
   const envs = [...index.matchAll(/env\('([A-Z_]+)'\)/g)].map((m) => m[1]).sort()
   assert.deepEqual(envs, ['SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL'], 'only the keys Supabase provides to every function')
   assert.match(index, /ALLOWED_ORIGIN = \/\^https:\\\/\\\/splitpost-app-\[a-z0-9-\]\+-crevant\\\.vercel\\\.app\$\//)
-  assert.match(read('supabase/config.toml'), /\[functions\.avatar\]\nverify_jwt = true/)
+  // The gateway check is off ON PURPOSE: the function verifies every caller with Supabase Auth.
+  assert.match(read('supabase/config.toml'), /\[functions\.avatar\]\nverify_jwt = false/)
+  assert.match(index, /fetch\(`\$\{url\}\/auth\/v1\/user`, \{ headers: \{ apikey: key \?\? anon, Authorization: `Bearer \$\{token\}` \} \}\)/)
+  assert.match(index, /user\.aud === 'authenticated' && user\.role === 'authenticated'/)
+  assert.match(index, /userRpc: \(token, fn, body, key\) => rpc\(key \?\? anon, token, fn, body\)/, 'caller calls use the publishable key (or the anon fallback), never the service key')
+})
+
+test('every request is authenticated with Supabase Auth before anything else', () => {
+  const h = code(read(`${dir}/handler.ts`))
+  const verify = h.indexOf('if (!(await deps.verifyUser(token, key))) return json(401')
+  assert.ok(verify > 0, 'the handler verifies the caller')
+  for (const later of ["action === 'upload'", 'readBody(req', 'readJson(req', 'deps.userRpc', 'deps.serviceRpc', 'deps.upload', 'deps.remove', 'deps.sign']) {
+    const at = h.indexOf(later, h.indexOf('export async function handle'))
+    assert.ok(at > verify, `${later} comes after authentication`)
+  }
+  assert.match(h, /\/\^sb_publishable_\[A-Za-z0-9_-\]\{10,200\}\$\//, 'only a publishable key is taken from the request')
 })
 
 test('the handler asks the database as the caller first, and trusts no id or path from the browser', () => {
   const h = code(read(`${dir}/handler.ts`))
   assert.ok(!/body\??\.(path|paths|user|userId|user_id|member|memberId|owner)\b/.test(h), 'no member id or path is read from the request')
   // Upload: header check, then the caller's authorization, then decode/re-encode, then storage, then commit.
-  const order = ['checkHeader(bytes)', "deps.userRpc(token, 'app_avatar_begin'", 'reencode(bytes)', 'deps.upload(path, clean)', "deps.serviceRpc('svc_avatar_commit'"]
+  const order = ['checkHeader(bytes)', "asCaller('app_avatar_begin'", 'reencode(bytes)', 'deps.upload(path, clean)', "deps.serviceRpc('svc_avatar_commit'"]
   const at = order.map((s) => h.indexOf(s))
   assert.ok(at.every((i) => i >= 0) && at.every((i, k) => k === 0 || i > at[k - 1]), `upload steps in order: ${at}`)
   // Every privileged action is preceded by the caller's own database check.
   for (const [action, check] of [['remove', "'app_avatar_remove'"], ['urls', "'app_avatars'"], ['cleanup', "'app_mod_storage_cleanup_start'"]]) {
     const block = h.slice(h.indexOf(`action === '${action}'`))
-    assert.ok(block.indexOf(`deps.userRpc(token, ${check}`) >= 0 && block.indexOf(`deps.userRpc(token, ${check}`) < Math.max(block.indexOf('deps.remove('), block.indexOf('deps.sign(')), `${action}: the caller's check comes first`)
+    assert.ok(block.indexOf(`asCaller(${check}`) >= 0 && block.indexOf(`asCaller(${check}`) < Math.max(block.indexOf('deps.remove('), block.indexOf('deps.sign(')), `${action}: the caller's check comes first`)
   }
   assert.match(h, /if \(!token\) return json\(401, \{ error: 'not_signed_in' \}\)/)
   assert.match(h, /const LINK_SECONDS = 3600/)

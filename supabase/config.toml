@@ -438,7 +438,9 @@ content_path = "./supabase/templates/invite.html"
 subject = "Reset your Crevant password"
 content_path = "./supabase/templates/recovery.html"
 
-# Profile pictures (Build 5.2b). JWT verification stays on: only signed-in
-# accounts reach the function, and it re-checks everything with the database.
+# Profile pictures (Build 5.2b). The gateway's JWT check is off: staging signs
+# sessions with ES256 keys, so the function verifies every caller itself with
+# Supabase Auth (signature, expiry, live session) before anything else, then
+# lets the database decide membership, limits and moderation.
 [functions.avatar]
-verify_jwt = true
+verify_jwt = false

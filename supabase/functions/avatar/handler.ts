@@ -2,9 +2,17 @@
 // injected (database calls as the caller, database calls as the service
 // role, Storage), so the safeguards can be tested.
 //
-// Authorization: EVERY action first asks the database, as the caller (with
-// the caller's own token), whether they may do it. The database derives who
-// they are from that token; this code never accepts a member id or a storage
+// Authentication: the platform's gateway JWT check is OFF for this function
+// (staging signs sessions with ES256 keys). Instead EVERY request is checked
+// here, before anything else, with Supabase Auth itself (verifyUser): the
+// token's signature (ES256, or the previous HS256 key), its expiry, and that
+// its session still exists (signed-out or revoked sessions are refused, which
+// the database alone would still accept until expiry).
+//
+// Authorization: then EVERY action asks the database, as the caller (their
+// own token, with the project's publishable key), whether they may do it:
+// membership, complete profile, limits, moderator. The database derives who
+// they are from the token; this code never accepts a member id or a storage
 // path from the browser. The service role is used only afterwards, for
 // Storage and for the two service-only database steps, and only with paths
 // the database handed out.
@@ -13,8 +21,10 @@ import { checkHeader, ImageRejected, MAX_INPUT_BYTES, reencode } from './image.t
 export type RpcResult = { ok: true; data: unknown } | { ok: false; status: number; code: string }
 
 export interface Deps {
-  /** A database function called AS THE CALLER (their token). */
-  userRpc(token: string, fn: string, body: Record<string, unknown>): Promise<RpcResult>
+  /** Supabase Auth's verdict on the caller's token: valid signature, not expired, session still exists. */
+  verifyUser(token: string, key: string | null): Promise<boolean>
+  /** A database function called AS THE CALLER (their token, with the publishable key). */
+  userRpc(token: string, fn: string, body: Record<string, unknown>, key: string | null): Promise<RpcResult>
   /** A service-only database function (svc_*). */
   serviceRpc(fn: string, body: Record<string, unknown>): Promise<RpcResult>
   upload(path: string, bytes: Uint8Array): Promise<boolean>
@@ -41,10 +51,16 @@ const refuse = (r: { status: number; code: string }) => {
   return json(status, { error: code })
 }
 
-/** The caller's bearer token, or null. (The platform also verifies it before the function runs.) */
+/** The caller's bearer token if it has the shape of a JWT, or null. Supabase Auth decides if it's valid. */
 export function bearer(req: Request): string | null {
-  const m = /^Bearer ([A-Za-z0-9._-]+)$/.exec(req.headers.get('authorization') ?? '')
-  return m ? m[1] : null
+  const m = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(req.headers.get('authorization') ?? '')
+  return m && m[1].length <= 4096 ? m[1] : null
+}
+
+/** The project's publishable key as the app sends it (public by design); anything else is ignored. */
+export function publishableKey(req: Request): string | null {
+  const k = req.headers.get('apikey') ?? ''
+  return /^sb_publishable_[A-Za-z0-9_-]{10,200}$/.test(k) ? k : null
 }
 
 async function readBody(req: Request, limit: number): Promise<Uint8Array | null> {
@@ -94,6 +110,10 @@ export async function handle(req: Request, action: string, deps: Deps): Promise<
   if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
   const token = bearer(req)
   if (!token) return json(401, { error: 'not_signed_in' })
+  const key = publishableKey(req)
+  // Authentication first, for every action, before reading the body or touching anything.
+  if (!(await deps.verifyUser(token, key))) return json(401, { error: 'not_signed_in' })
+  const asCaller = (fn: string, body: Record<string, unknown>) => deps.userRpc(token, fn, body, key)
 
   if (action === 'upload') {
     const bytes = await readBody(req, MAX_INPUT_BYTES)
@@ -105,7 +125,7 @@ export async function handle(req: Request, action: string, deps: Deps): Promise<
       return json(422, { error: e instanceof ImageRejected ? e.code : 'not_jpeg' })
     }
     // 1. Authorization, as the caller: membership, complete profile, 10 a day. The database chooses the path.
-    const begin = await deps.userRpc(token, 'app_avatar_begin', {})
+    const begin = await asCaller('app_avatar_begin', {})
     if (!begin.ok) return refuse(begin)
     const path = typeof begin.data === 'string' && /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/.test(begin.data) ? begin.data : null
     if (!path) {
@@ -140,7 +160,7 @@ export async function handle(req: Request, action: string, deps: Deps): Promise<
   }
 
   if (action === 'remove') {
-    const r = await deps.userRpc(token, 'app_avatar_remove', {})
+    const r = await asCaller('app_avatar_remove', {})
     if (!r.ok) return refuse(r)
     const previous = typeof r.data === 'string' ? r.data : null
     if (previous && !(await deps.remove([previous]))) await orphan(deps, previous, 'removed; delete failed')
@@ -154,7 +174,7 @@ export async function handle(req: Request, action: string, deps: Deps): Promise<
     if (!ids || ids.length > 100 || !ids.every((x) => typeof x === 'string' && UUID.test(x))) return json(400, { error: 'invalid_request' })
     if (ids.length === 0) return json(200, { avatars: {} })
     // The database returns paths only for visible members (active, not hidden), and only to members.
-    const r = await deps.userRpc(token, 'app_avatars', { p_members: [...new Set(ids)] })
+    const r = await asCaller('app_avatars', { p_members: [...new Set(ids)] })
     if (!r.ok) return refuse(r)
     const rows = Array.isArray(r.data) ? (r.data as Array<{ id?: unknown; path?: unknown; updated_at?: unknown }>) : []
     const valid = rows.filter((x) => typeof x.id === 'string' && typeof x.path === 'string')
@@ -176,12 +196,12 @@ export async function handle(req: Request, action: string, deps: Deps): Promise<
     if (!plan || !confirm) return json(400, { error: 'invalid_request' })
     // Moderator, same moderator's dry run, within 15 minutes, exact phrase; the
     // database rechecks every file and returns only those still safe to delete.
-    const start = await deps.userRpc(token, 'app_mod_storage_cleanup_start', { p_plan: plan, p_confirm: confirm })
+    const start = await asCaller('app_mod_storage_cleanup_start', { p_plan: plan, p_confirm: confirm })
     if (!start.ok) return refuse(start)
     const paths = (Array.isArray(start.data) ? start.data : []).filter((p): p is string => typeof p === 'string' && /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/.test(p))
     for (let i = 0; i < paths.length; i += 100) await deps.remove(paths.slice(i, i + 100))
     // The database records only files that are really gone.
-    const finish = await deps.userRpc(token, 'app_mod_storage_cleanup_finish', { p_plan: plan })
+    const finish = await asCaller('app_mod_storage_cleanup_finish', { p_plan: plan })
     if (!finish.ok) return refuse(finish)
     deps.log('storage_cleanup', { confirmed: paths.length, deleted: Number(finish.data) || 0 })
     return json(200, { deleted: Number(finish.data) || 0, confirmed: paths.length })

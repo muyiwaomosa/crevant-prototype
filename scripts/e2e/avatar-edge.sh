@@ -2,6 +2,9 @@
 # The avatar Edge Function (Build 5.2b) against a real LOCAL Supabase:
 # Storage, the Edge runtime (with JWT verification, as hosted) and the
 # database, through the same gateway the app uses (e2e/avatar-edge.e2e.cjs).
+# The gateway's JWT check is off for this function (as deployed): the
+# function verifies every caller with Supabase Auth itself, which these tests
+# exercise with ES256 tokens (local Auth signs with ES256, like staging).
 # Also starts a second copy of the function in the same Edge runtime image,
 # given the PRODUCTION project's address, to prove it refuses to run there.
 #
@@ -13,6 +16,7 @@ cd "$(dirname "$0")/../.."
 status="$(supabase status -o json 2>/dev/null)"
 val() { node -e 'const s=JSON.parse(process.argv[1]); process.stdout.write(s[process.argv[2]] || "")' "$status" "$1"; }
 export API_URL="$(val API_URL)" DB_URL="$(val DB_URL)" ANON_KEY="$(val ANON_KEY)" SERVICE_ROLE_KEY="$(val SERVICE_ROLE_KEY)"
+export PUBLISHABLE_KEY="$(val PUBLISHABLE_KEY)" JWT_SECRET="$(val JWT_SECRET)"
 case "$API_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "Refusing: API_URL is not local ($API_URL)" >&2; exit 1 ;; esac
 
 EDGE_IMAGE="${EDGE_IMAGE:-supabase/edge-runtime:v1.78.1}"
