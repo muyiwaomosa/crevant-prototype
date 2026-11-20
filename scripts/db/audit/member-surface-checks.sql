@@ -45,6 +45,16 @@ declare
     'public.app_suggested_creators(integer)',
     'public.app_topics()'
   ];
+  -- Moderation (20261124000000), once applied.
+  moderation text[] := array[
+    'public.app_is_moderator()',
+    'public.app_mod_dismiss(uuid,text)',
+    'public.app_mod_hide(uuid,text)',
+    'public.app_mod_queue(text)',
+    'public.app_mod_report(uuid)',
+    'public.app_mod_restore(uuid,text)',
+    'public.app_report(text,uuid,text,text)'
+  ];
   actual text[];
   extra text[];
   missing text[];
@@ -52,6 +62,9 @@ declare
 begin
   if to_regclass('social.profile_details') is not null then
     expected := expected || details;
+  end if;
+  if to_regclass('ops.content_reports') is not null then
+    expected := expected || moderation;
   end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
@@ -112,6 +125,11 @@ begin
       if position('social.current_access()' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': does not check social.current_access()');
       end if;
+    elsif r.proname like 'app\_mod\_%' then
+      -- Moderators only: membership AND an active moderator row.
+      if position('social.current_moderator()' in r.prosrc) = 0 then
+        bad := bad || (r.proname || ': does not check social.current_moderator()');
+      end if;
     elsif r.proname = 'app_access_state' then
       if position('auth.uid()' in r.prosrc) = 0 or position('ops.member_access a on a.user_id = v_uid' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': does not read only the caller''s own membership');
@@ -120,6 +138,12 @@ begin
       bad := bad || (r.proname || ': does not check social.current_member()');
     end if;
   end loop;
+  -- The moderator check goes through the membership check.
+  if pg_catalog.to_regprocedure('social.current_moderator()') is not null
+     and (position('social.current_member()' in (select prosrc from pg_catalog.pg_proc where oid = pg_catalog.to_regprocedure('social.current_moderator()'))) = 0
+          or position('ops.moderator_active(v_uid)' in (select prosrc from pg_catalog.pg_proc where oid = pg_catalog.to_regprocedure('social.current_moderator()'))) = 0) then
+    bad := bad || 'social.current_moderator: does not require membership and an active moderator row'::text;
+  end if;
   -- The membership chain.
   if position('social.current_access()' in coalesce((select prosrc from pg_catalog.pg_proc where oid = to_regprocedure('social.current_member()')), '')) = 0 then
     bad := bad || 'social.current_member: does not go through social.current_access()'::text;

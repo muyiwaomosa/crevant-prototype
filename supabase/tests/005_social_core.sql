@@ -68,10 +68,15 @@ declare
     'app_like', 'app_mark_viewed', 'app_me', 'app_member', 'app_member_posts', 'app_post', 'app_set_profile', 'app_unfollow', 'app_unlike', 'app_unseen_creators'
   ];
   details text[] := array['app_discover_people', 'app_member_details', 'app_my_details', 'app_set_profile_details', 'app_suggested_creators', 'app_topics'];
+  -- Moderation (20261124000000), once applied.
+  moderation text[] := array['app_is_moderator', 'app_mod_dismiss', 'app_mod_hide', 'app_mod_queue', 'app_mod_report', 'app_mod_restore', 'app_report'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || details) x);
+  end if;
+  if to_regclass('ops.content_reports') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || moderation) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -122,8 +127,12 @@ begin
       raise exception 'FAIL: members can call social.%', f.proname;
     end if;
   end loop;
-  if (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'social')
-     <> array['clique_members_guard', 'current_access', 'current_member', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check'] then
+  if ((select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'social')
+     <> case when to_regclass('ops.content_reports') is null
+          then array['clique_members_guard', 'current_access', 'current_member', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
+          -- Moderation (20261124000000) adds social.current_moderator().
+          else array['clique_members_guard', 'current_access', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
+        end) then
     raise exception 'FAIL: the social helper and trigger functions are not the approved set (found %)', n;
   end if;
   raise notice 'PASS: social helpers and triggers are not callable by members';
@@ -216,7 +225,9 @@ do $$
 begin
   if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
              where (n.nspname = 'social' or (n.nspname = 'public' and p.proname like 'app\_%'))
-               and regexp_replace(p.prosrc, 'ops\.member_access(_active)?\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
+               -- Also allowed: the moderation objects of 20261124000000 (reports, the
+               -- audit trail, moderators, the retention purge, the note check).
+               and regexp_replace(p.prosrc, 'ops\.(member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (

@@ -138,6 +138,54 @@ export type AccessState = { status: AccessStatus; expiresAt: string | null; preG
 /** The member's own profile row (Phase 1A own-row read), used to decide whether setup is needed. */
 export type OwnProfile = { id: string; createdAt: string; username: string | null; displayName: string | null }
 
+/**
+ * Reporting and moderation (20261124000000_moderation). Reports never hide
+ * anything by themselves, and no member function returns who reported.
+ */
+export type ReportTarget = 'post' | 'profile'
+export type ReportReason = 'spam' | 'harassment' | 'hate' | 'sexual' | 'violence' | 'self_harm' | 'impersonation' | 'other'
+export const REPORT_REASONS: Array<{ value: ReportReason; label: string }> = [
+  { value: 'spam', label: 'Spam or scam' },
+  { value: 'harassment', label: 'Harassment or bullying' },
+  { value: 'hate', label: 'Hate or discrimination' },
+  { value: 'sexual', label: 'Nudity or sexual content' },
+  { value: 'violence', label: 'Violence or threats' },
+  { value: 'self_harm', label: 'Self-harm' },
+  { value: 'impersonation', label: 'Impersonation' },
+  { value: 'other', label: 'Something else' },
+]
+/** Threats and self-harm are reviewed first (never around the clock). */
+export const PRIORITY_REASONS: ReportReason[] = ['violence', 'self_harm']
+export const reasonLabel = (r: string) => REPORT_REASONS.find((x) => x.value === r)?.label ?? r
+
+/** Whether reporting exists on this database, and whether the member moderates. */
+export type ModerationAccess = { available: boolean; moderator: boolean }
+export type ReportStatus = 'open' | 'hidden' | 'dismissed' | 'restored'
+
+export interface ModQueueItem {
+  id: string
+  targetType: ReportTarget
+  targetId: string
+  reason: ReportReason
+  priority: boolean
+  hasDetails: boolean
+  excerpt: string
+  targetUsername: string | null
+  openReportsForTarget: number
+  status: ReportStatus
+  createdAt: string
+  resolvedAt: string | null
+}
+
+export interface ModReport extends Omit<ModQueueItem, 'excerpt' | 'targetUsername' | 'hasDetails'> {
+  details: string | null
+  /** What was reported, as it was then (erased 90 days after resolution unless held). */
+  snapshot: Record<string, string | null> | null
+  dataPurged: boolean
+  targetState: 'live' | 'hidden' | 'deleted_by_author' | 'gone'
+  currentBody: string | null
+}
+
 export interface AppApi {
   /** The signed-in account's own pilot membership state (needs no membership itself). */
   accessState(): Promise<AccessState>
@@ -163,6 +211,14 @@ export interface AppApi {
   memberDetails(memberId: string): Promise<ProfileDetails | null>
   /** People the member doesn't follow yet, shared interests first. */
   suggested(): Promise<DiscoverMember[]>
+  /** Moderation (20261124000000): unavailable (and never a moderator) on a database without it. */
+  moderationAccess(): Promise<ModerationAccess>
+  report(target: ReportTarget, targetId: string, reason: ReportReason, details?: string): Promise<void>
+  modQueue(status: 'open' | 'resolved'): Promise<ModQueueItem[]>
+  modReport(id: string): Promise<ModReport | null>
+  modHide(id: string, note?: string): Promise<void>
+  modRestore(id: string, note?: string): Promise<void>
+  modDismiss(id: string, note?: string): Promise<void>
   following(): Promise<FollowedCreator[]>
   /** requestId: the browser's id for this post, reused on retry, so it's stored once (issue #48). */
   createPost(body: string, requestId?: string): Promise<string>
@@ -196,6 +252,8 @@ export const LIMITS = {
   bio: 160,
   followReason: 140,
   topics: 5,
+  reportDetails: 500,
+  moderationNote: 500,
 } as const
 
 /** Same reserved names as the profiles table (supabase/migrations/20261107000000_profiles_and_ops.sql). */
@@ -271,6 +329,13 @@ const MESSAGES: Record<string, string> = {
   too_many_topics: 'Choose up to 5 interests.',
   unknown_topic: "One of those interests isn't available any more. Please choose again.",
   not_available: "This isn't available yet. Please try again later.",
+  already_reported: "You've already reported this. We'll review it.",
+  cannot_report_self: "You can't report yourself.",
+  invalid_reason: 'Choose a reason from the list.',
+  not_moderator: 'Only moderators can do this.',
+  not_live: 'This is already hidden or was deleted by its author. Nothing was changed.',
+  not_hidden: "This isn't hidden by a moderator, so there's nothing to restore.",
+  not_open: 'This report was already resolved. Nothing was changed.',
   network: "We couldn't reach Splitpost. Check your connection and try again.",
   unknown: 'Something went wrong. Please try again.',
 }
@@ -533,6 +598,61 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       const r = (data as Array<Record<string, unknown>>)[0]
       return r ? toDetails(r) : null
     },
+    async moderationAccess() {
+      const { data, error } = await client.rpc('app_is_moderator')
+      if (error) {
+        if (isMissingFunction(error, 'app_is_moderator')) return { available: false, moderator: false }
+        throw toAppError(error)
+      }
+      return { available: true, moderator: data === true }
+    },
+    async report(target, targetId, reason, details) {
+      const { error } = await client.rpc('app_report', { p_target_type: target, p_target_id: targetId, p_reason: reason, p_details: details?.trim() || null })
+      if (!error) return
+      if (isMissingFunction(error, 'app_report')) throw new AppApiError('not_available')
+      throw toAppError(error)
+    },
+    async modQueue(status) {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_mod_queue', { p_status: status })
+      return rows.map((r) => ({
+        id: String(r.id),
+        targetType: r.target_type as ReportTarget,
+        targetId: String(r.target_id),
+        reason: r.reason as ReportReason,
+        priority: Boolean(r.priority),
+        hasDetails: Boolean(r.has_details),
+        excerpt: String(r.excerpt ?? ''),
+        targetUsername: (r.target_username as string | null) ?? null,
+        openReportsForTarget: num(r.open_reports_for_target as number),
+        status: r.status as ReportStatus,
+        createdAt: String(r.created_at),
+        resolvedAt: (r.resolved_at as string | null) ?? null,
+      }))
+    },
+    async modReport(id) {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_mod_report', { p_report: id })
+      const r = rows[0]
+      if (!r) return null
+      return {
+        id: String(r.id),
+        targetType: r.target_type as ReportTarget,
+        targetId: String(r.target_id),
+        reason: r.reason as ReportReason,
+        priority: Boolean(r.priority),
+        details: (r.details as string | null) ?? null,
+        snapshot: (r.snapshot as Record<string, string | null> | null) ?? null,
+        status: r.status as ReportStatus,
+        createdAt: String(r.created_at),
+        resolvedAt: (r.resolved_at as string | null) ?? null,
+        dataPurged: Boolean(r.data_purged),
+        targetState: r.target_state as ModReport['targetState'],
+        currentBody: (r.current_body as string | null) ?? null,
+        openReportsForTarget: num(r.open_reports_for_target as number),
+      }
+    },
+    modHide: (id, note) => rpc<void>('app_mod_hide', { p_report: id, p_note: note?.trim() || null }),
+    modRestore: (id, note) => rpc<void>('app_mod_restore', { p_report: id, p_note: note?.trim() || null }),
+    modDismiss: (id, note) => rpc<void>('app_mod_dismiss', { p_report: id, p_note: note?.trim() || null }),
     async suggested() {
       const { data, error } = await client.rpc('app_suggested_creators', { p_limit: 10 })
       if (error) {

@@ -306,10 +306,10 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   await pageB.getByRole('link', { name: 'Home' }).first().click()
   await pageB.getByTestId('post').filter({ hasText: postText }).waitFor()
   check('A\'s post shows in B\'s feed after following, marked as in B\'s Clique', await pageB.getByTestId('post').filter({ hasText: postText }).getByText('Clique', { exact: true }).isVisible())
-  const likeStatus = await answered(pageB, 'app_like', () => pageB.getByRole('button', { name: 'Like (0 likes)' }).click())
+  const likeStatus = await answered(pageB, 'app_like', () => pageB.getByRole('button', { name: 'Like, 0 likes' }).click())
   check('the server accepted B\'s like', likeStatus === 204 || likeStatus === 200, String(likeStatus))
-  await pageB.getByRole('button', { name: 'Unlike (1 likes)' }).waitFor()
-  await pageB.getByRole('link', { name: 'Comments (0)' }).click()
+  await pageB.getByRole('button', { name: 'Unlike, 1 like' }).waitFor()
+  await pageB.getByRole('link', { name: '0 comments' }).click()
   await pageB.getByLabel('Write a comment').fill('This finally made it click for my class.')
   const commentStatus = await answered(pageB, 'app_add_comment', () => pageB.getByRole('button', { name: 'Comment', exact: true }).click())
   check('the server accepted B\'s comment', commentStatus === 200, String(commentStatus))
@@ -324,11 +324,11 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   await pageB.goto(`${APP}/app`)
   await pageB.reload()
   await pageB.getByTestId('post').filter({ hasText: postText }).waitFor()
-  check('after a reload, B\'s like is still there', await pageB.getByRole('button', { name: 'Unlike (1 likes)' }).isVisible())
+  check('after a reload, B\'s like is still there', await pageB.getByRole('button', { name: 'Unlike, 1 like' }).isVisible())
   {
-    const shown = await pageB.getByRole('link', { name: /^Comments \(\d+\)$/ }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
+    const shown = await pageB.getByRole('link', { name: /^\d+ comments?$/ }).evaluateAll((els) => els.map((e) => e.textContent))
     const stored = rowsReport('social.comments', `author_id = '${idB}' and deleted_at is null`, 'id, created_at, post_id, left(body, 40) as body')
-    check('after a reload, the comment count is still 1', await pageB.getByRole('link', { name: 'Comments (1)' }).isVisible(), `page shows ${JSON.stringify(shown)}; stored ${stored.detail}`)
+    check('after a reload, the comment count is still 1', await pageB.getByRole('link', { name: '1 comment' }).isVisible(), `page shows ${JSON.stringify(shown)}; stored ${stored.detail}`)
   }
   const appStorage = await pageB.evaluate(() => Object.keys(localStorage).filter((k) => !/^sb-/.test(k)))
   check('no social data is kept in browser storage', appStorage.length === 0, appStorage.join(','))
@@ -342,10 +342,15 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     await pageB.goto(`${APP}/app`)
     const strip = pageB.getByRole('region', { name: 'Catch up' })
     await strip.waitFor()
-    const link = strip.getByRole('link', { name: 'Catch up with Aye Teacher (in your Clique): 1 unseen post' })
+    const link = strip.getByRole('link', { name: 'Catch up: 1 unseen post from Aye Teacher (in your Clique)' })
     check('a followed creator with a new post appears in the catch-up strip, marked as in your Clique, with a count of 1', await link.isVisible())
     check('the post published before the follow is not unseen', (await strip.getByRole('link').count()) === 1)
     check('the Home feed stays chronological: the newest post first', ((await pageB.getByTestId('post').first().textContent()) || '').includes(unseenText))
+    {
+      // The whole Home page: posts (Like, comments, Report) and the catch-up strip.
+      const v = await axe(pageB)
+      check('Home, with posts and the catch-up strip, has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
+    }
     const desktop = pageB.viewportSize()
     for (const width of [390, 320]) {
       await pageB.setViewportSize({ width, height: 760 })
@@ -461,7 +466,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   // 7. A sees B's comment on their post, and only A can delete the post.
   await pageA.goto(`${APP}/app/u/${userA}`)
   await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
-  check('A sees one comment on their post', await pageA.getByRole('link', { name: 'Comments (1)' }).isVisible())
+  check('A sees one comment on their post', await pageA.getByRole('link', { name: '1 comment' }).isVisible())
   const postCard = pageA.getByTestId('post').filter({ hasText: postText })
   await postCard.getByRole('button', { name: 'Delete post' }).click()
   await postCard.getByRole('button', { name: 'Delete', exact: true }).click()
@@ -505,7 +510,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     await pageA.unroute('**/rest/v1/rpc/app_create_post')
 
     // The same for a comment, on that post.
-    await pageA.getByTestId('post').filter({ hasText: lost }).getByRole('link', { name: 'Comments (0)' }).click()
+    await pageA.getByTestId('post').filter({ hasText: lost }).getByRole('link', { name: '0 comments' }).click()
     const said = `Said once (${RUN})`
     let droppedComment = false
     await pageA.route('**/rest/v1/rpc/app_add_comment', async (route) => {

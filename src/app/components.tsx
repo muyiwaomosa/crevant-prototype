@@ -8,6 +8,7 @@ import { relativeTime } from '../lib/time'
 import { AppApiError, hueFor, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
 import { useAppApi } from './AppApiContext'
 import { useTrackView } from './ViewTracker'
+import { ReportButton } from './moderation'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
   return <Avatar name={member.displayName} hue={hueFor(member.id)} size={size} />
@@ -104,30 +105,37 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
             onClick={toggleLike}
             disabled={busy}
             aria-pressed={liked}
-            aria-label={liked ? `Unlike (${likes} likes)` : `Like (${likes} likes)`}
             className={clsx(
               'inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition',
               liked ? 'bg-[#fde8ea] text-[#b4233a]' : 'text-ink-600 hover:bg-ink-100',
             )}
           >
             <Heart className={clsx('h-[18px] w-[18px]', liked && 'fill-current')} aria-hidden="true" />
+            {/* Named "Like, 3 likes" from the visible count plus screen-reader text,
+                so speech and sight match (WCAG 2.5.3). Words, not brackets, so every
+                browser joins the parts the same way. */}
+            <span className="sr-only">{liked ? 'Unlike, ' : 'Like, '}</span>
             <span className="tabular-nums">{likes}</span>
+            <span className="sr-only">{likes === 1 ? ' like' : ' likes'}</span>
           </button>
           {linkToPost ? (
             <Link
               to={`/app/post/${post.id}`}
-              aria-label={`Comments (${post.commentCount})`}
               className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-ink-600 hover:bg-ink-100"
             >
               <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />
+              {/* Named "2 comments" from its visible count (WCAG 2.5.3). */}
               <span className="tabular-nums">{post.commentCount}</span>
+              <span className="sr-only">{post.commentCount === 1 ? ' comment' : ' comments'}</span>
             </Link>
           ) : (
-            <span className="inline-flex h-9 items-center gap-1.5 px-3 text-sm font-semibold text-ink-600" aria-label={`${post.commentCount} comments`}>
+            <span className="inline-flex h-9 items-center gap-1.5 px-3 text-sm font-semibold text-ink-600">
               <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />
               <span className="tabular-nums">{post.commentCount}</span>
+              <span className="sr-only">{post.commentCount === 1 ? ' comment' : ' comments'}</span>
             </span>
           )}
+          {!post.isMine && <ReportButton target="post" targetId={post.id} name={post.author.displayName} className="ml-auto" />}
           {post.isMine && onDeleted && (
             <div className="ml-auto flex items-center gap-2">
               {confirming ? (

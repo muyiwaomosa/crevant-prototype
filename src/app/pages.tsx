@@ -9,6 +9,7 @@ import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, Tex
 import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
 import { DetailsEditor, MemberAbout, PersonSummary, SuggestedPeople, useTopics } from './profileDetails'
+import { ReportButton, useModeration } from './moderation'
 
 /** Loads data for a page, with loading and error states and a reload function. */
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
@@ -199,12 +200,13 @@ function UnseenStrip() {
           const count = c.unseenCount > 9 ? 'more than 9' : String(c.unseenCount)
           return (
             <li key={c.id} className="shrink-0">
+              {/* Named "Catch up: 3 unseen posts from <name> (in your Clique)" from the visible
+                  name plus screen-reader text, so speech and sight match (WCAG 2.5.3). */}
               <Link
                 to={`/app/catch-up/${c.username}`}
-                aria-label={`Catch up with ${c.displayName}${c.inMyClique ? ' (in your Clique)' : ''}: ${count} unseen ${c.unseenCount === 1 ? 'post' : 'posts'}`}
                 className="flex w-[68px] flex-col items-center gap-1 rounded-2xl py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
               >
-                <span className="relative">
+                <span className="relative" aria-hidden="true">
                   <span className={`block rounded-full p-[2px] ${c.inMyClique ? 'bg-brand-600' : 'bg-ink-200'}`}>
                     <span className="block rounded-full bg-paper p-[2px]">
                       <MemberAvatar member={c} size={52} />
@@ -218,8 +220,10 @@ function UnseenStrip() {
                     {unseenBadge(c.unseenCount)}
                   </span>
                 </span>
-                <span aria-hidden="true" className="w-full truncate text-center text-[12px] text-ink-700">
+                <span className="w-full truncate text-center text-[12px] text-ink-700">
+                  <span className="sr-only">{`Catch up: ${count} unseen ${c.unseenCount === 1 ? 'post' : 'posts'} from `}</span>
                   {c.displayName}
+                  {c.inMyClique && <span className="sr-only"> (in your Clique)</span>}
                 </span>
               </Link>
             </li>
@@ -591,7 +595,10 @@ function MemberHeader({ member, onChange, about }: { member: Member; onChange: (
             Edit your profile
           </Link>
         ) : (
-          <RelationshipButtons member={member} onChange={onChange} size="md" postsHref={member.postCount > 0 ? '#posts' : undefined} />
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <RelationshipButtons member={member} onChange={onChange} size="md" postsHref={member.postCount > 0 ? '#posts' : undefined} />
+            <ReportButton target="profile" targetId={member.id} name={member.displayName} />
+          </div>
         )}
       </div>
     </Card>
@@ -1101,6 +1108,7 @@ export function ProfilePage() {
   const api = useAppApi()
   const { profile, refresh } = useMyProfile()
   const me = useLoad<Me>(() => api.me(), [api, profile.username, profile.displayName])
+  const { moderator } = useModeration()
   return (
     <>
       <PageHeader title="Your profile" subtitle="How people see you on Splitpost." />
@@ -1126,6 +1134,11 @@ export function ProfilePage() {
             <Link to="/app/account" className={buttonClass('secondary', 'sm')}>
               Your account
             </Link>
+            {moderator && (
+              <Link to="/app/moderation" className={buttonClass('secondary', 'sm')}>
+                Moderation
+              </Link>
+            )}
           </div>
         </Card>
       )}

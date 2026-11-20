@@ -10,6 +10,7 @@ import { AppApiProvider, ProfileProvider, useAppApi, useProfileGate } from './Ap
 import { ViewTrackerProvider } from './ViewTracker'
 import { displayNameProblem, messageFor, usernameProblem, type AppApi, type MyDetails } from './api'
 import { DetailsSetup, SETUP_STEPS, SetupProgress } from './profileDetails'
+import { ModerationProvider } from './moderation'
 
 /**
  * The members area (/app): invited, signed-in members only (RequireAuth wraps
@@ -60,9 +61,11 @@ function Gate() {
   return (
     <ProfileProvider value={{ profile: status.profile, refresh: reload }}>
       <FirstTimeSetup>
-        <ViewTrackerProvider userId={status.profile.id}>
-          <MemberLayout username={status.profile.username} />
-        </ViewTrackerProvider>
+        <ModerationProvider>
+          <ViewTrackerProvider userId={status.profile.id}>
+            <MemberLayout username={status.profile.username} />
+          </ViewTrackerProvider>
+        </ModerationProvider>
       </FirstTimeSetup>
     </ProfileProvider>
   )
