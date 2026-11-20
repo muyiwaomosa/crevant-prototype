@@ -78,6 +78,22 @@ const writes = []
 const WRITE_FNS = /\/rest\/v1\/rpc\/(app_create_post|app_add_comment)$/
 const writesTo = (fn) => writes.filter((w) => w.fn === fn).map((w) => `${w.at} ${w.status ?? w.failure ?? 'pending'}`).join(', ') || 'none'
 const cspViolations = []
+// Accessibility (axe-core, WCAG 2.2 AA), injected through the DevTools
+// protocol so the page's own Content Security Policy stays in force.
+const AXE = readFileSync(path.join(__dirname, '..', 'node_modules', 'axe-core', 'axe.min.js'), 'utf8')
+async function axe(page) {
+  await page.evaluate(AXE)
+  return page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] })).violations.map((v) => `${v.id} x${v.nodes.length} [${v.nodes.map((n) => n.target.join(' ')).join('; ').slice(0, 160)}]`))
+}
+async function noSidewaysScroll(page, label) {
+  const desktop = page.viewportSize()
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 760 })
+    const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+    check(`at ${width}px, ${label} has no sideways scrolling`, sideways <= 0, `${sideways}px`)
+  }
+  if (desktop) await page.setViewportSize(desktop)
+}
 const consoleErrors = []
 async function newContext(browser, opts = {}) {
   const ctx = await browser.newContext(opts)
@@ -132,16 +148,47 @@ async function answered(page, fn, action) {
   return res.status()
 }
 
-async function signInAndSetUp(page, email, username, displayName) {
+// Sign in and choose a name, then the optional first-time setup
+// (20261123000000): `setup` gives the answers to enter, or null to use
+// "Skip the rest".
+async function signInAndSetUp(page, email, username, displayName, setup = null) {
   await page.goto(`${APP}/sign-in?next=%2Fapp`)
   await page.getByLabel('Email address', { exact: true }).fill(email)
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await page.waitForURL(`${APP}/app`)
   await page.getByText('Your profile is ready').waitFor()
+  await page.getByText('Step 1 of 5: Your name').waitFor()
   await page.getByLabel('Username').fill(username)
   await page.getByLabel('Display name').fill(displayName)
   await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('heading', { name: 'How will you use Splitpost?' }).waitFor()
+  if (setup) {
+    const v = await axe(page)
+    check('setup step 2 (identity) has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
+    await noSidewaysScroll(page, 'setup step 2')
+    await page.getByRole('radio', { name: new RegExp(`^${setup.identity}`) }).check()
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('heading', { name: 'What are you into?' }).waitFor()
+    for (const t of setup.topics) await page.getByRole('button', { name: t, exact: true }).click()
+    const v3 = await axe(page)
+    check('setup step 3 (interests) has no WCAG 2.2 AA violations', v3.length === 0, v3.join(', '))
+    await noSidewaysScroll(page, 'setup step 3')
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('heading', { name: 'Tell people about you' }).waitFor()
+    await page.getByLabel('Short bio').fill(setup.bio)
+    await page.getByLabel('Why should people follow you?').fill(setup.followReason)
+    const v4 = await axe(page)
+    check('setup step 4 (about you) has no WCAG 2.2 AA violations', v4.length === 0, v4.join(', '))
+    await noSidewaysScroll(page, 'setup step 4')
+    const saved = await answered(page, 'app_set_profile_details', () => page.getByRole('button', { name: 'Save and continue' }).click())
+    check('the server accepted the profile details', saved === 200 || saved === 204, String(saved))
+  } else {
+    const saved = await answered(page, 'app_set_profile_details', () => page.getByRole('button', { name: 'Skip the rest' }).click())
+    check('"Skip the rest" saves empty details, so setup is not shown again', saved === 200 || saved === 204, String(saved))
+  }
+  await page.getByRole('heading', { name: 'People you might like' }).waitFor()
+  await page.getByRole('button', { name: 'Go to my feed' }).click()
   await page.getByRole('heading', { name: 'Home' }).waitFor()
 }
 
@@ -182,8 +229,22 @@ async function signInAndSetUp(page, email, username, displayName) {
   // 2. A signs in, chooses a name and posts.
   const ctxA = await newContext(browser)
   const pageA = await ctxA.newPage()
-  await signInAndSetUp(pageA, emailA, userA, 'Aye Teacher')
+  await signInAndSetUp(pageA, emailA, userA, 'Aye Teacher', {
+    identity: 'Creator',
+    topics: ['Learning', 'Books & writing'],
+    bio: 'Maths teacher making fractions fun.',
+    followReason: 'One five-minute maths trick every week',
+  })
   check('A chose a username and display name, and the feed opened', sql(`select username || '|' || display_name from public.profiles where id = '${idA}'`) === `${userA}|Aye Teacher`)
+  check(
+    "A's details are stored as entered, with their interests",
+    sql(`select identity || '|' || bio || '|' || follow_reason || '|' || (onboarded_at is not null) || '|' || (select string_agg(topic, ',' order by topic) from social.member_topics where user_id = '${idA}') from social.profile_details where user_id = '${idA}'`)
+      === 'creator|Maths teacher making fractions fun.|One five-minute maths trick every week|true|books,learning',
+  )
+  check('choosing "Creator" changed nothing about A\'s pilot membership', sql(`select cohort || '|' || status from ops.member_access where user_id = '${idA}'`) === 'tester|active')
+  await pageA.reload()
+  await pageA.getByRole('heading', { name: 'Home' }).waitFor()
+  check('after a reload, first-time setup is not shown again', (await pageA.getByRole('progressbar').count()) === 0)
   await pageA.getByLabel('Write a post').fill(postText)
   const postStatus = await answered(pageA, 'app_create_post', () => pageA.getByRole('button', { name: 'Post', exact: true }).click())
   check('the server accepted A\'s post', postStatus === 200, String(postStatus))
@@ -200,12 +261,35 @@ async function signInAndSetUp(page, email, username, displayName) {
   const ctxB = await newContext(browser)
   const pageB = await ctxB.newPage()
   await signInAndSetUp(pageB, emailB, userB, 'Bee Fan')
+  check("B skipped setup: B's details are empty, and setup is marked done", sql(`select coalesce(identity, '-') || '|' || coalesce(bio, '-') || '|' || (onboarded_at is not null) from social.profile_details where user_id = '${idB}'`) === '-|-|true')
   await pageB.getByText('Your feed is quiet').waitFor()
   check('B\'s feed is empty before following anyone', (await pageB.getByTestId('post').count()) === 0)
   check('a new member sees the three first steps on Home', await pageB.getByText('Choose your Clique').isVisible())
   await pageB.getByRole('link', { name: 'Discover people' }).click()
   await pageB.getByLabel('Search people by name or username').fill(userA)
   await pageB.getByRole('button', { name: 'Search' }).click()
+  {
+    const card = pageB.getByRole('listitem').filter({ hasText: 'Aye Teacher' })
+    check("Discover shows A's bio, why to follow, identity and interests", (await card.getByText('Maths teacher making fractions fun.').count()) === 1
+      && (await card.getByText('One five-minute maths trick every week').count()) === 1
+      && (await card.getByText(/Creator ·/).count()) === 1
+      && (await card.getByRole('list', { name: 'Interests' }).getByText('Learning').count()) === 1)
+    // Interest-based discovery: by topic, without searching.
+    await pageB.getByLabel('Search people by name or username').fill('')
+    await pageB.getByRole('button', { name: 'Search' }).click()
+    const interest = pageB.getByLabel('Browse by interest')
+    await interest.selectOption({ label: 'Learning' })
+    await pageB.getByRole('link', { name: 'Aye Teacher', exact: true }).waitFor()
+    check('browsing Discover by "Learning" finds A', (await pageB.getByRole('link', { name: 'Aye Teacher', exact: true }).count()) === 1)
+    await interest.selectOption({ label: 'Travel' })
+    await pageB.getByText(/Nobody has chosen Travel yet|Try another interest/).first().waitFor()
+    check('browsing by an interest A did not choose does not list A', (await pageB.getByRole('link', { name: 'Aye Teacher', exact: true }).count()) === 0)
+    await interest.selectOption({ label: 'Learning' })
+    await pageB.getByRole('link', { name: 'Aye Teacher', exact: true }).waitFor()
+    const v = await axe(pageB)
+    check('Discover, with interests and person cards, has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
+    await noSidewaysScroll(pageB, 'Discover with interest filters')
+  }
   await pageB.getByRole('button', { name: 'Follow Aye Teacher' }).click()
   const confirmation = pageB.getByTestId('follow-confirmation')
   await confirmation.waitFor()

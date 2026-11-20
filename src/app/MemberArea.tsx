@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { CheckCircle2, Compass, Home, Plus, User, Users } from 'lucide-react'
 import { Wordmark } from '../components/Wordmark'
@@ -8,7 +8,8 @@ import { useAuth } from '../auth/AuthProvider'
 import { AuthCard, Field, Message, Spinner } from '../public/auth/AuthUi'
 import { AppApiProvider, ProfileProvider, useAppApi, useProfileGate } from './AppApiContext'
 import { ViewTrackerProvider } from './ViewTracker'
-import { displayNameProblem, messageFor, usernameProblem, type AppApi } from './api'
+import { displayNameProblem, messageFor, usernameProblem, type AppApi, type MyDetails } from './api'
+import { DetailsSetup, SETUP_STEPS, SetupProgress } from './profileDetails'
 
 /**
  * The members area (/app): invited, signed-in members only (RequireAuth wraps
@@ -58,11 +59,44 @@ function Gate() {
   if (status.kind === 'incomplete') return <SetupProfile onSaved={reload} createdAt={status.profile.createdAt} />
   return (
     <ProfileProvider value={{ profile: status.profile, refresh: reload }}>
-      <ViewTrackerProvider userId={status.profile.id}>
-        <MemberLayout username={status.profile.username} />
-      </ViewTrackerProvider>
+      <FirstTimeSetup>
+        <ViewTrackerProvider userId={status.profile.id}>
+          <MemberLayout username={status.profile.username} />
+        </ViewTrackerProvider>
+      </FirstTimeSetup>
     </ProfileProvider>
   )
+}
+
+/**
+ * The rest of first-time setup (identity, interests, about you, people to
+ * follow), shown once, after the name step. Everything in it is optional, and
+ * it never blocks the app: on a database without profile details, or if the
+ * details can't be loaded, the member goes straight in.
+ */
+function FirstTimeSetup({ children }: { children: ReactNode }) {
+  const api = useAppApi()
+  const [details, setDetails] = useState<MyDetails | null | undefined>(undefined)
+  const [done, setDone] = useState(false)
+  useEffect(() => {
+    let live = true
+    api.myDetails().then(
+      (d) => live && setDetails(d),
+      () => live && setDetails(null),
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
+  if (details === undefined) {
+    return (
+      <Frame>
+        <Spinner label="Getting things ready…" />
+      </Frame>
+    )
+  }
+  if (details && !details.onboarded && !done) return <DetailsSetup initial={details} onDone={() => setDone(true)} />
+  return <>{children}</>
 }
 
 /**
@@ -126,12 +160,13 @@ export function SetupProfile({ onSaved, createdAt }: { onSaved: () => Promise<vo
         }
       >
         <div className="space-y-5">
+          <SetupProgress step={1} total={SETUP_STEPS.length} label={SETUP_STEPS[0]} />
           {passwordSet && <Message tone="success">Your password is saved.</Message>}
           <div role="status" className="flex items-start gap-3 rounded-2xl bg-brand-50 px-4 py-3 text-brand-800 ring-1 ring-brand-100">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
               <p className="font-semibold">Your profile is ready</p>
-              <p className="text-sm">Created {new Date(createdAt).toLocaleString()}. Choose how people will see you to start posting and following.</p>
+              <p className="text-sm">Created {new Date(createdAt).toLocaleString()}. Choose how people will see you. Next, a few optional questions help you find people to follow.</p>
             </div>
           </div>
           <ProfileForm onSaved={onSaved} submitLabel="Continue" />

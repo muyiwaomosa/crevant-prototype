@@ -244,3 +244,74 @@ describe('before the membership migration (compatibility, never a bypass)', () =
     }
   })
 })
+
+// Profile details (20261123000000): a database without them answers PGRST202
+// for the exact function, and only then does the app fall back.
+const missing = (fn: string, params = '') => ({
+  code: 'PGRST202',
+  message: params ? `Could not find the function public.${fn}(${params}) in the schema cache` : `Could not find the function public.${fn} without parameters in the schema cache`,
+  details: '',
+  hint: null,
+})
+
+describe('profile details (20261123000000)', () => {
+  it('saves all four fields through app_set_profile_details, trimmed, empty as null', async () => {
+    const { api, calls } = fakeClient([{ data: null }])
+    await api.saveDetails({ identity: 'both', bio: '  Hi  ', followReason: '   ', topics: ['food'] })
+    expect(calls).toEqual([{ fn: 'app_set_profile_details', args: { p_identity: 'both', p_bio: 'Hi', p_follow_reason: null, p_topics: ['food'] } }])
+  })
+
+  it('maps rows, and never trusts an unknown identity', async () => {
+    const { api } = fakeClient([
+      { data: [{ identity: 'creator', bio: 'Bio', follow_reason: 'Why', topics: ['food', 'music'], onboarded: true }] },
+      { data: [{ identity: 'admin', bio: '', follow_reason: null, topics: 'food', onboarded: false }] },
+      { data: [{ identity: 'fan', bio: null, follow_reason: null, topics: [] }] },
+      { data: [] },
+    ])
+    expect(await api.myDetails()).toEqual({ identity: 'creator', bio: 'Bio', followReason: 'Why', topics: ['food', 'music'], onboarded: true })
+    expect(await api.myDetails()).toEqual({ identity: null, bio: null, followReason: null, topics: [], onboarded: false })
+    expect(await api.memberDetails('c1')).toEqual({ identity: 'fan', bio: null, followReason: null, topics: [] })
+    expect(await api.memberDetails('gone')).toBeNull()
+  })
+
+  it('Discover sends the interest and reads shared interests; without the new function it uses the original Discover', async () => {
+    const row = { id: 'c1', username: 'c', display_name: 'C', post_count: '2', follower_count: 1, followed_by_me: false, in_my_clique: false }
+    const { api, calls } = fakeClient([
+      { data: [{ ...row, identity: 'creator', bio: 'B', follow_reason: null, topics: ['food'], shared_topics: 1 }] },
+      { error: missing('app_discover_people', 'p_limit, p_query, p_topic') },
+      { data: [row] },
+    ])
+    expect((await api.discover(' cook ', 'food'))[0]).toMatchObject({ postCount: 2, sharedTopics: 1, details: { identity: 'creator', bio: 'B', topics: ['food'] } })
+    const old = await api.discover('cook', 'food')
+    expect(old[0].details).toBeUndefined()
+    expect(calls.map((c) => c.fn)).toEqual(['app_discover_people', 'app_discover_people', 'app_discover'])
+    expect(calls[0].args).toEqual({ p_query: 'cook', p_topic: 'food', p_limit: 30 })
+    expect(calls[2].args).toEqual({ p_query: 'cook', p_limit: 30 })
+  })
+
+  it('on a database without profile details, everything degrades to "not there", never to an error or a bypass', async () => {
+    const { api } = fakeClient([
+      { error: missing('app_topics') },
+      { error: missing('app_my_details') },
+      { error: missing('app_member_details', 'p_member') },
+      { error: missing('app_suggested_creators', 'p_limit') },
+      { error: missing('app_set_profile_details', 'p_bio, p_follow_reason, p_identity, p_topics') },
+    ])
+    expect(await api.topics()).toBeNull()
+    expect(await api.myDetails()).toBeNull()
+    expect(await api.memberDetails('c1')).toBeNull()
+    expect(await api.suggested()).toEqual([])
+    await expect(api.saveDetails({ identity: 'fan', bio: null, followReason: null, topics: [] })).rejects.toMatchObject({ code: 'not_available' })
+  })
+
+  it('any other failure stays a failure (no_pilot_access, another function, network)', async () => {
+    for (const error of [{ code: 'P0001', message: 'no_pilot_access' }, missing('app_topicsx'), NETWORK]) {
+      const { api } = fakeClient([{ error }, { error }, { error }])
+      await expect(api.topics(), error.message).rejects.toBeInstanceOf(AppApiError)
+      await expect(api.myDetails()).rejects.toBeInstanceOf(AppApiError)
+      await expect(api.suggested()).rejects.toBeInstanceOf(AppApiError)
+    }
+    const { api } = fakeClient([{ error: { code: 'P0001', message: 'too_many_topics' } }])
+    await expect(api.saveDetails({ identity: null, bio: null, followReason: null, topics: [] })).rejects.toMatchObject({ code: 'too_many_topics' })
+  })
+})

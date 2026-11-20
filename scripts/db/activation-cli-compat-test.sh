@@ -43,7 +43,9 @@ trap cleanup EXIT
 psql "$ADMIN_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -c "drop database if exists $NAME" -c "create database $NAME" >/dev/null || exit 1
 psql "$DB" -X -q -v ON_ERROR_STOP=1 -f scripts/db/bootstrap-roles.sql -f scripts/db/bootstrap-supabase-stub.sql >/dev/null || exit 1
 
-# Temporary copies of supabase/: one stops at 20261121000000 (staging today).
+# Temporary copies of supabase/: "before" stops at 20261121000000 (staging
+# before the activation), "after" at 20261122000000 (the activation itself).
+# Migrations added since then are not part of what this test reproduces.
 for d in before after; do
   mkdir -p "$WORK/$d/supabase/migrations"
   cp supabase/config.toml "$WORK/$d/supabase/"
@@ -52,7 +54,7 @@ done
 for f in supabase/migrations/*.sql; do
   v="$(basename "$f" | cut -d_ -f1)"
   [ "$v" \> 20261121000000 ] || cp "$f" "$WORK/before/supabase/migrations/"
-  cp "$f" "$WORK/after/supabase/migrations/"
+  [ "$v" \> 20261122000000 ] || cp "$f" "$WORK/after/supabase/migrations/"
 done
 
 # 1. Staging today, through the standard tooling.

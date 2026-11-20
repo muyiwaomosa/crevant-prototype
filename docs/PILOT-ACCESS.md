@@ -21,7 +21,7 @@ The database checks the layers in order for **every** member function:
   `no_pilot_access`.
 * `social.current_member()`: the above **and** a complete profile, or
   `profile_incomplete`.
-* All 26 `public.app_*` functions go through one of them, except
+* All `public.app_*` functions (26 in Build 4, 32 with the profile details of 20261123000000) go through one of them, except
   `app_access_state()`, which returns only the caller's own state (`active`,
   `none`, `revoked` or `expired`) so the app can explain it.
 * Revoking or expiring a membership takes effect on the account's **next

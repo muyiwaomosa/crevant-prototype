@@ -8,7 +8,7 @@
 //      fallback to the original calls.
 //   2. The new schema (the migration reapplied): the same request id sent
 //      twice is one post, through the server's request id.
-// The later migrations (pilot membership 20261122000000, viewed state
+// The later migrations (profile details 20261123000000, pilot membership 20261122000000, viewed state
 // 20261121000000, then the Inner Clique 20261120000000) are rolled back
 // first, newest first, and reapplied last,
 // oldest first, because each staging rollback refuses while a later migration
@@ -26,6 +26,7 @@ const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
 // Newest first.
 const LATER = [
+  { version: '20261123000000', name: 'profile_details', file: 'supabase/migrations/20261123000000_profile_details.sql', rollback: 'scripts/db/staging-rollback-profile-details.sql', phrase: 'REMOVE THE STAGING PROFILE DETAILS' },
   { version: '20261122000000', name: 'member_access', file: 'supabase/migrations/20261122000000_member_access.sql', rollback: 'scripts/db/staging-rollback-member-access.sql', phrase: 'REMOVE THE STAGING MEMBER ACCESS' },
   { version: '20261121000000', name: 'viewed_state', file: 'supabase/migrations/20261121000000_viewed_state.sql', rollback: 'scripts/db/staging-rollback-viewed-state.sql', phrase: 'REMOVE THE STAGING VIEWED STATE' },
   { version: '20261120000000', name: 'inner_clique', file: 'supabase/migrations/20261120000000_inner_clique.sql', rollback: 'scripts/db/staging-rollback-inner-clique.sql', phrase: 'REMOVE THE STAGING INNER CLIQUE' },

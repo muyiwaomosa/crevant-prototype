@@ -189,6 +189,18 @@ let A, B, tokenA
   const feed = await rest('/rpc/app_feed', { method: 'POST', token: tokenA, body: {} })
   check('without membership, A cannot read the feed (no_pilot_access)', feed.status === 400 && feed.json?.message === 'no_pilot_access', `${feed.status} ${JSON.stringify(feed.json)}`)
 
+  // Profile details (20261123000000): the same gate, through the real Data API.
+  // Choosing "creator" without membership changes nothing.
+  const details = await rest('/rpc/app_set_profile_details', { method: 'POST', token: tokenA, body: { p_identity: 'creator', p_bio: 'Hi', p_follow_reason: 'Because', p_topics: ['food'] } })
+  check('without membership, A cannot save profile details, even as a "creator" (no_pilot_access)', details.status === 400 && details.json?.message === 'no_pilot_access', `${details.status} ${JSON.stringify(details.json)}`)
+  for (const fn of ['app_topics', 'app_my_details', 'app_discover_people', 'app_suggested_creators']) {
+    const r = await rest(`/rpc/${fn}`, { method: 'POST', token: tokenA, body: {} })
+    check(`without membership, A cannot call ${fn} (no_pilot_access)`, r.status === 400 && r.json?.message === 'no_pilot_access', `${r.status} ${JSON.stringify(r.json)}`)
+    const anonCall = await rest(`/rpc/${fn}`, { method: 'POST', body: {} })
+    check(`anonymous visitors cannot call ${fn}`, anonCall.status === 401 || anonCall.status === 403 || anonCall.status === 404, String(anonCall.status))
+  }
+  check('nothing was saved for A', sql(`select count(*) from social.profile_details where user_id = '${A}'`) === '0' && sql(`select count(*) from ops.member_access where user_id = '${A}'`) === '0')
+
   const before = (await profileOf(A))[0]
   await sleep(50)
   const own = await rest(`/profiles?id=eq.${A}`, { method: 'PATCH', key: SERVICE, token: SERVICE, body: { username: `alice_${RUN}`.slice(0, 30), display_name: 'Alice' } })

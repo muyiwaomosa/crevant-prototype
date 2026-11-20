@@ -41,7 +41,9 @@ begin
   if exists (
     select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'social' and c.relkind in ('r', 'p')
-      and c.relname not in ('posts', 'follows', 'follow_events', 'clique_members', 'likes', 'comments', 'post_views')
+      and c.relname not in ('posts', 'follows', 'follow_events', 'clique_members', 'likes', 'comments', 'post_views',
+                            -- profile details (20261123000000), once applied
+                            'topics', 'profile_details', 'member_topics')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -57,12 +59,20 @@ declare
     -- app_add_comment and app_create_post have two versions each: the original,
     -- and the one with a request id (20261119000000_publishing_request_ids).
     -- app_access_state and app_set_profile: the pilot membership gate (20261122000000).
+    -- app_topics, app_my_details, app_set_profile_details, app_member_details,
+    -- app_discover_people and app_suggested_creators: profile details (20261123000000).
+    -- The set depends on whether that migration is applied yet (staging before
+    -- and after it); either way it must be exactly one of the two.
     'app_access_state', 'app_add_comment', 'app_add_comment', 'app_catch_up', 'app_clique_add', 'app_clique_remove', 'app_clique_replace', 'app_comments',
     'app_create_post', 'app_create_post', 'app_delete_comment', 'app_delete_post', 'app_discover', 'app_feed', 'app_follow', 'app_following',
     'app_like', 'app_mark_viewed', 'app_me', 'app_member', 'app_member_posts', 'app_post', 'app_set_profile', 'app_unfollow', 'app_unlike', 'app_unseen_creators'
   ];
+  details text[] := array['app_discover_people', 'app_member_details', 'app_my_details', 'app_set_profile_details', 'app_suggested_creators', 'app_topics'];
   found text[];
 begin
+  if to_regclass('social.profile_details') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || details) x);
+  end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname like 'app\_%';

@@ -60,6 +60,38 @@ export interface DiscoverMember extends MemberSummary {
   followerCount: number
   followedByMe: boolean
   inMyClique: boolean
+  /** Profile details (20261123000000). Absent on a database without them. */
+  details?: ProfileDetails
+  /** How many of the signed-in member's interests they share. */
+  sharedTopics?: number
+}
+
+/**
+ * How a member expects to use Splitpost. DESCRIPTIVE ONLY: it grants and
+ * restricts nothing (membership comes only from ops.member_access, and every
+ * member can post, follow and build a Clique whatever they choose).
+ */
+export type Identity = 'creator' | 'fan' | 'both'
+export const IDENTITIES: Identity[] = ['creator', 'fan', 'both']
+
+/** One interest a member can choose, from the database's topic list. */
+export interface Topic {
+  slug: string
+  label: string
+}
+
+/** Optional profile details (20261123000000_profile_details). Each may be empty. */
+export interface ProfileDetails {
+  identity: Identity | null
+  bio: string | null
+  followReason: string | null
+  /** Topic slugs, at most 5, in the topic list's order. */
+  topics: string[]
+}
+
+/** The member's own details, and whether they've finished first-time setup. */
+export interface MyDetails extends ProfileDetails {
+  onboarded: boolean
 }
 
 export interface FollowedCreator extends MemberSummary {
@@ -117,7 +149,20 @@ export interface AppApi {
   memberPosts(memberId: string, before?: string): Promise<Post[]>
   post(id: string): Promise<Post | null>
   comments(postId: string): Promise<Comment[]>
-  discover(query?: string): Promise<DiscoverMember[]>
+  /** Other members by name and (when the database has profile details) one interest, shared interests first. */
+  discover(query?: string, topic?: string): Promise<DiscoverMember[]>
+  /**
+   * Profile details (20261123000000). Each returns null (or an empty list)
+   * when the database doesn't have them yet, so the app works unchanged
+   * before that migration is applied.
+   */
+  topics(): Promise<Topic[] | null>
+  myDetails(): Promise<MyDetails | null>
+  /** Saves all of the member's details at once and marks first-time setup done. */
+  saveDetails(details: ProfileDetails): Promise<void>
+  memberDetails(memberId: string): Promise<ProfileDetails | null>
+  /** People the member doesn't follow yet, shared interests first. */
+  suggested(): Promise<DiscoverMember[]>
   following(): Promise<FollowedCreator[]>
   /** requestId: the browser's id for this post, reused on retry, so it's stored once (issue #48). */
   createPost(body: string, requestId?: string): Promise<string>
@@ -142,7 +187,16 @@ export interface AppApi {
 }
 
 /** Limits that match the database, so people hear about problems before sending. */
-export const LIMITS = { post: 2000, comment: 1000, clique: 25, username: { min: 3, max: 30 }, displayName: 50 } as const
+export const LIMITS = {
+  post: 2000,
+  comment: 1000,
+  clique: 25,
+  username: { min: 3, max: 30 },
+  displayName: 50,
+  bio: 160,
+  followReason: 140,
+  topics: 5,
+} as const
 
 /** Same reserved names as the profiles table (supabase/migrations/20261107000000_profiles_and_ops.sql). */
 const RESERVED_USERNAMES = new Set([
@@ -165,6 +219,18 @@ export function displayNameProblem(raw: string): string | null {
   if ([...d].length > LIMITS.displayName) return 'Display names are at most 50 characters.'
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001F\u007F-\u009F]/.test(d)) return 'Remove any special control characters.'
+  return null
+}
+
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001F\u007F-\u009F]/
+
+/** A bio or follow statement: optional, one paragraph, within its limit. */
+export function shortTextProblem(raw: string, max: number, what: string): string | null {
+  const t = raw.trim()
+  if (!t) return null
+  if ([...t].length > max) return `Keep ${what} to ${max} characters.`
+  if (CONTROL.test(t)) return 'Use a single paragraph, without line breaks or special characters.'
   return null
 }
 
@@ -198,6 +264,13 @@ const MESSAGES: Record<string, string> = {
   username_taken: 'That username is taken. Please choose another.',
   username_invalid: 'Use 3 to 30 lowercase letters, numbers or underscores, and not a reserved name.',
   display_name_invalid: 'Display names are 1 to 50 characters, with no special control characters.',
+  invalid_identity: 'Choose creator, fan or both.',
+  bio_too_long: 'Keep your bio to 160 characters.',
+  follow_reason_too_long: 'Keep this to 140 characters.',
+  invalid_text: 'Use a single paragraph, without line breaks or special characters.',
+  too_many_topics: 'Choose up to 5 interests.',
+  unknown_topic: "One of those interests isn't available any more. Please choose again.",
+  not_available: "This isn't available yet. Please try again later.",
   network: "We couldn't reach Splitpost. Check your connection and try again.",
   unknown: 'Something went wrong. Please try again.',
 }
@@ -285,6 +358,27 @@ export function isMissingFunction(error: { code?: string; message?: string } | n
   if (!error || error.code !== 'PGRST202') return false
   const m = /^Could not find the function public\.([a-z_]+)(?:\(| without parameters)/.exec(error.message ?? '')
   return !!m && m[1] === fn
+}
+
+const asIdentity = (v: unknown): Identity | null => (IDENTITIES as unknown[]).includes(v) ? (v as Identity) : null
+const asText = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
+const asTopics = (v: unknown): string[] => (Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : [])
+
+export function toDetails(r: Record<string, unknown> | undefined): ProfileDetails {
+  return { identity: asIdentity(r?.identity), bio: asText(r?.bio), followReason: asText(r?.follow_reason), topics: asTopics(r?.topics) }
+}
+
+function toDiscoverMember(r: Record<string, unknown>, withDetails: boolean): DiscoverMember {
+  return {
+    id: String(r.id),
+    username: String(r.username),
+    displayName: String(r.display_name),
+    postCount: num(r.post_count as number),
+    followerCount: num(r.follower_count as number),
+    followedByMe: Boolean(r.followed_by_me),
+    inMyClique: Boolean(r.in_my_clique),
+    ...(withDetails ? { details: toDetails(r), sharedTopics: num(r.shared_topics as number) } : {}),
+  }
 }
 
 export function createSupabaseApi(client: SupabaseClient, userId: string): AppApi {
@@ -393,17 +487,59 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         isMine: Boolean(r.is_mine),
       }))
     },
-    async discover(query) {
-      const rows = await rpc<Array<Record<string, unknown>>>('app_discover', { p_query: query?.trim() || null, p_limit: 30 })
-      return rows.map((r) => ({
-        id: String(r.id),
-        username: String(r.username),
-        displayName: String(r.display_name),
-        postCount: num(r.post_count as number),
-        followerCount: num(r.follower_count as number),
-        followedByMe: Boolean(r.followed_by_me),
-        inMyClique: Boolean(r.in_my_clique),
-      }))
+    async discover(query, topic) {
+      const p_query = query?.trim() || null
+      const { data, error } = await client.rpc('app_discover_people', { p_query, p_topic: topic || null, p_limit: 30 })
+      if (!error) return (data as Array<Record<string, unknown>>).map((r) => toDiscoverMember(r, true))
+      // Before 20261123000000 only: the original Discover (no interests).
+      if (!isMissingFunction(error, 'app_discover_people')) throw toAppError(error)
+      const rows = await rpc<Array<Record<string, unknown>>>('app_discover', { p_query, p_limit: 30 })
+      return rows.map((r) => toDiscoverMember(r, false))
+    },
+    async topics() {
+      const { data, error } = await client.rpc('app_topics')
+      if (error) {
+        if (isMissingFunction(error, 'app_topics')) return null
+        throw toAppError(error)
+      }
+      return (data as Array<Record<string, unknown>>).map((r) => ({ slug: String(r.slug), label: String(r.label) }))
+    },
+    async myDetails() {
+      const { data, error } = await client.rpc('app_my_details')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_details')) return null
+        throw toAppError(error)
+      }
+      const r = (data as Array<Record<string, unknown>>)[0]
+      return { ...toDetails(r), onboarded: Boolean(r?.onboarded) }
+    },
+    async saveDetails(d) {
+      const { error } = await client.rpc('app_set_profile_details', {
+        p_identity: d.identity,
+        p_bio: d.bio?.trim() || null,
+        p_follow_reason: d.followReason?.trim() || null,
+        p_topics: d.topics,
+      })
+      if (!error) return
+      if (isMissingFunction(error, 'app_set_profile_details')) throw new AppApiError('not_available')
+      throw toAppError(error)
+    },
+    async memberDetails(memberId) {
+      const { data, error } = await client.rpc('app_member_details', { p_member: memberId })
+      if (error) {
+        if (isMissingFunction(error, 'app_member_details')) return null
+        throw toAppError(error)
+      }
+      const r = (data as Array<Record<string, unknown>>)[0]
+      return r ? toDetails(r) : null
+    },
+    async suggested() {
+      const { data, error } = await client.rpc('app_suggested_creators', { p_limit: 10 })
+      if (error) {
+        if (isMissingFunction(error, 'app_suggested_creators')) return []
+        throw toAppError(error)
+      }
+      return (data as Array<Record<string, unknown>>).map((r) => toDiscoverMember(r, true))
     },
     async following() {
       const rows = await rpc<Array<Record<string, unknown>>>('app_following')
