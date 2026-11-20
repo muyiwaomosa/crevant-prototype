@@ -11,8 +11,8 @@ approved.
 | 5.1 Richer profiles and interests | on staging | identity, interests, bio, follow reason, Discover by interest |
 | 5.2a Reporting and moderation | on staging | reports, founder moderation, audit trail, 90-day retention |
 | 5.2b Profile pictures and profile experience | on staging | private avatars with server-side decode and re-encode, crop and zoom, avatars everywhere; Clique confirmation fix; consistent follow and Clique feedback |
-| 5.2c User feedback and feature requests | **in review** | Send feedback (header on phones, sidebar on larger screens), three categories, safe feature context, founder-only inbox with status and private notes; required before external pilot invitations (`docs/FEEDBACK.md`) |
-| 5.3 Photo publishing | next, after its performance spike | one photo per post, server-side re-encode, larger view; plan in `docs/MEDIA_PLAN.md` |
+| 5.2c User feedback and feature requests | on staging | Send feedback (header on phones, sidebar on larger screens), three categories, safe feature context, founder-only inbox with status and private notes; required before external pilot invitations (`docs/FEEDBACK.md`) |
+| 5.3 Photo publishing | **in review** (off until its staging gates pass) | one photo per post (1600 px plus an 800 px feed copy, re-encoded on the server), optional caption and description, server-controlled deletion queue with a schedule, evidence held for reports, founder switch, cap and processing-check gate (`docs/PHOTOS.md`) |
 | 5.4 Video publishing | after 5.3, after its device investigation | one video per post on Supabase Storage, direct authorised uploads, quotas and monitoring; HEVC and captions decisions open (`docs/MEDIA_PLAN.md`) |
 | Splitpost Flip | future discovery feature | both app-level and post-level insights; details to be defined. Not part of 5.2b |
 
@@ -35,6 +35,9 @@ deployments and acceptance gates.
 | Confirm hosted CDN behaviour for deleted pictures | 5.2b | unverified: how long a deleted file may still be served from cache on hosted staging |
 | HEIC photos on Android Chrome | 5.2b | may not open; the editor asks for another photo |
 | Undo after unfollow or removing from the Clique | 5.2b audit | approved for the backlog, not 5.2b |
-| Picture links: refetch when an image fails, and on returning to the tab | 5.2b acceptance | not a blocker; a changed picture can show initials in other open sessions for up to 50 minutes until a reload; planned with the shared media link cache in 5.3 |
+| Picture links: refetch when an image fails, and on returning to the tab | 5.2b acceptance | not a blocker; post photos got this in 5.3, avatars were deliberately left unchanged; a changed picture can show initials in other open sessions for up to 50 minutes until a reload |
 | Feedback retention closeout | 5.2c | the founder runs the closeout checklist within 30 days of the pilot evaluation formally closing (`docs/FEEDBACK.md`) |
 | Publish the pilot privacy notice feedback wording | 5.2c | approved wording in `docs/PRIVACY-NOTICE-PILOT-FEEDBACK-DRAFT.md`; its own reviewed PR and notice version; **required before external invitations** |
+| Publish the photo privacy wording | 5.3 | draft in `docs/PRIVACY-NOTICE-PILOT-PHOTOS-DRAFT.md`, with notes for review; publish with the feedback wording **before external invitations** |
+| A workflow to run the photo cleanup schedule script | 5.3 | today the founder runs it once with psql (`docs/PHOTOS.md`); a manual staging workflow could replace that |
+| Photo full copy at 1280 px | 5.3 | only if the hosted processing check fails at 1600 px |
