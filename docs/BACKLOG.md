@@ -10,35 +10,14 @@ approved.
 |---|---|---|
 | 5.1 Richer profiles and interests | on staging | identity, interests, bio, follow reason, Discover by interest |
 | 5.2a Reporting and moderation | on staging | reports, founder moderation, audit trail, 90-day retention |
-| 5.2b Profile pictures and profile experience | **in review** | private avatars with server-side decode and re-encode, crop and zoom, avatars everywhere; Clique confirmation fix; consistent follow and Clique feedback |
-| **5.2c User feedback and feature requests** | **next; required before external pilot invitations** | see below |
-| 5.3 Photo and video posts | later | needs 5.2b's validation pipeline extended to post media |
+| 5.2b Profile pictures and profile experience | on staging | private avatars with server-side decode and re-encode, crop and zoom, avatars everywhere; Clique confirmation fix; consistent follow and Clique feedback |
+| 5.2c User feedback and feature requests | **in review** | Send feedback (header on phones, sidebar on larger screens), three categories, safe feature context, founder-only inbox with status and private notes; required before external pilot invitations (`docs/FEEDBACK.md`) |
+| 5.3 Photo publishing | next, after its performance spike | one photo per post, server-side re-encode, larger view; plan in `docs/MEDIA_PLAN.md` |
+| 5.4 Video publishing | after 5.3, after its device investigation | one video per post on Supabase Storage, direct authorised uploads, quotas and monitoring; HEVC and captions decisions open (`docs/MEDIA_PLAN.md`) |
 | Splitpost Flip | future discovery feature | both app-level and post-level insights; details to be defined. Not part of 5.2b |
 
-### 5.2c User feedback and feature requests (must ship before external pilot invitations)
-
-Goal: every invited member can tell the team what's broken, confusing or
-missing, from inside the app, and the founder can review it in one place.
-
-* **Send feedback** from Profile (and a small link on the empty Home and in
-  setup's last step): a category (Something's broken, Something's
-  confusing, Idea or feature request, Other), a message (up to 1,000
-  characters) and, optionally, the page it was sent from. No screenshots
-  in the first version.
-* Clear confirmation ("Thanks. We read every message.") and a short note
-  that it isn't for urgent safety issues (link to Report and the safety
-  notice).
-* Stored privately (`ops`), never visible to other members; rate limited
-  (for example 10 a day); active pilot membership required, like every
-  member function.
-* A founder-only **Feedback** inbox next to Moderation: newest first, filter
-  by category, mark as read, add a private note, and a status (new,
-  planned, done, won't do). Recorded like moderation actions.
-* Retention and privacy wording agreed before launch; included in the
-  pilot privacy notice.
-* Acceptance: a tester can send each category from a phone; the founder
-  sees it within seconds; no other member can read it; database,
-  integration, browser and accessibility tests as for 5.2a.
+5.2c, 5.3 and 5.4 are one sprint with separate PRs, migrations, staging
+deployments and acceptance gates.
 
 ## Smaller items (not scheduled)
 
@@ -56,3 +35,6 @@ missing, from inside the app, and the founder can review it in one place.
 | Confirm hosted CDN behaviour for deleted pictures | 5.2b | unverified: how long a deleted file may still be served from cache on hosted staging |
 | HEIC photos on Android Chrome | 5.2b | may not open; the editor asks for another photo |
 | Undo after unfollow or removing from the Clique | 5.2b audit | approved for the backlog, not 5.2b |
+| Picture links: refetch when an image fails, and on returning to the tab | 5.2b acceptance | not a blocker; a changed picture can show initials in other open sessions for up to 50 minutes until a reload; planned with the shared media link cache in 5.3 |
+| Feedback retention purge | 5.2c | run `ops.purge_feedback` within 30 days of the pilot evaluation closing (`docs/FEEDBACK.md`) |
+| Pilot privacy notice: feedback line | 5.2c | needed before external invitations (`docs/FEEDBACK.md`) |

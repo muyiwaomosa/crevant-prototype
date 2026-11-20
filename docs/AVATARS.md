@@ -1,9 +1,8 @@
 # Profile pictures (Build 5, Stage 5.2b)
 
-Status: **in review; not applied or deployed.** Migration
-`20261125000000_avatars` is staging only (not on
-`supabase/production-migrations.txt`). The `avatar` Edge Function is deployed
-by hand, to staging only, after the migration.
+Status: **on staging.** Migration `20261125000000_avatars` is applied to
+staging only (not on `supabase/production-migrations.txt`), and the `avatar`
+Edge Function is deployed by hand to staging only.
 
 ## What members get
 
