@@ -107,6 +107,9 @@ begin
       if position('ops.member_access a on a.user_id = v_uid' in r.prosrc) = 0 then bad := bad || r.proname; end if;
     elsif r.proname in ('app_me', 'app_set_profile') then
       if position('social.current_access()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
+    elsif r.proname like 'app\_mod\_%' then
+      -- Moderation (20261124000000): membership AND moderator, through social.current_moderator().
+      if position('social.current_moderator()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
     elsif position('social.current_member()' in r.prosrc) = 0 then
       bad := bad || r.proname;
     end if;
@@ -116,6 +119,11 @@ begin
   end if;
   if position('ops.member_access_active(v_uid)' in (select prosrc from pg_proc where oid = 'social.current_access()'::regprocedure)) = 0 then
     bad := bad || 'social.current_access'::text;
+  end if;
+  if to_regprocedure('social.current_moderator()') is not null
+     and (position('social.current_member()' in (select prosrc from pg_proc where oid = to_regprocedure('social.current_moderator()'))) = 0
+          or position('ops.moderator_active(v_uid)' in (select prosrc from pg_proc where oid = to_regprocedure('social.current_moderator()'))) = 0) then
+    bad := bad || 'social.current_moderator'::text;
   end if;
   if position('social.visible_members' in (select prosrc from pg_proc where oid = 'social.is_member(uuid)'::regprocedure)) = 0 then
     bad := bad || 'social.is_member'::text;

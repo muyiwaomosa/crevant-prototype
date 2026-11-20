@@ -201,6 +201,22 @@ let A, B, tokenA
   }
   check('nothing was saved for A', sql(`select count(*) from social.profile_details where user_id = '${A}'`) === '0' && sql(`select count(*) from ops.member_access where user_id = '${A}'`) === '0')
 
+  // Moderation (20261124000000): the same gate; nothing is stored, and the
+  // moderation tables are not reachable through the Data API at all.
+  const report = await rest('/rpc/app_report', { method: 'POST', token: tokenA, body: { p_target_type: 'profile', p_target_id: B, p_reason: 'spam', p_details: null } })
+  check('without membership, A cannot report (no_pilot_access)', report.status === 400 && report.json?.message === 'no_pilot_access', `${report.status} ${JSON.stringify(report.json)}`)
+  for (const [fn, body] of [['app_is_moderator', {}], ['app_mod_queue', {}], ['app_mod_report', { p_report: A }], ['app_mod_hide', { p_report: A, p_note: null }], ['app_mod_restore', { p_report: A, p_note: null }], ['app_mod_dismiss', { p_report: A, p_note: null }]]) {
+    const r = await rest(`/rpc/${fn}`, { method: 'POST', token: tokenA, body })
+    check(`without membership, A cannot call ${fn} (no_pilot_access)`, r.status === 400 && r.json?.message === 'no_pilot_access', `${r.status} ${JSON.stringify(r.json)}`)
+    const anonCall = await rest(`/rpc/${fn}`, { method: 'POST', body })
+    check(`anonymous visitors cannot call ${fn}`, anonCall.status === 401 || anonCall.status === 403 || anonCall.status === 404, String(anonCall.status))
+  }
+  for (const table of ['content_reports', 'moderation_actions', 'moderators']) {
+    const r = await fetch(`${API}/rest/v1/${table}?select=*`, { headers: { apikey: PUB, Authorization: `Bearer ${tokenA}`, 'Accept-Profile': 'ops' } })
+    check(`ops.${table} is not reachable through the Data API`, !r.ok, String(r.status))
+  }
+  check('no report was stored', sql('select count(*) from ops.content_reports') === '0')
+
   const before = (await profileOf(A))[0]
   await sleep(50)
   const own = await rest(`/profiles?id=eq.${A}`, { method: 'PATCH', key: SERVICE, token: SERVICE, body: { username: `alice_${RUN}`.slice(0, 30), display_name: 'Alice' } })

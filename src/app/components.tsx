@@ -8,6 +8,7 @@ import { relativeTime } from '../lib/time'
 import { AppApiError, hueFor, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
 import { useAppApi } from './AppApiContext'
 import { useTrackView } from './ViewTracker'
+import { ReportButton } from './moderation'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
   return <Avatar name={member.displayName} hue={hueFor(member.id)} size={size} />
@@ -128,6 +129,7 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
               <span className="tabular-nums">{post.commentCount}</span>
             </span>
           )}
+          {!post.isMine && <ReportButton target="post" targetId={post.id} name={post.author.displayName} className="ml-auto" />}
           {post.isMine && onDeleted && (
             <div className="ml-auto flex items-center gap-2">
               {confirming ? (

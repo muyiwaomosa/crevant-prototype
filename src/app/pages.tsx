@@ -9,6 +9,7 @@ import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, Tex
 import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
 import { DetailsEditor, MemberAbout, PersonSummary, SuggestedPeople, useTopics } from './profileDetails'
+import { ReportButton, useModeration } from './moderation'
 
 /** Loads data for a page, with loading and error states and a reload function. */
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
@@ -591,7 +592,10 @@ function MemberHeader({ member, onChange, about }: { member: Member; onChange: (
             Edit your profile
           </Link>
         ) : (
-          <RelationshipButtons member={member} onChange={onChange} size="md" postsHref={member.postCount > 0 ? '#posts' : undefined} />
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <RelationshipButtons member={member} onChange={onChange} size="md" postsHref={member.postCount > 0 ? '#posts' : undefined} />
+            <ReportButton target="profile" targetId={member.id} name={member.displayName} />
+          </div>
         )}
       </div>
     </Card>
@@ -1101,6 +1105,7 @@ export function ProfilePage() {
   const api = useAppApi()
   const { profile, refresh } = useMyProfile()
   const me = useLoad<Me>(() => api.me(), [api, profile.username, profile.displayName])
+  const { moderator } = useModeration()
   return (
     <>
       <PageHeader title="Your profile" subtitle="How people see you on Splitpost." />
@@ -1126,6 +1131,11 @@ export function ProfilePage() {
             <Link to="/app/account" className={buttonClass('secondary', 'sm')}>
               Your account
             </Link>
+            {moderator && (
+              <Link to="/app/moderation" className={buttonClass('secondary', 'sm')}>
+                Moderation
+              </Link>
+            )}
           </div>
         </Card>
       )}

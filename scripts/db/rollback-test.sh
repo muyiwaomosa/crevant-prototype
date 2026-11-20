@@ -16,8 +16,9 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: profile details (20261123000000,
-# scripts/db/rollback-profile-details-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: moderation (20261124000000,
+# scripts/db/rollback-moderation-test.sh, the newest, so it goes first),
+# profile details (20261123000000, scripts/db/rollback-profile-details-test.sh),
 # pilot membership (20261122000000, scripts/db/rollback-member-access-test.sh),
 # viewed state (20261121000000), the Inner Clique (20261120000000,
 # scripts/db/rollback-inner-clique-test.sh), publishing request ids
@@ -101,9 +102,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+MODERATION=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261124000000')")
+if [ "$MODERATION" = t ]; then
+  # The newest migration (moderation) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-profile-details.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the profile details rollback refuses while moderation is recorded" \
+    || bad "the profile details rollback did not refuse while moderation is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-moderation-test.sh; then
+    ok "the moderation rollback refuses safely (including once any report, moderator, action or hidden item exists) and restores exactly the previous state"
+  else
+    bad "the moderation rollback tests failed"
+  fi
+fi
 DETAILS=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261123000000')")
 if [ "$DETAILS" = t ]; then
-  # The newest migration (profile details) goes first.
+  # Then profile details.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-member-access.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the pilot membership rollback refuses while profile details are recorded" \
@@ -294,17 +308,29 @@ if out=$(for f in supabase/tests/*.sql; do psql "$DB_URL" -X -q -v ON_ERROR_STOP
 else
   bad "database checks after reapplying: $(tail -3 <<<"$out" | tr '\n' ' ')"
 fi
-if [ "$DETAILS" = t ] || [ "$MEMBER" = t ] || [ "$VIEWED" = t ] || [ "$INNER" = t ] || [ "$REQUESTS" = t ] || [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
+if [ "$MODERATION" = t ] || [ "$DETAILS" = t ] || [ "$MEMBER" = t ] || [ "$VIEWED" = t ] || [ "$INNER" = t ] || [ "$REQUESTS" = t ] || [ "$PLATFORM" = t ] || [ "$SOCIAL_APPLIED" = t ] || [ "$ACQ" = 1 ]; then
   # Everything is back: the waitlist rollback must refuse until the later ones are removed.
   out=$(rollback check ""); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "after reapplying, the waitlist rollback refuses while a later migration is recorded" \
     || bad "the waitlist rollback did not refuse while a later migration is recorded (exit $code)"
+  if [ "$MODERATION" = t ]; then
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-moderation.sql 2>&1); code=$?
+    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+      && ok "after reapplying, the moderation rollback check passes again" \
+      || bad "moderation rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+  fi
   if [ "$DETAILS" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-profile-details.sql 2>&1); code=$?
+    if [ "$MODERATION" = t ]; then
+      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+        && ok "after reapplying, the profile details rollback refuses while moderation is recorded" \
+        || bad "the profile details rollback did not refuse after reapply while moderation is recorded (exit $code)"
+    else
     [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
       && ok "after reapplying, the profile details rollback check passes again" \
       || bad "profile details rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    fi
   fi
   if [ "$MEMBER" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-member-access.sql 2>&1); code=$?

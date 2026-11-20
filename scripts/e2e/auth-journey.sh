@@ -53,4 +53,5 @@ done
 # Release 1: the social core (posts, follows, the Clique, likes and comments) on the same stack and build.
 # It runs first and uses only three sign-ins, so both journeys stay under the local sign-in rate limit.
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/social-journey.e2e.cjs
+APP_URL="http://127.0.0.1:$APP_PORT" node e2e/moderation-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/auth-journey.e2e.cjs

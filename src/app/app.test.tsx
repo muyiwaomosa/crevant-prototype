@@ -21,6 +21,7 @@ import {
   type ProfileDetails,
 } from './api'
 import { MemberArea } from './MemberArea'
+import { ModerationQueuePage, ModerationReportPage } from './moderation'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
 
 afterEach(cleanup)
@@ -37,6 +38,9 @@ function fakeApi(
     creators?: number
     /** Profile details (20261123000000): 'done' (default, setup finished), 'new' (setup not done yet) or 'absent' (a database without them). */
     details?: 'done' | 'new' | 'absent'
+    /** Moderation (20261124000000): 'absent' for a database without it. */
+    moderation?: 'present' | 'absent'
+    moderator?: boolean
   } = {},
 ) {
   const users = new Map<string, Row>()
@@ -47,7 +51,7 @@ function fakeApi(
     add(meId, 'username' in pr ? pr.username ?? null : 'mia', 'displayName' in pr ? pr.displayName ?? null : 'Mia')
   }
   for (let i = 1; i <= (opts.creators ?? 11); i++) add(`c${i}`, `creator_${i}`, `Creator ${i}`)
-  const posts: Array<{ id: string; author: string; body: string; at: number; deleted: boolean }> = []
+  const posts: Array<{ id: string; author: string; body: string; at: number; deleted: boolean; hidden?: boolean }> = []
   const follows = new Set<string>()
   const followedAt = new Map<string, number>()
   const views = new Set<string>()
@@ -101,6 +105,20 @@ function fakeApi(
     const d = details.get(id)
     return d ? { identity: d.identity, bio: d.bio, followReason: d.followReason, topics: [...d.topics] } : { identity: null, bio: null, followReason: null, topics: [] }
   }
+  // Reports and moderation, with the database's rules.
+  type FakeReport = {
+    id: string; reporter: string; targetType: 'post' | 'profile'; targetId: string; owner: string; reason: string
+    details: string | null; snapshot: Record<string, string | null>; status: 'open' | 'hidden' | 'dismissed' | 'restored'; at: number
+  }
+  const reports: FakeReport[] = []
+  const modActions: Array<{ action: string; report: string; note: string | null }> = []
+  const moderationPresent = opts.moderation !== 'absent'
+  const isModerator = { value: opts.moderator ?? false }
+  const requireModerator = () => {
+    complete()
+    if (!isModerator.value) throw new AppApiError('not_moderator')
+  }
+  const hiddenProfiles = new Set<string>()
   const shared = (id: string) => detailsOf(id).topics.filter((t) => detailsOf(meId).topics.includes(t)).length
   // Pilot membership (20261122000000): active unless a test says otherwise.
   const access: { status: 'active' | 'none' | 'revoked' | 'expired'; expiresAt: string | null } = { status: 'active', expiresAt: null }
@@ -216,6 +234,95 @@ function fakeApi(
       if (detailsMode === 'absent') return null
       complete()
       return users.get(id)?.displayName ? detailsOf(id) : null
+    },
+    async moderationAccess() {
+      if (!moderationPresent) return { available: false, moderator: false }
+      complete()
+      return { available: true, moderator: isModerator.value }
+    },
+    async report(targetType, targetId, reason, details) {
+      if (!moderationPresent) throw new AppApiError('not_available')
+      complete()
+      maybeFail('report')
+      let owner: string
+      let snapshot: Record<string, string | null>
+      if (targetType === 'post') {
+        const p = posts.find((x) => x.id === targetId && !x.deleted)
+        if (!p) throw new AppApiError('not_found')
+        owner = p.author
+        snapshot = { body: p.body, author_username: users.get(p.author)!.username, author_display_name: users.get(p.author)!.displayName }
+      } else {
+        const u = users.get(targetId)
+        if (!u?.displayName) throw new AppApiError('not_found')
+        owner = targetId
+        snapshot = { username: u.username, display_name: u.displayName, bio: detailsOf(targetId).bio, follow_reason: detailsOf(targetId).followReason }
+      }
+      if (owner === meId) throw new AppApiError('cannot_report_self')
+      if (reports.some((r) => r.reporter === meId && r.targetType === targetType && r.targetId === targetId && r.status === 'open')) throw new AppApiError('already_reported')
+      reports.push({ id: `r${reports.length + 1}`, reporter: meId, targetType, targetId, owner, reason, details: details?.trim() || null, snapshot, status: 'open', at: (clock += 1000) })
+    },
+    async modQueue(status) {
+      requireModerator()
+      const priority = (r: FakeReport) => (r.reason === 'violence' || r.reason === 'self_harm' ? 1 : 0)
+      return reports
+        .filter((r) => (status === 'open' ? r.status === 'open' : r.status !== 'open'))
+        .sort((a, b) => priority(b) - priority(a) || a.at - b.at)
+        .map((r) => ({
+          id: r.id, targetType: r.targetType, targetId: r.targetId, reason: r.reason as never, priority: priority(r) === 1, hasDetails: r.details !== null,
+          excerpt: r.snapshot.body ?? r.snapshot.bio ?? r.snapshot.display_name ?? '', targetUsername: r.snapshot.author_username ?? r.snapshot.username ?? null,
+          openReportsForTarget: reports.filter((o) => o.targetId === r.targetId && o.status === 'open').length,
+          status: r.status, createdAt: new Date(r.at).toISOString(), resolvedAt: r.status === 'open' ? null : new Date(r.at).toISOString(),
+        }))
+    },
+    async modReport(id) {
+      requireModerator()
+      const r = reports.find((x) => x.id === id)
+      if (!r) return null
+      const p = r.targetType === 'post' ? posts.find((x) => x.id === r.targetId) : undefined
+      const targetState = r.targetType === 'post'
+        ? (!p ? 'gone' : p.hidden ? 'hidden' : p.deleted ? 'deleted_by_author' : 'live')
+        : hiddenProfiles.has(r.targetId) ? 'hidden' : 'live'
+      return {
+        id: r.id, targetType: r.targetType, targetId: r.targetId, reason: r.reason as never, priority: r.reason === 'violence' || r.reason === 'self_harm',
+        details: r.details, snapshot: r.snapshot, status: r.status, createdAt: new Date(r.at).toISOString(), resolvedAt: null, dataPurged: false,
+        targetState, currentBody: p && !p.deleted ? p.body : null,
+        openReportsForTarget: reports.filter((o) => o.targetId === r.targetId && o.status === 'open').length,
+      }
+    },
+    async modHide(id, note) {
+      requireModerator()
+      const r = reports.find((x) => x.id === id)
+      if (!r) throw new AppApiError('not_found')
+      if (r.targetType === 'post') {
+        const p = posts.find((x) => x.id === r.targetId && !x.deleted)
+        if (!p) throw new AppApiError('not_live')
+        p.deleted = true
+        p.hidden = true
+      } else {
+        if (hiddenProfiles.has(r.targetId)) throw new AppApiError('not_live')
+        hiddenProfiles.add(r.targetId)
+      }
+      for (const o of reports) if (o.targetId === r.targetId && o.status === 'open') o.status = 'hidden'
+      modActions.push({ action: 'hide', report: id, note: note?.trim() || null })
+    },
+    async modRestore(id, note) {
+      requireModerator()
+      const r = reports.find((x) => x.id === id)!
+      if (r.targetType === 'post') {
+        const p = posts.find((x) => x.id === r.targetId && x.hidden)
+        if (!p) throw new AppApiError('not_hidden')
+        p.deleted = false
+        p.hidden = false
+      } else if (!hiddenProfiles.delete(r.targetId)) throw new AppApiError('not_hidden')
+      for (const o of reports) if (o.targetId === r.targetId && (o.status === 'open' || o.status === 'hidden')) o.status = 'restored'
+      modActions.push({ action: 'restore', report: id, note: note?.trim() || null })
+    },
+    async modDismiss(id, note) {
+      requireModerator()
+      const r = reports.find((x) => x.id === id)!
+      if (r.status !== 'open') throw new AppApiError('not_open')
+      for (const o of reports) if (o.targetId === r.targetId && o.status === 'open') o.status = 'dismissed'
+      modActions.push({ action: 'dismiss', report: id, note: note?.trim() || null })
     },
     async suggested() {
       if (detailsMode === 'absent') return []
@@ -360,7 +467,12 @@ function fakeApi(
   }
   const setDetails = (id: string, d: Partial<MyDetails>) =>
     details.set(id, { identity: null, bio: null, followReason: null, topics: [], onboarded: true, ...details.get(id), ...d })
-  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details }
+  const seedReport = (r: Omit<FakeReport, 'id' | 'status' | 'at'>) => {
+    const id = `r${reports.length + 1}`
+    reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
+    return id
+  }
+  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -387,6 +499,8 @@ function renderApp(path: string, api: AppApi) {
             <Route path="clique" element={<CliquePage />} />
             <Route path="catch-up/:username" element={<CatchUpPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="moderation" element={<ModerationQueuePage />} />
+            <Route path="moderation/:id" element={<ModerationReportPage />} />
             <Route path="*" element={<AppNotFound />} />
           </Route>
         </Routes>
@@ -722,6 +836,123 @@ describe('first-time setup and profile details (20261123000000)', () => {
     expect(await screen.findByText('Your feed is quiet')).toBeTruthy()
     const people = await screen.findByTestId('suggested-people')
     expect(within(within(people).getAllByRole('listitem')[0]).getByRole('link', { name: 'Creator 3' })).toBeTruthy()
+  })
+})
+
+describe('reporting and moderation (20261124000000)', () => {
+  it("reports a post with a reason and details, after a safety notice; you can't report your own; a second report says so", async () => {
+    const f = fakeApi()
+    f.seedPost('c1', 'Something unkind')
+    f.follows.add(f.key('me', 'c1'))
+    const mine = await f.api.createPost('My own post')
+    renderApp('/app', f.api)
+    await screen.findByText('Something unkind')
+    const theirs = screen.getAllByTestId('post').find((p) => p.textContent?.includes('Something unkind'))!
+    const own = screen.getAllByTestId('post').find((p) => p.textContent?.includes('My own post'))!
+    expect(within(own).queryByRole('button', { name: /^Report/ })).toBeNull()
+    expect(mine).toBeTruthy()
+    fireEvent.click(within(theirs).getByRole('button', { name: 'Report this post by Creator 1' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Report this post' })
+    expect(within(dialog).getByRole('note').textContent).toMatch(/Reporting isn't an emergency service\..*not around the clock.*call 911.*988/)
+    expect(within(dialog).getAllByRole('radio').map((r) => r.closest('label')?.textContent)).toEqual([
+      'Spam or scam', 'Harassment or bullying', 'Hate or discrimination', 'Nudity or sexual content', 'Violence or threats', 'Self-harm', 'Impersonation', 'Something else',
+    ])
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send report' }))
+    expect((await within(dialog).findByRole('alert')).textContent).toBe('Choose a reason.')
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Harassment or bullying' }))
+    fireEvent.change(within(dialog).getByLabelText('Anything else we should know? (optional)'), { target: { value: '  It keeps happening.  ' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send report' }))
+    const sent = await within(dialog).findByTestId('report-sent')
+    expect(sent.textContent).toMatch(/Thanks for letting us know\. We'll review this\./)
+    expect(sent.textContent).toMatch(/isn't told who reported them/)
+    expect(sent.textContent).toMatch(/isn't removed just because it was reported/)
+    expect(f.reports).toHaveLength(1)
+    expect(f.reports[0]).toMatchObject({ targetType: 'post', reason: 'harassment', details: 'It keeps happening.' })
+    // Reporting hides nothing.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
+    expect(screen.getByText('Something unkind')).toBeTruthy()
+    // Again: already reported.
+    fireEvent.click(within(theirs).getByRole('button', { name: 'Report this post by Creator 1' }))
+    const again = await screen.findByRole('dialog', { name: 'Report this post' })
+    fireEvent.click(within(again).getByRole('radio', { name: 'Spam or scam' }))
+    fireEvent.click(within(again).getByRole('button', { name: 'Send report' }))
+    expect((await within(again).findByTestId('report-sent')).textContent).toMatch(/You've already reported this\. We'll review it\./)
+    expect(f.reports).toHaveLength(1)
+  })
+
+  it('a threat or self-harm report says it is reviewed first, but not around the clock', async () => {
+    const f = fakeApi()
+    renderApp('/app/u/creator_2', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Report Creator 2' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Report Creator 2' })
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Self-harm' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send report' }))
+    expect((await within(dialog).findByTestId('report-sent')).textContent).toMatch(/reviewed first, but not around the clock\. If someone is in danger now, call 911/)
+    expect(f.reports[0]).toMatchObject({ targetType: 'profile', targetId: 'c2', reason: 'self_harm' })
+  })
+
+  it('on a database without moderation, nothing new is shown', async () => {
+    const f = fakeApi('me', { moderation: 'absent' })
+    f.seedPost('c1', 'Hello')
+    f.follows.add(f.key('me', 'c1'))
+    renderApp('/app', f.api)
+    await screen.findByText('Hello')
+    expect(screen.queryByRole('button', { name: /^Report/ })).toBeNull()
+  })
+
+  it('members who are not moderators see no Moderation link, and the page is not available', async () => {
+    const f = fakeApi()
+    renderApp('/app/profile', f.api)
+    await screen.findByRole('heading', { name: 'Your name' })
+    expect(screen.queryByRole('link', { name: 'Moderation' })).toBeNull()
+    cleanup()
+    renderApp('/app/moderation', f.api)
+    expect(await screen.findByText("This page isn't available")).toBeTruthy()
+  })
+
+  it('a moderator reviews the queue (safety first), hides a post everywhere, restores it, and dismisses another', async () => {
+    const f = fakeApi('me', { moderator: true })
+    const p1 = f.seedPost('c1', 'A rude post')
+    const p2 = f.seedPost('c2', 'A harmless post')
+    f.follows.add(f.key('me', 'c1'))
+    f.follows.add(f.key('me', 'c2'))
+    const rRude = f.seedReport({ reporter: 'c3', targetType: 'post', targetId: p1, owner: 'c1', reason: 'harassment', details: 'Aimed at me.', snapshot: { body: 'A rude post', author_username: 'creator_1', author_display_name: 'Creator 1' } })
+    f.seedReport({ reporter: 'c4', targetType: 'post', targetId: p2, owner: 'c2', reason: 'violence', details: null, snapshot: { body: 'A harmless post', author_username: 'creator_2', author_display_name: 'Creator 2' } })
+    renderApp('/app/profile', f.api)
+    fireEvent.click(await screen.findByRole('link', { name: 'Moderation' }))
+    const list = await screen.findByRole('list', { name: 'Open reports' })
+    const items = within(list).getAllByRole('listitem')
+    expect(items[0].textContent).toMatch(/Priority: safety.*Violence or threats/)
+    expect(items[1].textContent).toMatch(/Harassment or bullying.*@creator_1/)
+    // Nothing identifies who reported.
+    expect(document.body.textContent).not.toMatch(/creator_3|Creator 3|creator_4|Creator 4/)
+    fireEvent.click(within(items[1]).getByRole('link'))
+    expect(await screen.findByText('Aimed at me.')).toBeTruthy()
+    expect(screen.getByText('Visible to members')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Note for the record (optional)'), { target: { value: 'Targeted.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(await screen.findByText('Hidden. Members can no longer see it.')).toBeTruthy()
+    expect(await screen.findByText('Hidden by a moderator')).toBeTruthy()
+    expect(f.modActions.at(-1)).toEqual({ action: 'hide', report: rRude, note: 'Targeted.' })
+    cleanup()
+    renderApp('/app', f.api)
+    await screen.findByText('A harmless post')
+    expect(screen.queryByText('A rude post')).toBeNull()
+    cleanup()
+    renderApp(`/app/moderation/${rRude}`, f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }))
+    expect(await screen.findByText('Restored. Members can see it again.')).toBeTruthy()
+    cleanup()
+    renderApp('/app', f.api)
+    expect(await screen.findByText('A rude post')).toBeTruthy()
+    cleanup()
+    renderApp('/app/moderation', f.api)
+    const open = await screen.findByRole('list', { name: 'Open reports' })
+    fireEvent.click(within(within(open).getAllByRole('listitem')[0]).getByRole('link'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }))
+    expect(await screen.findByText('Dismissed. Nothing was changed.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Hide' })).toBeTruthy()
+    expect(f.modActions.map((a) => a.action)).toEqual(['hide', 'restore', 'dismiss'])
   })
 })
 
