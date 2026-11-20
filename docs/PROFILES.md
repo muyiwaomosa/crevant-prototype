@@ -9,7 +9,9 @@ applied anywhere. Nothing is deployed.
 1. **First-time setup with progress** (Step N of 5):
    1. Your name (username and display name, as before; required).
    2. How you use Splitpost: Creator, Fan or Both (optional).
-   3. Your interests: up to 5 topics (optional).
+   3. Your interests: "Choose what you love so we can help you find your
+      people." We suggest at least 3 (a live count nudges: "Pick 1 more for
+      better suggestions"), allow up to 5, and never require any.
    4. About you: a short bio (160) and "Why should people follow you?" (140) (optional).
    5. People to follow: suggestions ranked by shared interests, with the existing Follow button.
 
@@ -63,9 +65,36 @@ one members have chosen).
 | travel | Travel | |
 | family | Family & parenting | new |
 
-Questions for approval: keep 14 or trim to about 10; add Faith, Comedy or
-Sports as their own topics; whether the waitlist and pilot creator categories
-should later move to this list.
+### Recommended revision (not applied until approved)
+
+Seventeen topics: the 14 above, with "Fitness & sport" split in two, and
+Faith and Comedy added. The migration still holds the 14; once the list is
+approved it changes in this PR, before the migration is applied anywhere.
+
+| Order | Slug | Label | Change |
+|---|---|---|---|
+| 10 | food | Food & cooking | |
+| 20 | money | Money & business | |
+| 30 | tech | Tech | |
+| 40 | learning | Learning | |
+| 50 | music | Music | |
+| 60 | film | Film & TV | |
+| 70 | comedy | Comedy | **new** |
+| 80 | gaming | Gaming | |
+| 90 | art | Art & design | |
+| 100 | style | Fashion & beauty | |
+| 110 | books | Books & writing | |
+| 120 | fitness | Fitness | **renamed** from "Fitness & sport" |
+| 130 | sports | Sports | **new**, split from fitness |
+| 140 | wellness | Health & wellness | |
+| 150 | faith | Faith & spirituality | **new** |
+| 160 | travel | Travel | |
+| 170 | family | Family & parenting | |
+
+Still open: the exact label for Faith ("Faith & spirituality" or "Faith"),
+and whether 17 is too many to scan comfortably on a phone (to be checked
+with screenshots once the list is approved). The waitlist and pilot
+creator categories stay as they are for now.
 
 ## Database
 
@@ -119,24 +148,97 @@ should later move to this list.
 | 11 | WCAG 2.2 AA on setup steps 2 to 4 and Discover; no sideways scrolling at 390 and 320 px | browser journey (axe-core) |
 | 12 | Rollback refuses once members have data, and otherwise removes exactly its objects | rollback tests (11) |
 
-## Founder browser test (after approval, on the protected Preview)
+## Staging deployment procedure (not authorized yet)
 
-Only after the migration is approved and applied to staging, and the Preview is
-built from this branch.
+Each step needs the founder's go-ahead. Nothing here touches Production, the
+public website's content or the frozen demo.
 
-1. Sign in as yourself on a phone. You should see **Step 2 of 5** once. Choose
-   Creator, pick 2 or 3 interests, write a bio and a reason, then Save. Step 5
-   lists suggestions (it may be empty if no one else has details yet). Go to
-   your feed.
-2. Reload. Setup should not appear again.
-3. Open Profile: "About you" shows your answers. Change one and save; you should see "Saved."
-4. Open your public page: the Creator label, bio, "Why follow" box and interests show.
-5. Discover: choose an interest in "Browse by interest"; only members with
-   that interest appear. Choose one nobody has: a clear empty message and "Show everyone".
-6. Post a text post, like, comment and delete it, to confirm nothing regressed.
-7. With a second, granted test account: choose **Fan**, skip the rest, and
-   confirm it can still post and follow you (identity grants nothing).
-8. With an account that has **no** grant: still "Your pilot access isn't active".
+**Before:** the topic list approved and committed in this PR, CI green on
+the final commit, and the pending read-only verify run approved or cancelled
+(it shares the staging deploy queue).
+
+1. **Merge PR #79 into `main`** (founder). The staging deploy only applies
+   migrations from `main`.
+   * The database is not touched by the merge.
+   * `splitpost` (www) rebuilds `main` as the public site only; the member
+     area isn't in that build (CI's public site job checks the bundle).
+     Expect no visible change on www.
+   * `crevant-prototype` builds a Preview only; its Production stays on `demo`.
+   * `splitpost-app` ignores `main` (its Ignored Build Step only builds
+     `claude/pilot-membership-integration`), so the Preview doesn't change yet.
+2. **Actions > "Deploy database to staging", mode `plan`**, branch `main`,
+   project reference `kpudeppgokpjhvaqrprn`. Expect "Not yet applied on
+   staging: 20261123000000" and `gate_pending=false`, and the dry run listing
+   only `20261123000000_profile_details.sql`. Stop if anything else is listed.
+3. **Same workflow, mode `apply`.** It re-verifies the target and approved
+   checksums, pushes only 20261123000000 with the pinned CLI (proven on top of
+   the activation's history record by the CLI compatibility test), then runs
+   every staging check 001 to 008 and lists the applied migrations.
+   Approve the `staging` environment when asked.
+4. **Same workflow, mode `check`** (optional, read only), or the activation
+   workflow's `verify` mode, to confirm membership is still "activated".
+5. **Update the Preview:** fast-forward `claude/pilot-membership-integration`
+   to the merged `main` commit (it is an ancestor of `main`, so no history is
+   rewritten). Vercel builds it with the existing branch-scoped staging
+   variables; no Vercel setting changes. Then check the page source has
+   `<meta name="crevant-build" content="member-app">`.
+6. **Founder acceptance tests** below, then grant invited users as usual
+   (`docs/PILOT-ACCESS.md`).
+
+**How it interacts with the activated membership system:**
+* The migration grants nothing, revokes nothing and doesn't touch
+  `ops.member_access`, its history, `current_access`, `current_member` or
+  `visible_members`.
+* The deploy protection only blocks 20261122000000, which is already applied,
+  so `apply` is allowed; the activation workflow isn't used (it would refuse:
+  nothing of 20261122000000 is pending).
+* Every new function requires active membership and a complete profile, so
+  only members granted through `ops.grant_member_access` see any of it.
+* After apply, staging check 007 and the audit confirm that every member
+  function, old and new, still enforces membership.
+
+**If something goes wrong:**
+* App problem: redeploy the Preview from the previous commit; the database
+  change is additive, and the old app ignores it.
+* Database problem before anyone saves details:
+  `scripts/db/staging-rollback-profile-details.sql`. No workflow runs it on
+  staging yet, so it would need a reviewed workflow change or an approved
+  manual run. After members have saved details, fix forward with a new
+  migration.
+
+## Founder acceptance tests (after deployment, on the protected Preview)
+
+Use a phone for 1 to 6. Note pass or fail for each.
+
+1. **First-time setup, as the founder.** Sign in. You see "Step 2 of 5: How
+   you use Splitpost", once.
+   * Choose Creator. On interests, read "Choose what you love so we can help
+     you find your people." Pick 2: it says "Pick 1 more for better
+     suggestions". Pick a third: "That's enough to find your people."
+   * Write a bio and "Why should people follow you?", then Save and continue.
+   * Step 5 shows suggestions (or a clear empty message if no one else has
+     details). Go to my feed.
+2. **Shown once.** Reload. No setup; Home opens.
+3. **Edit later.** Profile > About you shows your answers. Change your
+   interests and save. "Saved." appears, and the change survives a reload.
+4. **Public page.** Open your page from Profile: Creator label, bio, "Why
+   follow" box and interests.
+5. **Second member (granted test account).** Choose Fan, pick 1 interest,
+   skip the about step. Continue works with fewer than 3 interests. Then:
+   post, follow you, add you to their Clique. All work: identity grants
+   nothing and restricts nothing.
+6. **Discover.** As the second member: you appear with your bio and reason.
+   "Browse by interest" with one of your interests lists you; one you didn't
+   choose doesn't, and shows "Show everyone".
+7. **Skip everything (third granted account).** "Skip the rest" on step 2,
+   then Go to my feed. Reload: setup doesn't return.
+8. **No access.** An account with no grant still sees "Your pilot access
+   isn't active" and Sign out, and no setup.
+9. **Revocation.** Revoke the third account (`docs/PILOT-ACCESS.md`). It
+   disappears from Discover and suggestions for the others at once, and gets
+   "Your pilot access has ended" on its next load.
+10. **Regression.** Post, like, comment, catch-up and Clique still work;
+    www.splitpost.ca and the demo look unchanged.
 
 ## Stage 5.2 and later (plan, not built)
 

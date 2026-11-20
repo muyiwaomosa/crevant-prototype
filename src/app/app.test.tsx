@@ -549,9 +549,15 @@ describe('first-time setup and profile details (20261123000000)', () => {
 
     // 3. Interests, from the database's list, at most 5.
     expect(await screen.findByRole('heading', { name: 'What are you into?' })).toBeTruthy()
+    expect(screen.getByText('Choose what you love so we can help you find your people.')).toBeTruthy()
+    expect(screen.getByText(/We suggest at least 3\. You can choose up to 5/)).toBeTruthy()
+    const progress = screen.getByTestId('topic-progress')
+    expect(progress.textContent).toBe('Nothing chosen yet.')
     for (const t of ['Food & cooking', 'Music']) fireEvent.click(screen.getByRole('button', { name: t }))
     expect(screen.getByRole('button', { name: 'Music' }).getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByText(/2 of 5 chosen/)).toBeTruthy()
+    // Fewer than 3: a nudge, never a block.
+    expect(progress.textContent).toBe('2 chosen. Pick 1 more for better suggestions.')
+    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     // 4. About you, then saved once.
@@ -591,13 +597,32 @@ describe('first-time setup and profile details (20261123000000)', () => {
     expect(screen.queryByRole('progressbar')).toBeNull()
   })
 
+  it('interests are encouraged, not required: Continue works with none or one', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
+    fireEvent.click(screen.getByRole('radio', { name: /Fan/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('heading', { name: 'What are you into?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Tech' }))
+    expect(screen.getByTestId('topic-progress').textContent).toBe('1 chosen. Pick 2 more for better suggestions.')
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('heading', { name: 'Tell people about you' })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    await screen.findByRole('heading', { name: 'People you might like' })
+    expect(f.savedDetails).toEqual([{ identity: 'fan', bio: null, followReason: null, topics: ['tech'] }])
+  })
+
   it('checks the limits before saving, and keeps the member on the step if saving fails', async () => {
     const f = fakeApi('me', { details: 'new' })
     renderApp('/app', f.api)
     await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
     fireEvent.click(screen.getByRole('button', { name: 'Skip for now: how you use Splitpost' }))
     await screen.findByRole('heading', { name: 'What are you into?' })
-    for (const t of ['Food & cooking', 'Money & business', 'Tech', 'Music', 'Travel']) fireEvent.click(screen.getByRole('button', { name: t }))
+    for (const t of ['Food & cooking', 'Money & business', 'Tech']) fireEvent.click(screen.getByRole('button', { name: t }))
+    expect(screen.getByTestId('topic-progress').textContent).toBe("3 of 5 chosen. That's enough to find your people.")
+    for (const t of ['Music', 'Travel']) fireEvent.click(screen.getByRole('button', { name: t }))
+    expect(screen.getByTestId('topic-progress').textContent).toBe('5 of 5 chosen, the most you can pick.')
     // A sixth can't be chosen.
     expect((screen.getByRole('button', { name: 'Books & writing' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))

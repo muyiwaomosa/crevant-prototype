@@ -95,16 +95,49 @@ export function IdentityPicker({ value, onChange, hideLegend }: { value: Identit
   )
 }
 
-export function TopicPicker({ topics, value, onChange }: { topics: Topic[]; value: string[]; onChange: (v: string[]) => void }) {
+/** We suggest at least this many interests (never required): fewer give thinner suggestions. */
+export const SUGGESTED_TOPICS = 3
+
+/** How many interests are chosen, nudging toward 3 without requiring any. */
+export function topicProgress(n: number): string {
+  if (n === 0) return 'Nothing chosen yet.'
+  if (n < SUGGESTED_TOPICS) {
+    const more = SUGGESTED_TOPICS - n
+    return `${n} chosen. Pick ${more} more for better suggestions.`
+  }
+  if (n >= LIMITS.topics) return `${n} of ${LIMITS.topics} chosen, the most you can pick.`
+  return `${n} of ${LIMITS.topics} chosen. That's enough to find your people.`
+}
+
+export function TopicPicker({
+  topics,
+  value,
+  onChange,
+  hideLegend,
+}: {
+  topics: Topic[]
+  value: string[]
+  onChange: (v: string[]) => void
+  hideLegend?: boolean
+}) {
   const id = useId()
   const full = value.length >= LIMITS.topics
+  const enough = value.length >= SUGGESTED_TOPICS
   return (
     <fieldset>
-      <legend className="text-sm font-semibold text-ink-800">Your interests</legend>
-      <p id={`${id}-hint`} className="mt-1 text-sm text-ink-500" aria-live="polite">
-        Choose up to {LIMITS.topics}. We use them to suggest people. {value.length} of {LIMITS.topics} chosen.
+      <legend className={hideLegend ? 'sr-only' : 'text-sm font-semibold text-ink-800'}>Your interests</legend>
+      <p id={`${id}-hint`} className="mt-1 text-sm text-ink-500">
+        We suggest at least {SUGGESTED_TOPICS}. You can choose up to {LIMITS.topics}, and change them any time.
       </p>
-      <div className="mt-3 flex flex-wrap gap-2" role="group" aria-describedby={`${id}-hint`}>
+      <p
+        id={`${id}-count`}
+        aria-live="polite"
+        data-testid="topic-progress"
+        className={clsx('mt-1 text-sm font-semibold', enough ? 'text-brand-800' : 'text-ink-700')}
+      >
+        {topicProgress(value.length)}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2" role="group" aria-describedby={`${id}-hint ${id}-count`}>
         {topics.map((t) => {
           const on = value.includes(t.slug)
           const disabled = !on && full
@@ -271,14 +304,15 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
       <>
         {topics === undefined && <Spinner label="Loading interests…" />}
         {topics === null && <Message tone="info">Interests aren't available right now. You can add them later from your profile.</Message>}
-        {topics && <TopicPicker topics={topics} value={draft.topics} onChange={(t) => set({ topics: t })} />}
+        <p className="text-[15px] leading-relaxed text-ink-700">Choose what you love so we can help you find your people.</p>
+        {topics && <TopicPicker topics={topics} value={draft.topics} onChange={(t) => set({ topics: t })} hideLegend />}
         <div className="flex items-center justify-between gap-3">
           <button type="button" onClick={() => setStep(2)} className={buttonClass('secondary')}>
             Back
           </button>
           <div className="flex items-center gap-4">
             {skip(() => (set({ topics: [] }), setStep(4)), 'your interests')}
-            <button type="button" onClick={() => setStep(4)} disabled={draft.topics.length === 0} className={buttonClass('primary')}>
+            <button type="button" onClick={() => setStep(4)} className={buttonClass('primary')}>
               Continue
             </button>
           </div>
