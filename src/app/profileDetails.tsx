@@ -516,7 +516,7 @@ export function PersonSummary({
 }: {
   member: DiscoverMember
   topics: Topic[] | null | undefined
-  onChange: () => void | Promise<void>
+  onChange: (next: { followedByMe: boolean; inMyClique: boolean }) => void | Promise<void>
   myTopics?: string[]
 }) {
   const profile = `/app/u/${member.username}`
@@ -575,15 +575,12 @@ export function SuggestedPeople({ heading = 'Suggested for you', emptyText, limi
   const [people, setPeople] = useState<DiscoverMember[] | undefined>(undefined)
   const [mine, setMine] = useState<string[]>([])
   const [error, setError] = useState<unknown>(null)
-  const [stamp, setStamp] = useState(0)
   useEffect(() => {
     let live = true
     Promise.all([api.suggested(), api.myDetails().catch(() => null)]).then(
       ([s, d]) => {
         if (!live) return
-        // After a follow, keep the same people in the same order: someone who
-        // left the suggestions was just followed, so their button shows "Following".
-        setPeople((prev) => (prev ? prev.map((p) => s.find((n) => n.id === p.id) ?? { ...p, followedByMe: true }) : s.slice(0, limit)))
+        setPeople(s.slice(0, limit))
         setMine(d?.topics ?? [])
       },
       (e) => live && setError(e),
@@ -591,7 +588,7 @@ export function SuggestedPeople({ heading = 'Suggested for you', emptyText, limi
     return () => {
       live = false
     }
-  }, [api, limit, stamp])
+  }, [api, limit])
 
   if (error !== null) return <Message tone="error">{messageFor(error)}</Message>
   if (people === undefined) return <Spinner label="Finding people for you…" />
@@ -606,7 +603,14 @@ export function SuggestedPeople({ heading = 'Suggested for you', emptyText, limi
       <ul className="space-y-3">
         {people.map((m) => (
           <li key={m.id}>
-            <PersonSummary member={m} topics={topics} myTopics={mine} onChange={() => setStamp((n) => n + 1)} />
+            <PersonSummary
+              member={m}
+              topics={topics}
+              myTopics={mine}
+              // Keep the new state locally: suggestions leave out people you follow,
+              // so refetching would drop the person (and lose "In your Clique").
+              onChange={(next) => setPeople((list) => list?.map((p) => (p.id === m.id ? { ...p, ...next } : p)))}
+            />
           </li>
         ))}
       </ul>

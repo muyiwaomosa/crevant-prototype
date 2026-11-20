@@ -295,12 +295,13 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   await confirmation.waitFor()
   check(
     'after following, a confirmation offers Add to Clique and See their posts',
-    (await confirmation.getByRole('button', { name: 'Add Aye Teacher to your Clique' }).count()) === 1
+    (await confirmation.getByRole('button', { name: 'Add to Clique (Aye Teacher)' }).count()) === 1
       && (await confirmation.getByRole('link', { name: 'See their posts' }).getAttribute('href')) === `/app/u/${userA}#posts`
-      && (await pageB.getByRole('button', { name: 'Add Aye Teacher to your Clique' }).count()) === 1,
+      && (await pageB.getByRole('button', { name: 'Add to Clique (Aye Teacher)' }).count()) === 1,
   )
-  await pageB.getByRole('button', { name: 'Add Aye Teacher to your Clique' }).click()
-  await pageB.getByRole('button', { name: 'Remove Aye Teacher from your Clique (you keep following them)' }).waitFor()
+  await pageB.getByRole('button', { name: 'Add to Clique (Aye Teacher)' }).click()
+  await pageB.getByRole('button', { name: 'In your Clique (Aye Teacher, tap to remove)' }).waitFor()
+  check('adding to the Clique says "Added to your Clique!"', ((await pageB.getByTestId('relationship-notice').innerText()) || '').includes('Added to your Clique!'))
   check('following and joining the Clique are separate records', sql(`select (select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${idA}') || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${idA}' and removed_at is null)`) === '1|1')
 
   await pageB.getByRole('link', { name: 'Home' }).first().click()
@@ -394,7 +395,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     await pageB.goto(`${APP}/app/clique`)
     await pageB.getByLabel('25 of 25 in your Clique').waitFor()
     check('the Clique page lists all 27 followed creators in Following', (await pageB.getByRole('region', { name: 'Following' }).getByRole('listitem').count()) === 27)
-    const add = pageB.getByRole('button', { name: 'Add Maker 25 to your Clique' })
+    const add = pageB.getByRole('button', { name: 'Add to Clique (Maker 25)' })
     await add.click()
     const dialog = pageB.getByRole('dialog', { name: 'Your Clique is full' })
     await dialog.waitFor()
@@ -406,7 +407,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     const replaceStatus = await answered(pageB, 'app_clique_replace', () => dialog.getByRole('button', { name: 'Replace' }).click())
     check('the server accepted the replacement', replaceStatus === 204 || replaceStatus === 200, String(replaceStatus))
     await dialog.waitFor({ state: 'detached' })
-    await pageB.getByRole('button', { name: 'Add Maker 1 to your Clique' }).waitFor()
+    await pageB.getByRole('button', { name: 'Add to Clique (Maker 1)' }).waitFor()
     check(
       'the replacement swapped Maker 1 for Maker 25 in one step: still 25, Maker 1 still followed, closed as "replaced"',
       sql(`select (select count(*) from social.clique_members where fan_id = '${idB}' and removed_at is null)
@@ -421,7 +422,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
         && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[25]}'`) === '0')
 
     // A stale choice: another device replaces Maker 3 while the dialog is open.
-    await pageB.getByRole('button', { name: 'Add Maker 26 to your Clique' }).click()
+    await pageB.getByRole('button', { name: 'Add to Clique (Maker 26)' }).click()
     await dialog.waitFor()
     await dialog.getByRole('radio', { name: /Maker 3\b/ }).check()
     const elsewhere = await rpc(tokenB, 'app_clique_replace', { p_remove: others[2], p_add: others[0] })
@@ -447,7 +448,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await dialog.waitFor({ state: 'detached' })
 
-    await pageB.getByRole('region', { name: 'My Clique' }).getByRole('button', { name: 'Remove Maker 2 from your Clique (you keep following them)' }).click()
+    await pageB.getByRole('region', { name: 'My Clique' }).getByRole('button', { name: 'Remove from Clique (Maker 2, you keep following them)' }).click()
     await pageB.getByLabel('24 of 25 in your Clique').waitFor()
     check('removing from the Clique keeps the follow', sql(`select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${others[1]}'`) === '1')
     const self = await rpc(tokenB, 'app_follow', { p_creator: idB })
@@ -456,7 +457,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
 
   // 6. Unfollowing closes the Clique membership and keeps the history.
   await pageB.goto(`${APP}/app/u/${userA}`)
-  await pageB.getByRole('button', { name: 'Unfollow Aye Teacher' }).click()
+  await pageB.getByRole('button', { name: 'Following (Aye Teacher, tap to unfollow)' }).click()
   await pageB.getByRole('button', { name: 'Follow Aye Teacher' }).waitFor()
   check(
     'unfollowing closes the Clique membership (reason "unfollowed") and records the unfollow',

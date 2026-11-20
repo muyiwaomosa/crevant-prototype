@@ -877,10 +877,9 @@ function InnerRow({ creator, onChange }: { creator: FollowedCreator; onChange: (
           type="button"
           disabled={busy}
           onClick={() => run(() => api.cliqueRemove(creator.id), `${creator.displayName} was removed from your Clique. You still follow them.`)}
-          aria-label={`Remove ${creator.displayName} from your Clique (you keep following them)`}
           className={buttonClass('secondary', 'sm')}
         >
-          Remove from Clique
+          Remove from Clique<span className="sr-only">{` (${creator.displayName}, you keep following them)`}</span>
         </button>
       </div>
       {error !== null && <ErrorNote error={error} />}
@@ -917,21 +916,19 @@ function FollowedRow({
               onClick={() =>
                 full ? onReplace(creator) : run(() => api.cliqueAdd(creator.id), `${creator.displayName} was added to your Clique.`)
               }
-              aria-label={`Add ${creator.displayName} to your Clique`}
               aria-haspopup={full ? 'dialog' : undefined}
               className={buttonClass('secondary', 'sm')}
             >
-              <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique
+              <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique<span className="sr-only">{` (${creator.displayName})`}</span>
             </button>
           )}
           <button
             type="button"
             disabled={busy}
             onClick={() => run(() => api.unfollow(creator.id), `You unfollowed ${creator.displayName}.`)}
-            aria-label={creator.inMyClique ? `Unfollow ${creator.displayName} (also removes them from your Clique)` : `Unfollow ${creator.displayName}`}
             className={buttonClass('ghost', 'sm')}
           >
-            Unfollow
+            Unfollow<span className="sr-only">{creator.inMyClique ? ` ${creator.displayName} (also removes them from your Clique)` : ` ${creator.displayName}`}</span>
           </button>
         </div>
       </div>
