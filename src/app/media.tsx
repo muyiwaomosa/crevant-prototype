@@ -656,7 +656,8 @@ export function PhotoStoragePanel({ founder }: { founder: boolean }) {
 
   if (status === null && error === null)
     return <Spinner label="Loading photo storage…" />;
-  const stale =
+    // Deletions keep being queued after photos are turned off, so the schedule matters whenever files are waiting.
+  const stale = Boolean(status && (status.photosEnabled || status.queued > 0) && (!status.lastScheduledAt || Date.now() - Date.parse(status.lastScheduledAt) > 2 * 3600_000))
     status?.photosEnabled &&
     (!status.lastScheduledAt ||
       Date.now() - Date.parse(status.lastScheduledAt) > 2 * 3600_000);

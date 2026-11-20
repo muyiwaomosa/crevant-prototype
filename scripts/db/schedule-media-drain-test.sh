@@ -65,8 +65,22 @@ for _ in $(seq 1 30); do
 done
 [ "$rid" = t ] && [ "$status" = 401 ] && ok "the job's command reaches the post-media function from the database (refused there without the key, as expected)" || bad "the job's command did not reach the function (status '$status')"
 
+# remove works even where the photo migration is gone (so a schedule can always be taken down).
+"${PSQL[@]}" -c "delete from supabase_migrations.schema_migrations where version = '20261127000000'" >/dev/null
 out=$(run remove 'UNSCHEDULE THE STAGING PHOTO CLEANUP'); code=$?
-[ $code -eq 0 ] && [ "$(jobs)" = 0 ] && ok "remove unschedules it" || bad "remove (exit $code)"
+"${PSQL[@]}" -c "insert into supabase_migrations.schema_migrations (version, name) values ('20261127000000', 'post_photos')" >/dev/null
+[ $code -eq 0 ] && [ "$(jobs)" = 0 ] && ok "remove unschedules it, even without the photo migration" || bad "remove (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+out=$(run remove 'UNSCHEDULE THE STAGING PHOTO CLEANUP'); code=$?
+[ $code -eq 0 ] && [ "$(jobs)" = 0 ] && ok "removing again is harmless" || bad "a second remove (exit $code)"
+
+# An unrelated job that happens to have the same name is never replaced or removed.
+"${PSQL[@]}" -c "select cron.schedule('post-media-drain', '0 3 * * *', 'select 42')" >/dev/null
+for m in "apply|SCHEDULE THE STAGING PHOTO CLEANUP" "remove|UNSCHEDULE THE STAGING PHOTO CLEANUP"; do
+  out=$(run "${m%%|*}" "${m#*|}"); code=$?
+  [ $code -ne 0 ] && grep -q 'not the photo cleanup' <<<"$out" && [ "$("${PSQL[@]}" -c "select command from cron.job where jobname = 'post-media-drain'")" = 'select 42' ] \
+    && ok "${m%%|*} refuses to touch an unrelated job named post-media-drain" || bad "${m%%|*} touched an unrelated job (exit $code)"
+done
+"${PSQL[@]}" -c "select cron.unschedule('post-media-drain')" >/dev/null
 
 echo "Photo cleanup schedule tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]

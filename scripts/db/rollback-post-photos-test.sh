@@ -89,6 +89,11 @@ refuses "a file is in post-photos" "file(s) in post-photos" \
 refuses "a processing check was recorded" "processing check" \
   "select public.svc_photo_check_record('rollback-test', 100, true, null)" \
   "alter table ops.media_admin_events disable trigger media_admin_events_no_update; delete from ops.media_admin_events; alter table ops.media_admin_events enable trigger media_admin_events_no_update"
+if [ "$("${PSQL[@]}" -c "select count(*) from pg_available_extensions where name = 'pg_cron'")" = 1 ]; then
+  "${PSQL[@]}" -c "create extension if not exists pg_cron" >/dev/null
+  refuses "the photo cleanup schedule still exists" "cleanup schedule" \
+    "select cron.schedule('post-media-drain', '*/15 * * * *', 'select 1')" "select cron.unschedule('post-media-drain')"
+fi
 refuses "the mode is neither check nor apply" "mode must be check or apply" "select 1" "select 1" wipe "$PHRASE"
 refuses "apply without the confirmation phrase" "confirmation phrase" "select 1" "select 1" apply ""
 refuses "apply with a different phrase" "confirmation phrase" "select 1" "select 1" apply "remove the staging photo posts"

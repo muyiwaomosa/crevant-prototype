@@ -48,15 +48,23 @@ begin
   if m = 'remove' and current_setting('crevant.schedule_confirm') <> 'UNSCHEDULE THE STAGING PHOTO CLEANUP' then
     raise exception 'remove needs the confirmation phrase: UNSCHEDULE THE STAGING PHOTO CLEANUP';
   end if;
-  if to_regclass('supabase_migrations.schema_migrations') is null
-     or not exists (select 1 from supabase_migrations.schema_migrations where version = '20261127000000') then
+  -- Scheduling needs the photo migration (Production never has it). Removing
+  -- doesn't, so a schedule can always be taken down.
+  if m in ('check', 'apply') and (to_regclass('supabase_migrations.schema_migrations') is null
+     or not exists (select 1 from supabase_migrations.schema_migrations where version = '20261127000000')) then
     raise exception 'refused: photo posts (20261127000000) are not applied here. This is not staging after Build 5.3.';
   end if;
   if u !~ '^(https://kpudeppgokpjhvaqrprn\.supabase\.co|http://(kong|127\.0\.0\.1|localhost|host\.docker\.internal)(:\d+)?)/functions/v1/post-media/drain$' then
     raise exception 'refused: the drain address must be staging''s post-media function (or a local one in tests)';
   end if;
-  if not exists (select 1 from pg_available_extensions where name = 'pg_cron') or not exists (select 1 from pg_available_extensions where name = 'pg_net') then
+  if m in ('check', 'apply') and (not exists (select 1 from pg_available_extensions where name = 'pg_cron') or not exists (select 1 from pg_available_extensions where name = 'pg_net')) then
     raise exception 'refused: pg_cron and pg_net are not available here';
+  end if;
+  -- Never replace or remove a job of the same name that isn't this drain.
+  if to_regclass('cron.job') is not null and exists (
+       select 1 from cron.job j where j.jobname = 'post-media-drain'
+       and j.command !~ '/functions/v1/post-media/drain' ) then
+    raise exception 'refused, nothing changed: a job named post-media-drain exists that is not the photo cleanup. Rename or remove it by hand first.';
   end if;
   if m in ('check', 'apply') then
     if to_regclass('vault.decrypted_secrets') is null then
@@ -69,14 +77,20 @@ begin
   end if;
 end $$;
 
+select current_setting('crevant.schedule_mode') <> 'remove' as installing \gset
+\if :installing
 create extension if not exists pg_cron;
 create extension if not exists pg_net with schema extensions;
+\endif
 
 do $$
 declare
   m text := current_setting('crevant.schedule_mode');
   u text := current_setting('crevant.drain_url');
 begin
+  if to_regclass('cron.job') is null then
+    return;
+  end if;
   if exists (select 1 from cron.job where jobname = 'post-media-drain') then
     perform cron.unschedule('post-media-drain');
   end if;
@@ -93,7 +107,10 @@ begin
   end if;
 end $$;
 
+select to_regclass('cron.job') is not null as has_cron \gset
+\if :has_cron
 select jobname, schedule, active from cron.job where jobname = 'post-media-drain';
+\endif
 
 select current_setting('crevant.schedule_mode') <> 'check' as change \gset
 \if :change

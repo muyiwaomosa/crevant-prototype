@@ -61,9 +61,18 @@ declare
   q bigint := (select count(*) from ops.media_deletions) + (select count(*) from ops.media_drain_runs);
   e bigint := (select count(*) from ops.media_admin_events);
   o bigint := 0;
+  j bigint := 0;
 begin
   if to_regclass('storage.objects') is not null then
     execute $q$select count(*) from storage.objects where bucket_id = 'post-photos'$q$ into o;
+  end if;
+  -- The cleanup schedule must be removed first (staging-schedule-media-drain.sql, mode=remove):
+  -- otherwise it would keep calling a function whose database steps are gone.
+  if to_regclass('cron.job') is not null then
+    execute $q$select count(*) from cron.job where jobname = 'post-media-drain'$q$ into j;
+    if j > 0 then
+      raise exception 'refused, nothing changed: the photo cleanup schedule (post-media-drain) still exists. Remove it first with scripts/db/staging-schedule-media-drain.sql (mode=remove).';
+    end if;
   end if;
   if u > 0 or p > 0 or q > 0 or e > 0 or o > 0 then
     raise exception 'refused, nothing changed: % upload or photo record(s), % photo post(s), % queued deletion(s) or drain run(s), % settings change(s) or processing check(s) and % file(s) in post-photos exist. Fix forward with a new migration instead.', u, p, q, e, o;
@@ -287,6 +296,8 @@ begin
 end $$;
 comment on function public.app_feed(timestamptz, integer) is 'Following feed: posts from people the member follows, and their own, newest first.';
 comment on function public.app_post(uuid) is 'One live post.';
+comment on function public.app_member_posts(uuid, timestamptz, integer) is 'One member''s posts, newest first.';
+comment on function public.app_catch_up(uuid, timestamptz, uuid) is 'Up to 20 of a followed creator''s most recent unseen posts, oldest first. Older batches use the oldest post''s (created_at, id). Read-only: never marks posts viewed.';
 
 drop function public.app_photo_status();
 drop function public.app_photo_upload_begin();

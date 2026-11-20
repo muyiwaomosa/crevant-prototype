@@ -958,3 +958,5 @@ end;
 $$;
 comment on function public.app_feed(timestamptz, integer) is 'Following feed: posts from people the member follows, and their own, newest first (with any photo).';
 comment on function public.app_post(uuid) is 'One live post (with any photo).';
+comment on function public.app_member_posts(uuid, timestamptz, integer) is 'One member''s posts, newest first (with any photo).';
+comment on function public.app_catch_up(uuid, timestamptz, uuid) is 'Up to 20 of a followed creator''s most recent unseen posts, oldest first. Older batches use the oldest post''s (created_at, id). Read-only: never marks posts viewed.';

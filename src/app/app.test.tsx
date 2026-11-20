@@ -2501,4 +2501,12 @@ describe('photo posts (Build 5.3)', () => {
     expect(await screen.findByText('All six checks passed.')).toBeTruthy()
     expect(g.photo.checks).toEqual([1, 2, 3, 4, 5, 6])
   })
+
+  it('warns about a missing scheduled cleanup whenever files are waiting, even with photos off', async () => {
+    const f = fakeApi('me', { moderator: true, photos: false })
+    renderApp('/app/moderation', f.api)
+    await screen.findByRole('heading', { name: 'Photo storage' })
+    expect(screen.getByText('Off')).toBeTruthy()
+    expect(screen.getByText(/hasn't run in the last 2 hours/)).toBeTruthy()
+  })
 })

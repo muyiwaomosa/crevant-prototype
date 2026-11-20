@@ -432,3 +432,83 @@ begin
   end if;
   raise notice 'PASS: hidden photos are queued only at pilot close, on request with the exact phrase, and recorded';
 end $$;
+
+-- 12. Revoked membership: the author's photos get no links, and a revoked
+--     member can't get links or upload. (Review regression.)
+select pg_temp.begin_as('00000000-0000-4000-8000-00000000c501', 'a7');
+select pg_temp.stored('a7');
+insert into ph_ids values ('a7', pg_temp.post_as('00000000-0000-4000-8000-00000000c501', 'a7', 'Live, then the author is revoked', gen_random_uuid()));
+create temp table ph_viewer as select '00000000-0000-4000-8000-00000000c504'::uuid as id;
+select ops.grant_member_access('00000000-0000-4000-8000-00000000c504', 'tester', 'test');
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000c504","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if (select count(*) from public.app_post_photos(array[(select post from ph_ids where name = 'a7')])) <> 1 then
+    raise exception 'FAIL: a member gets no link for a visible photo post';
+  end if;
+end $$;
+commit;
+select ops.revoke_member_access('00000000-0000-4000-8000-00000000c501', 'test');
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000c504","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  if (select count(*) from public.app_post_photos(array[(select post from ph_ids where name = 'a7')])) <> 0 then
+    raise exception 'FAIL: a revoked author''s photo still gets links';
+  end if;
+  if (select count(*) from public.app_feed(null, 50) f where f.id = (select post from ph_ids where name = 'a7')) <> 0 then
+    raise exception 'FAIL: a revoked author''s photo post is still in the feed';
+  end if;
+end $$;
+commit;
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000c501","role":"authenticated"}', true);
+set local role authenticated;
+do $$ begin
+  perform pg_temp.expect_error_ph(format('select * from public.app_post_photos(%L::uuid[])', array[(select post from ph_ids where name = 'a7')]), 'no_pilot_access', 'a revoked member asking for links');
+  perform pg_temp.expect_error_ph('select * from public.app_photo_upload_begin()', 'no_pilot_access', 'a revoked member uploading');
+  perform pg_temp.expect_error_ph(format('select public.app_create_post(%L, %L, %L)', '', gen_random_uuid(), gen_random_uuid()), 'no_pilot_access', 'a revoked member publishing');
+  raise notice 'PASS: a revoked author''s photos get no links and leave the feed; a revoked member can''t get links, upload or publish';
+end $$;
+commit;
+
+-- 13. A legal or safety hold keeps evidence past report retention; lifting it releases it.
+--     (Review regression.)
+select ops.grant_member_access('00000000-0000-4000-8000-00000000c501', 'tester', 'test');
+select pg_temp.begin_as('00000000-0000-4000-8000-00000000c501', 'a8');
+select pg_temp.stored('a8');
+insert into ph_ids values ('a8', pg_temp.post_as('00000000-0000-4000-8000-00000000c501', 'a8', 'Held for legal reasons', gen_random_uuid()));
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000c504","role":"authenticated"}', true);
+set local role authenticated;
+select public.app_report('post', (select post from ph_ids where name = 'a8'), 'violence', null);
+commit;
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000c501","role":"authenticated"}', true);
+set local role authenticated;
+select public.app_delete_post((select post from ph_ids where name = 'a8'));
+commit;
+do $$
+declare
+  rid uuid := (select id from ops.content_reports where target_id = (select post from ph_ids where name = 'a8'));
+  full_p text := (select full_path from ph where name = 'a8');
+  feed_p text := (select feed_path from ph where name = 'a8');
+begin
+  if (select count(*) from ops.media_deletions where path in (full_p, feed_p)) <> 2 then
+    raise exception 'FAIL: deleting the post did not queue both copies';
+  end if;
+  perform ops.set_report_hold(rid, true, 'founder', 'legal request');
+  update ops.content_reports set status = 'dismissed', resolved_at = now() - interval '200 days' where id = rid;
+  perform ops.purge_expired_report_data();
+  if exists (select 1 from public.svc_media_drain_claim(100) c where c.path in (full_p, feed_p)) then
+    raise exception 'FAIL: held evidence was claimed for deletion past 90 days';
+  end if;
+  perform ops.set_report_hold(rid, false, 'founder', 'hold lifted');
+  perform ops.purge_expired_report_data();
+  if (select count(*) from public.svc_media_drain_claim(100) c where c.path in (full_p, feed_p)) <> 2 then
+    raise exception 'FAIL: evidence was not released (both copies) once the hold was lifted and retention passed';
+  end if;
+  raise notice 'PASS: a legal or safety hold keeps both copies past report retention; lifting it releases both';
+end $$;
+

@@ -28,8 +28,12 @@ What the code does that the founder may want reflected before publishing:
   legal or safety hold), even if the post or account is deleted.
 * A photo in a post a moderator **hid** is kept while it can be restored,
   and deleted at pilot close.
-* Deletion happens on a schedule: within about 15 minutes, not instantly.
-  Links already shown to people work for up to an hour, unless the file is
-  already deleted.
+* Deletion is done by the server, usually within seconds and at most about
+  15 minutes (longer only while Storage is failing and retries run). The
+  post disappears at once.
+* Links already on someone's screen last up to an hour but stop when the
+  file is deleted. For hidden or reported photos (kept), they can keep
+  working for up to an hour, and browsers may cache a shown photo for up to
+  an hour.
 * Photos are visible only to signed-in pilot members who can see the post.
 * An optional photo description is stored with the post.

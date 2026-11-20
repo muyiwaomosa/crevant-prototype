@@ -82,6 +82,16 @@ Files still referenced by a kept report snapshot stay held. The schedule
 deletes the rest within 15 minutes. Record it with the feedback closeout
 (`docs/FEEDBACK.md`).
 
+## Delays and limits members should know about
+
+| What | How long |
+|---|---|
+| Deleting a photo post | The post and its links disappear at once (no new links are issued). The files are deleted by the server: usually within seconds (the app asks right after the delete), at most about 15 minutes (the schedule), longer only if Storage fails and the retries run (up to about 10 hours over 8 attempts). |
+| Deleting an account | The same: queued at once, deleted by the next pass. |
+| Links already on someone's screen | A signed link lasts **one hour**. It stops working as soon as the file is deleted, so for an ordinary deleted post the exposure ends with the deletion. For a **hidden** post, or a reported post kept as **evidence**, the file stays, so a link already issued keeps working for up to an hour. Browsers may also keep a shown photo in their own cache for up to an hour (`max-age=3600`). |
+| Reported photos (evidence) | Kept while the report is open, then until report retention erases its snapshot (90 days after resolution), or for as long as a legal or safety hold lasts. Only moderators can see them in that time. |
+| Hidden photos | Kept while the post can be restored; deleted at pilot close (below). |
+
 ## Limits (provisionally approved, pending staging verification)
 
 | | |
@@ -132,9 +142,37 @@ Moderation > **Photo storage**: the switch; storage used against the cap;
 files waiting to be deleted; evidence held; the last scheduled cleanup (a
 warning after 2 hours without one while photos are on); failures (3 or more
 attempts) and give-ups; the last pass failing; reports open over 30 days;
-the egress thresholds; and the last processing checks. Weekly: Supabase
-Usage (storage and egress) against the thresholds. The function logs counts
-and timings only (no ids, paths or images).
+the egress thresholds; and the last processing checks. The stale-schedule
+warning appears whenever photos are on **or** files are waiting, so it also
+covers deletions after photos are turned off. Weekly: Supabase Usage
+(storage and egress) against the thresholds. The function logs counts and
+timings only (no ids, paths or images).
+
+**When the schedule isn't running** (the warning, or "Last scheduled
+cleanup" is old), in the SQL editor:
+
+```sql
+select status, return_message, start_time from cron.job_run_details
+where jobid = (select jobid from cron.job where jobname = 'post-media-drain') order by start_time desc limit 5;
+select status_code, created from net._http_response order by created desc limit 5;
+```
+
+A 401 means the two copies of the drain key differ (Edge Function secret
+`MEDIA_DRAIN_KEY` and Vault `media_drain_key`); 503 means the function isn't
+configured; no row means the job isn't scheduled (run the schedule script
+again: applying twice leaves exactly one job). Meanwhile, Run cleanup now
+works by hand.
+
+**When deletions gave up** (8 failed attempts, shown in Photo storage): fix
+the cause (usually Storage), then let them retry, in the SQL editor:
+
+```sql
+update ops.media_deletions set attempts = 0, last_attempt_at = null where deleted_at is null and attempts >= 8;
+```
+
+Changing the cap or thresholds while photos are on needs six passing
+processing checks within the last 7 days (run them again first); turning
+photos off never does.
 
 ## Staging deployment plan (each step needs the founder's approval)
 
@@ -179,7 +217,9 @@ and timings only (no ids, paths or images).
 10. Founder phone test (below).
 
 **Rollback, in order:** turn photos off (step above); unschedule
-(`-v mode=remove -v confirm='UNSCHEDULE THE STAGING PHOTO CLEANUP'`);
+(`-v mode=remove -v confirm='UNSCHEDULE THE STAGING PHOTO CLEANUP'`; this
+works even after the migration is gone, and the database rollback refuses
+while the schedule exists);
 `supabase functions delete post-media --project-ref kpudeppgokpjhvaqrprn`
 (posts show "This photo couldn't load", text is unaffected; stored files stay
 in the private bucket; links already issued work up to an hour). The
