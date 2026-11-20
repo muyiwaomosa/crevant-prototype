@@ -110,6 +110,9 @@ begin
     elsif r.proname like 'app\_mod\_%' then
       -- Moderation (20261124000000): membership AND moderator, through social.current_moderator().
       if position('social.current_moderator()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
+    elsif r.proname like 'app\_founder\_%' then
+      -- Feedback (20261126000000): membership AND the founder cohort, through social.current_founder().
+      if position('social.current_founder()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
     elsif position('social.current_member()' in r.prosrc) = 0 then
       bad := bad || r.proname;
     end if;
@@ -124,6 +127,11 @@ begin
      and (position('social.current_member()' in (select prosrc from pg_proc where oid = to_regprocedure('social.current_moderator()'))) = 0
           or position('ops.moderator_active(v_uid)' in (select prosrc from pg_proc where oid = to_regprocedure('social.current_moderator()'))) = 0) then
     bad := bad || 'social.current_moderator'::text;
+  end if;
+  if to_regprocedure('social.current_founder()') is not null
+     and (position('social.current_member()' in (select prosrc from pg_proc where oid = to_regprocedure('social.current_founder()'))) = 0
+          or position('a.cohort = ''founder''' in (select prosrc from pg_proc where oid = to_regprocedure('social.current_founder()'))) = 0) then
+    bad := bad || 'social.current_founder'::text;
   end if;
   if position('social.visible_members' in (select prosrc from pg_proc where oid = 'social.is_member(uuid)'::regprocedure)) = 0 then
     bad := bad || 'social.is_member'::text;

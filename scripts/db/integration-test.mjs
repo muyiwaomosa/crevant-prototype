@@ -237,6 +237,20 @@ let A, B, tokenA
   check('a signed-in account cannot upload straight into Storage (no member storage policy)', direct.status >= 400, String(direct.status))
   check('nothing was stored for A', sql(`select count(*) from social.avatar_uploads where user_id = '${A}'`) === '0' && sql("select count(*) from storage.objects where bucket_id = 'avatars'") === '0')
 
+  // Feedback (20261126000000): sending needs membership; the founder inbox
+  // needs the founder cohort; visitors get nothing; nothing is stored.
+  {
+    const send = await rest('/rpc/app_feedback_submit', { method: 'POST', token: tokenA, body: { p_category: 'problem', p_feature: 'home', p_body: 'Through the real API', p_request_id: '00000000-0000-4000-8000-0000000000fb' } })
+    check('without membership, A cannot send feedback (no_pilot_access)', send.status === 400 && send.json?.message === 'no_pilot_access', `${send.status} ${JSON.stringify(send.json)}`)
+    const list = await rest('/rpc/app_founder_feedback_list', { method: 'POST', token: tokenA, body: {} })
+    check('without membership, A cannot open the feedback inbox (no_pilot_access)', list.status === 400 && list.json?.message === 'no_pilot_access', `${list.status}`)
+    const anonSend = await rest('/rpc/app_feedback_submit', { method: 'POST', body: { p_category: 'problem', p_feature: 'home', p_body: 'Anonymous feedback', p_request_id: '00000000-0000-4000-8000-0000000000fc' } })
+    check('anonymous visitors cannot send feedback', anonSend.status === 401 || anonSend.status === 403 || anonSend.status === 404, String(anonSend.status))
+    const table = await rest('/feedback?select=*', { token: tokenA, headers: { 'Accept-Profile': 'ops' } })
+    check('a signed-in account cannot read the feedback table through the API', table.status >= 400, String(table.status))
+    check('no feedback was stored', sql('select count(*) from ops.feedback') === '0')
+  }
+
   const before = (await profileOf(A))[0]
   await sleep(50)
   const own = await rest(`/profiles?id=eq.${A}`, { method: 'PATCH', key: SERVICE, token: SERVICE, body: { username: `alice_${RUN}`.slice(0, 30), display_name: 'Alice' } })
