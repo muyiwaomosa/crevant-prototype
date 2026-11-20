@@ -13,6 +13,7 @@ approved.
 | 5.2b Profile pictures and profile experience | **in review** | private avatars with server-side decode and re-encode, crop and zoom, avatars everywhere; Clique confirmation fix; consistent follow and Clique feedback |
 | **5.2c User feedback and feature requests** | **next; required before external pilot invitations** | see below |
 | 5.3 Photo and video posts | later | needs 5.2b's validation pipeline extended to post media |
+| Splitpost Flip | future discovery feature | both app-level and post-level insights; details to be defined. Not part of 5.2b |
 
 ### 5.2c User feedback and feature requests (must ship before external pilot invitations)
 

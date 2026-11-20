@@ -20,13 +20,15 @@ by hand, to staging only, after the migration.
 |---|---|
 | Private storage | One bucket, `avatars`: private, JPEG only, at most 200 KB. No storage policy for members or visitors at all; the audit and staging check 010 fail otherwise. |
 | No direct uploads | Members can't write to Storage. Every upload, removal and link goes through the `avatar` Edge Function. |
-| Authorization on every action | Each action first calls the database **as the caller** (their own token): membership, complete profile, 10 changes a day; moderators only for cleanup. The service key is used only afterwards. |
+| Sign-in checked on every request | Staging signs sessions with ES256 keys, so the platform's gateway JWT check is off for this function (`verify_jwt = false`) and the function checks every request itself, before reading the body or touching anything: it asks Supabase Auth (`/auth/v1/user`) whether the token is valid. Auth checks the signature (current ES256 key, or the previous HS256 key), expiry, and that the session still exists, so signed-out and revoked sessions are refused too (the database alone would accept them until they expire). The token must belong to a signed-in user (`authenticated`); the anon or service key used as a token is refused. Missing, malformed, forged, expired and revoked tokens all get 401 and nothing happens (tested for every action, including cleanup). |
+| Authorization on every action | Each action then calls the database **as the caller** (their own token, with staging's publishable key, which the app sends): membership, complete profile, 10 changes a day; moderators only for cleanup. The service key is used only afterwards. |
 | Nothing from the browser is trusted | No member id or storage path is read from a request. The database chooses the path (`<member>/<random>.jpg`). The image is checked, decoded and re-encoded on the server. |
 | Full server-side validation | Header check (exactly 512 x 512 JPEG) before decoding; full decode with jpeg-js 0.4.4 under hard limits (1 megapixel, 64 MB, strict); fresh encode (quality 85, or 70 if needed) of at most 200 KB. Only the new file is stored: no metadata, nothing appended, type set by the server. |
 | Revocation | Committing re-checks membership at that moment. Revoked members can't upload, remove or get links; their picture isn't handed out to anyone; a moderator's Hide on a profile hides its picture too. |
 | Concurrency | One picture change at a time per member (a database lock). Overlapping uploads end with the newest picture and every replaced file deleted (tested with three at once). |
 | Production can't be targeted | The function refuses to run unless its project is `kpudeppgokpjhvaqrprn` (or local Supabase), so a deploy anywhere else serves nothing (tested). |
-| No privileged credentials exposed | The function reads only `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`, which Supabase provides to every hosted function. Nothing is stored in the repository, GitHub, Vercel or the browser. |
+| No privileged credentials exposed | The function reads only `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`, which Supabase provides to every hosted function. The service key stays inside the function, used only for Storage and the two service-only database steps. Nothing is stored in the repository, GitHub, Vercel or the browser. |
+| Legacy keys | These two environment keys are staging's **legacy** anon and service_role keys (enabled today). The anon key is only a fallback if a request has no publishable key. If the legacy keys are ever disabled, the function stops working safely (it refuses, everyone sees initials) and must be updated to the new secret key first. Changing the JWT signing keys needs no change here. |
 | Browsers | Only the member app's Previews may call it from a browser (and local development locally). Sign-in and the database checks are the real boundary. |
 
 ### jpeg-js security review
@@ -97,10 +99,11 @@ Profile > Moderation > Picture storage:
    supabase login
    ```
    ```bash
-   supabase functions deploy avatar --project-ref kpudeppgokpjhvaqrprn
+   supabase functions deploy avatar --no-verify-jwt --project-ref kpudeppgokpjhvaqrprn
    ```
-   JWT verification stays on (the default; also set in
-   `supabase/config.toml`). No secret is created. In the dashboard (Edge
+   `--no-verify-jwt` is required (it matches `supabase/config.toml`): the
+   gateway's check doesn't handle staging's ES256 keys, and the function
+   verifies every caller with Supabase Auth itself. No secret is created. In the dashboard (Edge
    Functions > Secrets), confirm `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
    `SUPABASE_SERVICE_ROLE_KEY` are listed (Supabase provides them).
 5. Fast-forward the Preview branch to the merged commit (no force push, no
@@ -108,10 +111,31 @@ Profile > Moderation > Picture storage:
    staging project.
 6. Founder phone test (below).
 
-**Rollback:** `supabase functions delete avatar --project-ref kpudeppgokpjhvaqrprn`
-(or redeploy the previous version) makes everyone show initials. The
-migration's rollback (`scripts/db/staging-rollback-avatars.sql`) refuses
-once any picture record or file exists; after that, fix forward.
+### Rollback
+
+Remove the function (or redeploy a previous version):
+
+```bash
+supabase functions delete avatar --project-ref kpudeppgokpjhvaqrprn
+```
+
+What that does, and doesn't, do:
+
+* **The app falls back to initials.** No new picture links are issued, so
+  pages show initials as soon as they load (a page already open keeps its
+  pictures until it's reloaded). Saving or removing a
+  picture says it isn't available. Everything else keeps working (tested).
+* **Stored pictures are not deleted.** Deleting the function leaves every
+  file in the private `avatars` bucket. A file goes only when its member
+  removes their picture or the moderator cleanup runs, and both need the
+  function. Nobody can read the files without a signed link.
+* **Links already issued keep working for up to an hour.** Signed links are
+  served by Storage, not the function, so a link issued just before the
+  rollback still shows that picture until it expires (at most one hour),
+  unless the file itself is deleted.
+* **The database rollback** (`scripts/db/staging-rollback-avatars.sql`)
+  refuses while any picture record or stored file exists, so it can only be
+  used before anyone has saved a picture. After that, fix forward.
 
 ## Founder phone test
 
@@ -129,5 +153,7 @@ On an iPhone (Safari) and an Android phone (Chrome):
    About you, and can skip it.
 6. Moderation > Picture storage > **Check for unused files**: usually
    "Nothing to clean up".
-7. Try saving 11 pictures in a day: the 11th says "You can change your
+7. Sign out and back in, then save a picture: it works. (A signed-out
+   session can't be used to change pictures.)
+8. Try saving 11 pictures in a day: the 11th says "You can change your
    picture 10 times a day. Please try again tomorrow." 

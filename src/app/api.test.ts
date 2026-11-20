@@ -315,3 +315,57 @@ describe('profile details (20261123000000)', () => {
     await expect(api.saveDetails({ identity: null, bio: null, followReason: null, topics: [] })).rejects.toMatchObject({ code: 'too_many_topics' })
   })
 })
+
+// Profile pictures (the avatar Edge Function). With the function missing or
+// failing, links are simply absent (initials) and saving says why; nothing throws into the app.
+describe('profile pictures when the avatar function is unavailable', () => {
+  function pictureClient(answer: { data?: unknown; status?: number; body?: unknown } | Error) {
+    const calls: string[] = []
+    const client = {
+      functions: {
+        async invoke(name: string) {
+          calls.push(name)
+          if (answer instanceof Error) return { data: null, error: answer }
+          if (answer.status && answer.status >= 400) {
+            return { data: null, error: { name: 'FunctionsHttpError', context: new Response(JSON.stringify(answer.body ?? {}), { status: answer.status }) } }
+          }
+          return { data: answer.data ?? null, error: null }
+        },
+      },
+      storage: { from: () => ({ getPublicUrl: () => ({ data: { publicUrl: 'https://staging.example/storage/v1/object/public/avatars/x' } }) }) },
+    }
+    return { api: createSupabaseApi(client as unknown as SupabaseClient, 'u1'), calls }
+  }
+
+  it('links: a missing function, a server error or a network failure all mean "no pictures" (initials)', async () => {
+    for (const answer of [{ status: 404, body: 'Function not found' }, { status: 503, body: { error: 'unavailable' } }, { status: 500 }, new Error('Failed to fetch')]) {
+      const { api } = pictureClient(answer)
+      expect(await api.avatarLinks(['c1', 'c2'])).toEqual({})
+    }
+  })
+
+  it('links: valid answers become full links on the project; anything else is ignored', async () => {
+    const { api } = pictureClient({ data: { avatars: { c1: { url: '/object/sign/avatars/c1/a.jpg?token=t', updatedAt: null }, c2: { url: 'https://evil.example/x.jpg' } } } })
+    expect(await api.avatarLinks(['c1', 'c2'])).toEqual({ c1: { url: 'https://staging.example/storage/v1/object/sign/avatars/c1/a.jpg?token=t', updatedAt: null } })
+  })
+
+  it('saving and removing explain what went wrong, with known codes only', async () => {
+    const cases: Array<[{ status: number; body?: unknown } | Error, string]> = [
+      [{ status: 404, body: 'Function not found' }, 'not_available'],
+      [{ status: 503, body: { error: 'unavailable' } }, 'not_available'],
+      [{ status: 429, body: { error: 'rate_limited' } }, 'avatar_limit'],
+      [{ status: 422, body: { error: 'not_jpeg' } }, 'not_jpeg'],
+      [{ status: 413, body: { error: 'too_large' } }, 'photo_too_large'],
+      [{ status: 401, body: { error: 'not_signed_in' } }, 'not_signed_in'],
+      [{ status: 400, body: { error: 'some internal detail' } }, 'unknown'],
+      [{ status: 502 }, 'storage_unavailable'],
+      [new Error('Failed to fetch'), 'network'],
+    ]
+    for (const [answer, code] of cases) {
+      const up = pictureClient(answer)
+      await expect(up.api.uploadAvatar(new Blob(['x'], { type: 'image/jpeg' }))).rejects.toMatchObject({ code })
+      const rm = pictureClient(answer)
+      await expect(rm.api.removeAvatar()).rejects.toMatchObject({ code })
+    }
+  })
+})

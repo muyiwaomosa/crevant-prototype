@@ -330,6 +330,7 @@ function fakeApi(
       modActions.push({ action: 'dismiss', report: id, note: note?.trim() || null })
     },
     async avatarLinks(ids) {
+      maybeFail('avatarLinks')
       return Object.fromEntries(ids.filter((id) => pictures.has(id) && users.get(id)?.displayName).map((id) => [id, { url: pictures.get(id)!, updatedAt: null }]))
     },
     async uploadAvatar(jpeg) {
@@ -1153,6 +1154,43 @@ describe('profile pictures (20261125000000)', () => {
     const field = within(screen.getByTestId('profile-picture-field'))
     expect(field.getByText('Profile picture (optional)')).toBeTruthy()
     expect(field.getByRole('button', { name: 'Add a photo' })).toBeTruthy()
+  })
+
+  it('when picture links fail (function unavailable), the feed, profiles and setup keep working with initials', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    f.failures.avatarLinks = new AppApiError('not_available')
+    f.failures.removeAvatar = new AppApiError('not_available')
+    f.pictures.set('me', 'https://pics.test/me.jpg')
+    f.follows.add(f.key('me', 'c1'))
+    f.seedPost('c1', 'Still readable')
+    renderApp('/app', f.api)
+    // Setup still works, including the About you step with its photo field.
+    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: how you use Splitpost' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+    await screen.findByRole('heading', { name: 'Tell people about you' })
+    expect(screen.getByRole('button', { name: 'Add a photo' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Go to my feed' }))
+    expect(await screen.findByText('Still readable')).toBeTruthy()
+    expect(document.querySelector('img[src^="https://pics.test"]')).toBeNull()
+    cleanup()
+    renderApp('/app/profile', f.api)
+    expect(await screen.findByRole('heading', { name: 'Your name' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'About you' })).toBeTruthy()
+  })
+
+  it('saving or removing a picture while the function is unavailable says so plainly', async () => {
+    const f = fakeApi()
+    f.pictures.set('me', 'https://pics.test/me.jpg')
+    f.failures.removeAvatar = new AppApiError('not_available')
+    renderApp('/app/profile', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change picture' }))
+    const editor = within(await screen.findByTestId('avatar-editor'))
+    fireEvent.click(editor.getByRole('button', { name: 'Remove picture' }))
+    fireEvent.click(editor.getByRole('button', { name: 'Remove' }))
+    expect((await editor.findByRole('alert')).textContent).toMatch(/isn't available yet/)
+    expect(f.pictures.has('me')).toBe(true)
   })
 
   it('moderators clean up unused picture files only after a dry run and the exact phrase', async () => {
