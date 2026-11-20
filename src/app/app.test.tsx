@@ -15,8 +15,10 @@ import {
   usernameProblem,
   type AppApi,
   type Comment,
+  type MyDetails,
   type OwnProfile,
   type Post,
+  type ProfileDetails,
 } from './api'
 import { MemberArea } from './MemberArea'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
@@ -28,7 +30,15 @@ afterEach(cleanup)
 
 type Row = { id: string; username: string | null; displayName: string | null; createdAt: string }
 
-function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null; creators?: number } = {}) {
+function fakeApi(
+  meId = 'me',
+  opts: {
+    profile?: Partial<Row> | null
+    creators?: number
+    /** Profile details (20261123000000): 'done' (default, setup finished), 'new' (setup not done yet) or 'absent' (a database without them). */
+    details?: 'done' | 'new' | 'absent'
+  } = {},
+) {
   const users = new Map<string, Row>()
   const add = (id: string, username: string | null, displayName: string | null) =>
     users.set(id, { id, username, displayName, createdAt: '2026-11-17T10:00:00Z' })
@@ -74,6 +84,24 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null; creators?: 
     return p
   }
   const failures: Partial<Record<keyof AppApi, AppApiError>> = {}
+  // Profile details, with the database's rules (identity is descriptive only).
+  const topicList = [
+    { slug: 'food', label: 'Food & cooking' },
+    { slug: 'money', label: 'Money & business' },
+    { slug: 'tech', label: 'Tech' },
+    { slug: 'music', label: 'Music' },
+    { slug: 'travel', label: 'Travel' },
+    { slug: 'books', label: 'Books & writing' },
+  ]
+  const detailsMode = opts.details ?? 'done'
+  const details = new Map<string, MyDetails>()
+  if (detailsMode === 'done') details.set(meId, { identity: null, bio: null, followReason: null, topics: [], onboarded: true })
+  const savedDetails: ProfileDetails[] = []
+  const detailsOf = (id: string): ProfileDetails => {
+    const d = details.get(id)
+    return d ? { identity: d.identity, bio: d.bio, followReason: d.followReason, topics: [...d.topics] } : { identity: null, bio: null, followReason: null, topics: [] }
+  }
+  const shared = (id: string) => detailsOf(id).topics.filter((t) => detailsOf(meId).topics.includes(t)).length
   // Pilot membership (20261122000000): active unless a test says otherwise.
   const access: { status: 'active' | 'none' | 'revoked' | 'expired'; expiresAt: string | null } = { status: 'active', expiresAt: null }
   const maybeFail = (name: keyof AppApi) => {
@@ -148,18 +176,54 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null; creators?: 
         .filter((c) => c.post === postId && !c.deleted)
         .map((c) => ({ id: c.id, postId, author: summary(c.author), body: c.body, createdAt: new Date(c.at).toISOString(), isMine: c.author === meId }))
     },
-    async discover(query) {
+    async discover(query, topic) {
       complete()
       const q = (query ?? '').trim().toLowerCase()
+      const withDetails = detailsMode !== 'absent'
       return [...users.values()]
         .filter((u) => u.id !== meId && u.username && u.displayName && (!q || u.username.includes(q) || u.displayName.toLowerCase().includes(q)))
+        .filter((u) => !withDetails || !topic || detailsOf(u.id).topics.includes(topic))
         .map((u) => ({
           ...summary(u.id),
           postCount: posts.filter((p) => p.author === u.id && !p.deleted).length,
           followerCount: [...follows].filter((k) => k.endsWith(`>${u.id}`)).length,
           followedByMe: follows.has(key(meId, u.id)),
           inMyClique: clique.has(key(meId, u.id)),
+          ...(withDetails ? { details: detailsOf(u.id), sharedTopics: shared(u.id) } : {}),
         }))
+        .sort((a, b) => (b.sharedTopics ?? 0) - (a.sharedTopics ?? 0))
+    },
+    async topics() {
+      if (detailsMode === 'absent') return null
+      complete()
+      return topicList
+    },
+    async myDetails() {
+      if (detailsMode === 'absent') return null
+      complete()
+      return details.get(meId) ?? { identity: null, bio: null, followReason: null, topics: [], onboarded: false }
+    },
+    async saveDetails(d) {
+      if (detailsMode === 'absent') throw new AppApiError('not_available')
+      complete()
+      maybeFail('saveDetails')
+      if ((d.bio ?? '').trim().length > 160) throw new AppApiError('bio_too_long')
+      if (d.topics.length > 5) throw new AppApiError('too_many_topics')
+      savedDetails.push({ ...d, topics: [...d.topics] })
+      details.set(meId, { identity: d.identity, bio: d.bio?.trim() || null, followReason: d.followReason?.trim() || null, topics: [...new Set(d.topics)], onboarded: true })
+    },
+    async memberDetails(id) {
+      if (detailsMode === 'absent') return null
+      complete()
+      return users.get(id)?.displayName ? detailsOf(id) : null
+    },
+    async suggested() {
+      if (detailsMode === 'absent') return []
+      complete()
+      return (await api.discover())
+        .filter((m) => !m.followedByMe)
+        .sort((a, b) => (b.sharedTopics ?? 0) - (a.sharedTopics ?? 0))
+        .slice(0, 10)
     },
     async following() {
       complete()
@@ -294,7 +358,9 @@ function fakeApi(meId = 'me', opts: { profile?: Partial<Row> | null; creators?: 
     posts.push({ id, author, body, at: at ?? (clock += 1000), deleted: false })
     return id
   }
-  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access }
+  const setDetails = (id: string, d: Partial<MyDetails>) =>
+    details.set(id, { identity: null, bio: null, followReason: null, topics: [], onboarded: true, ...details.get(id), ...d })
+  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -458,6 +524,179 @@ describe('first visit: choosing a username and display name', () => {
     const { api } = fakeApi('me', { profile: null })
     renderApp('/app', api)
     expect(await screen.findByText(/Your profile isn't ready yet/)).toBeTruthy()
+  })
+})
+
+describe('first-time setup and profile details (20261123000000)', () => {
+  it('a new member goes from their name to identity, interests, about and people to follow, with progress shown, then the feed', async () => {
+    const f = fakeApi('me', { profile: { username: null, displayName: null }, details: 'new' })
+    f.setDetails('c1', { identity: 'creator', bio: 'Budget recipes.', followReason: 'A new recipe every week', topics: ['food', 'music'] })
+    f.setDetails('c2', { identity: 'fan', topics: ['travel'] })
+    renderApp('/app', f.api)
+    expect(await screen.findByText('Step 1 of 5: Your name')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'mia' } })
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Mia' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    // 2. Identity: descriptive only, and the page says so.
+    expect(await screen.findByRole('heading', { name: 'How will you use Splitpost?' })).toBeTruthy()
+    const bar = screen.getByRole('progressbar', { name: 'Profile setup' })
+    expect(bar.getAttribute('aria-valuenow')).toBe('2')
+    expect(screen.getByText(/This only describes you\. Everyone can post, follow and build a Clique, whatever you choose/)).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('radio', { name: /Creator/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    // 3. Interests, from the database's list, at most 5.
+    expect(await screen.findByRole('heading', { name: 'What are you into?' })).toBeTruthy()
+    for (const t of ['Food & cooking', 'Music']) fireEvent.click(screen.getByRole('button', { name: t }))
+    expect(screen.getByRole('button', { name: 'Music' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText(/2 of 5 chosen/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    // 4. About you, then saved once.
+    expect(await screen.findByRole('heading', { name: 'Tell people about you' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Short bio'), { target: { value: 'Home cook.\nToronto.' } })
+    fireEvent.change(screen.getByLabelText('Why should people follow you?'), { target: { value: 'Quick dinners' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+
+    // 5. People to follow, shared interests first, with the existing Follow button.
+    expect(await screen.findByRole('heading', { name: 'People you might like' })).toBeTruthy()
+    expect(f.savedDetails).toEqual([{ identity: 'creator', bio: 'Home cook. Toronto.', followReason: 'Quick dinners', topics: ['food', 'music'] }])
+    const people = await screen.findByTestId('suggested-people')
+    const first = within(people).getAllByRole('listitem')[0]
+    expect(within(first).getByRole('link', { name: 'Creator 1' })).toBeTruthy()
+    expect(within(first).getByText('Budget recipes.')).toBeTruthy()
+    expect(within(first).getByText('A new recipe every week')).toBeTruthy()
+    expect(within(first).getByText('Shares 2 of your interests')).toBeTruthy()
+    fireEvent.click(within(first).getByRole('button', { name: 'Follow Creator 1' }))
+    expect(await within(first).findByRole('button', { name: 'Unfollow Creator 1' })).toBeTruthy()
+    expect(f.follows.has(f.key('me', 'c1'))).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Go to my feed' }))
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
+  })
+
+  it('every step can be skipped: "Skip the rest" saves empty details and setup is not shown again', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    const view = renderApp('/app', f.api)
+    expect(await screen.findByRole('heading', { name: 'How will you use Splitpost?' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Skip the rest' }))
+    expect(await screen.findByRole('heading', { name: 'People you might like' })).toBeTruthy()
+    expect(f.savedDetails).toEqual([{ identity: null, bio: null, followReason: null, topics: [] }])
+    fireEvent.click(screen.getByRole('button', { name: 'Go to my feed' }))
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
+    view.unmount()
+    renderApp('/app', f.api)
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
+    expect(screen.queryByRole('progressbar')).toBeNull()
+  })
+
+  it('checks the limits before saving, and keeps the member on the step if saving fails', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: how you use Splitpost' }))
+    await screen.findByRole('heading', { name: 'What are you into?' })
+    for (const t of ['Food & cooking', 'Money & business', 'Tech', 'Music', 'Travel']) fireEvent.click(screen.getByRole('button', { name: t }))
+    // A sixth can't be chosen.
+    expect((screen.getByRole('button', { name: 'Books & writing' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('heading', { name: 'Tell people about you' })
+    fireEvent.change(screen.getByLabelText('Short bio'), { target: { value: 'x'.repeat(161) } })
+    expect(screen.getByText('161/160')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Keep your bio to 160 characters/)
+    expect(f.savedDetails).toHaveLength(0)
+    fireEvent.change(screen.getByLabelText('Short bio'), { target: { value: 'Fine.' } })
+    f.failures.saveDetails = new AppApiError('rate_limited')
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/going a little fast/)
+    expect(screen.getByRole('heading', { name: 'Tell people about you' })).toBeTruthy()
+    delete f.failures.saveDetails
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    expect(await screen.findByRole('heading', { name: 'People you might like' })).toBeTruthy()
+  })
+
+  it('on a database without profile details, the member goes straight in and nothing new is shown', async () => {
+    const f = fakeApi('me', { profile: { username: null, displayName: null }, details: 'absent' })
+    renderApp('/app', f.api)
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'mia' } })
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Mia' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
+    cleanup()
+    renderApp('/app/discover', f.api)
+    expect(await screen.findByRole('link', { name: 'Creator 1' })).toBeTruthy()
+    expect(screen.queryByText('Browse by interest')).toBeNull()
+    cleanup()
+    renderApp('/app/profile', f.api)
+    expect(await screen.findByRole('heading', { name: 'Your name' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByText('Loading your details…')).toBeNull())
+    expect(screen.queryByRole('heading', { name: 'About you' })).toBeNull()
+  })
+
+  it('Discover filters by interest and shows bios, follow reasons and shared interests', async () => {
+    const f = fakeApi()
+    f.setDetails('me', { topics: ['food'] })
+    f.setDetails('c1', { identity: 'creator', bio: 'Budget recipes.', followReason: 'A new recipe every week', topics: ['food'] })
+    f.setDetails('c2', { identity: 'both', topics: ['travel'] })
+    renderApp('/app/discover', f.api)
+    const items = await screen.findAllByRole('listitem')
+    expect(within(items[0]).getByRole('link', { name: 'Creator 1' })).toBeTruthy()
+    expect(within(items[0]).getByText('Shares 1 of your interests')).toBeTruthy()
+    expect(within(items[0]).getByText(/Why follow:/)).toBeTruthy()
+    expect(within(items[0]).getByText(/Creator ·/)).toBeTruthy()
+    const filter = screen.getByLabelText('Browse by interest') as HTMLSelectElement
+    expect([...filter.options].map((o) => o.textContent)).toEqual(['Everyone', 'Food & cooking', 'Money & business', 'Tech', 'Music', 'Travel', 'Books & writing'])
+    fireEvent.change(filter, { target: { value: 'travel' } })
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'Creator 1' })).toBeNull())
+    expect(screen.getByRole('link', { name: 'Creator 2' })).toBeTruthy()
+    expect(screen.getByText(/Creator and fan ·/)).toBeTruthy()
+    fireEvent.change(filter, { target: { value: 'books' } })
+    expect(await screen.findByText('Nobody has chosen Books & writing yet. Try another interest.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show everyone' }))
+    expect(await screen.findByRole('link', { name: 'Creator 1' })).toBeTruthy()
+  })
+
+  it("a member's page shows their identity, bio, why to follow and interests", async () => {
+    const f = fakeApi()
+    f.setDetails('c1', { identity: 'creator', bio: 'Budget recipes.', followReason: 'A new recipe every week', topics: ['food', 'music'] })
+    renderApp('/app/u/creator_1', f.api)
+    const about = await screen.findByTestId('member-about')
+    expect(within(about).getByText('Creator')).toBeTruthy()
+    expect(within(about).getByText('Budget recipes.')).toBeTruthy()
+    expect(within(about).getByText('Why follow')).toBeTruthy()
+    expect(within(about).getByText('A new recipe every week')).toBeTruthy()
+    expect(within(within(about).getByRole('list', { name: 'Interests' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Food & cooking', 'Music'])
+    cleanup()
+    renderApp('/app/u/creator_2', f.api)
+    expect(await screen.findByRole('heading', { name: 'Creator 2' })).toBeTruthy()
+    expect(screen.queryByTestId('member-about')).toBeNull()
+  })
+
+  it('details are edited later from Profile', async () => {
+    const f = fakeApi()
+    f.setDetails('me', { identity: 'fan', bio: 'Old bio', topics: ['tech'] })
+    renderApp('/app/profile', f.api)
+    expect(await screen.findByRole('heading', { name: 'About you' })).toBeTruthy()
+    expect((screen.getByRole('radio', { name: /Fan/ }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByLabelText('Short bio') as HTMLTextAreaElement).value).toBe('Old bio')
+    fireEvent.click(screen.getByRole('radio', { name: /Both/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Music' }))
+    fireEvent.change(screen.getByLabelText('Why should people follow you?'), { target: { value: 'Honest reviews' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }))
+    expect(await screen.findByText('Saved.')).toBeTruthy()
+    expect(f.savedDetails.at(-1)).toEqual({ identity: 'both', bio: 'Old bio', followReason: 'Honest reviews', topics: ['tech', 'music'] })
+  })
+
+  it('an empty feed suggests people who share your interests', async () => {
+    const f = fakeApi()
+    f.setDetails('me', { topics: ['music'] })
+    f.setDetails('c3', { topics: ['music'], followReason: 'Live sets' })
+    renderApp('/app', f.api)
+    expect(await screen.findByText('Your feed is quiet')).toBeTruthy()
+    const people = await screen.findByTestId('suggested-people')
+    expect(within(within(people).getAllByRole('listitem')[0]).getByRole('link', { name: 'Creator 3' })).toBeTruthy()
   })
 })
 
@@ -808,7 +1047,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     seedPost('c1', 'First post from Creator 1')
     renderApp('/app/discover', api)
     const card = within((await screen.findByRole('link', { name: 'Creator 1' })).closest('li')!)
-    expect(card.getByRole('link', { name: "See Creator 1's posts" }).getAttribute('href')).toBe('/app/u/creator_1#posts')
+    expect(card.getByRole('link', { name: 'See posts by Creator 1' }).getAttribute('href')).toBe('/app/u/creator_1#posts')
     expect(card.queryByRole('button', { name: 'Unfollow Creator 1' })).toBeNull()
 
     fireEvent.click(card.getByRole('button', { name: 'Follow Creator 1' }))

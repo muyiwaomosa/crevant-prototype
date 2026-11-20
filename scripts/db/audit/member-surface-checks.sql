@@ -35,11 +35,24 @@ declare
     'public.app_unlike(uuid)',
     'public.app_unseen_creators()'
   ];
+  -- Profile details (20261123000000), once applied. Before it, exactly the
+  -- list above; after it, exactly the list above plus these.
+  details text[] := array[
+    'public.app_discover_people(text,text,integer)',
+    'public.app_member_details(uuid)',
+    'public.app_my_details()',
+    'public.app_set_profile_details(text,text,text,text[])',
+    'public.app_suggested_creators(integer)',
+    'public.app_topics()'
+  ];
   actual text[];
   extra text[];
   missing text[];
   anon_fns text[];
 begin
+  if to_regclass('social.profile_details') is not null then
+    expected := expected || details;
+  end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
   from pg_catalog.pg_proc p

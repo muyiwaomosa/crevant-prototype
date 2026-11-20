@@ -3,11 +3,12 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { ArrowLeft, Check, Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, Modal, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
-import { LIMITS, type Comment, type DiscoverMember, type FollowedCreator, type Member, type Me, type Post } from './api'
+import { LIMITS, type Comment, type FollowedCreator, type Member, type Me, type Post } from './api'
 import { useAppApi, useMyProfile } from './AppApiContext'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
 import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
+import { DetailsEditor, MemberAbout, PersonSummary, SuggestedPeople, useTopics } from './profileDetails'
 
 /** Loads data for a page, with loading and error states and a reload function. */
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
@@ -371,6 +372,9 @@ function GettingStarted() {
           </li>
         ))}
       </ol>
+      <div className="mt-5">
+        <SuggestedPeople heading="People you might like" limit={3} />
+      </div>
     </Card>
   )
 }
@@ -408,7 +412,11 @@ export function DiscoverPage() {
   const api = useAppApi()
   const [query, setQuery] = useState('')
   const [submitted, setSubmitted] = useState('')
-  const list = useLoad(() => api.discover(submitted), [api, submitted])
+  const [topic, setTopic] = useState('')
+  const { topics } = useTopics()
+  const list = useLoad(() => api.discover(submitted, topic || undefined), [api, submitted, topic])
+  const mine = useLoad(async () => (await api.myDetails().catch(() => null))?.topics ?? [], [api])
+  const topicLabel = topics?.find((t) => t.slug === topic)?.label
 
   function search(e: FormEvent) {
     e.preventDefault()
@@ -417,7 +425,7 @@ export function DiscoverPage() {
 
   return (
     <>
-      <PageHeader title="Discover" subtitle="Find people to follow, most recently active first. Open a profile to read their posts." />
+      <PageHeader title="Discover" subtitle="Find people to follow. People who share your interests come first, then the most recently active." />
       <form onSubmit={search} role="search" className="mb-4 flex gap-2">
         <label htmlFor="discover-search" className="sr-only">
           Search people by name or username
@@ -437,20 +445,47 @@ export function DiscoverPage() {
           Search
         </button>
       </form>
+      {topics && topics.length > 0 && (
+        <div className="mb-4">
+          <label htmlFor="discover-topic" className="mb-1.5 block text-sm font-semibold text-ink-700">
+            Browse by interest
+          </label>
+          <select
+            id="discover-topic"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            className="block h-12 w-full rounded-2xl border border-ink-200 bg-white px-4 text-base text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+          >
+            <option value="">Everyone</option>
+            {topics.map((t) => (
+              <option key={t.slug} value={t.slug}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       {list.loading && !list.data && <Loading label="Finding people…" />}
       {list.error !== null && <ErrorNote error={list.error} />}
       {list.data && list.data.length === 0 && (
         <EmptyState
           icon={<Search className="h-7 w-7" />}
           title="Nobody found"
-          body={submitted ? `No one matches "${submitted}". Try a different name or username.` : 'No other members yet. Invited members will appear here.'}
+          body={
+            submitted
+              ? `No one matches "${submitted}"${topicLabel ? ` in ${topicLabel}` : ''}. Try a different name or username.`
+              : topicLabel
+                ? `Nobody has chosen ${topicLabel} yet. Try another interest.`
+                : 'No other members yet. Invited members will appear here.'
+          }
           action={
-            submitted ? (
+            submitted || topic ? (
               <button
                 type="button"
                 onClick={() => {
                   setQuery('')
                   setSubmitted('')
+                  setTopic('')
                 }}
                 className={buttonClass('secondary')}
               >
@@ -464,40 +499,12 @@ export function DiscoverPage() {
         <ul className="space-y-3">
           {list.data.map((m) => (
             <li key={m.id}>
-              <PersonCard member={m} onChange={list.reload} />
+              <PersonSummary member={m} topics={topics} myTopics={mine.data} onChange={list.reload} />
             </li>
           ))}
         </ul>
       )}
     </>
-  )
-}
-
-function PersonCard({ member, onChange }: { member: DiscoverMember; onChange: () => Promise<void> }) {
-  const profile = `/app/u/${member.username}`
-  return (
-    <Card className="p-4">
-      <div className="flex min-w-0 items-center gap-3">
-        <Link to={profile} aria-hidden="true" tabIndex={-1} className="shrink-0">
-          <MemberAvatar member={member} size={44} />
-        </Link>
-        <div className="min-w-0 flex-1 leading-tight">
-          <MemberLink member={member} className="block truncate" />
-          <p className="truncate text-[13px] text-ink-500">
-            @{member.username} · {member.postCount} {member.postCount === 1 ? 'post' : 'posts'} · {member.followerCount}{' '}
-            {member.followerCount === 1 ? 'follower' : 'followers'}
-          </p>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <RelationshipButtons member={member} onChange={onChange} postsHref={member.postCount > 0 ? `${profile}#posts` : undefined} />
-        {member.postCount > 0 && (
-          <Link to={`${profile}#posts`} aria-label={`See ${member.displayName}'s posts`} className="text-sm font-semibold text-brand-700 underline sm:mt-1.5">
-            See posts
-          </Link>
-        )}
-      </div>
-    </Card>
   )
 }
 
@@ -511,6 +518,8 @@ export function MemberPage() {
   const member = useLoad(() => api.member(username), [api, username])
   const m = member.data
   const posts = useLoad(async () => (m ? api.memberPosts(m.id) : []), [api, m?.id])
+  const details = useLoad(async () => (m ? api.memberDetails(m.id) : null), [api, m?.id])
+  const { topics } = useTopics()
   // Arriving from "See posts" (…#posts): bring the posts into view once they load.
   const postsReady = posts.data !== undefined && m !== undefined && m !== null
   useEffect(() => {
@@ -522,7 +531,7 @@ export function MemberPage() {
   if (!m) return <NotFoundPanel what="This member" />
   return (
     <>
-      <MemberHeader member={m} onChange={member.reload} />
+      <MemberHeader member={m} onChange={member.reload} about={<MemberAbout details={details.data} topics={topics} />} />
       <h2 id="posts" className="mb-3 mt-6 scroll-mt-20 font-display text-lg font-bold text-ink-900">
         Posts
       </h2>
@@ -551,7 +560,7 @@ export function MemberPage() {
   )
 }
 
-function MemberHeader({ member, onChange }: { member: Member; onChange: () => Promise<void> }) {
+function MemberHeader({ member, onChange, about }: { member: Member; onChange: () => Promise<void>; about?: ReactNode }) {
   return (
     <Card className="p-5">
       <div className="flex items-center gap-4">
@@ -561,6 +570,7 @@ function MemberHeader({ member, onChange }: { member: Member; onChange: () => Pr
           <p className="text-[15px] text-ink-500">@{member.username}</p>
         </div>
       </div>
+      {about}
       <dl className="mt-4 flex gap-6 text-sm">
         <div>
           <dt className="text-ink-500">Posts</dt>
@@ -1121,7 +1131,11 @@ export function ProfilePage() {
       )}
       {me.error !== null && <ErrorNote error={me.error} />}
       <Card className="p-5">
+        <h2 className="mb-4 font-display text-lg font-bold text-ink-900">Your name</h2>
         <ProfileForm initial={{ username: profile.username, displayName: profile.displayName }} submitLabel="Save changes" onSaved={refresh} />
+      </Card>
+      <Card className="mt-4 p-5">
+        <DetailsEditor />
       </Card>
     </>
   )
