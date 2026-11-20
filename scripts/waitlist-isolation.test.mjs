@@ -69,11 +69,11 @@ test('every e2e/edge file is marked test only', () => {
   for (const f of walk('e2e/edge')) assert.match(read(f), /^\/\/ TEST ONLY\. Never deployed/, f)
 })
 
-test('nothing deploys any function but join-waitlist and avatar', () => {
+test('nothing deploys any function but join-waitlist, avatar and post-media', () => {
   const files = [...walk('.github'), ...walk('scripts'), ...walk('docs'), 'package.json'].filter((p) => !p.endsWith('.test.mjs'))
   for (const f of files) {
     for (const m of read(f).matchAll(/functions deploy\s+([^\s`'"]+)/g)) {
-      assert.ok(['join-waitlist', 'avatar'].includes(m[1]), `${f} deploys ${m[1]}`)
+      assert.ok(['join-waitlist', 'avatar', 'post-media'].includes(m[1]), `${f} deploys ${m[1]}`)
     }
   }
 })
