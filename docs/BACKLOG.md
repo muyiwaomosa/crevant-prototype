@@ -10,7 +10,7 @@ approved.
 |---|---|---|
 | 5.1 Richer profiles and interests | on staging | identity, interests, bio, follow reason, Discover by interest |
 | 5.2a Reporting and moderation | on staging | reports, founder moderation, audit trail, 90-day retention |
-| 5.2b Profile pictures and profile experience | **planning** | private avatars with server-side validation, crop and zoom, avatars everywhere; Clique confirmation fix; small action-feedback improvements |
+| 5.2b Profile pictures and profile experience | **in review** | private avatars with server-side decode and re-encode, crop and zoom, avatars everywhere; Clique confirmation fix; consistent follow and Clique feedback |
 | **5.2c User feedback and feature requests** | **next; required before external pilot invitations** | see below |
 | 5.3 Photo and video posts | later | needs 5.2b's validation pipeline extended to post media |
 
@@ -50,5 +50,8 @@ missing, from inside the app, and the founder can review it in one place.
 | Preview access for testers (Vercel Authentication) | tester grants | founder decision: shareable link, team access or password protection |
 | Move the Preview to a long-lived branch | Build 4 | replaces `claude/pilot-membership-integration` |
 | Close superseded PRs #76 and #77 | Build 4 | unmerged by design |
-| Unfollow and "remove from Clique" happen on a single tap, with no confirmation or undo | 5.2b audit | proposed: a short "Undo" in the confirmation message (5.2b if approved, otherwise later) |
-| Clean up storage objects of deleted accounts | 5.2b plan | the avatar row is deleted with the account; the file needs a founder-run sweep |
+| Clean up storage objects of deleted accounts | 5.2b | done in 5.2b: the moderator's monthly "Picture storage" cleanup removes them |
+| Scheduled picture-storage cleanup | 5.2b | today a monthly moderator task; could join the pg_cron proposal |
+| Confirm hosted CDN behaviour for deleted pictures | 5.2b | unverified: how long a deleted file may still be served from cache on hosted staging |
+| HEIC photos on Android Chrome | 5.2b | may not open; the editor asks for another photo |
+| Undo after unfollow or removing from the Clique | 5.2b audit | approved for the backlog, not 5.2b |

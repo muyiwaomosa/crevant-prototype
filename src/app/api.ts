@@ -358,6 +358,7 @@ const MESSAGES: Record<string, string> = {
   photo_too_large: 'That photo is too large. Please choose one under 15 MB.',
   photo_type: 'Please choose a photo (JPEG, PNG, WebP or HEIC).',
   storage_unavailable: "We couldn't save your picture right now. Please try again.",
+  avatar_limit: 'You can change your picture 10 times a day. Please try again tomorrow.',
   plan_expired: 'That check is more than 15 minutes old. Run it again.',
   confirmation_mismatch: 'Type the confirmation exactly as shown.',
   network: "We couldn't reach Splitpost. Check your connection and try again.",
@@ -479,6 +480,7 @@ async function functionError(error: unknown): Promise<AppApiError> {
       const body = (await ctx.json()) as { error?: unknown }
       if (typeof body.error === 'string') {
         if (body.error === 'too_large') return new AppApiError('photo_too_large')
+        if (body.error === 'rate_limited') return new AppApiError('avatar_limit')
         if (body.error === 'unavailable') return new AppApiError('not_available')
         if (Object.prototype.hasOwnProperty.call(MESSAGES, body.error)) return new AppApiError(body.error)
       }
