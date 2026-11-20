@@ -36,5 +36,5 @@ deployments and acceptance gates.
 | HEIC photos on Android Chrome | 5.2b | may not open; the editor asks for another photo |
 | Undo after unfollow or removing from the Clique | 5.2b audit | approved for the backlog, not 5.2b |
 | Picture links: refetch when an image fails, and on returning to the tab | 5.2b acceptance | not a blocker; a changed picture can show initials in other open sessions for up to 50 minutes until a reload; planned with the shared media link cache in 5.3 |
-| Feedback retention purge | 5.2c | run `ops.purge_feedback` within 30 days of the pilot evaluation closing (`docs/FEEDBACK.md`) |
-| Pilot privacy notice: feedback line | 5.2c | needed before external invitations (`docs/FEEDBACK.md`) |
+| Feedback retention closeout | 5.2c | the founder runs the closeout checklist within 30 days of the pilot evaluation formally closing (`docs/FEEDBACK.md`) |
+| Publish the pilot privacy notice feedback wording | 5.2c | approved wording in `docs/PRIVACY-NOTICE-PILOT-FEEDBACK-DRAFT.md`; its own reviewed PR and notice version; **required before external invitations** |

@@ -315,8 +315,8 @@ export function FeedbackPage() {
               </p>
             </div>
             <p className="text-[13px] text-ink-500">
-              Sent from: <span className="font-semibold text-ink-700">{FEATURE_LABELS[feature]}</span>. We note only which part of the app you were using, plus your
-              name and pilot role, so we can follow up.
+              Sent from: <span className="font-semibold text-ink-700">{FEATURE_LABELS[feature]}</span>. We record which part of Splitpost you were using, along with
+              your name and pilot role, to help us understand your feedback.
             </p>
             {problem && (
               <div id={problemId}>

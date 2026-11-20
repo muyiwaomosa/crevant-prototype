@@ -98,7 +98,9 @@ const sideways = (page) => page.evaluate(() => document.documentElement.scrollWi
   await pageT.getByRole('heading', { name: 'Help us improve Splitpost' }).waitFor()
   check('the page has the approved title and supporting text', await pageT.getByText('Your feedback helps us build a better experience for creators and fans.').isVisible())
   await pageT.getByText(/^Sent from:/).waitFor()
-  check('the form says it was opened from Home', /Sent from: Home\./.test(await pageT.getByText(/^Sent from:/).textContent()))
+  check('the form says, before sending, that it was opened from Home, with the approved wording',
+    (await pageT.getByText(/^Sent from:/).textContent()).replace(/\s+/g, ' ') === 'Sent from: Home. We record which part of Splitpost you were using, along with your name and pilot role, to help us understand your feedback.')
+  check('the page promises no personal reply', !/follow up|get back to you|reply to you|respond to you/i.test(await pageT.locator('main').textContent()))
   check('the URL carries no context (nothing in the address or query string)', new URL(pageT.url()).pathname === '/app/feedback' && new URL(pageT.url()).search === '')
   {
     const v = await axe(pageT)

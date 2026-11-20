@@ -2132,7 +2132,11 @@ describe('feedback (Build 5.2c)', () => {
     fireEvent.click(sendLinks()[0])
     expect(await screen.findByRole('heading', { name: 'Help us improve Splitpost' })).toBeTruthy()
     expect(screen.getByText('Your feedback helps us build a better experience for creators and fans.')).toBeTruthy()
-    expect((await screen.findByText(/^Sent from:/)).textContent).toMatch(/^Sent from: Discover\./)
+    expect((await screen.findByText(/^Sent from:/)).textContent?.replace(/\s+/g, ' ')).toBe(
+      'Sent from: Discover. We record which part of Splitpost you were using, along with your name and pilot role, to help us understand your feedback.',
+    )
+    // No promise of a personal reply (not part of this build).
+    expect(document.body.textContent).not.toMatch(/follow up|get back to you|reply to you|respond to you/i)
     for (const label of ['Report a problem', 'Suggest an improvement', 'Share something I like']) expect(screen.getByRole('radio', { name: label })).toBeTruthy()
     // The founder's inbox link is only for the founder.
     expect(screen.queryByRole('link', { name: 'Open the feedback inbox' })).toBeNull()
