@@ -18,7 +18,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-EXCLUDE=realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+EXCLUDE=realtime,imgproxy,postgres-meta,studio,logflare,vector,supavisor  # Storage and the Edge runtime run: profile pictures (Build 5.2b)
 
 # Every host port the local stack is configured to bind.
 PORTS=$(grep -E '^[[:space:]]*(port|shadow_port)[[:space:]]*=[[:space:]]*[0-9]+' supabase/config.toml | grep -oE '[0-9]+$' | sort -un | paste -sd, -)

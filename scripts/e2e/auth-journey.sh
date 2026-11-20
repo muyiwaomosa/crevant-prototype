@@ -14,7 +14,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-EXCLUDE=realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+EXCLUDE=realtime,imgproxy,postgres-meta,studio,logflare,vector,supavisor  # Storage and the Edge runtime run: profile pictures (Build 5.2b)
 APP_PORT=4176
 
 expected_cli="${SUPABASE_CLI_VERSION:-2.122.1}"

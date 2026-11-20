@@ -146,6 +146,12 @@ jobs:
         run: scripts/db/rollback-test.sh
       - name: Publishing on the old and new schema (request id fallback, issue #48)
         run: scripts/db/request-ids-fallback-test.sh
+      # After the rollback tests (they need an empty picture store): the avatar
+      # Edge Function in the local Edge runtime, through the same gateway the
+      # app uses. Image validation, authorization, revocation, the daily
+      # limit, overlapping uploads, cleanup, and the Production guard.
+      - name: Avatar Edge Function on local Supabase (validation, authorization, cleanup)
+        run: scripts/e2e/avatar-edge.sh
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup || true
