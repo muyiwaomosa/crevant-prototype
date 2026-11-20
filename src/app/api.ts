@@ -35,6 +35,31 @@ export interface Post {
   likedByMe: boolean
   authorInMyClique: boolean
   isMine: boolean
+  /** Photo posts (20261127000000): the photo's shape and description; null or absent for text posts. */
+  media?: PostMedia | null
+}
+
+export type PostMedia = { kind: 'photo'; width: number; height: number; description: string | null }
+/** Signed links (valid for an hour) to a post's photo: the 800 px feed copy and the full 1600 px one. */
+export type PhotoLinks = { feed: string; full: string }
+/** Photo storage at a glance (moderators). */
+export interface MediaStatus {
+  photosEnabled: boolean
+  capBytes: number | null
+  usedBytes: number
+  photoPosts: number
+  queued: number
+  oldestQueuedAt: string | null
+  failing: number
+  gaveUp: number
+  held: number
+  heldOpenOver30Days: number
+  lastScheduledAt: string | null
+  lastRunAt: string | null
+  lastRunFailed: boolean
+  egressReviewGb: number | null
+  egressPauseGb: number | null
+  checks: Array<{ ok: boolean; ms: number; at: string }>
 }
 
 export interface Comment {
@@ -273,6 +298,24 @@ export interface AppApi {
   feedbackEntry(id: string): Promise<FeedbackEntry | null>
   setFeedbackStatus(id: string, status: FeedbackStatus): Promise<void>
   addFeedbackNote(id: string, note: string): Promise<void>
+  /**
+   * Photo posts (20261127000000 and the post-media Edge Function). The browser
+   * sends only its resized JPEG; the server checks it, makes both stored
+   * copies and stores them. Off (false) until the founder turns photos on,
+   * and on a database without them.
+   */
+  photoStatus(): Promise<boolean>
+  uploadPhoto(jpeg: Blob): Promise<{ uploadId: string; width: number; height: number }>
+  /** Publishes a post with a stored photo (caption optional). requestId as for createPost. */
+  createPhotoPost(body: string, requestId: string, uploadId: string, description?: string): Promise<string>
+  photoLinks(postIds: string[]): Promise<Record<string, PhotoLinks>>
+  /** After deleting a photo post: asks the server to work through the deletion queue now (the schedule guarantees it anyway). */
+  requestPhotoCleanup(): Promise<void>
+  modReportPhoto(reportId: string): Promise<(PhotoLinks & { description: string | null }) | null>
+  mediaStatus(): Promise<MediaStatus>
+  modMediaDrain(): Promise<{ deleted: number; failed: number }>
+  /** The founder's hosted processing check (one of six). */
+  runPhotoCheck(seed: number): Promise<{ ms: number; ok: boolean }>
   following(): Promise<FollowedCreator[]>
   /** requestId: the browser's id for this post, reused on retry, so it's stored once (issue #48). */
   createPost(body: string, requestId?: string): Promise<string>
@@ -402,6 +445,15 @@ const MESSAGES: Record<string, string> = {
   avatar_limit: 'You can change your picture 10 times a day. Please try again tomorrow.',
   plan_expired: 'That check is more than 15 minutes old. Run it again.',
   confirmation_mismatch: 'Type the confirmation exactly as shown.',
+  photos_unavailable: "Photo posts aren't available right now. You can still post text.",
+  photo_limit: 'You can post 10 photos a day. Please try again tomorrow.',
+  storage_full: "Photo storage is full for now. You can still post text, and we're on it.",
+  upload_not_ready: 'Something went wrong with that photo. Please add it again.',
+  upload_expired: 'That photo took too long to post. Please add it again.',
+  invalid_description: 'Keep the photo description to 250 characters on one line.',
+  photo_not_usable: "That photo couldn't be used. Please choose another one.",
+  photo_original_too_large: 'That photo is too large. Please choose one under 25 MB.',
+  photo_upload_failed: "We couldn't upload your photo right now. Please try again.",
   feedback_too_short: 'Please write at least 10 characters.',
   invalid_category: 'Choose what kind of feedback this is.',
   invalid_status: 'Choose a status from the list.',
@@ -447,6 +499,7 @@ type PostRow = {
   liked_by_me: boolean
   author_in_my_clique: boolean
   is_mine: boolean
+  media?: unknown
 }
 
 const num = (v: number | string | null | undefined) => Number(v ?? 0)
@@ -462,6 +515,7 @@ export function toPost(r: PostRow): Post {
     likedByMe: r.liked_by_me,
     authorInMyClique: r.author_in_my_clique,
     isMine: r.is_mine,
+    media: toMedia(r.media),
   }
 }
 
@@ -536,6 +590,34 @@ async function functionError(error: unknown): Promise<AppApiError> {
     return new AppApiError(ctx.status >= 500 ? 'storage_unavailable' : 'unknown')
   }
   return new AppApiError('network')
+}
+
+/** The post-media function's refusals, in the app's words. */
+async function photoFunctionError(error: unknown): Promise<AppApiError> {
+  const ctx = (error as { context?: unknown })?.context
+  if (ctx instanceof Response) {
+    if (ctx.status === 404) return new AppApiError('photos_unavailable')
+    try {
+      const body = (await ctx.json()) as { error?: unknown }
+      if (typeof body.error === 'string') {
+        if (['not_jpeg', 'wrong_size', 'not_decodable', 'too_large'].includes(body.error)) return new AppApiError('photo_not_usable')
+        if (body.error === 'unavailable') return new AppApiError('photos_unavailable')
+        if (body.error === 'storage_unavailable') return new AppApiError('photo_upload_failed')
+        if (Object.prototype.hasOwnProperty.call(MESSAGES, body.error)) return new AppApiError(body.error)
+      }
+    } catch {
+      /* not JSON */
+    }
+    return new AppApiError(ctx.status >= 500 ? 'photo_upload_failed' : 'unknown')
+  }
+  return new AppApiError('network')
+}
+
+function toMedia(v: unknown): PostMedia | null {
+  if (!v || typeof v !== 'object') return null
+  const m = v as Record<string, unknown>
+  if (m.kind !== 'photo' || typeof m.width !== 'number' || typeof m.height !== 'number' || m.width < 1 || m.height < 1) return null
+  return { kind: 'photo', width: m.width, height: m.height, description: typeof m.description === 'string' ? m.description : null }
 }
 
 function toFeedbackItem(r: Record<string, unknown>): FeedbackItem {
@@ -881,6 +963,84 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         ? writeOnce<string>('app_create_post', { p_body: body, p_request_id: requestId }, { p_body: body })
         : rpc<string>('app_create_post', { p_body: body }),
     deletePost: (id) => rpc<void>('app_delete_post', { p_post: id }),
+    async photoStatus() {
+      const { data, error } = await client.rpc('app_photo_status')
+      if (error) {
+        if (isMissingFunction(error, 'app_photo_status')) return false
+        throw toAppError(error)
+      }
+      return data === true
+    },
+    async uploadPhoto(jpeg) {
+      const { data, error } = await client.functions.invoke('post-media/photo', { body: jpeg, headers: { 'Content-Type': 'image/jpeg' } })
+      if (error) throw await photoFunctionError(error)
+      const d = (data ?? {}) as { uploadId?: unknown; width?: unknown; height?: unknown }
+      if (typeof d.uploadId !== 'string' || typeof d.width !== 'number' || typeof d.height !== 'number') throw new AppApiError('photo_upload_failed')
+      return { uploadId: d.uploadId, width: d.width, height: d.height }
+    },
+    createPhotoPost: (body, requestId, uploadId, description) =>
+      rpc<string>('app_create_post', { p_body: body, p_request_id: requestId, p_media: uploadId, p_media_description: description?.trim() || null }),
+    async photoLinks(postIds) {
+      const ids = [...new Set(postIds)].slice(0, 100)
+      if (ids.length === 0) return {}
+      const { data, error } = await client.functions.invoke('post-media/links', { body: { ids } })
+      // No function yet (or any failure): the post shows "couldn't load" with a retry.
+      if (error || !data || typeof data !== 'object') return {}
+      const photos = (data as { photos?: Record<string, { feed?: unknown; full?: unknown }> }).photos ?? {}
+      const base = client.storage.from('post-photos').getPublicUrl('x').data.publicUrl.split('/object/')[0]
+      const out: Record<string, PhotoLinks> = {}
+      for (const [id, v] of Object.entries(photos)) {
+        if (typeof v?.feed === 'string' && typeof v?.full === 'string' && v.feed.startsWith('/object/sign/post-photos/') && v.full.startsWith('/object/sign/post-photos/')) {
+          out[id] = { feed: `${base}${v.feed}`, full: `${base}${v.full}` }
+        }
+      }
+      return out
+    },
+    async requestPhotoCleanup() {
+      await client.functions.invoke('post-media/cleanup', { body: {} })
+    },
+    async modReportPhoto(reportId) {
+      const { data, error } = await client.functions.invoke('post-media/mod-photo', { body: { report: reportId } })
+      if (error) throw await photoFunctionError(error)
+      const p = (data as { photo?: { feed?: unknown; full?: unknown; description?: unknown } | null })?.photo
+      if (!p || typeof p.feed !== 'string' || typeof p.full !== 'string' || !p.feed.startsWith('/object/sign/post-photos/') || !p.full.startsWith('/object/sign/post-photos/')) return null
+      const base = client.storage.from('post-photos').getPublicUrl('x').data.publicUrl.split('/object/')[0]
+      return { feed: `${base}${p.feed}`, full: `${base}${p.full}`, description: typeof p.description === 'string' ? p.description : null }
+    },
+    async mediaStatus() {
+      const s = await rpc<Record<string, unknown>>('app_mod_media_status')
+      const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
+      return {
+        photosEnabled: s.photos_enabled === true,
+        capBytes: n(s.cap_bytes),
+        usedBytes: Number(s.used_bytes ?? 0),
+        photoPosts: Number(s.photo_posts ?? 0),
+        queued: Number(s.queued ?? 0),
+        oldestQueuedAt: (s.oldest_queued_at as string | null) ?? null,
+        failing: Number(s.failing ?? 0),
+        gaveUp: Number(s.gave_up ?? 0),
+        held: Number(s.held ?? 0),
+        heldOpenOver30Days: Number(s.held_open_over_30_days ?? 0),
+        lastScheduledAt: (s.last_scheduled_at as string | null) ?? null,
+        lastRunAt: (s.last_run_at as string | null) ?? null,
+        lastRunFailed: s.last_run_failed === true,
+        egressReviewGb: n(s.egress_review_gb),
+        egressPauseGb: n(s.egress_pause_gb),
+        checks: Array.isArray(s.checks) ? (s.checks as Array<Record<string, unknown>>).map((c) => ({ ok: c.ok === true, ms: Number(c.ms ?? 0), at: String(c.at) })) : [],
+      }
+    },
+    async modMediaDrain() {
+      const { data, error } = await client.functions.invoke('post-media/mod-drain', { body: {} })
+      if (error) throw await photoFunctionError(error)
+      const d = (data ?? {}) as { deleted?: unknown; failed?: unknown }
+      return { deleted: Number(d.deleted ?? 0), failed: Number(d.failed ?? 0) }
+    },
+    async runPhotoCheck(seed) {
+      const { data, error } = await client.functions.invoke('post-media/check', { body: { seed } })
+      if (error) throw await photoFunctionError(error)
+      const d = (data ?? {}) as { ms?: unknown; ok?: unknown }
+      return { ms: Number(d.ms ?? 0), ok: d.ok === true }
+    },
     follow: (id) => rpc<void>('app_follow', { p_creator: id }),
     unfollow: (id) => rpc<void>('app_unfollow', { p_creator: id }),
     cliqueAdd: (id) => rpc<void>('app_clique_add', { p_creator: id }),

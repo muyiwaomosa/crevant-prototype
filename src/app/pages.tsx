@@ -10,6 +10,7 @@ import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
 import { DetailsEditor, MemberAbout, PersonSummary, SuggestedPeople, useTopics } from './profileDetails'
 import { ReportButton, useModeration } from './moderation'
+import { PostComposer, usePhotosEnabled } from './media'
 import { ProfilePictureField } from './avatars'
 
 /** Loads data for a page, with loading and error states and a reload function. */
@@ -110,13 +111,11 @@ export function FeedPage() {
       <PageHeader title="Home" subtitle="Posts from people you follow, newest first." />
       <UnseenStrip />
       <Card className="mb-4 p-4 sm:p-5">
-        <TextComposer
+        <PostComposer
           label="Write a post"
           placeholder="Share something with the people who follow you…"
-          max={LIMITS.post}
-          submitLabel="Post"
-          onSubmit={async (text, requestId) => {
-            await api.createPost(text, requestId)
+          onPost={async ({ text, requestId, photo }) => {
+            await (photo ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description) : api.createPost(text, requestId))
             await feed.reload()
           }}
         />
@@ -390,18 +389,17 @@ function GettingStarted() {
 export function ComposePage() {
   const api = useAppApi()
   const navigate = useNavigate()
+  const photos = usePhotosEnabled()
   return (
     <>
-      <PageHeader title="Create a post" subtitle="Text posts for now. Everyone who follows you will see it in their feed." />
+      <PageHeader title="Create a post" subtitle={`${photos ? 'Text, or one photo with an optional caption.' : 'Text posts for now.'} Everyone who follows you will see it in their feed.`} />
       <Card className="p-4 sm:p-5">
-        <TextComposer
+        <PostComposer
           label="Write a post"
           placeholder="What do you want to share?"
-          max={LIMITS.post}
-          submitLabel="Post"
           rows={6}
-          onSubmit={async (text, requestId) => {
-            const id = await api.createPost(text, requestId)
+          onPost={async ({ text, requestId, photo }) => {
+            const id = await (photo ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description) : api.createPost(text, requestId))
             navigate(`/app/post/${id}`)
           }}
         />

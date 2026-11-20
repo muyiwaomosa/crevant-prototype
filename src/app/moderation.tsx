@@ -20,6 +20,8 @@ import {
 import { useAppApi } from './AppApiContext'
 import { When } from './components'
 import { StorageCleanupPanel } from './avatars'
+import { PhotoStoragePanel, ReportPhoto } from './media'
+import { useFeedbackAccess } from './feedback'
 
 /**
  * Reporting and founder-only moderation (Build 5, Stage 5.2a).
@@ -232,6 +234,7 @@ function PriorityBadge() {
 export function ModerationQueuePage() {
   const api = useAppApi()
   const { moderator } = useModeration()
+  const { founder } = useFeedbackAccess()
   const [tab, setTab] = useState<'open' | 'resolved'>('open')
   const [items, setItems] = useState<ModQueueItem[] | undefined>(undefined)
   const [error, setError] = useState<unknown>(null)
@@ -299,8 +302,9 @@ export function ModerationQueuePage() {
           ))}
         </ul>
       )}
-      <div className="mt-8">
+      <div className="mt-8 space-y-4">
         <StorageCleanupPanel />
+        <PhotoStoragePanel founder={founder} />
       </div>
     </>
   )
@@ -399,7 +403,8 @@ export function ModerationReportPage() {
               <p className="mt-1 text-[13px] text-ink-500">
                 By {snap.author_display_name} (@{snap.author_username})
               </p>
-              <p className="mt-1 whitespace-pre-wrap break-words text-[15px] text-ink-900">{snap.body}</p>
+              {snap.body && <p className="mt-1 whitespace-pre-wrap break-words text-[15px] text-ink-900">{snap.body}</p>}
+              {snap.media_full_path && <ReportPhoto reportId={r.id} />}
             </>
           ) : (
             <dl className="mt-1 grid gap-1 text-[15px] text-ink-900">
