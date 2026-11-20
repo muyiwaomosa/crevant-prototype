@@ -19,6 +19,7 @@ import {
 } from './api'
 import { useAppApi } from './AppApiContext'
 import { When } from './components'
+import { StorageCleanupPanel } from './avatars'
 
 /**
  * Reporting and founder-only moderation (Build 5, Stage 5.2a).
@@ -298,6 +299,9 @@ export function ModerationQueuePage() {
           ))}
         </ul>
       )}
+      <div className="mt-8">
+        <StorageCleanupPanel />
+      </div>
     </>
   )
 }

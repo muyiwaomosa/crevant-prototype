@@ -97,9 +97,14 @@ test('www.splitpost.ca may talk only to the Production project; everywhere else 
   }
 })
 
-test('the two rules are otherwise identical: the same policy apart from connect-src, the same other headers', () => {
+test('the two rules are otherwise identical: the same policy apart from connect-src (and the member app\'s staging pictures), the same other headers', () => {
   const [elsewhere, site] = securityRules
-  const without = (rule) => ({ ...cspOf(rule), 'connect-src': null })
+  // Profile pictures (Build 5.2b): the member app (every host but www) may
+  // load images from the staging project, where signed picture links point.
+  // That one host, in img-src, on that rule only. www.splitpost.ca is unchanged.
+  assert.deepEqual(cspOf(elsewhere)['img-src'], ["'self'", 'data:', 'blob:', STAGING])
+  assert.deepEqual(cspOf(site)['img-src'], ["'self'", 'data:', 'blob:'])
+  const without = (rule) => ({ ...cspOf(rule), 'connect-src': null, 'img-src': null })
   assert.deepEqual(without(site), without(elsewhere))
   const others = (rule) => rule.headers.filter((x) => x.key !== 'Content-Security-Policy')
   assert.deepEqual(others(site), others(elsewhere))

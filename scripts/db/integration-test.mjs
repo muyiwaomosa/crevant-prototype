@@ -217,6 +217,26 @@ let A, B, tokenA
   }
   check('no report was stored', sql('select count(*) from ops.content_reports') === '0')
 
+  // Profile pictures (20261125000000): the member steps need membership; the
+  // service steps and Storage itself are closed to members and visitors.
+  for (const fn of ['app_avatar_begin', 'app_avatar_remove']) {
+    const r = await rest(`/rpc/${fn}`, { method: 'POST', token: tokenA, body: {} })
+    check(`without membership, A cannot call ${fn} (no_pilot_access)`, r.status === 400 && r.json?.message === 'no_pilot_access', `${r.status} ${JSON.stringify(r.json)}`)
+  }
+  const pics = await rest('/rpc/app_avatars', { method: 'POST', token: tokenA, body: { p_members: [B] } })
+  check('without membership, A cannot read pictures (no_pilot_access)', pics.status === 400 && pics.json?.message === 'no_pilot_access', `${pics.status}`)
+  for (const [fn, body] of [['svc_avatar_commit', { p_path: `${A}/00000000-0000-4000-8000-000000000001.jpg` }], ['svc_avatar_orphan', { p_path: `${A}/00000000-0000-4000-8000-000000000001.jpg`, p_reason: 'x' }]]) {
+    const asMember = await rest(`/rpc/${fn}`, { method: 'POST', token: tokenA, body })
+    check(`a signed-in account cannot call ${fn}`, asMember.status === 401 || asMember.status === 403 || asMember.status === 404, String(asMember.status))
+    const asAnon = await rest(`/rpc/${fn}`, { method: 'POST', body })
+    check(`anonymous visitors cannot call ${fn}`, asAnon.status === 401 || asAnon.status === 403 || asAnon.status === 404, String(asAnon.status))
+  }
+  const direct = await call(`/storage/v1/object/avatars/${A}/00000000-0000-4000-8000-000000000002.jpg`, {
+    method: 'POST', token: tokenA, body: 'not an image', headers: { 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
+  })
+  check('a signed-in account cannot upload straight into Storage (no member storage policy)', direct.status >= 400, String(direct.status))
+  check('nothing was stored for A', sql(`select count(*) from social.avatar_uploads where user_id = '${A}'`) === '0' && sql("select count(*) from storage.objects where bucket_id = 'avatars'") === '0')
+
   const before = (await profileOf(A))[0]
   await sleep(50)
   const own = await rest(`/profiles?id=eq.${A}`, { method: 'PATCH', key: SERVICE, token: SERVICE, body: { username: `alice_${RUN}`.slice(0, 30), display_name: 'Alice' } })

@@ -22,6 +22,7 @@ import {
 } from './api'
 import { MemberArea } from './MemberArea'
 import { ModerationQueuePage, ModerationReportPage } from './moderation'
+import { clampOffset, coverScale, sourceRect } from './avatars'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
 
 afterEach(cleanup)
@@ -119,6 +120,10 @@ function fakeApi(
     if (!isModerator.value) throw new AppApiError('not_moderator')
   }
   const hiddenProfiles = new Set<string>()
+  // Profile pictures: id -> link. Uploads and removals are recorded.
+  const pictures = new Map<string, string>()
+  const pictureCalls: string[] = []
+  const storage = { unused: 0, bytes: 0, plans: new Map<string, string>() }
   const shared = (id: string) => detailsOf(id).topics.filter((t) => detailsOf(meId).topics.includes(t)).length
   // Pilot membership (20261122000000): active unless a test says otherwise.
   const access: { status: 'active' | 'none' | 'revoked' | 'expired'; expiresAt: string | null } = { status: 'active', expiresAt: null }
@@ -324,6 +329,37 @@ function fakeApi(
       for (const o of reports) if (o.targetId === r.targetId && o.status === 'open') o.status = 'dismissed'
       modActions.push({ action: 'dismiss', report: id, note: note?.trim() || null })
     },
+    async avatarLinks(ids) {
+      maybeFail('avatarLinks')
+      return Object.fromEntries(ids.filter((id) => pictures.has(id) && users.get(id)?.displayName).map((id) => [id, { url: pictures.get(id)!, updatedAt: null }]))
+    },
+    async uploadAvatar(jpeg) {
+      complete()
+      maybeFail('uploadAvatar')
+      pictureCalls.push(`upload:${jpeg.type}`)
+      pictures.set(meId, `https://pics.test/${meId}-${pictureCalls.length}.jpg`)
+    },
+    async removeAvatar() {
+      complete()
+      maybeFail('removeAvatar')
+      pictureCalls.push('remove')
+      pictures.delete(meId)
+    },
+    async modStoragePreview() {
+      requireModerator()
+      const planId = `plan-${storage.plans.size + 1}`
+      const phrase = `DELETE ${storage.unused} FILES`
+      storage.plans.set(planId, phrase)
+      return { planId, fileCount: storage.unused, totalBytes: storage.bytes, confirmPhrase: phrase, expiresAt: '2026-11-20T00:15:00Z' }
+    },
+    async modStorageCleanup(planId, confirm) {
+      requireModerator()
+      if (storage.plans.get(planId) !== confirm) throw new AppApiError('confirmation_mismatch')
+      storage.plans.delete(planId)
+      const deleted = storage.unused
+      storage.unused = 0
+      return { deleted, confirmed: deleted }
+    },
     async suggested() {
       if (detailsMode === 'absent') return []
       complete()
@@ -369,6 +405,7 @@ function fakeApi(
       clique.delete(key(meId, id))
     },
     async cliqueAdd(id) {
+      maybeFail('cliqueAdd')
       if (!follows.has(key(meId, id))) throw new AppApiError('not_following')
       if (clique.has(key(meId, id))) return
       if ([...clique].filter((k) => k.startsWith(`${meId}>`)).length >= 25) throw new AppApiError('clique_full')
@@ -472,7 +509,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport }
+  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -690,7 +727,7 @@ describe('first-time setup and profile details (20261123000000)', () => {
     expect(within(first).getByText('A new recipe every week')).toBeTruthy()
     expect(within(first).getByText('Shares 2 of your interests')).toBeTruthy()
     fireEvent.click(within(first).getByRole('button', { name: 'Follow Creator 1' }))
-    expect(await within(first).findByRole('button', { name: 'Unfollow Creator 1' })).toBeTruthy()
+    expect(await within(first).findByRole('button', { name: 'Following (Creator 1, tap to unfollow)' })).toBeTruthy()
     expect(f.follows.has(f.key('me', 'c1'))).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Go to my feed' }))
     expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
@@ -981,6 +1018,206 @@ describe('accessible names match what is visible (WCAG 2.5.3)', () => {
   })
 })
 
+describe('Clique confirmation (the suggestion card fix)', () => {
+  async function toSuggestions(f: ReturnType<typeof fakeApi>) {
+    f.setDetails('c1', { topics: ['food'], followReason: 'Recipes' })
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip the rest' }))
+    await screen.findByRole('heading', { name: 'People you might like' })
+    const people = await screen.findByTestId('suggested-people')
+    return within(within(people).getAllByRole('listitem').find((li) => li.textContent?.includes('Creator 1'))!)
+  }
+
+  it('after adding someone, the card says "Added to your Clique!" and shows "In your Clique", and stays that way; Discover agrees after navigating', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    const card = await toSuggestions(f)
+    fireEvent.click(card.getByRole('button', { name: 'Follow Creator 1' }))
+    const confirmation = within(await card.findByTestId('follow-confirmation'))
+    fireEvent.click(confirmation.getByRole('button', { name: 'Add to Clique (Creator 1)' }))
+    expect((await card.findByTestId('relationship-notice')).textContent).toBe('Added to your Clique!')
+    const inClique = card.getByRole('button', { name: 'In your Clique (Creator 1, tap to remove)' })
+    expect(inClique.textContent?.trim()).toMatch(/^In your Clique/)
+    expect(inClique.querySelector('svg')).toBeTruthy() // the check mark
+    // The suggestions no longer include people you follow; the card keeps the right state anyway.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(card.getByRole('button', { name: 'In your Clique (Creator 1, tap to remove)' })).toBeTruthy()
+    expect(card.queryByRole('button', { name: 'Add to Clique (Creator 1)' })).toBeNull()
+    expect(f.clique.has(f.key('me', 'c1'))).toBe(true)
+    // After leaving setup, Discover shows the same (server) state.
+    fireEvent.click(screen.getByRole('button', { name: 'Go to my feed' }))
+    await screen.findByRole('heading', { name: 'Home' })
+    cleanup()
+    renderApp('/app/discover', f.api)
+    expect(await screen.findByRole('button', { name: 'In your Clique (Creator 1, tap to remove)' })).toBeTruthy()
+  })
+
+  it('a double tap sends one request; a failure shows a clear message and changes nothing', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    let calls = 0
+    const add = f.api.cliqueAdd.bind(f.api)
+    f.api.cliqueAdd = async (id) => {
+      calls++
+      await new Promise((r) => setTimeout(r, 30))
+      return add(id)
+    }
+    const card = await toSuggestions(f)
+    fireEvent.click(card.getByRole('button', { name: 'Follow Creator 1' }))
+    const button = await within(await card.findByTestId('follow-confirmation')).findByRole('button', { name: 'Add to Clique (Creator 1)' })
+    f.failures.cliqueAdd = new AppApiError('rate_limited')
+    fireEvent.click(button)
+    expect((await card.findByRole('alert')).textContent).toMatch(/going a little fast/)
+    expect(card.getByRole('button', { name: 'Add to Clique (Creator 1)' })).toBeTruthy()
+    expect(f.clique.has(f.key('me', 'c1'))).toBe(false)
+    delete f.failures.cliqueAdd
+    calls = 0
+    const again = card.getByRole('button', { name: 'Add to Clique (Creator 1)' })
+    fireEvent.click(again)
+    fireEvent.click(again)
+    expect((await card.findByTestId('relationship-notice')).textContent).toBe('Added to your Clique!')
+    expect(calls).toBe(1)
+  })
+
+  it('removing from the Clique and unfollowing say so clearly', async () => {
+    const f = fakeApi()
+    f.follows.add(f.key('me', 'c1'))
+    f.clique.add(f.key('me', 'c1'))
+    renderApp('/app/u/creator_1', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'In your Clique (Creator 1, tap to remove)' }))
+    expect((await screen.findByTestId('relationship-notice')).textContent).toBe('Removed from your Clique. You still follow Creator 1.')
+    fireEvent.click(screen.getByRole('button', { name: 'Following (Creator 1, tap to unfollow)' }))
+    expect((await screen.findByTestId('relationship-notice')).textContent).toBe('You unfollowed Creator 1.')
+    expect(screen.getByRole('button', { name: 'Follow Creator 1' })).toBeTruthy()
+  })
+})
+
+describe('profile pictures (20261125000000)', () => {
+  it('crop maths: the photo always covers the square, and the saved part is what is shown', () => {
+    expect(coverScale(1024, 768, 240)).toBeCloseTo(240 / 768)
+    expect(clampOffset(10, 400, 240)).toBe(0) // can't leave a gap on the left
+    expect(clampOffset(-500, 400, 240)).toBe(-160) // or on the right
+    expect(clampOffset(-80, 400, 240)).toBe(-80)
+    const s = coverScale(1000, 500, 240) * 2 // zoomed in 2x
+    expect(sourceRect({ x: -100, y: -60, scale: s, view: 240 })).toEqual({ sx: 100 / s, sy: 60 / s, size: 240 / s })
+  })
+
+  it('shows pictures wherever members appear, and initials for everyone else', async () => {
+    const f = fakeApi()
+    f.pictures.set('c1', 'https://pics.test/c1.jpg')
+    f.follows.add(f.key('me', 'c1'))
+    f.seedPost('c1', 'With a picture')
+    f.seedPost('c2', 'Without one')
+    f.follows.add(f.key('me', 'c2'))
+    const view = renderApp('/app', f.api)
+    await screen.findByText('With a picture')
+    await waitFor(() => expect(view.container.querySelector('img[src="https://pics.test/c1.jpg"]')).toBeTruthy())
+    const other = screen.getAllByTestId('post').find((p) => p.textContent?.includes('Without one'))!
+    expect(other.querySelector('img[src^="https://pics.test"]')).toBeNull()
+    cleanup()
+    const d = renderApp('/app/discover', f.api)
+    await screen.findByRole('link', { name: 'Creator 1' })
+    await waitFor(() => expect(d.container.querySelector('img[src="https://pics.test/c1.jpg"]')).toBeTruthy())
+  })
+
+  it('the editor offers camera and gallery, refuses non-photos and huge files, and removes a picture after confirming', async () => {
+    const f = fakeApi()
+    f.pictures.set('me', 'https://pics.test/me.jpg')
+    renderApp('/app/profile', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change picture' }))
+    const editor = within(await screen.findByTestId('avatar-editor'))
+    const input = editor.getByLabelText('Choose a new photo', { selector: 'input' }) as HTMLInputElement
+    expect(input.type).toBe('file')
+    expect(input.getAttribute('accept')).toBe('image/*')
+    expect(input.hasAttribute('capture')).toBe(false) // phones offer camera AND gallery
+    fireEvent.change(input, { target: { files: [new File(['%PDF'], 'notes.pdf', { type: 'application/pdf' })] } })
+    expect((await editor.findByRole('alert')).textContent).toMatch(/Please choose a photo/)
+    const huge = new File(['x'], 'huge.jpg', { type: 'image/jpeg' })
+    Object.defineProperty(huge, 'size', { value: 16 * 1024 * 1024 })
+    fireEvent.change(input, { target: { files: [huge] } })
+    expect((await editor.findByRole('alert')).textContent).toMatch(/under 15 MB/)
+    expect(f.pictureCalls).toEqual([])
+    fireEvent.click(editor.getByRole('button', { name: 'Remove picture' }))
+    fireEvent.click(editor.getByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText('Profile picture removed. Your initials show instead.')).toBeTruthy()
+    expect(f.pictureCalls).toEqual(['remove'])
+    expect(f.pictures.has('me')).toBe(false)
+  })
+
+  it('the About you step offers an optional photo', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: how you use Splitpost' }))
+    await screen.findByRole('heading', { name: 'What are you into?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('heading', { name: 'Tell people about you' })
+    const field = within(screen.getByTestId('profile-picture-field'))
+    expect(field.getByText('Profile picture (optional)')).toBeTruthy()
+    expect(field.getByRole('button', { name: 'Add a photo' })).toBeTruthy()
+  })
+
+  it('when picture links fail (function unavailable), the feed, profiles and setup keep working with initials', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    f.failures.avatarLinks = new AppApiError('not_available')
+    f.failures.removeAvatar = new AppApiError('not_available')
+    f.pictures.set('me', 'https://pics.test/me.jpg')
+    f.follows.add(f.key('me', 'c1'))
+    f.seedPost('c1', 'Still readable')
+    renderApp('/app', f.api)
+    // Setup still works, including the About you step with its photo field.
+    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: how you use Splitpost' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+    await screen.findByRole('heading', { name: 'Tell people about you' })
+    expect(screen.getByRole('button', { name: 'Add a photo' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Go to my feed' }))
+    expect(await screen.findByText('Still readable')).toBeTruthy()
+    expect(document.querySelector('img[src^="https://pics.test"]')).toBeNull()
+    cleanup()
+    renderApp('/app/profile', f.api)
+    expect(await screen.findByRole('heading', { name: 'Your name' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'About you' })).toBeTruthy()
+  })
+
+  it('saving or removing a picture while the function is unavailable says so plainly', async () => {
+    const f = fakeApi()
+    f.pictures.set('me', 'https://pics.test/me.jpg')
+    f.failures.removeAvatar = new AppApiError('not_available')
+    renderApp('/app/profile', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change picture' }))
+    const editor = within(await screen.findByTestId('avatar-editor'))
+    fireEvent.click(editor.getByRole('button', { name: 'Remove picture' }))
+    fireEvent.click(editor.getByRole('button', { name: 'Remove' }))
+    expect((await editor.findByRole('alert')).textContent).toMatch(/isn't available yet/)
+    expect(f.pictures.has('me')).toBe(true)
+  })
+
+  it('moderators clean up unused picture files only after a dry run and the exact phrase', async () => {
+    const f = fakeApi('me', { moderator: true })
+    f.storage.unused = 2
+    f.storage.bytes = 40_000
+    renderApp('/app/moderation', f.api)
+    const panel = within(await screen.findByTestId('storage-cleanup'))
+    fireEvent.click(panel.getByRole('button', { name: 'Check for unused files' }))
+    expect(await panel.findByText(/2 unused files \(40 KB\)/)).toBeTruthy()
+    const run = panel.getByRole('button', { name: 'Delete 2 files' }) as HTMLButtonElement
+    expect(run.disabled).toBe(true)
+    fireEvent.change(panel.getByLabelText(/to confirm/), { target: { value: 'delete 2 files' } })
+    expect(run.disabled).toBe(true)
+    fireEvent.change(panel.getByLabelText(/to confirm/), { target: { value: 'DELETE 2 FILES' } })
+    fireEvent.click(run)
+    expect(await panel.findByText('Deleted 2 unused files.')).toBeTruthy()
+  })
+
+  it('members who are not moderators never see storage cleanup', async () => {
+    const f = fakeApi()
+    renderApp('/app/moderation', f.api)
+    expect(await screen.findByText("This page isn't available")).toBeTruthy()
+    expect(screen.queryByTestId('storage-cleanup')).toBeNull()
+  })
+})
+
 describe('feed and posting', () => {
   it('starts quiet, points to Discover, and shows your own post after posting', async () => {
     const { api } = fakeApi()
@@ -1125,9 +1362,10 @@ describe('Following and My Clique', () => {
     seedPost('c1', 'Hello from Creator 1')
     renderApp('/app/discover', api)
     fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 1' }))
-    expect(await screen.findByRole('button', { name: 'Unfollow Creator 1' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Add Creator 1 to your Clique' }))
-    expect(await screen.findByRole('button', { name: 'Remove Creator 1 from your Clique (you keep following them)' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Following (Creator 1, tap to unfollow)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Clique (Creator 1)' }))
+    expect(await screen.findByRole('button', { name: 'In your Clique (Creator 1, tap to remove)' })).toBeTruthy()
+    expect(screen.getByTestId('relationship-notice').textContent).toBe('Added to your Clique!')
   })
 
   it('follows are unlimited: Following lists all 30 followed creators, each with its status', async () => {
@@ -1136,7 +1374,7 @@ describe('Following and My Clique', () => {
     expect(await screen.findByText('30 creators')).toBeTruthy()
     expect(following().getAllByRole('listitem')).toHaveLength(30)
     expect(following().getAllByText('Clique')).toHaveLength(2)
-    expect(following().getAllByRole('button', { name: /^Add Creator \d+ to your Clique$/ })).toHaveLength(28)
+    expect(following().getAllByRole('button', { name: /^Add to Clique \(Creator \d+\)$/ })).toHaveLength(28)
     expect(following().getAllByRole('button', { name: /^Unfollow Creator/ })).toHaveLength(30)
     expect(screen.getByLabelText('2 of 25 in your Clique').textContent).toBe('2/25')
   })
@@ -1144,10 +1382,10 @@ describe('Following and My Clique', () => {
   it('adds and removes Clique creators; removing never unfollows', async () => {
     const fake = setup(3, 1)
     renderApp('/app/clique', fake.api)
-    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Add Creator 2 to your Clique' }))
+    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Add to Clique (Creator 2)' }))
     expect(await screen.findByLabelText('2 of 25 in your Clique')).toBeTruthy()
     expect((await screen.findByTestId('clique-status')).textContent).toMatch(/Creator 2 was added/)
-    fireEvent.click(myClique().getByRole('button', { name: 'Remove Creator 1 from your Clique (you keep following them)' }))
+    fireEvent.click(myClique().getByRole('button', { name: 'Remove from Clique (Creator 1, you keep following them)' }))
     expect(await screen.findByLabelText('1 of 25 in your Clique')).toBeTruthy()
     expect(fake.follows.has(fake.key('me', 'c1'))).toBe(true)
     expect(following().getByRole('button', { name: 'Unfollow Creator 1' })).toBeTruthy()
@@ -1167,7 +1405,7 @@ describe('Following and My Clique', () => {
     const fake = setup(27, 25)
     renderApp('/app/clique', fake.api)
     expect(await screen.findByLabelText('25 of 25 in your Clique')).toBeTruthy()
-    const add = following().getByRole('button', { name: 'Add Creator 26 to your Clique' })
+    const add = following().getByRole('button', { name: 'Add to Clique (Creator 26)' })
     expect(add.getAttribute('aria-haspopup')).toBe('dialog')
     fireEvent.click(add)
     const dialog = within(await screen.findByRole('dialog', { name: 'Your Clique is full' }))
@@ -1184,13 +1422,13 @@ describe('Following and My Clique', () => {
     expect(innerOf(fake)).toContain('me>c26')
     expect(innerOf(fake)).not.toContain('me>c3')
     expect(fake.follows.has(fake.key('me', 'c3'))).toBe(true)
-    expect(following().getByRole('button', { name: 'Add Creator 3 to your Clique' })).toBeTruthy()
+    expect(following().getByRole('button', { name: 'Add to Clique (Creator 3)' })).toBeTruthy()
   })
 
   // Opens the replacement dialog for Creator 26 with c1..c25 in the Clique.
   async function openReplace(fake: ReturnType<typeof fakeApi>) {
     renderApp('/app/clique', fake.api)
-    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Add Creator 26 to your Clique' }))
+    fireEvent.click(await (await loaded()).findByRole('button', { name: 'Add to Clique (Creator 26)' }))
     return within(await screen.findByRole('dialog', { name: 'Your Clique is full' }))
   }
 
@@ -1271,7 +1509,7 @@ describe('Following and My Clique', () => {
     const fake = setup(27, 25)
     const before = innerOf(fake)
     renderApp('/app/clique', fake.api)
-    const add = await (await loaded()).findByRole('button', { name: 'Add Creator 27 to your Clique' })
+    const add = await (await loaded()).findByRole('button', { name: 'Add to Clique (Creator 27)' })
     add.focus()
     fireEvent.click(add)
     const dialog = await screen.findByRole('dialog')
@@ -1288,7 +1526,7 @@ describe('Following and My Clique', () => {
   it('a full Clique elsewhere links to the Clique page, which opens the replacement for that creator', async () => {
     const fake = setup(26, 25)
     renderApp('/app/u/creator_26', fake.api)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Creator 26 to your Clique' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to Clique (Creator 26)' }))
     expect((await screen.findByRole('alert')).textContent).toMatch(/full \(25\)/)
     fireEvent.click(screen.getByRole('link', { name: 'Choose who to replace' }))
     const dialog = within(await screen.findByRole('dialog', { name: 'Your Clique is full' }))
@@ -1308,7 +1546,7 @@ describe('Following and My Clique', () => {
     follows.add(key('me', 'c1'))
     clique.add(key('me', 'c1'))
     renderApp('/app/u/creator_1', api)
-    fireEvent.click(await screen.findByRole('button', { name: 'Unfollow Creator 1' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Following (Creator 1, tap to unfollow)' }))
     expect(await screen.findByRole('button', { name: 'Follow Creator 1' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Clique/ })).toBeNull()
   })
@@ -1329,22 +1567,21 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     renderApp('/app/discover', api)
     const card = within((await screen.findByRole('link', { name: 'Creator 1' })).closest('li')!)
     expect(card.getByRole('link', { name: 'See posts by Creator 1' }).getAttribute('href')).toBe('/app/u/creator_1#posts')
-    expect(card.queryByRole('button', { name: 'Unfollow Creator 1' })).toBeNull()
+    expect(card.queryByRole('button', { name: 'Following (Creator 1, tap to unfollow)' })).toBeNull()
 
     fireEvent.click(card.getByRole('button', { name: 'Follow Creator 1' }))
     const confirmation = within(await card.findByTestId('follow-confirmation'))
     expect(confirmation.getByText(/You're following/).textContent).toMatch(/Creator 1\. Their new posts will appear on Home, newest first\./)
-    expect(card.getByRole('button', { name: 'Unfollow Creator 1' }).textContent).toBe('Following')
+    expect(card.getByRole('button', { name: 'Following (Creator 1, tap to unfollow)' }).textContent?.trim()).toMatch(/^Following/)
     // One "Add to Clique" only: the confirmation's.
-    expect(card.getAllByRole('button', { name: 'Add Creator 1 to your Clique' })).toHaveLength(1)
+    expect(card.getAllByRole('button', { name: 'Add to Clique (Creator 1)' })).toHaveLength(1)
     expect(confirmation.getByRole('link', { name: 'See their posts' }).getAttribute('href')).toBe('/app/u/creator_1#posts')
 
-    fireEvent.click(confirmation.getByRole('button', { name: 'Add Creator 1 to your Clique' }))
-    expect(await card.findByText(/They are in your Clique\./)).toBeTruthy()
+    fireEvent.click(confirmation.getByRole('button', { name: 'Add to Clique (Creator 1)' }))
+    expect((await card.findByTestId('relationship-notice')).textContent).toBe('Added to your Clique!')
     expect(clique.has(key('me', 'c1'))).toBe(true)
-    expect(card.getByRole('button', { name: 'Remove Creator 1 from your Clique (you keep following them)' })).toBeTruthy()
-
-    fireEvent.click(card.getByRole('button', { name: 'Not now' }))
+    expect(card.getByRole('button', { name: 'In your Clique (Creator 1, tap to remove)' })).toBeTruthy()
+    // The follow prompt is done once they're in the Clique.
     expect(card.queryByTestId('follow-confirmation')).toBeNull()
   })
 
@@ -1382,7 +1619,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 5' }))
     const confirmation = within(await screen.findByTestId('follow-confirmation'))
     expect(confirmation.getByRole('link', { name: 'See their posts' }).getAttribute('href')).toBe('#posts')
-    expect(confirmation.getByRole('button', { name: 'Add Creator 5 to your Clique' })).toBeTruthy()
+    expect(confirmation.getByRole('button', { name: 'Add to Clique (Creator 5)' })).toBeTruthy()
   })
 
   it('adding from the confirmation when the Clique is full leads to the replacement choice', async () => {
@@ -1393,7 +1630,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     }
     renderApp('/app/u/creator_26', fake.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 26' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Creator 26 to your Clique' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to Clique (Creator 26)' }))
     expect((await screen.findByRole('alert')).textContent).toBe('Your Clique is full (25). Choose someone to replace.')
     expect(screen.getByRole('link', { name: 'Choose who to replace' }).getAttribute('href')).toBe('/app/clique?add=c26')
   })
@@ -1658,7 +1895,7 @@ describe('member-facing copy never says "Inner Clique"', () => {
 
     // A full Clique elsewhere: the error and the link.
     renderApp('/app/u/creator_26', fake.api)
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Creator 26 to your Clique' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to Clique (Creator 26)' }))
     expect((await screen.findByRole('alert')).textContent).toBe('Your Clique is full (25). Choose someone to replace.')
     expect(shownCopy()).not.toMatch(OLD)
     cleanup()
@@ -1667,7 +1904,7 @@ describe('member-facing copy never says "Inner Clique"', () => {
     renderApp('/app/clique', fake.api)
     const followingList = within(await screen.findByRole('region', { name: 'Following' }))
     expect(shownCopy()).not.toMatch(OLD)
-    fireEvent.click(followingList.getByRole('button', { name: 'Add Creator 26 to your Clique' }))
+    fireEvent.click(followingList.getByRole('button', { name: 'Add to Clique (Creator 26)' }))
     const dialog = within(await screen.findByRole('dialog', { name: 'Your Clique is full' }))
     expect(shownCopy()).not.toMatch(OLD)
     fake.failures.cliqueReplace = new AppApiError('not_in_clique')

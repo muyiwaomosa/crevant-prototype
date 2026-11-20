@@ -22,7 +22,7 @@ if (!/^http:\/\/(127\.0\.0\.1|localhost):/.test(API)) throw new Error('Refusing:
 
 const vercel = JSON.parse(readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'))
 const SECURITY_HEADERS = Object.fromEntries(
-  vercel.headers.find((h) => h.source === '/(.*)').headers.map((h) => [h.key.toLowerCase(), h.value.replace('https://kpudeppgokpjhvaqrprn.supabase.co', API)]),
+  vercel.headers.find((h) => h.source === '/(.*)').headers.map((h) => [h.key.toLowerCase(), h.value.replaceAll('https://kpudeppgokpjhvaqrprn.supabase.co', API)]),
 )
 const AXE = readFileSync(path.join(__dirname, '..', 'node_modules', 'axe-core', 'axe.min.js'), 'utf8')
 
@@ -228,6 +228,50 @@ async function signIn(page, email) {
   await pageB.getByTestId('post').filter({ hasText: postText }).waitFor()
   check('after Restore, the post is back in the feed', true)
   check('every action is in the append-only audit trail', sql(`select string_agg(action, ',' order by id) from ops.moderation_actions where target_id = '${postId}'`) === 'hide,restore')
+
+  // 6. Build 5.2b: the Clique confirmation on "People you might like" (a
+  //    fresh member who hasn't finished setup), then the same state on Discover.
+  {
+    const email = `modc-${RUN}@example.test`
+    const r = await fetch(`${API}/auth/v1/admin/users`, { method: 'POST', headers: adminHeaders, body: JSON.stringify({ email, password: PASSWORD, email_confirm: true }) })
+    const C = await r.json()
+    sql(`update public.profiles set username = 'modc_${RUN}', display_name = 'Cleo New' where id = '${C.id}'`)
+    sql(`select ops.grant_member_access('${C.id}', 'tester', 'moderation-journey')`)
+    const ctxC = await newContext(browser)
+    const pageC = await ctxC.newPage()
+    await pageC.goto(`${APP}/sign-in?next=%2Fapp`)
+    await pageC.getByLabel('Email address', { exact: true }).fill(email)
+    await pageC.getByLabel('Password', { exact: true }).fill(PASSWORD)
+    await pageC.getByRole('button', { name: 'Sign in' }).click()
+    await pageC.getByRole('heading', { name: 'How will you use Splitpost?' }).waitFor()
+    await pageC.getByRole('button', { name: 'Skip the rest' }).click()
+    await pageC.getByRole('heading', { name: 'People you might like' }).waitFor()
+    const card = pageC.getByTestId('suggested-people').getByRole('listitem').filter({ hasText: A.displayName })
+    await card.getByRole('button', { name: `Follow ${A.displayName}` }).click()
+    await card.getByTestId('follow-confirmation').getByRole('button', { name: `Add to Clique (${A.displayName})` }).click()
+    await card.getByRole('button', { name: `In your Clique (${A.displayName}, tap to remove)` }).waitFor()
+    check('on "People you might like", adding to the Clique says "Added to your Clique!" and shows "In your Clique"',
+      ((await card.getByTestId('relationship-notice').innerText()) || '').includes('Added to your Clique!'))
+    await pageC.waitForTimeout(800)
+    check('the card keeps "In your Clique" (no stale "Add to Clique")',
+      (await card.getByRole('button', { name: `Add to Clique (${A.displayName})` }).count()) === 0
+        && (await card.getByRole('button', { name: `In your Clique (${A.displayName}, tap to remove)` }).count()) === 1)
+    check('the Clique membership is stored once', sql(`select count(*) from social.clique_members where fan_id = '${C.id}' and creator_id = '${A.id}' and removed_at is null`) === '1')
+    {
+      const v = await axe(pageC)
+      check('"People you might like" with the confirmation has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
+      await fits(pageC, '"People you might like"')
+    }
+    await pageC.getByRole('button', { name: 'Go to my feed' }).click()
+    await pageC.getByRole('heading', { name: 'Home' }).waitFor()
+    await pageC.reload()
+    await pageC.goto(`${APP}/app/discover`)
+    await pageC.getByLabel('Search people by name or username').fill(A.username)
+    await pageC.getByRole('button', { name: 'Search' }).click()
+    await pageC.getByRole('button', { name: `In your Clique (${A.displayName}, tap to remove)` }).waitFor()
+    check('after a reload and navigating to Discover, the person is still "In your Clique"', true)
+    await ctxC.close()
+  }
 
   await browser.close()
   console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`)

@@ -6,8 +6,9 @@
 // 2. The deployed entry point keeps its safeguards: real Turnstile, the
 //    project identity check, a required hop count, no privileged credential,
 //    no way to weaken TLS.
-// 3. Nothing deploys anything but join-waitlist (the A3 proxy diagnostic is
-//    not part of this repository's main branch).
+// 3. Nothing deploys anything but join-waitlist and avatar (Build 5.2b; its
+//    own safeguards are checked in scripts/avatar-function.test.mjs). The A3
+//    proxy diagnostic is not part of this repository's main branch.
 // 4. The staging rollback's inventory names every object the two waitlist
 //    migrations create, so a rollback can never leave one behind silently.
 import { test } from 'node:test'
@@ -25,8 +26,8 @@ const walk = (dir) =>
 // Code only: comments may name what the code must not do.
 const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '')
 
-test('supabase/functions holds only the join-waitlist function', () => {
-  assert.deepEqual(readdirSync(join(root, 'supabase/functions')).sort(), ['join-waitlist'])
+test('supabase/functions holds only the approved functions (join-waitlist, avatar)', () => {
+  assert.deepEqual(readdirSync(join(root, 'supabase/functions')).sort(), ['avatar', 'join-waitlist'])
 })
 
 test('no test substitution or verification bypass in deployable code', () => {
@@ -68,11 +69,11 @@ test('every e2e/edge file is marked test only', () => {
   for (const f of walk('e2e/edge')) assert.match(read(f), /^\/\/ TEST ONLY\. Never deployed/, f)
 })
 
-test('nothing deploys any function but join-waitlist', () => {
+test('nothing deploys any function but join-waitlist and avatar', () => {
   const files = [...walk('.github'), ...walk('scripts'), ...walk('docs'), 'package.json'].filter((p) => !p.endsWith('.test.mjs'))
   for (const f of files) {
     for (const m of read(f).matchAll(/functions deploy\s+([^\s`'"]+)/g)) {
-      assert.equal(m[1], 'join-waitlist', `${f} deploys ${m[1]}`)
+      assert.ok(['join-waitlist', 'avatar'].includes(m[1]), `${f} deploys ${m[1]}`)
     }
   }
 })

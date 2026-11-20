@@ -2,16 +2,17 @@ import clsx from 'clsx'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, Heart, MessageCircle, Trash2, Users } from 'lucide-react'
-import { Avatar, Card, buttonClass } from '../components/ui'
+import { Card, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
-import { AppApiError, hueFor, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
+import { AppApiError, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
 import { useAppApi } from './AppApiContext'
 import { useTrackView } from './ViewTracker'
 import { ReportButton } from './moderation'
+import { PictureAvatar } from './avatars'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
-  return <Avatar name={member.displayName} hue={hueFor(member.id)} size={size} />
+  return <PictureAvatar id={member.id} name={member.displayName} size={size} />
 }
 
 export function MemberLink({ member, className }: { member: MemberSummary; className?: string }) {
@@ -264,104 +265,125 @@ export function RelationshipButtons({
   postsHref,
 }: {
   member: { id: string; displayName: string; followedByMe: boolean; inMyClique: boolean }
-  onChange: () => void | Promise<void>
+  /** Called after a change succeeds, with the new state (lists may refresh, or keep it locally). */
+  onChange: (next: { followedByMe: boolean; inMyClique: boolean }) => void | Promise<void>
   size?: 'sm' | 'md'
   /** Where "See their posts" goes: a route (`/app/u/name#posts`) or an in-page anchor (`#posts`). Omit to hide it. */
   postsHref?: string
 }) {
   const api = useAppApi()
+  // The state this control shows. It follows the member it is given, but a
+  // successful change updates it at once, so a list that refreshes (or drops
+  // the person, as suggestions do once you follow them) can't make it stale.
+  const [state, setState] = useState({ followedByMe: member.followedByMe, inMyClique: member.inMyClique })
+  useEffect(() => {
+    setState({ followedByMe: member.followedByMe, inMyClique: member.inMyClique })
+  }, [member.id, member.followedByMe, member.inMyClique])
   const [busy, setBusy] = useState(false)
+  // A second tap while a request is still running is ignored, even in the same instant.
+  const inFlight = useRef(false)
   const [error, setError] = useState<unknown>(null)
   const [justFollowed, setJustFollowed] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const name = member.displayName
 
-  async function run(action: () => Promise<void>) {
-    if (busy) return
+  async function run(action: () => Promise<void>, next: { followedByMe: boolean; inMyClique: boolean }, message: string | null, followed = false) {
+    if (inFlight.current) return
+    inFlight.current = true
     setBusy(true)
     setError(null)
+    setNotice(null)
     try {
       await action()
-      await onChange()
+      setState(next)
+      setJustFollowed(followed)
+      setNotice(message)
+      try {
+        await onChange(next)
+      } catch {
+        // The change itself succeeded; a failed refresh shouldn't undo what is shown.
+      }
     } catch (e) {
       setError(e)
     } finally {
+      inFlight.current = false
       setBusy(false)
     }
   }
 
-  const prompt = justFollowed && member.followedByMe
   const addToClique = (className: string) => (
     <button
       type="button"
       disabled={busy}
-      onClick={() => run(() => api.cliqueAdd(member.id))}
-      aria-label={`Add ${member.displayName} to your Clique`}
+      onClick={() => run(() => api.cliqueAdd(member.id), { followedByMe: true, inMyClique: true }, 'Added to your Clique!')}
       className={className}
     >
-      <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique
+      <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique<span className="sr-only">{` (${name})`}</span>
     </button>
   )
+  const prompt = justFollowed && state.followedByMe && !state.inMyClique
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        {member.followedByMe ? (
+        {state.followedByMe ? (
           <button
             type="button"
             disabled={busy}
-            onClick={() =>
-              run(async () => {
-                await api.unfollow(member.id)
-                setJustFollowed(false)
-              })
-            }
-            aria-label={`Unfollow ${member.displayName}`}
+            onClick={() => run(() => api.unfollow(member.id), { followedByMe: false, inMyClique: false }, `You unfollowed ${name}.`)}
             className={buttonClass('secondary', size)}
           >
-            Following
+            <Check className="h-4 w-4" aria-hidden="true" /> Following<span className="sr-only">{` (${name}, tap to unfollow)`}</span>
           </button>
         ) : (
           <button
             type="button"
             disabled={busy}
-            onClick={() =>
-              run(async () => {
-                await api.follow(member.id)
-                setJustFollowed(true)
-              })
-            }
-            aria-label={`Follow ${member.displayName}`}
+            onClick={() => run(() => api.follow(member.id), { followedByMe: true, inMyClique: false }, null, true)}
             className={buttonClass('primary', size)}
           >
-            Follow
+            Follow<span className="sr-only">{` ${name}`}</span>
           </button>
         )}
-        {member.followedByMe &&
-          (member.inMyClique ? (
+        {state.followedByMe &&
+          (state.inMyClique ? (
             <button
               type="button"
               disabled={busy}
-              onClick={() => run(() => api.cliqueRemove(member.id))}
-              aria-label={`Remove ${member.displayName} from your Clique (you keep following them)`}
+              onClick={() =>
+                run(() => api.cliqueRemove(member.id), { followedByMe: true, inMyClique: false }, `Removed from your Clique. You still follow ${name}.`)
+              }
               className={buttonClass('secondary', size)}
             >
-              <Users className="h-4 w-4" aria-hidden="true" /> In your Clique
+              <Check className="h-4 w-4" aria-hidden="true" /> In your Clique<span className="sr-only">{` (${name}, tap to remove)`}</span>
             </button>
           ) : (
             !prompt && addToClique(buttonClass('secondary', size))
           ))}
+        {busy && (
+          <span className="text-sm text-ink-500" aria-hidden="true">
+            Saving…
+          </span>
+        )}
       </div>
+      {/* Success and error messages are announced to screen readers. */}
       <div aria-live="polite">
+        {notice && (
+          <p data-testid="relationship-notice" className="flex items-start gap-2 rounded-2xl bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-900 ring-1 ring-brand-100">
+            <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{notice}</span>
+          </p>
+        )}
         {prompt && (
           <div data-testid="follow-confirmation" className="rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-900 ring-1 ring-brand-100">
             <p className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
-                You're following <strong>{member.displayName}</strong>. Their new posts will appear on Home, newest first.
-                {member.inMyClique ? ' They are in your Clique.' : ' Add them to your Clique to keep them close.'}
+                You're following <strong>{name}</strong>. Their new posts will appear on Home, newest first. Add them to your Clique to keep them close.
               </span>
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              {!member.inMyClique && addToClique(buttonClass('primary', 'sm'))}
+              {addToClique(buttonClass('primary', 'sm'))}
               {postsHref &&
                 (postsHref.startsWith('#') ? (
                   <a href={postsHref} className={buttonClass('secondary', 'sm')}>
