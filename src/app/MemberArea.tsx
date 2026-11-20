@@ -12,6 +12,7 @@ import { displayNameProblem, messageFor, usernameProblem, type AppApi, type MyDe
 import { DetailsSetup, SETUP_STEPS, SetupProgress } from './profileDetails'
 import { ModerationProvider } from './moderation'
 import { FeedbackProvider, SendFeedbackLink } from './feedback'
+import { MediaProvider } from './media'
 import { AvatarProvider } from './avatars'
 
 /**
@@ -66,9 +67,11 @@ function Gate() {
         <FirstTimeSetup>
           <ModerationProvider>
             <FeedbackProvider>
-              <ViewTrackerProvider userId={status.profile.id}>
-                <MemberLayout username={status.profile.username} />
-              </ViewTrackerProvider>
+              <MediaProvider>
+                <ViewTrackerProvider userId={status.profile.id}>
+                  <MemberLayout username={status.profile.username} />
+                </ViewTrackerProvider>
+              </MediaProvider>
             </FeedbackProvider>
           </ModerationProvider>
         </FirstTimeSetup>

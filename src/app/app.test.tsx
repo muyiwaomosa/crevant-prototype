@@ -15,6 +15,8 @@ import {
   usernameProblem,
   type AppApi,
   type FeedbackEntry,
+  type PhotoLinks,
+  type PostMedia,
   type FeedbackItem,
   type Comment,
   type MyDetails,
@@ -25,6 +27,19 @@ import {
 import { MemberArea } from './MemberArea'
 import { ModerationQueuePage, ModerationReportPage } from './moderation'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage, featureFor } from './feedback'
+import { fitWithin } from './photoPrep'
+
+// The browser's photo preparation (canvas) doesn't exist in jsdom: stand in for it.
+vi.mock('./photoPrep', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./photoPrep')>()
+  return {
+    ...actual,
+    preparePhoto: vi.fn(async (file: File) => {
+      if (file.name.endsWith('.txt')) throw new (await import('./api')).AppApiError('photo_type')
+      return { blob: new Blob(['jpeg'], { type: 'image/jpeg' }), preview: 'blob:preview', width: 1600, height: 1067 }
+    }),
+  }
+})
 import { clampOffset, coverScale, sourceRect } from './avatars'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
 
@@ -48,6 +63,8 @@ function fakeApi(
     /** Feedback (20261126000000): 'absent' for a database without it. */
     feedback?: 'present' | 'absent'
     founder?: boolean
+    /** Photo posts (20261127000000): on only when a test says so. */
+    photos?: boolean
   } = {},
 ) {
   const users = new Map<string, Row>()
@@ -58,7 +75,7 @@ function fakeApi(
     add(meId, 'username' in pr ? pr.username ?? null : 'mia', 'displayName' in pr ? pr.displayName ?? null : 'Mia')
   }
   for (let i = 1; i <= (opts.creators ?? 11); i++) add(`c${i}`, `creator_${i}`, `Creator ${i}`)
-  const posts: Array<{ id: string; author: string; body: string; at: number; deleted: boolean; hidden?: boolean }> = []
+  const posts: Array<{ id: string; author: string; body: string; at: number; deleted: boolean; hidden?: boolean; media?: PostMedia }> = []
   const follows = new Set<string>()
   const followedAt = new Map<string, number>()
   const views = new Set<string>()
@@ -88,6 +105,7 @@ function fakeApi(
     likedByMe: likes.has(key(meId, p.id)),
     authorInMyClique: clique.has(key(meId, p.author)),
     isMine: p.author === meId,
+    media: p.media ?? null,
   })
   const live = (id: string) => {
     const p = posts.find((x) => x.id === id && !x.deleted)
@@ -126,6 +144,15 @@ function fakeApi(
     if (!isModerator.value) throw new AppApiError('not_moderator')
   }
   const hiddenProfiles = new Set<string>()
+  // Photo posts, with the database's and the function's rules.
+  const photo = {
+    on: opts.photos ?? false,
+    uploads: new Map<string, { width: number; height: number; used: boolean }>(),
+    calls: [] as string[],
+    linkCalls: [] as string[][],
+    links: (id: string): PhotoLinks | null => ({ feed: `https://pics.test/${id}-feed.jpg`, full: `https://pics.test/${id}.jpg` }),
+    checks: [] as number[],
+  }
   // Feedback, with the database's rules.
   const feedbackPresent = opts.feedback !== 'absent'
   const isFounder = { value: opts.founder ?? false }
@@ -254,6 +281,71 @@ function fakeApi(
       if (detailsMode === 'absent') return null
       complete()
       return users.get(id)?.displayName ? detailsOf(id) : null
+    },
+    async photoStatus() {
+      complete()
+      return photo.on
+    },
+    async uploadPhoto(jpeg) {
+      photo.calls.push('upload')
+      maybeFail('uploadPhoto')
+      if (!photo.on) throw new AppApiError('photos_unavailable')
+      if (jpeg.type !== 'image/jpeg') throw new AppApiError('photo_not_usable')
+      const id = `u${++n}`
+      photo.uploads.set(id, { width: 1600, height: 1067, used: false })
+      return { uploadId: id, width: 1600, height: 1067 }
+    },
+    async createPhotoPost(body, requestId, uploadId, description) {
+      photo.calls.push(`publish:${uploadId}:${requestId}`)
+      maybeFail('createPhotoPost')
+      complete()
+      const prior = requests.get(requestId)
+      if (prior) return prior.id
+      const u = photo.uploads.get(uploadId)
+      if (!u || u.used) throw new AppApiError('upload_not_ready')
+      if ([...body.trim()].length > 2000) throw new AppApiError('too_long')
+      u.used = true
+      const id = `p${String(++n).padStart(3, '0')}`
+      posts.push({ id, author: meId, body: body.trim(), at: (clock += 1000), deleted: false, media: { kind: 'photo', width: u.width, height: u.height, description: description?.trim() || null } })
+      requests.set(requestId, { id, body: body.trim() })
+      return id
+    },
+    async photoLinks(ids) {
+      photo.linkCalls.push([...ids])
+      const out: Record<string, PhotoLinks> = {}
+      for (const id of ids) {
+        const p = posts.find((x) => x.id === id && !x.deleted && x.media)
+        const l = p ? photo.links(id) : null
+        if (l) out[id] = l
+      }
+      return out
+    },
+    async requestPhotoCleanup() {
+      photo.calls.push('cleanup')
+    },
+    async modReportPhoto(reportId) {
+      requireModerator()
+      const r = reports.find((x) => x.id === reportId)
+      return r?.snapshot.media_full_path ? { feed: 'https://pics.test/reported-feed.jpg', full: 'https://pics.test/reported.jpg', description: null } : null
+    },
+    async mediaStatus() {
+      requireModerator()
+      return {
+        photosEnabled: photo.on, capBytes: 1_000_000_000, usedBytes: 52_428_800, photoPosts: posts.filter((p) => p.media && !p.deleted).length,
+        queued: 2, oldestQueuedAt: null, failing: 1, gaveUp: 0, held: 1, heldOpenOver30Days: 1,
+        lastScheduledAt: new Date(Date.now() - 3 * 3600_000).toISOString(), lastRunAt: null, lastRunFailed: false,
+        egressReviewGb: 10, egressPauseGb: 20, checks: [],
+      }
+    },
+    async modMediaDrain() {
+      requireModerator()
+      photo.calls.push('mod-drain')
+      return { deleted: 2, failed: 0 }
+    },
+    async runPhotoCheck(seed) {
+      if (!isFounder.value) throw new AppApiError('not_founder')
+      photo.checks.push(seed)
+      return { ms: 600 + seed, ok: true }
     },
     async feedbackAccess() {
       if (!feedbackPresent) return { available: false, founder: false }
@@ -581,7 +673,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, feedback, feedbackCalls, isFounder, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
+  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -2264,5 +2356,157 @@ describe('feedback (Build 5.2c)', () => {
     expect(await screen.findByText('Reproduced on iPhone.')).toBeTruthy()
     expect(screen.getByText(/Status New to Planned by Mia/)).toBeTruthy()
     expect(screen.getByText(/Note added by Mia/)).toBeTruthy()
+  })
+})
+
+describe('photo posts (Build 5.3)', () => {
+  const choose = (name = 'IMG_0001.HEIC') => fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [new File(['x'], name, { type: name.endsWith('.txt') ? 'text/plain' : 'image/heic' })] } })
+
+  it('sizes photos to at most 1600 px on the longest edge, never upscaling', () => {
+    expect(fitWithin(4032, 3024)).toEqual({ width: 1600, height: 1200 })
+    expect(fitWithin(3024, 4032)).toEqual({ width: 1200, height: 1600 })
+    expect(fitWithin(800, 600)).toEqual({ width: 800, height: 600 })
+  })
+
+  it('with photos off, posting is text only, exactly as before', async () => {
+    const f = fakeApi()
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'Home' })
+    await act(async () => {})
+    expect(screen.queryByRole('button', { name: 'Add photo' })).toBeNull()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Write a post' }), { target: { value: 'Words only' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    expect(await screen.findByText('Words only')).toBeTruthy()
+    expect(f.photo.calls).toEqual([])
+  })
+
+  it('posts a photo with no caption: one upload, one post, shown with its description', async () => {
+    const f = fakeApi('me', { photos: true })
+    renderApp('/app', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
+    choose()
+    expect(await screen.findByRole('img', { name: "The photo you're adding" })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Write a post' }).getAttribute('placeholder')).toBe('Add a caption (optional)')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Photo description (optional)' }), { target: { value: 'A red bicycle by a canal' } })
+    const post = screen.getByRole('button', { name: 'Post' })
+    expect(post.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(post)
+    fireEvent.click(post)
+    const photo = await screen.findByRole('img', { name: 'A red bicycle by a canal' })
+    expect(photo.getAttribute('src')).toMatch(/-feed\.jpg$/)
+    expect(f.photo.calls.filter((c) => c === 'upload')).toHaveLength(1)
+    expect(f.photo.calls.filter((c) => c.startsWith('publish'))).toHaveLength(1)
+    const mine = f.posts.find((p) => p.media)!
+    expect(mine.body).toBe('')
+    // No empty caption paragraph.
+    const card = screen.getByTestId('post')
+    expect(within(card).queryByText((_, el) => el?.tagName === 'P' && el.textContent === '')).toBeNull()
+  })
+
+  it('a failed publish is retried with the same upload and request id (posted once)', async () => {
+    const f = fakeApi('me', { photos: true })
+    f.failures.createPhotoPost = new AppApiError('network')
+    renderApp('/app', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
+    choose()
+    await screen.findByRole('img', { name: "The photo you're adding" })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Write a post' }), { target: { value: 'Sunset' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/couldn't reach Splitpost/)
+    delete f.failures.createPhotoPost
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    expect(await screen.findByText('Sunset')).toBeTruthy()
+    const publishes = f.photo.calls.filter((c) => c.startsWith('publish'))
+    expect(f.photo.calls.filter((c) => c === 'upload')).toHaveLength(1)
+    expect(publishes).toHaveLength(2)
+    expect(publishes[0]).toBe(publishes[1])
+    expect(f.posts.filter((p) => p.media)).toHaveLength(1)
+  })
+
+  it('a failed upload says so plainly, and a retry uploads again', async () => {
+    const f = fakeApi('me', { photos: true })
+    f.failures.uploadPhoto = new AppApiError('photo_upload_failed')
+    renderApp('/app/new', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
+    choose()
+    await screen.findByRole('img', { name: "The photo you're adding" })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    expect((await screen.findByRole('alert')).textContent).toBe("We couldn't upload your photo right now. Please try again.")
+    delete f.failures.uploadPhoto
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    await waitFor(() => expect(f.posts.filter((p) => p.media)).toHaveLength(1))
+    expect(f.photo.calls.filter((c) => c === 'upload')).toHaveLength(2)
+  })
+
+  it('a file that is not a photo is refused before anything is sent', async () => {
+    const f = fakeApi('me', { photos: true })
+    renderApp('/app', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
+    choose('notes.txt')
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Please choose a photo/)
+    expect(f.photo.calls).toEqual([])
+  })
+
+  it('shows a photo in the feed, opens the full photo, and recovers from a failed link', async () => {
+    const f = fakeApi()
+    f.follows.add(f.key('me', 'c1'))
+    const id = f.seedPost('c1', '')
+    f.posts.find((p) => p.id === id)!.media = { kind: 'photo', width: 900, height: 1600, description: null }
+    let fail = 1
+    const links = f.photo.links
+    f.photo.links = (x) => (fail-- > 0 ? null : links(x))
+    renderApp('/app', f.api)
+    expect(await screen.findByText("This photo couldn't load.")).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    const img = await screen.findByRole('img', { name: 'Photo by Creator 1' })
+    // A tall photo is shown at 4:5 in the feed.
+    expect((screen.getByTestId('post-photo') as HTMLElement).style.aspectRatio).toBe(String(4 / 5))
+    // An expired link: one fresh fetch.
+    const before = f.photo.linkCalls.length
+    fireEvent.error(img)
+    await waitFor(() => expect(f.photo.linkCalls.length).toBe(before + 1))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open the photo: Photo by Creator 1' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Photo' })
+    expect(within(dialog).getByRole('img', { name: 'Photo by Creator 1' }).getAttribute('src')).toBe(`https://pics.test/${id}.jpg`)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('deleting your photo post asks the server to clean up its files', async () => {
+    const f = fakeApi('me', { photos: true })
+    const id = f.seedPost('me', 'My photo')
+    f.posts.find((p) => p.id === id)!.media = { kind: 'photo', width: 1600, height: 1067, description: null }
+    renderApp('/app', f.api)
+    await screen.findByText('My photo')
+    fireEvent.click(screen.getByRole('button', { name: /Delete/ }))
+    const confirm = await screen.findAllByRole('button', { name: /Delete/ })
+    fireEvent.click(confirm[confirm.length - 1])
+    await waitFor(() => expect(f.photo.calls).toContain('cleanup'))
+  })
+
+  it('moderators see photo storage; only the founder can run the processing check', async () => {
+    const f = fakeApi('me', { moderator: true, photos: true })
+    renderApp('/app/moderation', f.api)
+    expect(await screen.findByRole('heading', { name: 'Photo storage' })).toBeTruthy()
+    expect(screen.getByText(/failed to delete at least 3 times/)).toBeTruthy()
+    expect(screen.getByText(/hasn't run in the last 2 hours/)).toBeTruthy()
+    expect(screen.getByText(/held for reports open more than 30 days/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Run processing check' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Run cleanup now' }))
+    expect(await screen.findByText('2 deleted.')).toBeTruthy()
+    cleanup()
+    const g = fakeApi('me', { moderator: true, founder: true })
+    renderApp('/app/moderation', g.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Run processing check' }))
+    expect(await screen.findByText('All six checks passed.')).toBeTruthy()
+    expect(g.photo.checks).toEqual([1, 2, 3, 4, 5, 6])
+  })
+
+  it('warns about a missing scheduled cleanup whenever files are waiting, even with photos off', async () => {
+    const f = fakeApi('me', { moderator: true, photos: false })
+    renderApp('/app/moderation', f.api)
+    await screen.findByRole('heading', { name: 'Photo storage' })
+    expect(screen.getByText('Off')).toBeTruthy()
+    expect(screen.getByText(/hasn't run in the last 2 hours/)).toBeTruthy()
   })
 })

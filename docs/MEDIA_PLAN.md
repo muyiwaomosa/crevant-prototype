@@ -22,14 +22,15 @@ service without approval.
   reports, at 90 days), and the moderator storage cleanup extended to the
   new buckets.
 
-## Build 5.3: photos (provisionally approved)
+## Build 5.3: photos (implemented, in review)
 
-* Up to 1600 px on the long edge, decoded and re-encoded on the server
-  (no metadata survives), subject to the performance spike.
-* **Spike first:** re-encode representative 1600 px photos in the hosted
-  Edge runtime on staging and measure CPU time and memory against the
-  function limits. If it is too slow, propose 1280 px rather than a paid
-  service.
+See `docs/PHOTOS.md`: the design, limits, measured performance, gates,
+monitoring, retention and the staging deployment plan. The shared pieces
+5.4 reuses are built there: `social.media_uploads` (upload lifecycle),
+`social.post_media` with `posts.media_kind`, one `media` column from the post
+readers, the `post-media` function, the durable deletion queue and its
+schedule, evidence holds, the founder switch and cap, and Photo storage
+monitoring. Avatars were left unchanged.
 
 ## Build 5.4: video on Supabase Storage (plan, not approved for build)
 

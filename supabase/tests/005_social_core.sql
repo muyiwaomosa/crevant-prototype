@@ -45,7 +45,9 @@ begin
                             -- profile details (20261123000000), once applied
                             'topics', 'profile_details', 'member_topics',
                             -- profile pictures (20261125000000), once applied
-                            'avatars', 'avatar_uploads', 'avatar_events')
+                            'avatars', 'avatar_uploads', 'avatar_events',
+                            -- photo posts (20261127000000), once applied
+                            'media_uploads', 'post_media')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -74,6 +76,9 @@ declare
   moderation text[] := array['app_is_moderator', 'app_mod_dismiss', 'app_mod_hide', 'app_mod_queue', 'app_mod_report', 'app_mod_restore', 'app_report'];
   -- Profile pictures (20261125000000), once applied.
   avatars text[] := array['app_avatar_begin', 'app_avatar_remove', 'app_avatars', 'app_mod_storage_cleanup_finish', 'app_mod_storage_cleanup_start', 'app_mod_storage_preview'];
+  -- Photo posts (20261127000000), once applied.
+  -- (app_create_post gains a third version, with a photo.)
+  photos text[] := array['app_create_post', 'app_mod_media_status', 'app_mod_report_media', 'app_photo_status', 'app_photo_upload_begin', 'app_post_photos'];
   -- Feedback (20261126000000), once applied.
   feedback text[] := array['app_feedback_submit', 'app_founder_feedback', 'app_founder_feedback_add_note', 'app_founder_feedback_list', 'app_founder_feedback_set_status', 'app_is_founder'];
   found text[];
@@ -89,6 +94,9 @@ begin
   end if;
   if to_regclass('ops.feedback') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || feedback) x);
+  end if;
+  if to_regclass('social.post_media') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || photos) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -149,7 +157,10 @@ begin
           when to_regclass('ops.feedback') is null
           then array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
           -- Feedback (20261126000000) adds social.current_founder().
-          else array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
+          when to_regclass('social.post_media') is null
+          then array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
+          -- Photo posts (20261127000000) add the media helper.
+          else array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_media_json', 'post_views_are_permanent', 'rate_check']
         end) then
     raise exception 'FAIL: the social helper and trigger functions are not the approved set (found %)', n;
   end if;
@@ -245,7 +256,7 @@ begin
              where (n.nspname = 'social' or (n.nspname = 'public' and p.proname like 'app\_%'))
                -- Also allowed: the moderation objects of 20261124000000 (reports, the
                -- audit trail, moderators, the retention purge, the note check).
-               and regexp_replace(p.prosrc, 'ops\.(member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
+               and regexp_replace(p.prosrc, 'ops\.(member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (

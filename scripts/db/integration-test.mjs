@@ -237,6 +237,28 @@ let A, B, tokenA
   check('a signed-in account cannot upload straight into Storage (no member storage policy)', direct.status >= 400, String(direct.status))
   check('nothing was stored for A', sql(`select count(*) from social.avatar_uploads where user_id = '${A}'`) === '0' && sql("select count(*) from storage.objects where bucket_id = 'avatars'") === '0')
 
+  // Photo posts (20261127000000): the member steps need membership; the service
+  // steps and the post-photos bucket are closed to members and visitors.
+  {
+    for (const [fn, body] of [['app_photo_upload_begin', {}], ['app_photo_status', {}], ['app_post_photos', { p_posts: [] }]]) {
+      const r = await rest(`/rpc/${fn}`, { method: 'POST', token: tokenA, body })
+      check(`without membership, A cannot call ${fn} (no_pilot_access)`, r.status === 400 && r.json?.message === 'no_pilot_access', `${r.status} ${JSON.stringify(r.json)}`)
+    }
+    for (const [fn, body] of [['svc_photo_upload_stored', { p_upload: '00000000-0000-4000-8000-000000000001', p_width: 1, p_height: 1, p_full_bytes: 1, p_feed_bytes: 1 }], ['svc_media_drain_claim', { p_limit: 10 }], ['svc_photo_check_record', { p_actor: 'x', p_ms: 1, p_ok: true, p_detail: null }]]) {
+      const asMember = await rest(`/rpc/${fn}`, { method: 'POST', token: tokenA, body })
+      check(`a signed-in account cannot call ${fn}`, asMember.status === 401 || asMember.status === 403 || asMember.status === 404, String(asMember.status))
+      const asAnon = await rest(`/rpc/${fn}`, { method: 'POST', body })
+      check(`anonymous visitors cannot call ${fn}`, asAnon.status === 401 || asAnon.status === 403 || asAnon.status === 404, String(asAnon.status))
+    }
+    const direct = await call(`/storage/v1/object/post-photos/${A}/00000000-0000-4000-8000-000000000003.jpg`, {
+      method: 'POST', token: tokenA, body: 'not an image', headers: { 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
+    })
+    check('a signed-in account cannot upload straight into post-photos (no member storage policy)', direct.status >= 400, String(direct.status))
+    const list = await call('/storage/v1/object/list/post-photos', { method: 'POST', token: tokenA, body: { prefix: '' } })
+    check('a signed-in account cannot list post-photos', list.status >= 400 || (Array.isArray(list.json) && list.json.length === 0), String(list.status))
+    check('photo posts are off and nothing was stored', sql("select photos_enabled from ops.media_settings") === 'f' && sql("select count(*) from storage.objects where bucket_id = 'post-photos'") === '0')
+  }
+
   // Feedback (20261126000000): sending needs membership; the founder inbox
   // needs the founder cohort; visitors get nothing; nothing is stored.
   {

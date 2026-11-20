@@ -10,6 +10,7 @@ import { useAppApi } from './AppApiContext'
 import { useTrackView } from './ViewTracker'
 import { ReportButton } from './moderation'
 import { PictureAvatar } from './avatars'
+import { PostPhoto } from './media'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
   return <PictureAvatar id={member.id} name={member.displayName} size={size} />
@@ -75,6 +76,8 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
     setError(null)
     try {
       await api.deletePost(post.id)
+      // The database has queued the photo's files; this only asks the server to delete them now.
+      if (post.media) void api.requestPhotoCleanup().catch(() => undefined)
       onDeleted?.(post.id)
     } catch (e) {
       setError(e)
@@ -99,7 +102,8 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
             </span>
           )}
         </header>
-        <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-800">{post.body}</p>
+        {post.media && <PostPhoto post={post} />}
+        {post.body !== '' && <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-800">{post.body}</p>}
         <footer className="mt-3 flex items-center gap-1">
           <button
             type="button"

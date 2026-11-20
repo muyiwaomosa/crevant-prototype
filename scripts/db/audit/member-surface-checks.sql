@@ -73,6 +73,15 @@ declare
     'public.app_founder_feedback_set_status(uuid,text)',
     'public.app_is_founder()'
   ];
+  -- Photo posts (20261127000000), once applied.
+  photos text[] := array[
+    'public.app_create_post(text,uuid,uuid,text)',
+    'public.app_mod_media_status()',
+    'public.app_mod_report_media(uuid)',
+    'public.app_photo_status()',
+    'public.app_photo_upload_begin()',
+    'public.app_post_photos(uuid[])'
+  ];
   actual text[];
   extra text[];
   missing text[];
@@ -89,6 +98,9 @@ begin
   end if;
   if to_regclass('ops.feedback') is not null then
     expected := expected || feedback;
+  end if;
+  if to_regclass('social.post_media') is not null then
+    expected := expected || photos;
   end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
@@ -327,11 +339,20 @@ begin
         raise exception 'FAIL: % storage bucket(s) exist; none are expected before profile pictures (20261125000000)', buckets;
       end if;
     else
-      -- Profile pictures: exactly the one private avatars bucket, JPEG only, at most 200 KB.
-      execute $q$select count(*) from storage.buckets where not (id = 'avatars' and name = 'avatars' and public is false
-                 and file_size_limit = 204800 and allowed_mime_types = array['image/jpeg'])$q$ into buckets;
+      -- Profile pictures: the private avatars bucket, JPEG only, at most 200 KB; with photo
+      -- posts (20261127000000) also the private post-photos bucket, JPEG only, at most 600 KB.
+      execute $q$select count(*) from storage.buckets where not (
+                   (id = 'avatars' and name = 'avatars' and public is false and file_size_limit = 204800 and allowed_mime_types = array['image/jpeg'])
+                   or (id = 'post-photos' and name = 'post-photos' and public is false and file_size_limit = 614400
+                       and allowed_mime_types = array['image/jpeg'] and pg_catalog.to_regclass('social.post_media') is not null))$q$ into buckets;
       if buckets > 0 then
-        raise exception 'FAIL: a storage bucket other than the private avatars bucket exists, or its settings changed';
+        raise exception 'FAIL: a storage bucket other than the private avatars and post-photos buckets exists, or its settings changed';
+      end if;
+      if pg_catalog.to_regclass('social.post_media') is not null then
+        execute $q$select count(*) from storage.buckets where id = 'post-photos'$q$ into buckets;
+        if buckets <> 1 then
+          raise exception 'FAIL: the private post-photos bucket is missing';
+        end if;
       end if;
       execute $q$select count(*) from storage.buckets where id = 'avatars'$q$ into buckets;
       if buckets <> 1 then
