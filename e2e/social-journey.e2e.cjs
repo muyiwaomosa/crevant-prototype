@@ -23,7 +23,7 @@ if (!/^http:\/\/(127\.0\.0\.1|localhost):/.test(API)) throw new Error('Refusing:
 
 const vercel = JSON.parse(readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'))
 const SECURITY_HEADERS = Object.fromEntries(
-  vercel.headers.find((h) => h.source === '/(.*)').headers.map((h) => [h.key.toLowerCase(), h.value.replace('https://kpudeppgokpjhvaqrprn.supabase.co', API)]),
+  vercel.headers.find((h) => h.source === '/(.*)').headers.map((h) => [h.key.toLowerCase(), h.value.replaceAll('https://kpudeppgokpjhvaqrprn.supabase.co', API)]),
 )
 
 const RUN = String(Date.now()).slice(-7)

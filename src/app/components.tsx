@@ -2,16 +2,17 @@ import clsx from 'clsx'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, Heart, MessageCircle, Trash2, Users } from 'lucide-react'
-import { Avatar, Card, buttonClass } from '../components/ui'
+import { Card, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
-import { AppApiError, hueFor, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
+import { AppApiError, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
 import { useAppApi } from './AppApiContext'
 import { useTrackView } from './ViewTracker'
 import { ReportButton } from './moderation'
+import { PictureAvatar } from './avatars'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
-  return <Avatar name={member.displayName} hue={hueFor(member.id)} size={size} />
+  return <PictureAvatar id={member.id} name={member.displayName} size={size} />
 }
 
 export function MemberLink({ member, className }: { member: MemberSummary; className?: string }) {

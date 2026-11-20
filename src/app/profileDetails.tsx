@@ -17,6 +17,7 @@ import {
 } from './api'
 import { useAppApi } from './AppApiContext'
 import { MemberAvatar, MemberLink, RelationshipButtons } from './components'
+import { ProfilePictureField } from './avatars'
 
 /**
  * Profile details (Build 5, Stage 5.1): identity preference, interests, bio
@@ -322,6 +323,7 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
   } else if (step === 4) {
     body = (
       <form onSubmit={saveAndContinue} className="space-y-4" noValidate>
+        <ProfilePictureField optionalNote />
         <ShortText
           label="Short bio"
           hint="Optional. One line about you."

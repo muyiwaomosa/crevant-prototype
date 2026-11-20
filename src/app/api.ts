@@ -186,6 +186,11 @@ export interface ModReport extends Omit<ModQueueItem, 'excerpt' | 'targetUsernam
   currentBody: string | null
 }
 
+/** A member's current picture: a signed link (valid for an hour) and when it changed. */
+export type AvatarLink = { url: string; updatedAt: string | null }
+/** A storage cleanup dry run (moderators only), valid for 15 minutes. */
+export type StoragePlan = { planId: string; fileCount: number; totalBytes: number; confirmPhrase: string; expiresAt: string }
+
 export interface AppApi {
   /** The signed-in account's own pilot membership state (needs no membership itself). */
   accessState(): Promise<AccessState>
@@ -219,6 +224,17 @@ export interface AppApi {
   modHide(id: string, note?: string): Promise<void>
   modRestore(id: string, note?: string): Promise<void>
   modDismiss(id: string, note?: string): Promise<void>
+  /**
+   * Profile pictures (20261125000000 and the avatar Edge Function). The
+   * browser sends only the cropped 512 x 512 JPEG; the server chooses the
+   * path, checks everything and re-encodes it. Links for members without a
+   * picture (or not visible) are simply absent; with no function, all are.
+   */
+  avatarLinks(memberIds: string[]): Promise<Record<string, AvatarLink>>
+  uploadAvatar(jpeg: Blob): Promise<void>
+  removeAvatar(): Promise<void>
+  modStoragePreview(): Promise<StoragePlan>
+  modStorageCleanup(planId: string, confirm: string): Promise<{ deleted: number; confirmed: number }>
   following(): Promise<FollowedCreator[]>
   /** requestId: the browser's id for this post, reused on retry, so it's stored once (issue #48). */
   createPost(body: string, requestId?: string): Promise<string>
@@ -336,6 +352,14 @@ const MESSAGES: Record<string, string> = {
   not_live: 'This is already hidden or was deleted by its author. Nothing was changed.',
   not_hidden: "This isn't hidden by a moderator, so there's nothing to restore.",
   not_open: 'This report was already resolved. Nothing was changed.',
+  not_jpeg: "That photo couldn't be used. Please choose another one.",
+  wrong_size: "That photo couldn't be used. Please choose another one.",
+  not_decodable: "That photo couldn't be read. Please choose another one.",
+  photo_too_large: 'That photo is too large. Please choose one under 15 MB.',
+  photo_type: 'Please choose a photo (JPEG, PNG, WebP or HEIC).',
+  storage_unavailable: "We couldn't save your picture right now. Please try again.",
+  plan_expired: 'That check is more than 15 minutes old. Run it again.',
+  confirmation_mismatch: 'Type the confirmation exactly as shown.',
   network: "We couldn't reach Splitpost. Check your connection and try again.",
   unknown: 'Something went wrong. Please try again.',
 }
@@ -444,6 +468,26 @@ function toDiscoverMember(r: Record<string, unknown>, withDetails: boolean): Dis
     inMyClique: Boolean(r.in_my_clique),
     ...(withDetails ? { details: toDetails(r), sharedTopics: num(r.shared_topics as number) } : {}),
   }
+}
+
+/** Reads the avatar function's error code from a failed invoke (never raw text). */
+async function functionError(error: unknown): Promise<AppApiError> {
+  const ctx = (error as { context?: unknown })?.context
+  if (ctx instanceof Response) {
+    if (ctx.status === 404) return new AppApiError('not_available')
+    try {
+      const body = (await ctx.json()) as { error?: unknown }
+      if (typeof body.error === 'string') {
+        if (body.error === 'too_large') return new AppApiError('photo_too_large')
+        if (body.error === 'unavailable') return new AppApiError('not_available')
+        if (Object.prototype.hasOwnProperty.call(MESSAGES, body.error)) return new AppApiError(body.error)
+      }
+    } catch {
+      /* not JSON */
+    }
+    return new AppApiError(ctx.status >= 500 ? 'storage_unavailable' : 'unknown')
+  }
+  return new AppApiError('network')
 }
 
 export function createSupabaseApi(client: SupabaseClient, userId: string): AppApi {
@@ -649,6 +693,47 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         currentBody: (r.current_body as string | null) ?? null,
         openReportsForTarget: num(r.open_reports_for_target as number),
       }
+    },
+    async avatarLinks(memberIds) {
+      const ids = [...new Set(memberIds)].slice(0, 100)
+      if (ids.length === 0) return {}
+      const { data, error } = await client.functions.invoke('avatar/urls', { body: { ids } })
+      // No function yet (or any failure): everyone shows initials.
+      if (error || !data || typeof data !== 'object') return {}
+      const avatars = (data as { avatars?: Record<string, { url?: unknown; updatedAt?: unknown }> }).avatars ?? {}
+      const base = client.storage.from('avatars').getPublicUrl('x').data.publicUrl.split('/object/')[0]
+      const out: Record<string, AvatarLink> = {}
+      for (const [id, v] of Object.entries(avatars)) {
+        if (typeof v?.url === 'string' && v.url.startsWith('/object/sign/avatars/')) {
+          out[id] = { url: `${base}${v.url}`, updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : null }
+        }
+      }
+      return out
+    },
+    async uploadAvatar(jpeg) {
+      const { error } = await client.functions.invoke('avatar/upload', { body: jpeg, headers: { 'Content-Type': 'image/jpeg' } })
+      if (error) throw await functionError(error)
+    },
+    async removeAvatar() {
+      const { error } = await client.functions.invoke('avatar/remove', { body: {} })
+      if (error) throw await functionError(error)
+    },
+    async modStoragePreview() {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_mod_storage_preview')
+      const r = rows[0] ?? {}
+      return {
+        planId: String(r.plan_id),
+        fileCount: num(r.file_count as number),
+        totalBytes: num(r.total_bytes as number),
+        confirmPhrase: String(r.confirm_phrase),
+        expiresAt: String(r.expires_at),
+      }
+    },
+    async modStorageCleanup(planId, confirm) {
+      const { data, error } = await client.functions.invoke('avatar/cleanup', { body: { plan: planId, confirm } })
+      if (error) throw await functionError(error)
+      const d = data as { deleted?: unknown; confirmed?: unknown }
+      return { deleted: num(d?.deleted as number), confirmed: num(d?.confirmed as number) }
     },
     modHide: (id, note) => rpc<void>('app_mod_hide', { p_report: id, p_note: note?.trim() || null }),
     modRestore: (id, note) => rpc<void>('app_mod_restore', { p_report: id, p_note: note?.trim() || null }),

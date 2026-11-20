@@ -22,6 +22,7 @@ import {
 } from './api'
 import { MemberArea } from './MemberArea'
 import { ModerationQueuePage, ModerationReportPage } from './moderation'
+import { clampOffset, coverScale, sourceRect } from './avatars'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
 
 afterEach(cleanup)
@@ -119,6 +120,10 @@ function fakeApi(
     if (!isModerator.value) throw new AppApiError('not_moderator')
   }
   const hiddenProfiles = new Set<string>()
+  // Profile pictures: id -> link. Uploads and removals are recorded.
+  const pictures = new Map<string, string>()
+  const pictureCalls: string[] = []
+  const storage = { unused: 0, bytes: 0, plans: new Map<string, string>() }
   const shared = (id: string) => detailsOf(id).topics.filter((t) => detailsOf(meId).topics.includes(t)).length
   // Pilot membership (20261122000000): active unless a test says otherwise.
   const access: { status: 'active' | 'none' | 'revoked' | 'expired'; expiresAt: string | null } = { status: 'active', expiresAt: null }
@@ -324,6 +329,36 @@ function fakeApi(
       for (const o of reports) if (o.targetId === r.targetId && o.status === 'open') o.status = 'dismissed'
       modActions.push({ action: 'dismiss', report: id, note: note?.trim() || null })
     },
+    async avatarLinks(ids) {
+      return Object.fromEntries(ids.filter((id) => pictures.has(id) && users.get(id)?.displayName).map((id) => [id, { url: pictures.get(id)!, updatedAt: null }]))
+    },
+    async uploadAvatar(jpeg) {
+      complete()
+      maybeFail('uploadAvatar')
+      pictureCalls.push(`upload:${jpeg.type}`)
+      pictures.set(meId, `https://pics.test/${meId}-${pictureCalls.length}.jpg`)
+    },
+    async removeAvatar() {
+      complete()
+      maybeFail('removeAvatar')
+      pictureCalls.push('remove')
+      pictures.delete(meId)
+    },
+    async modStoragePreview() {
+      requireModerator()
+      const planId = `plan-${storage.plans.size + 1}`
+      const phrase = `DELETE ${storage.unused} FILES`
+      storage.plans.set(planId, phrase)
+      return { planId, fileCount: storage.unused, totalBytes: storage.bytes, confirmPhrase: phrase, expiresAt: '2026-11-20T00:15:00Z' }
+    },
+    async modStorageCleanup(planId, confirm) {
+      requireModerator()
+      if (storage.plans.get(planId) !== confirm) throw new AppApiError('confirmation_mismatch')
+      storage.plans.delete(planId)
+      const deleted = storage.unused
+      storage.unused = 0
+      return { deleted, confirmed: deleted }
+    },
     async suggested() {
       if (detailsMode === 'absent') return []
       complete()
@@ -473,7 +508,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport }
+  return { api, seedPost, follows, clique, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -1052,6 +1087,96 @@ describe('Clique confirmation (the suggestion card fix)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Following (Creator 1, tap to unfollow)' }))
     expect((await screen.findByTestId('relationship-notice')).textContent).toBe('You unfollowed Creator 1.')
     expect(screen.getByRole('button', { name: 'Follow Creator 1' })).toBeTruthy()
+  })
+})
+
+describe('profile pictures (20261125000000)', () => {
+  it('crop maths: the photo always covers the square, and the saved part is what is shown', () => {
+    expect(coverScale(1024, 768, 240)).toBeCloseTo(240 / 768)
+    expect(clampOffset(10, 400, 240)).toBe(0) // can't leave a gap on the left
+    expect(clampOffset(-500, 400, 240)).toBe(-160) // or on the right
+    expect(clampOffset(-80, 400, 240)).toBe(-80)
+    const s = coverScale(1000, 500, 240) * 2 // zoomed in 2x
+    expect(sourceRect({ x: -100, y: -60, scale: s, view: 240 })).toEqual({ sx: 100 / s, sy: 60 / s, size: 240 / s })
+  })
+
+  it('shows pictures wherever members appear, and initials for everyone else', async () => {
+    const f = fakeApi()
+    f.pictures.set('c1', 'https://pics.test/c1.jpg')
+    f.follows.add(f.key('me', 'c1'))
+    f.seedPost('c1', 'With a picture')
+    f.seedPost('c2', 'Without one')
+    f.follows.add(f.key('me', 'c2'))
+    const view = renderApp('/app', f.api)
+    await screen.findByText('With a picture')
+    await waitFor(() => expect(view.container.querySelector('img[src="https://pics.test/c1.jpg"]')).toBeTruthy())
+    const other = screen.getAllByTestId('post').find((p) => p.textContent?.includes('Without one'))!
+    expect(other.querySelector('img[src^="https://pics.test"]')).toBeNull()
+    cleanup()
+    const d = renderApp('/app/discover', f.api)
+    await screen.findByRole('link', { name: 'Creator 1' })
+    await waitFor(() => expect(d.container.querySelector('img[src="https://pics.test/c1.jpg"]')).toBeTruthy())
+  })
+
+  it('the editor offers camera and gallery, refuses non-photos and huge files, and removes a picture after confirming', async () => {
+    const f = fakeApi()
+    f.pictures.set('me', 'https://pics.test/me.jpg')
+    renderApp('/app/profile', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change picture' }))
+    const editor = within(await screen.findByTestId('avatar-editor'))
+    const input = editor.getByLabelText('Choose a new photo', { selector: 'input' }) as HTMLInputElement
+    expect(input.type).toBe('file')
+    expect(input.getAttribute('accept')).toBe('image/*')
+    expect(input.hasAttribute('capture')).toBe(false) // phones offer camera AND gallery
+    fireEvent.change(input, { target: { files: [new File(['%PDF'], 'notes.pdf', { type: 'application/pdf' })] } })
+    expect((await editor.findByRole('alert')).textContent).toMatch(/Please choose a photo/)
+    const huge = new File(['x'], 'huge.jpg', { type: 'image/jpeg' })
+    Object.defineProperty(huge, 'size', { value: 16 * 1024 * 1024 })
+    fireEvent.change(input, { target: { files: [huge] } })
+    expect((await editor.findByRole('alert')).textContent).toMatch(/under 15 MB/)
+    expect(f.pictureCalls).toEqual([])
+    fireEvent.click(editor.getByRole('button', { name: 'Remove picture' }))
+    fireEvent.click(editor.getByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText('Profile picture removed. Your initials show instead.')).toBeTruthy()
+    expect(f.pictureCalls).toEqual(['remove'])
+    expect(f.pictures.has('me')).toBe(false)
+  })
+
+  it('the About you step offers an optional photo', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: how you use Splitpost' }))
+    await screen.findByRole('heading', { name: 'What are you into?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByRole('heading', { name: 'Tell people about you' })
+    const field = within(screen.getByTestId('profile-picture-field'))
+    expect(field.getByText('Profile picture (optional)')).toBeTruthy()
+    expect(field.getByRole('button', { name: 'Add a photo' })).toBeTruthy()
+  })
+
+  it('moderators clean up unused picture files only after a dry run and the exact phrase', async () => {
+    const f = fakeApi('me', { moderator: true })
+    f.storage.unused = 2
+    f.storage.bytes = 40_000
+    renderApp('/app/moderation', f.api)
+    const panel = within(await screen.findByTestId('storage-cleanup'))
+    fireEvent.click(panel.getByRole('button', { name: 'Check for unused files' }))
+    expect(await panel.findByText(/2 unused files \(40 KB\)/)).toBeTruthy()
+    const run = panel.getByRole('button', { name: 'Delete 2 files' }) as HTMLButtonElement
+    expect(run.disabled).toBe(true)
+    fireEvent.change(panel.getByLabelText(/to confirm/), { target: { value: 'delete 2 files' } })
+    expect(run.disabled).toBe(true)
+    fireEvent.change(panel.getByLabelText(/to confirm/), { target: { value: 'DELETE 2 FILES' } })
+    fireEvent.click(run)
+    expect(await panel.findByText('Deleted 2 unused files.')).toBeTruthy()
+  })
+
+  it('members who are not moderators never see storage cleanup', async () => {
+    const f = fakeApi()
+    renderApp('/app/moderation', f.api)
+    expect(await screen.findByText("This page isn't available")).toBeTruthy()
+    expect(screen.queryByTestId('storage-cleanup')).toBeNull()
   })
 })
 

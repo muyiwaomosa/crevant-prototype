@@ -10,6 +10,7 @@ import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
 import { DetailsEditor, MemberAbout, PersonSummary, SuggestedPeople, useTopics } from './profileDetails'
 import { ReportButton, useModeration } from './moderation'
+import { ProfilePictureField } from './avatars'
 
 /** Loads data for a page, with loading and error states and a reload function. */
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
@@ -1140,6 +1141,9 @@ export function ProfilePage() {
         </Card>
       )}
       {me.error !== null && <ErrorNote error={me.error} />}
+      <Card className="mb-4 p-5">
+        <ProfilePictureField />
+      </Card>
       <Card className="p-5">
         <h2 className="mb-4 font-display text-lg font-bold text-ink-900">Your name</h2>
         <ProfileForm initial={{ username: profile.username, displayName: profile.displayName }} submitLabel="Save changes" onSaved={refresh} />
