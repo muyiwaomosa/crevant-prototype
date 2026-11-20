@@ -26,8 +26,8 @@ const walk = (dir) =>
 // Code only: comments may name what the code must not do.
 const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '')
 
-test('supabase/functions holds only the approved functions (join-waitlist, avatar)', () => {
-  assert.deepEqual(readdirSync(join(root, 'supabase/functions')).sort(), ['avatar', 'join-waitlist'])
+test('supabase/functions holds only the approved functions (join-waitlist, avatar, post-media) and their shared code', () => {
+  assert.deepEqual(readdirSync(join(root, 'supabase/functions')).sort(), ['_shared', 'avatar', 'join-waitlist', 'post-media'])
 })
 
 test('no test substitution or verification bypass in deployable code', () => {
