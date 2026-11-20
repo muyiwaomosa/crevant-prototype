@@ -444,3 +444,9 @@ content_path = "./supabase/templates/recovery.html"
 # lets the database decide membership, limits and moderation.
 [functions.avatar]
 verify_jwt = false
+
+# Photo posts (Build 5.3). As for avatars: the gateway's JWT check is off and
+# the function verifies every member itself with Supabase Auth; the scheduled
+# drain carries the drain key instead.
+[functions.post-media]
+verify_jwt = false

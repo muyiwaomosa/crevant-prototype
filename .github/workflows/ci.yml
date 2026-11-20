@@ -152,6 +152,13 @@ jobs:
       # limit, overlapping uploads, cleanup, and the Production guard.
       - name: Avatar Edge Function on local Supabase (validation, authorization, cleanup)
         run: scripts/e2e/avatar-edge.sh
+      # Photo posts: the post-media Edge Function in the local Edge runtime,
+      # through the same gateway. Sign-in on every action, the switch and its
+      # processing-check gate, both server-made copies with no metadata,
+      # refusals, links, server-controlled deletion (request, scheduled drain
+      # with its key), evidence held, and the Production guard.
+      - name: Post-media Edge Function on local Supabase (photos, deletion queue, evidence)
+        run: scripts/e2e/post-media-edge.sh
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup || true
