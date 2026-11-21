@@ -48,10 +48,15 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<unknown>(null)
-  useEffect(() => {
+  // Follow the server's numbers when they change (a reload), adjusted during
+  // render rather than in an effect: an effect also ran once after the first
+  // render, and could land after a quick first tap and undo it.
+  const [shown, setShown] = useState({ liked: post.likedByMe, likes: post.likeCount })
+  if (shown.liked !== post.likedByMe || shown.likes !== post.likeCount) {
+    setShown({ liked: post.likedByMe, likes: post.likeCount })
     setLiked(post.likedByMe)
     setLikes(post.likeCount)
-  }, [post.likedByMe, post.likeCount])
+  }
 
   async function toggleLike() {
     if (busy) return

@@ -104,7 +104,8 @@ jobs:
     # Supabase's Edge runtime as the restricted waitlist_writer login
     # (scripts/e2e/waitlist-edge.sh; Turnstile is a stand-in there, in test
     # code under e2e/ only), the database TLS checks, and the staging rollback
-    # tests, all against this runner's own throwaway databases.
+    # tests, all against this runner's own throwaway databases. The photo
+    # cleanup schedule suites run alongside, in the Scheduler job.
     name: Integration (real local Supabase)
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -159,6 +160,44 @@ jobs:
       # with its key), evidence held, and the Production guard.
       - name: Post-media Edge Function on local Supabase (photos, deletion queue, evidence)
         run: scripts/e2e/post-media-edge.sh
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup || true
+
+  scheduler:
+    # The photo cleanup schedule suites, on their own real local Supabase in
+    # Docker so they run alongside the Integration job instead of after it
+    # (they were its last 3.5 minutes). Same pinned CLI and images, same
+    # start-up script, a fresh database with every migration applied (as the
+    # start-up leaves it); they need nothing the other suites leave
+    # behind. Standard local development keys only, no secrets, never
+    # contacts staging: every hosted connection string in them is fake and
+    # refused before connecting.
+    name: Scheduler (photo cleanup schedule on local Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_CLI_VERSION: 2.122.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the pinned Supabase CLI
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/supabase-cli" "supabase@${SUPABASE_CLI_VERSION}"
+          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Confirm the CLI version
+        run: |
+          set -euo pipefail
+          installed="$(supabase --version | tr -d '[:space:]')"
+          if [ "$installed" != "$SUPABASE_CLI_VERSION" ]; then
+            echo "::error::Expected Supabase CLI $SUPABASE_CLI_VERSION but found $installed."
+            exit 1
+          fi
+      - name: Start local Supabase (ports reserved, one start-up retry; tests are never retried)
+        run: scripts/ci/start-local-supabase.sh
       # The staging photo cleanup schedule (pg_cron, the synchronous http
       # extension, Vault): refusals, check, apply; non-200, network failure and
       # the 20 second timeout; real scheduled runs; removal; then the guarded
