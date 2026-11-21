@@ -312,6 +312,23 @@ function frame(b) {
     `queued ${queuedNow}, statuses ${passes.map((r) => r.status).join(',')}, deleted ${deletedTotal}, left|reclaimed ${after}, gone ${gone}`)
   check('and the evidence is still held after them', (await stored(evPaths[0])).status === 200 && (await stored(evPaths[1])).status === 200)
 
+  // 9c. Manual cleanup doesn't depend on the schedule: with no cleanup job
+  // scheduled (as after pausing it), a moderator's Run cleanup now still
+  // deletes queued files.
+  const manualUp = await photo(A.token, makePhoto(640, 480, 31))
+  const manualPost = (await rpc(A.token, 'app_create_post', { p_body: 'Manual cleanup', p_request_id: crypto.randomUUID(), p_media: manualUp.json.uploadId })).json
+  await rpc(A.token, 'app_delete_post', { p_post: manualPost })
+  // (Two queries: SQL resolves cron.job before it could short-circuit.)
+  const noJob = sql("select to_regclass('cron.job') is null") === 't' ? 't'
+    : sql("select not exists (select 1 from cron.job where jobname = 'post-media-drain')")
+  const manualQueued = sql(`select count(*) from ops.media_deletions where deleted_at is null and path like '${A.id}/${manualUp.json.uploadId}%'`)
+  const manual = await call('mod-drain', M.token, '{}', { contentType: 'application/json' })
+  const manualLeft = sql(`select count(*) from ops.media_deletions where deleted_at is null and path like '${A.id}/${manualUp.json.uploadId}%'`)
+  check('with no cleanup job scheduled, a moderator\'s Run cleanup now deletes the queued files',
+    noJob === 't' && manualQueued === '2' && manual.status === 200 && manualLeft === '0'
+      && (await stored(`${A.id}/${manualUp.json.uploadId}.jpg`)).status >= 400,
+    `no job ${noJob}, queued ${manualQueued}, status ${manual.status}, left ${manualLeft}`)
+
   // 10. The moderator's status panel numbers.
   const st = await rpc(M.token, 'app_mod_media_status', {})
   check('the photo storage status shows the switch, usage, queue, held evidence and the last scheduled pass',

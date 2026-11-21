@@ -172,6 +172,15 @@ jobs:
       # caught by the fingerprints, and the 15 minute boundary.
       - name: Photo cleanup schedule check workflow on local Supabase (check only, refusals)
         run: scripts/db/staging-schedule-check-test.sh
+      # The "Photo cleanup schedule on staging" and "Remove pg_net from
+      # staging" wrappers, on local Supabase set up like staging, with real
+      # pg_cron runs against a keyed drain, a 401 and a fake 200: refusals,
+      # apply replacing (not duplicating) and verifying the first run against
+      # the drain's own record, INSTALLED BUT UNVERIFIED, pause touching only
+      # the cleanup job, the two-run removal gate (failed, unmatched and
+      # unattributed runs), removal, and checks 001 to 013 afterwards.
+      - name: Photo cleanup apply and pg_net removal workflows on local Supabase (gate, verification, pause)
+        run: scripts/db/staging-photo-cleanup-test.sh
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup || true

@@ -168,7 +168,9 @@ test('nothing for Production, the public site, the demo or the member app', () =
   }
 })
 
-test('no other workflow runs the wrapper or the scheduler script', () => {
+test('no other workflow runs this check wrapper or the scheduler script directly', () => {
+  // The apply workflow (staging-photo-cleanup-schedule.yml) runs the scheduler
+  // script only through its own wrapper, tested in photo-cleanup-workflows.test.mjs.
   const files = execFileSync('git', ['ls-files', '.github/workflows'], { encoding: 'utf8' }).split('\n').filter(Boolean)
   const users = files.filter((f) => /staging-schedule-check\.sh|staging-schedule-media-drain\.sql/.test(readFileSync(f, 'utf8')))
   assert.deepEqual(users, [WF_PATH])

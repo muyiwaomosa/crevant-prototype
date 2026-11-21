@@ -1,0 +1,98 @@
+name: Remove pg_net from staging
+
+# Removes the pg_net extension from the Crevant STAGING Supabase project
+# (scripts/db/staging-pgnet-removal.sh), only once the http photo cleanup job
+# is proven:
+#
+#   check  (default) The gate, then the removal script's check mode: it drops
+#          pg_net inside a transaction and rolls it back. Nothing changes.
+#   apply  Needs the phrase REMOVE PG_NET FROM STAGING, and the gate.
+#
+# The gate: exactly one cleanup job, on http, active every 15 minutes; its two
+# newest finished runs both succeeded and each matched exactly one drain pass
+# recorded by the post-media function; no failed or unmatched run since the
+# replacement; and every drain pass attributed to a run. Then the removal
+# script's own checks (one http job with a succeeded run, no cron job using
+# net., an empty queue, no database webhooks, nothing depending on pg_net).
+#
+# It never touches the cleanup job, other cron jobs or other extensions.
+# Afterwards, run "Deploy database to staging" in check mode (checks 001 to 013).
+#
+# Safeguards, none of which depend on the others:
+#   * Started by hand only, from main, by the repository owner, and only
+#     re-run by the repository owner (github.actor and github.triggering_actor).
+#   * The staging environment (and its approval rule, where configured).
+#   * The typed project reference must match the staging project, as must the
+#     environment variable and the project inside the connection string
+#     (scripts/db/verify-staging-target.sh). A Production project can never match.
+#   * Full TLS certificate and host name verification (sslmode=verify-full).
+#   * The removal script must match the reviewed checksum pinned in the wrapper.
+#   * Fingerprints of the cron jobs (commands as md5 only) and extensions
+#     before and after; never prints a connection string, command or key.
+#   * Never runs within a minute before or 90 seconds after a quarter hour,
+#     or while a cleanup run is in progress.
+#   * Only the STAGING_DATABASE_URL secret. No Production secret, workflow,
+#     Supabase CLI, migration, Edge Function, Vercel or app build.
+#   * Shares the database deploy queue, so it never overlaps a deploy or rollback.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = the gate and a rolled-back removal (no changes). apply = remove pg_net (needs the phrase and the gate)."
+        type: choice
+        options:
+          - check
+          - apply
+        default: check
+        required: true
+      confirm_project_ref:
+        description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
+        type: string
+        required: true
+      confirm_phrase:
+        description: "apply: REMOVE PG_NET FROM STAGING. check: leave empty."
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-staging
+  cancel-in-progress: false
+
+env:
+  # The one project this workflow may ever touch. Changing it requires a reviewed PR.
+  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
+
+jobs:
+  remove-pg-net:
+    name: Remove pg_net from staging (${{ inputs.mode }})
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved staging project
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-staging-target.sh
+
+      - name: Remove pg_net (check or apply, behind the gate)
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+          MODE: ${{ inputs.mode }}
+          CONFIRM_PHRASE: ${{ inputs.confirm_phrase }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/staging-pgnet-removal.sh

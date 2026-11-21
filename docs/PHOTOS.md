@@ -319,35 +319,50 @@ here touches Production, photos or billing):
    ```bash
    psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-schedule-media-drain.sql
    ```
-3. **Schedule apply**: replaces the pg_net job with the http job in one
-   transaction (one job before, one after, no gap, the same 15 minute
-   schedule):
-   ```bash
-   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=apply -v confirm='SCHEDULE THE STAGING PHOTO CLEANUP' -f scripts/db/staging-schedule-media-drain.sql
-   ```
-4. **Wait for one succeeded run** (at most 15 minutes), with the monitoring
-   queries above, and see "Last scheduled cleanup" update in Photo storage.
-   If it fails, read the message, fix the cause, and wait for the next run.
-   Don't go on until a run has succeeded.
-5. **Removal check** (rolls back; every line must say `ok`):
-   ```bash
-   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-remove-pg-net.sql
-   ```
-6. **Removal apply**:
-   ```bash
-   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=apply -v confirm='REMOVE PG_NET FROM STAGING' -f scripts/db/staging-remove-pg-net.sql
-   ```
+3. **Schedule apply**, with the GitHub workflow **Photo cleanup schedule on
+   staging**: mode `apply`, the project reference, and the phrase
+   `SCHEDULE THE STAGING PHOTO CLEANUP`. It replaces the pg_net job with the
+   http job in one transaction (one job before, one after, a new job id, the
+   same 15 minute schedule; pg_net stays installed), then waits for the first
+   scheduled run and verifies it end to end. A run counts as **verified** only
+   if pg_cron recorded it as succeeded (which, for this job, means the drain
+   answered HTTP 200 within 20 seconds) **and** exactly one `scheduled` pass in
+   `ops.media_drain_runs`, written by the post-media function itself after its
+   key check, finished inside that run. If the replacement committed but the
+   run can't be verified, the workflow fails with **INSTALLED BUT
+   UNVERIFIED**: the new job stays in place (it is not rolled back), and the
+   message says why (for example HTTP 401: the two copies of the drain key
+   differ). Anything that can't be attributed reliably (another job calling
+   the drain, a pass matching no run, a run with two passes) fails closed.
+4. **Verify** (mode `verify`, read only) after at least two more runs (about
+   30 minutes). It lists each run with its matching drain pass.
+5. **Removal check**, with the workflow **Remove pg_net from staging**, mode
+   `check`. Its gate: one http cleanup job, active every 15 minutes; its two
+   newest runs both verified; no failed or unmatched run since the
+   replacement; every drain pass attributed. Then the removal script's own
+   checks, and a drop that is rolled back.
+6. **Removal apply**: the same workflow, mode `apply`, with the phrase
+   `REMOVE PG_NET FROM STAGING`. The gate is checked again first.
 7. **Deploy database to staging, `check`**: runs security checks 001 to 013;
-   all must pass, 003 included.
-8. Watch the next scheduled run succeed after the removal.
+   all must pass, 003 included. (004 to 013 have not run on staging yet: the
+   failed APPLY stopped at 003.)
+8. **Verify** once more after the next run.
 
-**Rollback of the move.** Before step 6, nothing needs undoing: the http job
-is a complete replacement, and `remove` takes it down if needed (files then
-simply wait in the queue; Run cleanup now still works). Going back to the
-pg_net job is not a rollback target, because it reopens the exposure. After
-step 6, if something turns out to need pg_net, `create extension pg_net with
-schema extensions` restores it, but brings back the PUBLIC grants and the
-check 003 failure, so it needs its own approval.
+With psql instead, the same scripts run with `-v mode=apply` and their
+phrases, but without the workflows' verification and gate.
+
+**If something goes wrong (pause only).** The workflow's `remove` mode, with
+the phrase `UNSCHEDULE THE STAGING PHOTO CLEANUP`, unschedules only the
+cleanup job: it refuses a job of that name that isn't the cleanup, and fails
+if any other cron job changed. Photos are off and the queue is durable, so a
+pause is harmless: queued files wait, and Moderation > Photo storage > Run
+cleanup now (or a member's own cleanup after deleting a post) keeps working,
+since manual cleanup doesn't depend on the schedule (tested in CI with no
+cleanup job scheduled). Resume with `apply`. Going back to the old pg_net job
+is deliberately not offered: it would reopen the exposure. After step 6, if
+something turns out to need pg_net, `create extension pg_net with schema
+extensions` restores it, but brings back the PUBLIC grants and the check 003
+failure, so it needs its own approval.
 
 **Production.** Production has no photo migration, and both scripts refuse to
 run there. Nothing in this move changes Production. When photos are approved
