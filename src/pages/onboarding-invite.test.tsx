@@ -30,17 +30,23 @@ const start = (search = '') => {
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }))
 
 describe('personalized onboarding', () => {
-  it('asks intent and topics, and only asks what someone will post about if they plan to create', () => {
+  it('is one onboarding for everyone: no creator or fan choice; topics, and an optional "what you post about"', () => {
     start()
     click('Get started')
     expect(screen.getByRole('heading', { name: 'What are you into?' })).toBeTruthy()
-    expect(screen.queryByRole('group', { name: 'What will you post about?' })).toBeNull()
-    click('Create content')
+    // One Splitpost, one account: nobody is asked to choose creator or fan.
+    expect(screen.queryByRole('group', { name: 'How do you plan to use Splitpost?' })).toBeNull()
+    for (const name of ['Create content', 'Discover and support creators', 'Both']) expect(screen.queryByRole('button', { name })).toBeNull()
+    // What someone posts about is optional, for everyone, up to 3.
     const posting = screen.getByRole('group', { name: 'What will you post about?' })
     for (const t of ['Fitness', 'Food', 'Art']) fireEvent.click(within(posting).getByRole('button', { name: t }))
     expect((within(posting).getByRole('button', { name: 'Music' }) as HTMLButtonElement).disabled).toBe(true)
-    click('Discover and support creators')
-    expect(screen.queryByRole('group', { name: 'What will you post about?' })).toBeNull()
+    click('Continue')
+    click('Continue')
+    click('Go to my feed')
+    const s = saved()
+    expect(s.intent).toBeNull()
+    expect(s.creatorCategories).toEqual(['Fitness', 'Food', 'Art'])
   })
 
   it('suggests creators who match the chosen topics first, without following anyone', () => {

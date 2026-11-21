@@ -5,7 +5,7 @@ import { ArrowDownWideNarrow, Check, Gift, Mail, Plus, UserPlus } from 'lucide-r
 import { useStore } from '../state/store'
 import { resolveDemoInvite } from '../lib/invites'
 import { suggestedForOnboarding } from '../lib/matching'
-import type { Category, Intent } from '../types'
+import type { Category } from '../types'
 import { Wordmark } from '../components/Wordmark'
 import { Button, CreatorAvatar, SparkIcon } from '../components/ui'
 import { Toasts } from '../components/Toasts'
@@ -14,11 +14,6 @@ import { TourBannerSlot } from '../components/TourBanner'
 type Step = 0 | 1 | 2 | 3
 
 const TOPICS: Category[] = ['Food', 'Money', 'Travel', 'Tech', 'Music', 'Art', 'Fitness', 'Books', 'Wellness']
-const INTENTS: Array<[Intent, string]> = [
-  ['discover', 'Discover and support creators'],
-  ['create', 'Create content'],
-  ['both', 'Both'],
-]
 
 function Chip({ on, onClick, children, disabled }: { on: boolean; onClick: () => void; children: string; disabled?: boolean }) {
   return (
@@ -61,14 +56,12 @@ export function OnboardingPage() {
   const replay = params.get('replay') === '1'
   const [step, setStep] = useState<Step>(0)
   const [picked, setPicked] = useState<string[]>([])
-  const [intent, setIntent] = useState<Intent | null>(state.intent)
   const [interests, setInterests] = useState<Category[]>(state.interests)
   const [creatorCategories, setCreatorCategories] = useState<Category[]>(state.creatorCategories)
   const inviteCode = params.get('invite')
   const invite = inviteCode ? resolveDemoInvite(inviteCode) : null
   const inviter = invite?.creatorId ? creators.find((c) => c.id === invite.creatorId) ?? null : null
   const [inviteDecision, setInviteDecision] = useState<'pending' | 'followed' | 'declined'>('pending')
-  const asksCreating = intent === 'create' || intent === 'both'
   const headingRef = useRef<HTMLHeadingElement>(null)
   const others = creators.filter((c) => !c.isSelf)
 
@@ -82,9 +75,10 @@ export function OnboardingPage() {
 
   const finish = (choice: string[] | 'skip') => {
     const setup = {
-      intent,
+      // One Splitpost, one account: nobody chooses creator or fan.
+      intent: null,
       interests,
-      creatorCategories: asksCreating ? creatorCategories : [],
+      creatorCategories,
       invite: inviter && inviteCode ? { code: inviteCode.trim().toLowerCase(), creatorId: inviter.id, decision: inviteDecision } : null,
     }
     // Following the inviting creator happens only if the visitor chose it.
@@ -172,16 +166,6 @@ export function OnboardingPage() {
               </h1>
               <p className="mt-1 text-[15px] text-ink-600">This shapes who we suggest in Discover. It never follows anyone for you, and you can change it any time.</p>
 
-              <h2 className="mt-5 text-sm font-semibold text-ink-900">How do you plan to use Splitpost?</h2>
-              <div role="group" aria-label="How do you plan to use Splitpost?" className="mt-2 flex flex-wrap gap-2">
-                {INTENTS.map(([v, label]) => (
-                  <Chip key={v} on={intent === v} onClick={() => setIntent(intent === v ? null : v)}>
-                    {label}
-                  </Chip>
-                ))}
-              </div>
-              <p className="mt-1.5 text-[13px] text-ink-600">Not an account type: everyone can post and support.</p>
-
               <h2 className="mt-5 text-sm font-semibold text-ink-900">Topics you enjoy</h2>
               <div role="group" aria-label="Topics you enjoy" className="mt-2 flex flex-wrap gap-2">
                 {TOPICS.map((t) => (
@@ -191,9 +175,8 @@ export function OnboardingPage() {
                 ))}
               </div>
 
-              {asksCreating && (
-                <>
-                  <h2 className="mt-5 text-sm font-semibold text-ink-900">What will you post about? Up to 3</h2>
+              <>
+                  <h2 className="mt-5 text-sm font-semibold text-ink-900">If you post, what about? Optional, up to 3</h2>
                   <div role="group" aria-label="What will you post about?" className="mt-2 flex flex-wrap gap-2">
                     {TOPICS.map((t) => (
                       <Chip
@@ -207,7 +190,6 @@ export function OnboardingPage() {
                     ))}
                   </div>
                 </>
-              )}
 
               <div className="mt-auto grid grid-cols-1 gap-2 pt-6 min-[360px]:grid-cols-[auto_1fr]">
                 <Button variant="secondary" size="lg" onClick={() => setStep(0)}>
