@@ -109,6 +109,17 @@ const makePhoto = (page, w, h) =>
   sql("select public.svc_photo_check_record('founder', 600, true, 'journey') from generate_series(1, 6)")
   sql("select ops.set_media_settings('founder', true, 2000000000, 10, 20)")
   const cspViolations = []
+  // Founder-only by default (20261128000000): a tester sees no Add photo.
+  {
+    const ctx0 = await newContext(browser, { viewport: { width: 390, height: 844 } })
+    const p0 = await ctx0.newPage()
+    await signIn(p0, P.email)
+    await p0.getByRole('textbox', { name: 'Write a post' }).waitFor()
+    await p0.waitForTimeout(800)
+    check('with the audience at founder, a tester sees no Add photo', (await p0.getByRole('button', { name: 'Add photo' }).count()) === 0)
+    await ctx0.close()
+  }
+  sql("select ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS')")
 
   // 1. P, on a phone, posts a photo with no caption and a description.
   const ctxP = await newContext(browser, { viewport: { width: 390, height: 844 } })
@@ -235,6 +246,7 @@ const makePhoto = (page, w, h) =>
   }
   check('no Content Security Policy violation while showing photos', cspViolations.length === 0, cspViolations.join(' | ').slice(0, 200))
 
+  sql("select ops.set_photo_audience('founder', 'founder')")
   sql("select ops.set_media_settings('founder', false, 2000000000, 10, 20)")
   await browser.close()
   console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`)
