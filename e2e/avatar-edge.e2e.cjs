@@ -266,7 +266,10 @@ function frame(b) {
   {
     const pre = (origin) => fetch(`${GUARD}/upload`, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' } })
     const preview = 'https://splitpost-app-git-claude-pilot-membership-integration-crevant.vercel.app'
-    check('the member app\'s Preview may call it from the browser', (await pre(preview)).headers.get('access-control-allow-origin') === preview)
+    // Phase 1B-2: this copy refuses to run (the waitlist project's address), so it
+    // grants no browser origin anything, the member app's Previews included. The
+    // allowed origins of a running copy are tested in scripts/e2e/functions-policy-edge.sh.
+    check('refusing to run, it grants no origin, not even the member app\'s Preview', !(await pre(preview)).headers.get('access-control-allow-origin'))
     check('other websites may not', !(await pre('https://evil.example')).headers.get('access-control-allow-origin'))
     check('look-alike addresses may not', !(await pre('https://splitpost-app-x-crevant.vercel.app.evil.example')).headers.get('access-control-allow-origin'))
     check('outside local development, localhost may not', !(await pre('http://127.0.0.1:4176')).headers.get('access-control-allow-origin'))
