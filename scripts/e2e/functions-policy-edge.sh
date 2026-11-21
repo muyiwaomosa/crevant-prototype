@@ -14,7 +14,7 @@
 #   3. Member Production while its reference is null, the waitlist project and
 #      an unknown project: the member functions refuse to run (503).
 #   4. join-waitlist: on the waitlist project and staging, responses are
-#      identical to main's version (status, body, CORS); on member Production
+#      identical to its version before the guard (7c8a9ce; status, body, CORS); on member Production
 #      and an unknown project it stays closed without reading any secret
 #      (its database setting is never even parsed).
 set -euo pipefail
@@ -25,8 +25,11 @@ STAGING=kpudeppgokpjhvaqrprn
 WAITLIST=hmrliwoychnqrbbydorg
 MEMBER=membersprodtestrefab
 COMMIT=$(git rev-parse HEAD)
-# main's join-waitlist is the reference for "unchanged" (CI checkouts may not have origin/main yet).
-git rev-parse --verify -q origin/main >/dev/null || git fetch -q --no-tags --depth=1 origin main:refs/remotes/origin/main
+# The reference for "unchanged": join-waitlist as it was before the Phase 1B-2
+# runtime guard (the last commit before it, on main). Pinned, so the
+# comparison stays meaningful after the guard itself is on main.
+BEFORE_GUARD=7c8a9ce360dac79dee400694104a990c6f66b6bb
+git cat-file -e "$BEFORE_GUARD^{commit}" 2>/dev/null || git fetch -q --no-tags origin "$BEFORE_GUARD"
 OTHER_COMMIT=$(printf 'f%.0s' $(seq 1 40))
 PORT=58460  # the last port used is kept in a file: start runs in a subshell
 pass=0; failed=0
@@ -156,7 +159,8 @@ verify fail "the verifier fails a function that refuses to run" 'a 503 means' \
 reset
 # 4. join-waitlist: identical to main's version where allowed; closed, no secret read, elsewhere.
 OLD="$TMP/join-old"; mkdir -p "$OLD/supabase/functions/join-waitlist" "$OLD/supabase/functions/_shared"
-for f in index.ts handler.ts db.ts; do git show "origin/main:supabase/functions/join-waitlist/$f" > "$OLD/supabase/functions/join-waitlist/$f"; done
+for f in index.ts handler.ts db.ts; do git show "$BEFORE_GUARD:supabase/functions/join-waitlist/$f" > "$OLD/supabase/functions/join-waitlist/$f"; done
+grep -q waitlistProjectAllowed "$OLD/supabase/functions/join-waitlist/index.ts" && bad "the reference copy already has the guard (wrong reference commit)"
 NEW="$TMP/join-new"; mkdir -p "$NEW/supabase"; cp -r supabase/functions "$NEW/supabase/functions"
 NEWM=$(copy join-member join-waitlist member)
 WENV=(-e WAITLIST_FUNCTION_ENABLED=true -e WAITLIST_ALLOWED_ORIGINS=https://site.test -e WAITLIST_ALLOWED_HOSTNAMES=site.test
@@ -179,8 +183,8 @@ for where in "the waitlist project|https://$WAITLIST.supabase.co" "staging|https
   Po=$(start "fnpol-join-old-$RANDOM" "$OLD" join-waitlist "$url" "${WENV[@]}")
   Pn=$(start "$newname" "$NEW" join-waitlist "$url" "${WENV[@]}")
   a=$(probe "$Po"); b=$(probe "$Pn")
-  if [ "$(grep -c '^HTTP' <<<"$a")" = 5 ] && [ "$a" = "$b" ]; then ok "join-waitlist on $what answers exactly as main's version does ($(grep -c '^HTTP' <<<"$a") requests compared)"
-  else bad "join-waitlist on $what differs from main's version:"; diff <(echo "$a") <(echo "$b") | head -10; fi
+  if [ "$(grep -c '^HTTP' <<<"$a")" = 5 ] && [ "$a" = "$b" ]; then ok "join-waitlist on $what answers exactly as before the guard ($(grep -c '^HTTP' <<<"$a") requests compared)"
+  else bad "join-waitlist on $what differs from its version before the guard:"; diff <(echo "$a") <(echo "$b") | head -10; fi
   if docker logs "$newname" 2>&1 | grep -q 'not an approved project'; then bad "join-waitlist on $what logged the project guard"; fi
 done
 for where in "member Production|https://$MEMBER.supabase.co|$NEWM" "an unknown project|https://abcdefghijabcdefghij.supabase.co|$NEW"; do
