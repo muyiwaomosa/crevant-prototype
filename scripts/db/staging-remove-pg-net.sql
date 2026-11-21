@@ -20,7 +20,8 @@
 --   6. no trigger calls supabase_functions.http_request (Supabase database
 --      webhooks, which are built on pg_net);
 --   7. no function, view or other object outside pg_net depends on it or
---      mentions net.http_ in its body, other than Supabase's own
+--      mentions net. in its body (any pg_net function, its queue or its
+--      responses; trigger and event trigger functions included), other than Supabase's own
 --      supabase_functions.http_request (covered by 6) and
 --      extensions.grant_pg_net_access (it only runs when pg_net is created).
 -- Then it runs drop extension pg_net (without cascade, so anything missed by
@@ -123,7 +124,7 @@ begin
   -- Function bodies that call pg_net (not recorded in pg_depend), other than Supabase's two.
   select string_agg(n.nspname || '.' || p.proname || '()', '; ') into bodies
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where p.prosrc ~ '\mnet\.http_'
+  where p.prosrc ~ '\mnet\.[_a-z]'
     and p.oid not in (select objid from pg_depend where classid = 'pg_proc'::regclass and deptype = 'e'
                       and refobjid = (select oid from pg_extension where extname = 'pg_net'))
     and not (p.pronargs = 0 and (n.nspname, p.proname) in (('supabase_functions', 'http_request'), ('extensions', 'grant_pg_net_access')));

@@ -193,10 +193,30 @@ legacy_job
 out=$(DRAIN=$GATEWAY A apply "$APPLY"); code=$?
 [ $code -ne 0 ] && grep -q 'INSTALLED BUT UNVERIFIED' <<<"$out" && grep -q 'its first run failed' <<<"$out" && grep -q 'FAILED: HTTP 401' <<<"$out" \
   && [ "$(method)" = http ] && clean_out "$out" && ok "a first run refused with 401: INSTALLED BUT UNVERIFIED, reported as HTTP 401 only" || bad "401 first run (exit $code): $out"
+# Recovery from INSTALLED BUT UNVERIFIED.
+stuck=$(jobid)
+out=$(A apply "$APPLY"); code=$?
+[ $code -ne 0 ] && grep -q 'Already applied' <<<"$out" && grep -q 'UNVERIFIED' <<<"$out" && [ "$(jobcount)" = 1 ] && [ "$(jobid)" = "$stuck" ] \
+  && ok "re-applying an unverified job changes nothing and still fails (no duplicate, no silent success)" || bad "re-apply when unverified (exit $code): $out"
+out=$(A verify ''); code=$?
+[ $code -ne 0 ] && grep -q 'pause (remove), then apply' <<<"$out" && ok "verify stays UNVERIFIED and says how to restart cleanly" || bad "verify when unverified (exit $code): $out"
+out=$(A remove "$PAUSE"); code=$?
+[ $code -eq 0 ] && [ "$(jobcount)" = 0 ] && [ "$(others_fp)" = "$OTHERS" ] && ok "pause takes the unverified job down, touching nothing else" || bad "pause when unverified (exit $code)"
+out=$(A apply "$APPLY"); code=$?
+[ $code -eq 0 ] && grep -q 'paused): apply installs a fresh http job' <<<"$out" && grep -q 'APPLIED AND VERIFIED' <<<"$out" && [ "$(jobcount)" = 1 ] && [ "$(jobid)" != "$stuck" ] \
+  && [ "$(method)" = http ] && [ "$(has_ext pg_net)" = 1 ] && [ "$(others_fp)" = "$OTHERS" ] \
+  && ok "after the pause, apply installs a fresh http job (new id, history reset) and verifies it, without the old pg_net job" || bad "re-apply after pause (exit $code): $out"
 A remove "$PAUSE" >/dev/null
 
 # --- 6. apply: replaced, not duplicated, and verified end to end ---------------------
 legacy_job; old=$(jobid)
+# Old job history that looks verified (succeeded runs, each with a pass inside): it must never count.
+"${PSQL[@]}" -c "with r as (select (select coalesce(max(runid), 0) from cron.job_run_details) + 100000 + g as runid, now() - (g || ' minutes')::interval as t from generate_series(20, 50, 15) g),
+                 ins as (insert into cron.job_run_details (jobid, runid, job_pid, database, username, command, status, return_message, start_time, end_time)
+                         select $old, runid, 0, 'postgres', 'postgres', (select command from cron.job where jobid = $old), 'succeeded', '1 row', t, t + interval '2 seconds' from r returning start_time)
+                 insert into ops.media_drain_runs (source, claimed, deleted, failed, finished_at) select 'scheduled', 0, 0, 0, start_time + interval '1 second' from ins" >/dev/null \
+  || bad "fixture: could not add the old job's history"
+[ "$("${PSQL[@]}" -c "select count(*) from cron.job_run_details where jobid = $old and status = 'succeeded'")" -ge 3 ] || bad "fixture: the old job's history is missing"
 out=$(A apply "$APPLY"); code=$?
 [ $code -eq 0 ] && grep -q 'APPLIED AND VERIFIED' <<<"$out" && grep -q 'Replaced, not duplicated' <<<"$out" && grep -q 'verified (drain pass' <<<"$out" \
   && [ "$(jobcount)" = 1 ] && [ "$(jobid)" != "$old" ] && [ "$(method)" = http ] && [ "$(has_ext pg_net)" = 1 ] && [ "$(has_ext http)" = 1 ] \
@@ -218,21 +238,51 @@ out2=$(A verify ''); code2=$?
 [ $code -ne 0 ] && grep -q 'run(s) failed since the replacement' <<<"$out" && [ $code2 -ne 0 ] && clean_out "$out$out2" && [ "$(has_ext pg_net)" = 1 ] \
   && ok "a failed run since the replacement blocks removal, even with the newest runs verified" || bad "failed run gate (exit $code/$code2): $out"
 # A fresh replacement; then a pass that matches no run, and a run with two passes.
-A remove "$PAUSE" >/dev/null; legacy_job; A apply "$APPLY" >/dev/null; wait_finished 2
+A remove "$PAUSE" >/dev/null; A apply "$APPLY" >/dev/null; wait_finished 2
 "${PSQL[@]}" -c "insert into ops.media_drain_runs (source, claimed, deleted, failed, finished_at) values ('scheduled', 0, 0, 0, now())" >/dev/null
 out=$(B check ''); code=$?
 out2=$(A verify ''); code2=$?
 [ $code -ne 0 ] && grep -q "can't be attributed" <<<"$out" && [ $code2 -ne 0 ] && grep -q 'reliably attributed' <<<"$out2" \
   && ok "a drain pass that matches no run fails both closed" || bad "unattributed (exit $code/$code2): $out"
-A remove "$PAUSE" >/dev/null; legacy_job; A apply "$APPLY" >/dev/null; wait_finished 2
+A remove "$PAUSE" >/dev/null; A apply "$APPLY" >/dev/null; wait_finished 2
 "${PSQL[@]}" -c "insert into ops.media_drain_runs (source, claimed, deleted, failed, finished_at)
                  select 'scheduled', 0, 0, 0, start_time + (end_time - start_time) / 2 from cron.job_run_details
                  where jobid = (select jobid from cron.job where jobname = 'post-media-drain') and status = 'succeeded' order by runid desc limit 1" >/dev/null
 out=$(B check ''); code=$?
 [ $code -ne 0 ] && grep -q '2 matching drain passes' <<<"$out" && ok "a run with two matching drain passes is not verified, and blocks removal" || bad "double match (exit $code): $out"
 
+# A pass 1 ms after a run ended belongs to no run: fails closed.
+A remove "$PAUSE" >/dev/null; A apply "$APPLY" >/dev/null; wait_finished 2
+"${PSQL[@]}" -c "insert into ops.media_drain_runs (source, claimed, deleted, failed, finished_at)
+                 select 'scheduled', 0, 0, 0, end_time + interval '1 millisecond' from cron.job_run_details
+                 where jobid = (select jobid from cron.job where jobname = 'post-media-drain') and status = 'succeeded' order by runid desc limit 1" >/dev/null
+out=$(B check ''); code=$?
+[ $code -ne 0 ] && grep -q 'match no run of this job: 1' <<<"$out" && ok "a pass just outside a run's window (1 ms after it ended) is unattributed and blocks removal" || bad "boundary (exit $code): $out"
+# A run of the same job id under another command (altered in place) can't drop out of view.
+A remove "$PAUSE" >/dev/null; A apply "$APPLY" >/dev/null; wait_finished 2
+"${PSQL[@]}" -c "insert into cron.job_run_details (jobid, runid, job_pid, database, username, command, status, return_message, start_time, end_time)
+                 values ((select jobid from cron.job where jobname = 'post-media-drain'), (select max(runid) from cron.job_run_details) + 100000, 0, 'postgres', 'postgres', 'select 1', 'failed', 'x', now() - interval '1 minute', now() - interval '59 seconds')" >/dev/null \
+  || bad "fixture: could not add a run under another command"
+out=$(B check ''); code=$?
+out2=$(A verify ''); code2=$?
+[ $code -ne 0 ] && grep -q 'under a different command: 1' <<<"$out" && [ $code2 -ne 0 ] \
+  && ok "a run recorded under an altered command fails verify and the gate closed" || bad "altered command (exit $code/$code2): $out"
+
 # --- 8. Removal, once the gate is met ---------------------------------------------------
-A remove "$PAUSE" >/dev/null; legacy_job; A apply "$APPLY" >/dev/null; wait_finished 2
+A remove "$PAUSE" >/dev/null; A apply "$APPLY" >/dev/null; wait_finished 2
+for dep in \
+  "create function public.crevant_t_dep() returns bigint language sql as \$f\$ select count(*) from net._http_response \$f\$|drop function public.crevant_t_dep()|a function reading pg_net's responses table" \
+  "create function public.crevant_t_dep() returns trigger language plpgsql as \$f\$ begin perform net.http_post(url := 'http://kong:8000/'); return new; end \$f\$; create table public.crevant_t_tab (id int); create trigger crevant_t_trg after insert on public.crevant_t_tab for each row execute function public.crevant_t_dep()|drop table public.crevant_t_tab; drop function public.crevant_t_dep()|a trigger whose function calls pg_net" \
+  "create table public.crevant_t_tab (id int, req bigint default net.http_get('http://kong:8000/'))|drop table public.crevant_t_tab|a column default calling pg_net" \
+  "select cron.schedule('crevant-test-net', '0 5 * * *', \$q\$select net.http_get('http://kong:8000/')\$q\$)|select cron.unschedule('crevant-test-net')|another cron job using pg_net" \
+  "create table public.crevant_t_tab (id int); create trigger crevant_t_hook after insert on public.crevant_t_tab for each row execute function supabase_functions.http_request('http://kong:8000/', 'POST', '{}', '{}', '1000')|drop table public.crevant_t_tab|a database webhook"; do
+  IFS='|' read -r make undo what <<<"$dep"
+  "${PSQL[@]}" -c "$make" >/dev/null
+  out=$(B check ''); code=$?
+  "${PSQL[@]}" -c "$undo" >/dev/null
+  [ $code -ne 0 ] && grep -q 'removal script refused' <<<"$out" && grep -Eq '^ +[4-7] \| REFUSED' <<<"$out" && [ "$(has_ext pg_net)" = 1 ] \
+    && ok "removal refuses with $what (nothing changed)" || bad "dependency: $what (exit $code): $(grep -E 'REFUSED|Refused' <<<"$out" | head -3)"
+done
 before_job=$("${PSQL[@]}" -c "select jobid || md5(command) || schedule || active from cron.job where jobname = 'post-media-drain'")
 out=$(B check ''); code=$?
 [ $code -eq 0 ] && grep -q 'Gate met: [2-9] consecutive verified runs' <<<"$out" && grep -q 'Check passed' <<<"$out" && [ "$(has_ext pg_net)" = 1 ] && clean_out "$out" \
@@ -253,6 +303,14 @@ done
 [ $all -eq 0 ] && ok "staging security checks 001 to 013 all pass afterwards (003 unchanged)" || bad "a staging security check failed"
 out=$(A remove "$PAUSE"); code=$?
 [ $code -eq 0 ] && [ "$(jobcount)" = 0 ] && [ "$(others_fp)" = "$OTHERS" ] && ok "pause still works after pg_net is gone" || bad "final pause (exit $code)"
+# Recovery after pg_net's removal: apply installs the http job; pg_net stays gone.
+out=$(A apply "$APPLY"); code=$?
+[ $code -eq 0 ] && grep -q 'APPLIED AND VERIFIED' <<<"$out" && grep -q 'pg_net is not installed (unchanged)' <<<"$out" && [ "$(has_ext pg_net)" = 0 ] \
+  && [ "$("${PSQL[@]}" -c "select to_regnamespace('net') is null")" = t ] && [ "$(jobcount)" = 1 ] && [ "$(method)" = http ] \
+  && ok "after pg_net is gone, pause then apply restores the cleanup on http and verifies it; pg_net is not reinstalled" || bad "recovery after removal (exit $code): $out"
+out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/003_waitlist.sql 2>&1); code=$?
+[ $code -eq 0 ] && ok "and security check 003 still passes after that recovery" || bad "check 003 after recovery: $(grep -m1 ERROR <<<"$out")"
+A remove "$PAUSE" >/dev/null
 
 echo "Cleanup workflow tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]

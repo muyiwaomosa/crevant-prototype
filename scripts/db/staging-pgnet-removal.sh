@@ -20,8 +20,8 @@ cd "$(dirname "$0")/../.."
 . scripts/db/staging-photo-cleanup-lib.sh
 
 SCRIPT=scripts/db/staging-remove-pg-net.sql
-# sha256 of the reviewed removal script (PR #85).
-SCRIPT_SHA256=d2b211eab597f3a0a3258d2d1fe33ab47d18c7427745ab0323358cd8c135ad26
+# sha256 of the reviewed removal script (PR #85, function scan widened in #87).
+SCRIPT_SHA256=a672de2ac4be5bef764854b4de93e4fcd4ec1d8b161bfe8a9f92ab294acad71f
 REMOVE_PHRASE='REMOVE PG_NET FROM STAGING'
 
 MODE="${MODE:-check}"
@@ -48,7 +48,7 @@ if [ "$JOBS" = 1 ] && [ "$METHOD" = http ]; then
   [ "$VERIFIED_IN_A_ROW" -ge 2 ] || gate+=("the two newest runs must both be verified ($VERIFIED_IN_A_ROW in a row so far)")
   [ "$FAILED_RUNS" = 0 ] || gate+=("$FAILED_RUNS run(s) failed since the replacement")
   [ "$UNMATCHED_OK_RUNS" = 0 ] || gate+=("$UNMATCHED_OK_RUNS run(s) succeeded without exactly one matching drain pass")
-  [ "$UNATTRIBUTED" = 0 ] || gate+=("$UNATTRIBUTED drain pass(es) can't be attributed to a run")
+  [ "$UNATTRIBUTED" = 0 ] || gate+=("$UNATTRIBUTED drain pass(es) or run(s) under another command can't be attributed")
 fi
 if [ ${#gate[@]} -gt 0 ]; then
   printf '  gate: %s\n' "${gate[@]}"

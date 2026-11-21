@@ -88,7 +88,8 @@ for (const [label, f] of Object.entries(FLOWS)) {
     assert.deepEqual([...on.matchAll(/^ {6}([a-z_]+):$/gm)].map((m) => m[1]), ['mode', 'confirm_project_ref', 'confirm_phrase'])
     assert.deepEqual([...on.matchAll(/^ {10}- ([a-z-]+)$/gm)].map((m) => m[1]), f.modes, 'the modes, nothing else')
     assert.match(on, new RegExp(`default: ${f.modes[0]}\\n`), `defaults to ${f.modes[0]}`)
-    assert.ok(!/restore/i.test(code(wf)) && !/restore/i.test(code(wrapper)), 'no restore mode')
+    assert.ok(!/restore[-_ ]?previous/i.test(wf + wrapper), 'no restore mode')
+    assert.ok(code(wrapper).includes(`case "$MODE" in ${f.modes.join('|')}) ;;`), 'the wrapper accepts exactly these modes')
     assert.match(wf, /^ {2}EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn$/m)
   })
 
@@ -206,4 +207,25 @@ test('only these two workflows run their wrappers', () => {
     const name = f.wrapper.split('/').pop().replace('.', '\\.')
     assert.deepEqual(files.filter((p) => new RegExp(name).test(readFileSync(p, 'utf8'))), [f.wf])
   }
+})
+
+test('recovery: apply on an installed http job only passes its verification, and a paused cleanup gets a fresh http job', () => {
+  const raw = read(FLOWS.schedule.wrapper)
+  const a = code(raw)
+  const from = raw.indexOf('if [ "$METHOD" = http ]; then\n  # Never replaces')
+  assert.ok(from > 0, 'the already-applied branch is where expected')
+  const already = code(raw.slice(from, raw.indexOf('# Two starting points only')))
+  assert.match(already, /http_verdict\n {2}exit 0\nfi/, 'already applied succeeds only through the verify verdict')
+  assert.match(a, /if \[ "\$JOBS" = 0 \]; then\n {2}echo "No cleanup job is scheduled \(paused\): apply installs a fresh http job\."/)
+  // apply never brings back pg_net or the old scheduler, and never removes pg_net either.
+  assert.ok(!/net\.http_post|create extension[^\n]*pg_net/i.test(a), 'nothing in the schedule wrapper can recreate the old pg_net job or pg_net')
+  assert.match(a, /grep -c '\^extension\|pg_net\|' <<<"\$before"\)" = "\$\(grep -c '\^extension\|pg_net\|' <<<"\$after"\)"/, 'pg_net presence must be unchanged by apply')
+})
+
+test('attribution: runs under an altered command fail closed, and the removal scan covers any net. reference', () => {
+  assert.match(LIB, /d\.command is distinct from j\.command/)
+  assert.match(LIB, /UNATTRIBUTED=\$\(\(UNATTRIBUTED \+ altered\)\)/)
+  const sql = read(FLOWS.removal.sql)
+  assert.match(sql, /where p\.prosrc ~ '\\mnet\\\.\[_a-z\]'/, 'function bodies are scanned for any net. reference, not only net.http_')
+  assert.match(sql, /command ~ '\\mnet\\\.'/, 'cron jobs are scanned for any net. reference')
 })

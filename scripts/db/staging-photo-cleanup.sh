@@ -54,6 +54,18 @@ echo "Cleanup job now: $JOBS job(s) named post-media-drain; method ${METHOD:-non
 [ "$OTHERS" = 0 ] || fail "another cron job calls the drain, so runs can't be attributed. Stop and investigate. Nothing changed."
 [ "$JOBS" -le 1 ] || fail "$JOBS jobs are named post-media-drain. Stop and investigate. Nothing changed."
 
+RESTART_HINT="To start a clean history once the cause is fixed: pause (remove), then apply, which installs a fresh http job (a new id). The old pg_net job is never restored."
+# The verify verdict for the http job (used by verify, and by apply when the
+# job is already installed, so neither can pass an unverified job).
+http_verdict() {
+  report_runs
+  [ "$UNATTRIBUTED" = 0 ] || fail "UNVERIFIED: $UNATTRIBUTED drain pass(es) match no run of this job, or runs were recorded under another command, so runs can't be reliably attributed. Stop and investigate. $RESTART_HINT"
+  [ "$LATEST" != none ] || fail "UNVERIFIED: the http job has no finished run yet. Run verify again after the next quarter hour."
+  [ "$SCHEDULE" = '*/15 * * * *' ] && [ "$ACTIVE" = true ] || fail "UNVERIFIED: the http job is not active every 15 minutes."
+  [ "$FAILED_RUNS" = 0 ] && [ "$UNMATCHED_OK_RUNS" = 0 ] || fail "UNVERIFIED: since the replacement, $FAILED_RUNS run(s) failed and $UNMATCHED_OK_RUNS succeeded without exactly one matching drain pass. $RESTART_HINT"
+  echo "Verdict: VERIFIED. $VERIFIED_IN_A_ROW consecutive verified run(s), none failed since the replacement. Nothing changed."
+}
+
 # --- verify -----------------------------------------------------------------
 if [ "$MODE" = verify ]; then
   [ "$JOBS" = 1 ] || fail "UNVERIFIED: no cleanup job is scheduled (paused or never applied)."
@@ -63,12 +75,7 @@ if [ "$MODE" = verify ]; then
     exit 0
   fi
   [ "$METHOD" = http ] || fail "UNVERIFIED: the cleanup job is neither the http nor the pg_net job."
-  report_runs
-  [ "$UNATTRIBUTED" = 0 ] || fail "UNVERIFIED: $UNATTRIBUTED drain pass(es) match no run of this job, so runs can't be reliably attributed. Stop and investigate."
-  [ "$LATEST" != none ] || fail "UNVERIFIED: the http job has no finished run yet. Run verify again after the next quarter hour."
-  [ "$SCHEDULE" = '*/15 * * * *' ] && [ "$ACTIVE" = true ] || fail "UNVERIFIED: the http job is not active every 15 minutes."
-  [ "$FAILED_RUNS" = 0 ] && [ "$UNMATCHED_OK_RUNS" = 0 ] || fail "UNVERIFIED: since the replacement, $FAILED_RUNS run(s) failed and $UNMATCHED_OK_RUNS succeeded without exactly one matching drain pass."
-  echo "Verdict: VERIFIED. $VERIFIED_IN_A_ROW consecutive verified run(s), none failed since the replacement. Nothing changed."
+  http_verdict
   exit 0
 fi
 
@@ -90,12 +97,19 @@ fi
 
 # --- apply --------------------------------------------------------------------
 if [ "$METHOD" = http ]; then
-  echo "Already applied: the cleanup job already uses the http extension. Nothing changed."
-  report_runs
+  # Never replaces an installed http job, and only succeeds if it is verified.
+  echo "Already applied: the cleanup job already uses the http extension. Nothing changed. Its verification:"
+  http_verdict
   exit 0
 fi
-[ "$JOBS" = 1 ] && [ "$METHOD" = pg_net ] && [ "$ACTIVE" = true ] \
-  || fail "apply expects exactly one active pg_net cleanup job (staging today). Nothing changed."
+# Two starting points only: staging today (one active pg_net job), or paused
+# (no cleanup job, e.g. after remove, before or after pg_net's removal).
+if [ "$JOBS" = 0 ]; then
+  echo "No cleanup job is scheduled (paused): apply installs a fresh http job."
+else
+  [ "$JOBS" = 1 ] && [ "$METHOD" = pg_net ] && [ "$ACTIVE" = true ] \
+    || fail "apply expects one active pg_net cleanup job or a paused cleanup (none scheduled). Nothing changed."
+fi
 boundary_wait
 running_wait
 before=$(fingerprint) || fail "could not read the cron jobs before applying."
@@ -119,13 +133,19 @@ problems=()
 [ "$OTHERS" = 0 ] || problems+=("$OTHERS other job(s) call the drain")
 grep -q '|post-media-drain|.*|pg_net$' <<<"$after" && problems+=("a pg_net cleanup job is still scheduled")
 grep -q '^extension|http|.*|extensions$' <<<"$after" || problems+=("the http extension is not installed in extensions")
-grep -q '^extension|pg_net|' <<<"$after" || problems+=("pg_net was removed, which apply must never do")
+[ "$(grep -c '^extension|pg_net|' <<<"$before")" = "$(grep -c '^extension|pg_net|' <<<"$after")" ] || problems+=("pg_net was installed or removed, which apply must never do")
 [ "$(others "$before" | grep -v '^extension|http|')" = "$(others "$after" | grep -v '^extension|http|')" ] || problems+=("another cron job or extension changed")
 if [ ${#problems[@]} -gt 0 ]; then
   printf '  problem: %s\n' "${problems[@]}"
   fail "INSTALLED BUT NOT AS EXPECTED: the replacement COMMITTED (it is not rolled back), but the checks above failed. Stop: pause it if needed, and investigate."
 fi
-echo "Replaced, not duplicated: job $JOBID (pg_net) is gone; job $NEWID (http, every 15 minutes, active) is the only cleanup job. pg_net is still installed."
+if [ -n "$JOBID" ]; then
+  echo "Replaced, not duplicated: job $JOBID (pg_net) is gone; job $NEWID (http, every 15 minutes, active) is the only cleanup job."
+else
+  echo "Installed: job $NEWID (http, every 15 minutes, active) is the only cleanup job."
+fi
+grep -q '^extension|pg_net|' <<<"$after" && echo "pg_net is still installed (unchanged)." || echo "pg_net is not installed (unchanged)."
+
 
 # Wait for the first scheduled run and verify it end to end.
 interval=$(local_setting SCHEDULE_TEST_INTERVAL)
@@ -142,11 +162,11 @@ for _ in $(seq 1 $((wait_max / step))); do
   sleep "$step"
 done
 [ -n "$interval" ] && "${PSQL[@]}" -c "select cron.alter_job($NEWID, schedule := '*/15 * * * *')" >/dev/null
-unverified() { fail "INSTALLED BUT UNVERIFIED: the http cleanup job is COMMITTED and scheduled (not rolled back), but $1. Next: run verify after the next run, or pause with remove mode."; }
+unverified() { fail "INSTALLED BUT UNVERIFIED: the http cleanup job is COMMITTED and scheduled (not rolled back), but $1. Next: fix the cause, then pause (remove) and apply again for a fresh job; verify alone can't clear a failed first run. The old pg_net job is never restored."; }
 [ -n "$finished" ] && [ "$finished" != 0 ] || unverified "no run finished within $((wait_max / 60)) minutes"
 report_runs
-[ "$UNATTRIBUTED" = 0 ] || unverified "$UNATTRIBUTED drain pass(es) match no run of this job, so the run can't be reliably attributed"
+[ "$UNATTRIBUTED" = 0 ] || unverified "$UNATTRIBUTED drain pass(es) match no run of this job, or runs were recorded under another command, so the run can't be reliably attributed"
 [ "$LATEST" = succeeded ] || unverified "its first run failed (see above)"
 [ "$VERIFIED_IN_A_ROW" -ge 1 ] || unverified "its first run succeeded without exactly one matching drain pass"
 echo "Verdict: APPLIED AND VERIFIED. The first scheduled run reached the drain function and completed a pass."
-echo "pg_net is still installed. Its removal is a separate workflow, after at least two consecutive verified runs."
+echo "Removing pg_net (if still installed) is a separate workflow, after at least two consecutive verified runs."

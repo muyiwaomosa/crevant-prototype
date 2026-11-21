@@ -206,8 +206,9 @@ status. `succeeded` means the drain answered HTTP 200 within 20 seconds.
 | `the drain key is missing from Vault` | Vault has no `media_drain_key` (32 characters or more). |
 | `server restarted` | The database restarted during the run (pg_cron's own message). |
 
-No job row means the job isn't scheduled (run the schedule script again:
-applying twice leaves exactly one job). pg_cron never starts a run while the
+No job row means the job isn't scheduled (run the workflow **Photo cleanup
+schedule on staging** in `apply` mode: from a paused cleanup it installs
+exactly one job and verifies its first run). pg_cron never starts a run while the
 previous one is still going, and a pass claims each queued file before
 deleting it, so a slow run meeting the next one, a member's cleanup or a
 moderator's pass never deletes a file twice. Meanwhile, Run cleanup now
@@ -247,15 +248,10 @@ photos off never does.
    supabase functions deploy post-media --no-verify-jwt --project-ref kpudeppgokpjhvaqrprn
    ```
 6. **Schedule the cleanup** (pg_cron and the http extension) with the
-   staging database connection string (Database > Connect), first as a
-   check, then for real:
-   ```bash
-   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-schedule-media-drain.sql
-   ```
-   ```bash
-   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=apply -v confirm='SCHEDULE THE STAGING PHOTO CLEANUP' -f scripts/db/staging-schedule-media-drain.sql
-   ```
-   Within 15 minutes, Photo storage shows a "Last scheduled cleanup".
+   GitHub workflows, first **Photo cleanup schedule check on staging**, then
+   **Photo cleanup schedule on staging** in `apply` mode (see "The cleanup
+   schedule without pg_net" below). Within 15 minutes, Photo storage shows
+   a "Last scheduled cleanup".
 7. Fast-forward the Preview branch to the merged commit (no force push, no
    Vercel change). Photos are still off, so members see no change.
 8. **Hosted CPU gate**: Moderation > Photo storage > Run processing check.
@@ -308,17 +304,13 @@ here touches Production, photos or billing):
    select jobname, schedule, active from cron.job;
    select count(*) from net.http_request_queue;
    ```
-2. **Schedule check** (rolls back; shows `http (synchronous)`). Without psql
-   on your computer, use the GitHub workflow **Photo cleanup schedule check
-   on staging** (Actions > Run workflow, on `main`, typing
-   `kpudeppgokpjhvaqrprn`). It runs only this check, with the staging
-   environment's existing secret, the staging target and TLS checks, the
-   script's pinned checksum, and before and after fingerprints of the cron
-   jobs and extensions (any difference fails it). It can't apply, remove or
-   touch pg_net. With psql, the same check is:
-   ```bash
-   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-schedule-media-drain.sql
-   ```
+2. **Schedule check** (rolls back; shows `http (synchronous)`), with the
+   GitHub workflow **Photo cleanup schedule check on staging** (Actions >
+   Run workflow, on `main`, typing `kpudeppgokpjhvaqrprn`). It runs only this
+   check, with the staging environment's existing secret, the staging target
+   and TLS checks, the script's pinned checksum, and before and after
+   fingerprints of the cron jobs and extensions (any difference fails it).
+   It can't apply, remove or touch pg_net.
 3. **Schedule apply**, with the GitHub workflow **Photo cleanup schedule on
    staging**: mode `apply`, the project reference, and the phrase
    `SCHEDULE THE STAGING PHOTO CLEANUP`. It replaces the pg_net job with the
@@ -348,8 +340,9 @@ here touches Production, photos or billing):
    failed APPLY stopped at 003.)
 8. **Verify** once more after the next run.
 
-With psql instead, the same scripts run with `-v mode=apply` and their
-phrases, but without the workflows' verification and gate.
+These workflows are the only routine way to run any of this. Running the
+scripts any other way skips their verification and gate, and is only for an
+emergency (below).
 
 **If something goes wrong (pause only).** The workflow's `remove` mode, with
 the phrase `UNSCHEDULE THE STAGING PHOTO CLEANUP`, unschedules only the
@@ -358,11 +351,39 @@ if any other cron job changed. Photos are off and the queue is durable, so a
 pause is harmless: queued files wait, and Moderation > Photo storage > Run
 cleanup now (or a member's own cleanup after deleting a post) keeps working,
 since manual cleanup doesn't depend on the schedule (tested in CI with no
-cleanup job scheduled). Resume with `apply`. Going back to the old pg_net job
-is deliberately not offered: it would reopen the exposure. After step 6, if
-something turns out to need pg_net, `create extension pg_net with schema
-extensions` restores it, but brings back the PUBLIC grants and the check 003
-failure, so it needs its own approval.
+cleanup job scheduled).
+
+**Recovery.** Resume with `apply`: from a paused cleanup (no job scheduled) it
+installs a fresh http job, with a new id and so a fresh run history, and
+verifies its first run. This works the same before and after pg_net's
+removal; it never reinstalls pg_net and never restores the old pg_net job
+(going back to it is deliberately not offered: it would reopen the
+exposure). From **INSTALLED BUT UNVERIFIED**: fix the cause (for example the
+drain key), then pause and apply again. Running `apply` on the unverified job
+changes nothing and still fails, and `verify` stays unverified while any
+failed run is in the job's history, so neither can pass it silently. The
+removal gate counts only the fresh job's runs, so it needs two new verified
+runs. After step 6, if something turns out to need pg_net, `create extension
+pg_net with schema extensions` restores it, but brings back the PUBLIC grants
+and the check 003 failure, so it needs its own approval.
+
+**Emergency intervention (only with the founder's explicit approval).** Only
+if the workflows can't run (for example GitHub Actions is down) and the
+cleanup must be stopped now. The approval names the one action. The only
+prepared action is a pause, in the staging SQL editor: first look, then
+unschedule that one job by its id, and only if it is the cleanup.
+
+```sql
+select jobid, jobname, schedule, active, command ~ '/functions/v1/post-media/drain' as is_cleanup from cron.job where jobname = 'post-media-drain';
+```
+
+```sql
+select cron.unschedule(<jobid from the row above, only if is_cleanup is true>);
+```
+
+Nothing else (apply, removal, pg_net) is done by hand: those wait for the
+workflows, or for a reviewed plan approved separately. Afterwards, record what
+was done and when, and run the workflow's `verify` once it is available.
 
 **Production.** Production has no photo migration, and both scripts refuse to
 run there. Nothing in this move changes Production. When photos are approved
@@ -373,10 +394,10 @@ check 003 keeps passing. Check 003 is in Production's own list
 catch pg_net appearing there, or the waitlist roles gaining access to the
 `extensions` schema.
 
-**Rollback, in order:** turn photos off (step above); unschedule
-(`-v mode=remove -v confirm='UNSCHEDULE THE STAGING PHOTO CLEANUP'`; this
-works even after the migration is gone, and the database rollback refuses
-while the schedule exists);
+**Rollback, in order:** turn photos off (step above); unschedule (the
+workflow **Photo cleanup schedule on staging**, `remove` mode, phrase
+`UNSCHEDULE THE STAGING PHOTO CLEANUP`; this works even after the migration
+is gone, and the database rollback refuses while the schedule exists);
 `supabase functions delete post-media --project-ref kpudeppgokpjhvaqrprn`
 (posts show "This photo couldn't load", text is unaffected; stored files stay
 in the private bucket; links already issued work up to an hour). The

@@ -15,7 +15,10 @@
 #     ops.media_drain_runs (written by the post-media function itself, after
 #     its drain key check) finished inside that run's start and end;
 #   * any 'scheduled' pass since the job's first run that falls in no run
-#     of the job is UNATTRIBUTED, and fails everything closed.
+#     of the job is UNATTRIBUTED, and fails everything closed;
+#   * any run of the job's id under a different command (the command was
+#     altered in place) fails everything closed too, so no earlier run,
+#     failed or not, can drop out of view.
 # Never prints the connection string, a cron command, a run's raw error
 # (only a fixed classification) or the Vault secret. Never reads Vault.
 #
@@ -136,11 +139,20 @@ unattributed() {
        and not exists (select 1 from r where m.finished_at between r.start_time and coalesce(r.end_time, pg_catalog.now()))"
 }
 
-# Prints the runs and sets: VERIFIED_IN_A_ROW, FAILED_RUNS, UNMATCHED_OK_RUNS, UNATTRIBUTED, LATEST (status of newest).
+# Runs of the cleanup job's id recorded under a command other than its current one.
+other_command_runs() {
+  q "select count(*) from cron.job_run_details d join cron.job j on j.jobid = d.jobid
+     where j.jobname = 'post-media-drain' and d.command is distinct from j.command"
+}
+
+# Prints the runs and sets: VERIFIED_IN_A_ROW, FAILED_RUNS, UNMATCHED_OK_RUNS,
+# UNATTRIBUTED (including runs under another command), LATEST (status of newest).
 report_runs() {
   local rows line runid status secs matched counts outcome verdict
   rows=$(runs) || fail "could not read the cleanup's runs and the drain passes."
   UNATTRIBUTED=$(unattributed) || fail "could not read the drain passes."
+  local altered
+  altered=$(other_command_runs) || fail "could not read the cleanup's run history."
   VERIFIED_IN_A_ROW=0; FAILED_RUNS=0; UNMATCHED_OK_RUNS=0; LATEST=none
   local streak=true
   echo "Finished runs of this job, newest first (a run is verified only with exactly one matching drain pass):"
@@ -161,4 +173,6 @@ report_runs() {
     echo "  run $runid: $status after ${secs}s, $verdict"
   done <<<"$rows"
   echo "Drain passes since the first run that match no run of this job: $UNATTRIBUTED"
+  echo "Runs of this job recorded under a different command: $altered"
+  UNATTRIBUTED=$((UNATTRIBUTED + altered))
 }
