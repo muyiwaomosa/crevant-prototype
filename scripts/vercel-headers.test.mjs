@@ -32,7 +32,9 @@ test('the earlier security headers are still present', () => {
   assert.equal(headers['Referrer-Policy'], 'strict-origin-when-cross-origin')
 })
 
-const PRODUCTION_HOST = 'crevant-prototype.vercel.app'
+// The public website's Production address (config/public-site.json), the only
+// host where / and /join can ever go without the noindex header.
+const PRODUCTION_HOST = 'www.splitpost.ca'
 const robotsRules = config.headers.filter((h) => h.headers.some((x) => x.key === 'X-Robots-Tag'))
 
 test('every address except the production one is noindex (Previews, deployment addresses, anything else)', () => {
@@ -55,9 +57,27 @@ test('on the production address, every path except exactly / and /join is noinde
     assert.equal(headerNoindex(PRODUCTION_HOST, p), true, p)
   }
   // Every other address (Previews, deployment URLs) is noindex on every path, / and /join included.
-  for (const host of ['crevant-prototype-git-claude-public-launch-prep-crevant.vercel.app', 'crevant-prototype-abc123-crevant.vercel.app', 'localhost']) {
+  for (const host of [
+    'crevant-prototype-git-claude-public-launch-prep-crevant.vercel.app',
+    'crevant-prototype-abc123-crevant.vercel.app',
+    'splitpost-git-claude-website-redesign-crevant.vercel.app',
+    'localhost',
+    // The member app, its Previews and the project's own address: never indexed.
+    'app.splitpost.ca',
+    'splitpost-app.vercel.app',
+    'splitpost-app-git-claude-pilot-m1-environment-crevant.vercel.app',
+    // The frozen demo's address and the bare domain (which redirects to www).
+    'crevant-prototype.vercel.app',
+    'splitpost.ca',
+  ]) {
     for (const p of ['/', '/join', '/tour', '/privacy', '/xyz']) assert.equal(headerNoindex(host, p), true, `${host}${p}`)
   }
+})
+
+test('the robots rules use the same host as config/public-site.json (one source of truth)', () => {
+  const site = JSON.parse(readFileSync(new URL('../config/public-site.json', import.meta.url), 'utf8'))
+  assert.equal(site.productionHost, PRODUCTION_HOST)
+  assert.equal(JSON.stringify(robotsRules).includes('crevant-prototype.vercel.app'), false)
 })
 
 test('the robots header rules are exactly two, and nothing ever sends an "index" header', () => {
