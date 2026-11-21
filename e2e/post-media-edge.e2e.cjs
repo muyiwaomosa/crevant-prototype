@@ -284,6 +284,34 @@ function frame(b) {
   await call('drain', null, '{}', { url: DRAIN, contentType: 'application/json', headers: { 'x-media-drain-key': DRAIN_KEY } })
   check('the next scheduled pass deletes them', sql(`select count(*) from ops.media_deletions where deleted_at is null and path like '${A.id}/${failUpload.json.uploadId}%'`) === '0')
 
+  // 9b. Overlapping passes (a slow scheduled run meeting the next one, a
+  // member's cleanup, a moderator's pass): each queued file is claimed and
+  // deleted exactly once, and evidence is still held.
+  const overlapIds = []
+  for (let i = 0; i < 3; i++) {
+    const up = await photo(A.token, makePhoto(640, 480, 20 + i))
+    const p = (await rpc(A.token, 'app_create_post', { p_body: `Overlap ${i}`, p_request_id: crypto.randomUUID(), p_media: up.json.uploadId })).json
+    await rpc(A.token, 'app_delete_post', { p_post: p })
+    overlapIds.push(up.json.uploadId)
+  }
+  const like = overlapIds.map((u) => `path like '${A.id}/${u}%'`).join(' or ')
+  const queuedNow = sql(`select count(*) from ops.media_deletions where deleted_at is null and (${like})`)
+  const key = { 'x-media-drain-key': DRAIN_KEY }
+  const passes = await Promise.all([
+    call('drain', null, '{}', { url: DRAIN, contentType: 'application/json', headers: key }),
+    call('drain', null, '{}', { url: DRAIN, contentType: 'application/json', headers: key }),
+    call('drain', null, '{}', { url: DRAIN, contentType: 'application/json', headers: key }),
+    call('mod-drain', M.token, '{}', { contentType: 'application/json' }),
+  ])
+  const deletedTotal = passes.reduce((n, r) => n + (r.json?.deleted ?? 0), 0)
+  const after = sql(`select count(*) filter (where deleted_at is null) || '|' || count(*) filter (where attempts <> 1) from ops.media_deletions where ${like}`)
+  let gone = true
+  for (const u of overlapIds) for (const suffix of ['.jpg', '-feed.jpg']) if ((await stored(`${A.id}/${u}${suffix}`)).status < 400) gone = false
+  check('four overlapping passes delete each of the 6 queued files exactly once (claimed once, none left, none deleted twice)',
+    queuedNow === '6' && passes.every((r) => r.status === 200) && deletedTotal === 6 && after === '0|0' && gone,
+    `queued ${queuedNow}, statuses ${passes.map((r) => r.status).join(',')}, deleted ${deletedTotal}, left|reclaimed ${after}, gone ${gone}`)
+  check('and the evidence is still held after them', (await stored(evPaths[0])).status === 200 && (await stored(evPaths[1])).status === 200)
+
   // 10. The moderator's status panel numbers.
   const st = await rpc(M.token, 'app_mod_media_status', {})
   check('the photo storage status shows the switch, usage, queue, held evidence and the last scheduled pass',

@@ -49,8 +49,9 @@ durable queue (`ops.media_deletions`), in the same transaction as the event:
 
 The queue is worked through only by the server (service key):
 
-* **every 15 minutes by the schedule** (pg_cron and pg_net, set up by
-  `scripts/db/staging-schedule-media-drain.sql`), which needs no browser;
+* **every 15 minutes by the schedule** (pg_cron and the synchronous `http`
+  extension, set up by `scripts/db/staging-schedule-media-drain.sql`), which
+  needs no browser;
 * right after a member deletes a photo post (only quicker; the schedule
   guarantees it);
 * by a moderator (Photo storage > Run cleanup now).
@@ -186,15 +187,30 @@ timings only (no ids, paths or images).
 cleanup" is old), in the SQL editor:
 
 ```sql
-select status, return_message, start_time from cron.job_run_details
+select jobname, schedule, active from cron.job where jobname = 'post-media-drain';
+select status, return_message, start_time, end_time - start_time as took from cron.job_run_details
 where jobid = (select jobid from cron.job where jobname = 'post-media-drain') order by start_time desc limit 5;
-select status_code, created from net._http_response order by created desc limit 5;
 ```
 
-A 401 means the two copies of the drain key differ (Edge Function secret
-`MEDIA_DRAIN_KEY` and Vault `media_drain_key`); 503 means the function isn't
-configured; no row means the job isn't scheduled (run the schedule script
-again: applying twice leaves exactly one job). Meanwhile, Run cleanup now
+The request is made inside each cron run, so its outcome is the run's own
+status. `succeeded` means the drain answered HTTP 200 within 20 seconds.
+`failed` carries one of these messages, and never the key or any header:
+
+| Message | Meaning |
+|---|---|
+| `the drain answered HTTP 401` | The two copies of the drain key differ (Edge Function secret `MEDIA_DRAIN_KEY` and Vault `media_drain_key`). |
+| `the drain answered HTTP 503` | The function isn't configured (its secrets). |
+| `the drain answered HTTP 502` | The drain couldn't claim or record its pass; see the function's logs. |
+| `the drain timed out after 20 seconds` | The function didn't answer in time; the next run tries again. Queued files are not lost. |
+| `network error reaching the drain` | The function's address couldn't be reached. |
+| `the drain key is missing from Vault` | Vault has no `media_drain_key` (32 characters or more). |
+| `server restarted` | The database restarted during the run (pg_cron's own message). |
+
+No job row means the job isn't scheduled (run the schedule script again:
+applying twice leaves exactly one job). pg_cron never starts a run while the
+previous one is still going, and a pass claims each queued file before
+deleting it, so a slow run meeting the next one, a member's cleanup or a
+moderator's pass never deletes a file twice. Meanwhile, Run cleanup now
 works by hand.
 
 **When deletions gave up** (8 failed attempts, shown in Photo storage): fix
@@ -230,8 +246,9 @@ photos off never does.
    ```bash
    supabase functions deploy post-media --no-verify-jwt --project-ref kpudeppgokpjhvaqrprn
    ```
-6. **Schedule the cleanup** with the staging database connection string
-   (Database > Connect), first as a check, then for real:
+6. **Schedule the cleanup** (pg_cron and the http extension) with the
+   staging database connection string (Database > Connect), first as a
+   check, then for real:
    ```bash
    psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-schedule-media-drain.sql
    ```
@@ -256,6 +273,83 @@ because the restored switch would let every member post photos, and once
 any audience change has been recorded. Turn photos off first. It must run
 before the photo posts rollback, which refuses while the audience is
 recorded.
+
+## The cleanup schedule without pg_net (Build 5.3 remediation)
+
+The first schedule used pg_net. Installing pg_net grants PUBLIC usage of
+schema `net` and every right on its request queue and responses. Those
+grants belong to `supabase_admin`, so they can't be revoked from `postgres`,
+and while a request waits in `net.http_request_queue` its headers (the
+drain key) are readable by every role, including the waitlist roles.
+Security check 003 rightly fails on it, and stays unchanged.
+
+The schedule now uses Supabase's `http` extension: the call is made inside
+the cron run, nothing is queued, the key is read from Vault only for that
+call, and the run fails on anything but HTTP 200 or after 20 seconds
+(`http.timeout_msec`, set for each run). The `http` extension creates no
+tables, and only `postgres` and the API's server roles can use the
+`extensions` schema it lives in (the waitlist roles can't).
+
+`scripts/db/staging-remove-pg-net.sql` removes pg_net once nothing needs it
+(check, then apply with the phrase `REMOVE PG_NET FROM STAGING`). It refuses,
+changing nothing, unless: exactly one `post-media-drain` job exists, every 15
+minutes, on the http extension; that job has a succeeded run; no cron job
+mentions `net.`; pg_net's queue is empty; there are no database webhooks;
+and nothing else depends on pg_net. `check` performs the drop inside a
+transaction and rolls it back, which also proves the permission to drop it.
+
+**The move on staging** (each step needs the founder's approval; nothing
+here touches Production, photos or billing):
+
+1. Read only, in the SQL editor: confirm `http` is available and see what
+   uses pg_net today.
+   ```sql
+   select name, default_version, installed_version from pg_available_extensions where name in ('http', 'pg_net', 'pg_cron');
+   select jobname, schedule, active from cron.job;
+   select count(*) from net.http_request_queue;
+   ```
+2. **Schedule check** (rolls back; shows `http (synchronous)`):
+   ```bash
+   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-schedule-media-drain.sql
+   ```
+3. **Schedule apply**: replaces the pg_net job with the http job in one
+   transaction (one job before, one after, no gap, the same 15 minute
+   schedule):
+   ```bash
+   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=apply -v confirm='SCHEDULE THE STAGING PHOTO CLEANUP' -f scripts/db/staging-schedule-media-drain.sql
+   ```
+4. **Wait for one succeeded run** (at most 15 minutes), with the monitoring
+   queries above, and see "Last scheduled cleanup" update in Photo storage.
+   If it fails, read the message, fix the cause, and wait for the next run.
+   Don't go on until a run has succeeded.
+5. **Removal check** (rolls back; every line must say `ok`):
+   ```bash
+   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-remove-pg-net.sql
+   ```
+6. **Removal apply**:
+   ```bash
+   psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=apply -v confirm='REMOVE PG_NET FROM STAGING' -f scripts/db/staging-remove-pg-net.sql
+   ```
+7. **Deploy database to staging, `check`**: runs security checks 001 to 013;
+   all must pass, 003 included.
+8. Watch the next scheduled run succeed after the removal.
+
+**Rollback of the move.** Before step 6, nothing needs undoing: the http job
+is a complete replacement, and `remove` takes it down if needed (files then
+simply wait in the queue; Run cleanup now still works). Going back to the
+pg_net job is not a rollback target, because it reopens the exposure. After
+step 6, if something turns out to need pg_net, `create extension pg_net with
+schema extensions` restores it, but brings back the PUBLIC grants and the
+check 003 failure, so it needs its own approval.
+
+**Production.** Production has no photo migration, and both scripts refuse to
+run there. Nothing in this move changes Production. When photos are approved
+for Production, its schedule uses the same http design (with Production's
+own address in a reviewed change), so pg_net is never installed there and
+check 003 keeps passing. Check 003 is in Production's own list
+(`supabase/production-checks.txt`), so any Production deployment would also
+catch pg_net appearing there, or the waitlist roles gaining access to the
+`extensions` schema.
 
 **Rollback, in order:** turn photos off (step above); unschedule
 (`-v mode=remove -v confirm='UNSCHEDULE THE STAGING PHOTO CLEANUP'`; this

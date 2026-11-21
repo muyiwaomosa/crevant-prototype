@@ -159,9 +159,11 @@ jobs:
       # with its key), evidence held, and the Production guard.
       - name: Post-media Edge Function on local Supabase (photos, deletion queue, evidence)
         run: scripts/e2e/post-media-edge.sh
-      # The staging photo cleanup schedule (pg_cron, pg_net, Vault): refusals,
-      # check, apply, its command reaching the function, and removal.
-      - name: Photo cleanup schedule on local Supabase (refusals, apply, remove)
+      # The staging photo cleanup schedule (pg_cron, the synchronous http
+      # extension, Vault): refusals, check, apply; non-200, network failure and
+      # the 20 second timeout; real scheduled runs; removal; then the guarded
+      # move off pg_net and staging security checks 001 to 013.
+      - name: Photo cleanup schedule on local Supabase (http runs, timeout, pg_net removal, checks 001-013)
         run: scripts/db/schedule-media-drain-test.sh
       - name: Stop local Supabase
         if: always()
