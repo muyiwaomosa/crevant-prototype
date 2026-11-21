@@ -11,8 +11,8 @@ const staging = readFileSync(new URL('../.github/workflows/waitlist-admin.yml', 
 test('the Production admin workflow offers exactly the minimum actions, and refuses anything else', () => {
   const block = admin.split('options:')[1].split('default:')[0]
   const options = [...block.matchAll(/^\s+- ([a-z-]+)$/gm)].map((m) => m[1])
-  assert.deepEqual(options, ['status', 'summary', 'open', 'close', 'delete', 'purge', 'set-notice-version'])
-  assert.match(admin, /status\|summary\|open\|close\|delete\|purge\|set-notice-version\) echo "Action: \$ACTION"/)
+  assert.deepEqual(options, ['status', 'summary', 'open', 'close', 'delete', 'purge', 'purge-acquisition-events', 'set-notice-version'])
+  assert.match(admin, /status\|summary\|open\|close\|delete\|purge\|purge-acquisition-events\|set-notice-version\) echo "Action: \$ACTION"/)
   for (const no of ['wave-', 'creator', 'issue-link', 'revoke-link', 'acquisition']) assert.equal(admin.includes(`- ${no}`), false, no)
 })
 
