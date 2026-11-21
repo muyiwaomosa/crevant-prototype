@@ -36,4 +36,4 @@ What the code does that the founder may want reflected before publishing:
   working for up to an hour, and browsers may cache a shown photo for up to
   an hour.
 * Photos are visible only to signed-in pilot members who can see the post.
-* An optional photo description is stored with the post.
+* New photo posts don't ask for a photo description. Older ones may have one stored with the post, used only as the photo's alternative text for screen readers.

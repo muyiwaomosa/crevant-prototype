@@ -275,11 +275,6 @@ export function PostPhoto({ post }: { post: Post }) {
               width={media.width}
               height={media.height}
             />
-            {media.description && (
-              <figcaption className="text-sm text-ink-600">
-                {media.description}
-              </figcaption>
-            )}
           </figure>
         )}
       </Modal>
@@ -345,8 +340,6 @@ function PhotoComposer({
 }) {
   const api = useAppApi();
   const textId = useId();
-  const descId = useId();
-  const descHint = useId();
   const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<{
@@ -355,7 +348,6 @@ function PhotoComposer({
     width: number;
     height: number;
   } | null>(null);
-  const [description, setDescription] = useState("");
   const [stage, setStage] = useState<
     "idle" | "reading" | "uploading" | "posting"
   >("idle");
@@ -367,7 +359,6 @@ function PhotoComposer({
   const request = useRef<{ key: string; id: string } | null>(null);
   const length = [...text.trim()].length;
   const over = length > LIMITS.post;
-  const descOver = [...description.trim()].length > DESCRIPTION_MAX;
   const busy = stage !== "idle";
 
   useEffect(
@@ -393,15 +384,15 @@ function PhotoComposer({
     }
   }
 
+  // The caption is kept when the photo is changed or removed.
   function removePhoto() {
     setPhoto(null);
-    setDescription("");
     uploaded.current = null;
   }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (sending.current || over || descOver || (length === 0 && !photo)) return;
+    if (sending.current || over || (length === 0 && !photo)) return;
     sending.current = true;
     setError(null);
     try {
@@ -411,10 +402,8 @@ function PhotoComposer({
           setStage("uploading");
           uploaded.current = (await api.uploadPhoto(photo.blob)).uploadId;
         }
-        photoPart = {
-          uploadId: uploaded.current,
-          description: description.trim(),
-        };
+        // No description is asked for: the photo's alt text falls back to "Photo by <name>".
+        photoPart = { uploadId: uploaded.current, description: "" };
       }
       const key = `${text}\u0000${photoPart?.uploadId ?? ""}\u0000${photoPart?.description ?? ""}`;
       if (!request.current || request.current.key !== key)
@@ -425,7 +414,6 @@ function PhotoComposer({
       uploaded.current = null;
       setText("");
       setPhoto(null);
-      setDescription("");
     } catch (err) {
       // An expired or unusable upload can't be retried: the photo is sent again next time.
       if (
@@ -442,6 +430,50 @@ function PhotoComposer({
 
   return (
     <form onSubmit={submit} className="space-y-3" noValidate>
+      {photosEnabled && (
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,.heic,.heif"
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => void choose(e.target.files?.[0])}
+          data-testid="photo-input"
+        />
+      )}
+      {/* With a photo: the preview first, then its controls, then the one
+          caption field. The caption field below stays the same element
+          either way, so nothing typed is lost when a photo is added. */}
+      {photo && (
+        <div className="space-y-2" data-testid="photo-attachment">
+          <div className="overflow-hidden rounded-2xl bg-ink-100">
+            <img
+              src={photo.preview}
+              alt="The photo you're adding"
+              className="max-h-80 w-full object-contain"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              className={clsx(buttonClass("secondary", "sm"), "h-11")}
+            >
+              <ImagePlus className="h-4 w-4" aria-hidden="true" /> Change photo
+            </button>
+            <button
+              type="button"
+              onClick={removePhoto}
+              disabled={busy}
+              className={clsx(buttonClass("secondary", "sm"), "h-11")}
+            >
+              <X className="h-4 w-4" aria-hidden="true" /> Remove photo
+            </button>
+          </div>
+        </div>
+      )}
       <label htmlFor={textId} className="sr-only">
         {label}
       </label>
@@ -453,69 +485,16 @@ function PhotoComposer({
         placeholder={photo ? "Add a caption (optional)" : placeholder}
         className="block w-full resize-y rounded-2xl border border-ink-200 bg-white px-4 py-3 text-[15px] leading-relaxed text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
       />
-      {photo && (
-        <div className="space-y-2">
-          <div className="relative overflow-hidden rounded-2xl bg-ink-100">
-            <img
-              src={photo.preview}
-              alt="The photo you're adding"
-              className="max-h-80 w-full object-contain"
-            />
-            <button
-              type="button"
-              onClick={removePhoto}
-              disabled={busy}
-              className="absolute right-2 top-2 inline-flex h-11 items-center gap-1 rounded-full bg-white/95 px-3 text-sm font-semibold text-ink-800 shadow"
-            >
-              <X className="h-4 w-4" aria-hidden="true" /> Remove photo
-            </button>
-          </div>
-          <div>
-            <label
-              htmlFor={descId}
-              className="block text-sm font-semibold text-ink-800"
-            >
-              Photo description (optional)
-            </label>
-            <p id={descHint} className="text-[13px] text-ink-500">
-              Helps people who use screen readers. Up to {DESCRIPTION_MAX}{" "}
-              characters.
-            </p>
-            <input
-              id={descId}
-              type="text"
-              value={description}
-              aria-describedby={descHint}
-              aria-invalid={descOver || undefined}
-              onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 block min-h-11 w-full rounded-xl border border-ink-200 bg-white px-3 text-[15px] text-ink-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-            />
-          </div>
-        </div>
-      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          {photosEnabled && (
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*,.heic,.heif"
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden="true"
-              onChange={(e) => void choose(e.target.files?.[0])}
-              data-testid="photo-input"
-            />
-          )}
-          {photosEnabled && (
+          {photosEnabled && !photo && (
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={busy}
               className={buttonClass("secondary", "sm")}
             >
-              <ImagePlus className="h-4 w-4" aria-hidden="true" />{" "}
-              {photo ? "Change photo" : "Add photo"}
+              <ImagePlus className="h-4 w-4" aria-hidden="true" /> Add photo
             </button>
           )}
           <span
@@ -530,7 +509,7 @@ function PhotoComposer({
         </div>
         <button
           type="submit"
-          disabled={busy || over || descOver || (length === 0 && !photo)}
+          disabled={busy || over || (length === 0 && !photo)}
           className={buttonClass("primary", "sm")}
         >
           {stage === "uploading"
@@ -545,11 +524,6 @@ function PhotoComposer({
         <p role="status" className="text-sm text-ink-600">
           Uploading your photo…
         </p>
-      )}
-      {descOver && (
-        <Message tone="error">
-          {messageFor(new AppApiError("invalid_description"))}
-        </Message>
       )}
       {error !== null && <ErrorNote error={error} />}
     </form>

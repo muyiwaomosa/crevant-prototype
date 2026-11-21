@@ -121,7 +121,7 @@ const makePhoto = (page, w, h) =>
   }
   sql("select ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS')")
 
-  // 1. P, on a phone, posts a photo with no caption and a description.
+  // 1. P, on a phone, posts a photo with no caption (the composer asks for nothing else).
   const ctxP = await newContext(browser, { viewport: { width: 390, height: 844 } })
   const pageP = await ctxP.newPage()
   pageP.on('console', (m) => /Content Security Policy/i.test(m.text()) && cspViolations.push(m.text()))
@@ -132,16 +132,44 @@ const makePhoto = (page, w, h) =>
   const tall = await makePhoto(pageP, 3024, 4032)
   await pageP.getByTestId('photo-input').setInputFiles({ name: 'IMG_0420.jpg', mimeType: 'image/jpeg', buffer: tall })
   await pageP.getByRole('img', { name: "The photo you're adding" }).waitFor()
-  check('choosing a photo shows a preview, with Remove photo and a description field', await pageP.getByRole('button', { name: 'Remove photo' }).isVisible()
-    && await pageP.getByRole('textbox', { name: 'Photo description (optional)' }).isVisible())
+  const form = pageP.locator('form').filter({ has: pageP.getByRole('img', { name: "The photo you're adding" }) })
+  check('choosing a photo shows a preview with Change photo and Remove photo, and one caption field (no description field)',
+    await form.getByRole('button', { name: 'Change photo' }).isVisible() && await form.getByRole('button', { name: 'Remove photo' }).isVisible()
+    && (await form.getByRole('textbox').count()) === 1 && (await form.getByRole('textbox', { name: 'Write a post' }).getAttribute('placeholder')) === 'Add a caption (optional)')
+  // The layout, top to bottom, at phone widths: photo, its controls, the caption, Post; nothing off screen.
+  const layout = async () => {
+    const box = async (l) => (await l.boundingBox()) ?? { y: NaN, height: 0, x: 0, width: 0 }
+    const [img, change, remove, caption, post] = await Promise.all([
+      box(form.getByRole('img', { name: "The photo you're adding" })), box(form.getByRole('button', { name: 'Change photo' })),
+      box(form.getByRole('button', { name: 'Remove photo' })), box(form.getByRole('textbox', { name: 'Write a post' })),
+      box(form.getByRole('button', { name: 'Post', exact: true })),
+    ])
+    const vw = pageP.viewportSize().width
+    return img.y + img.height <= change.y && change.y + change.height <= caption.y && remove.y + remove.height <= caption.y
+      && caption.y + caption.height <= post.y && change.height >= 44 && remove.height >= 44
+      && [img, change, remove, caption, post].every((b) => b.x >= 0 && b.x + b.width <= vw)
+  }
+  check('at 390px: photo, then Change photo and Remove photo (44px targets), then the caption, then Post', await layout())
+  // Keyboard: from Change photo, Tab moves to Remove photo, then the caption, then Post.
+  {
+    const focused = (l) => l.evaluate((el) => el === document.activeElement)
+    await form.getByRole('button', { name: 'Change photo' }).focus()
+    await pageP.keyboard.press('Tab')
+    const a = await focused(form.getByRole('button', { name: 'Remove photo' }))
+    await pageP.keyboard.press('Tab')
+    const b = await focused(form.getByRole('textbox', { name: 'Write a post' }))
+    await pageP.keyboard.press('Tab')
+    const c = await focused(form.getByRole('button', { name: 'Post', exact: true }))
+    check('Tab order: Change photo, Remove photo, the caption, then Post', a && b && c, `${a} ${b} ${c}`)
+  }
   {
     const v = await axe(pageP, 'main')
     check('the composer with a photo has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
     await pageP.setViewportSize({ width: 320, height: 700 })
     check('at 320px, the composer has no sideways scrolling', (await sideways(pageP)) <= 0)
+    check('at 320px, the same order, all on screen', await layout())
     await pageP.setViewportSize({ width: 390, height: 844 })
   }
-  await pageP.getByRole('textbox', { name: 'Photo description (optional)' }).fill('A white square on a sunset gradient')
   const uploadReq = pageP.waitForResponse((r) => r.url().includes('/functions/v1/post-media/photo'))
   await pageP.getByRole('button', { name: 'Post', exact: true }).click()
   const uploadRes = await uploadReq
@@ -156,13 +184,16 @@ const makePhoto = (page, w, h) =>
     return null
   })()
   check('the browser sends a JPEG resized to 1600 px on the long edge (1200 x 1600)', uploadRes.status() === 200 && sentFrame?.w === 1200 && sentFrame?.h === 1600, `${uploadRes.status()} ${JSON.stringify(sentFrame)}`)
-  const mine = pageP.getByTestId('post').filter({ has: pageP.getByRole('img', { name: 'A white square on a sunset gradient' }) })
+  const mine = pageP.getByTestId('post').filter({ has: pageP.getByRole('img', { name: /^Photo by / }) }).first()
   await mine.waitFor()
   for (let i = 0; i < 20 && !(await photoShown(mine)); i++) await pageP.waitForTimeout(250)
-  check('the photo post appears on Home, loaded from Storage, with its description as alt text', await photoShown(mine))
+  check('the photo post appears on Home, loaded from Storage, with the fallback alt text (Photo by ...)', await photoShown(mine))
   const firstPost = sql(`select id from social.posts where author_id = '${P.id}' and media_kind = 'photo' order by created_at limit 1`)
-  check('it was stored with no caption, and two files exist', sql(`select body from social.posts where id = '${firstPost}'`) === ''
+  check('it was stored with no caption and no description, and two files exist', sql(`select body from social.posts where id = '${firstPost}'`) === ''
+    && sql(`select description is null from social.post_media where post_id = '${firstPost}'`) === 't'
     && sql(`select count(*) from storage.objects o join social.media_uploads u on o.name in (u.full_path, u.feed_path) join social.post_media m on m.upload_id = u.id where m.post_id = '${firstPost}'`) === '2')
+  // An existing post with a saved description (from before this change): it is used as alt text only (checked by Q below).
+  sql(`update social.post_media set description = 'A white square on a sunset gradient' where post_id = '${firstPost}'`)
 
   // 2. A second photo with a caption, from Create.
   await pageP.goto(`${APP}/app/new`)
@@ -200,6 +231,10 @@ const makePhoto = (page, w, h) =>
   await dialog.waitFor()
   for (let i = 0; i < 20 && !(await photoShown(dialog)); i++) await pageQ.waitForTimeout(250)
   check('tapping opens the full 1600 px photo in a dialog', await photoShown(dialog) && !/-feed\.jpg/.test(await dialog.locator('img').first().getAttribute('src')))
+  check('a saved description is the alt text only: not shown as visible text in the feed or the full photo',
+    (await dialog.getByRole('img', { name: 'A white square on a sunset gradient' }).count()) === 1
+    && (await dialog.getByText('A white square on a sunset gradient').count()) === 0
+    && (await qPost.getByText('A white square on a sunset gradient').count()) === 0)
   {
     const v = await axe(pageQ, '[role="dialog"]')
     check('the photo dialog has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
