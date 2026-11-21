@@ -8,7 +8,7 @@
 //      fallback to the original calls.
 //   2. The new schema (the migration reapplied): the same request id sent
 //      twice is one post, through the server's request id.
-// The later migrations (photo audience 20261128000000, photo posts 20261127000000, feedback 20261126000000, profile pictures 20261125000000, moderation 20261124000000, profile details 20261123000000, pilot membership 20261122000000, viewed state
+// The later migrations (member launch gate 20261129000000, photo audience 20261128000000, photo posts 20261127000000, feedback 20261126000000, profile pictures 20261125000000, moderation 20261124000000, profile details 20261123000000, pilot membership 20261122000000, viewed state
 // 20261121000000, then the Inner Clique 20261120000000) are rolled back
 // first, newest first, and reapplied last,
 // oldest first, because each staging rollback refuses while a later migration
@@ -26,6 +26,7 @@ const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
 // Newest first.
 const LATER = [
+  { version: '20261129000000', name: 'member_launch_gate', file: 'supabase/migrations/20261129000000_member_launch_gate.sql', rollback: 'scripts/db/staging-rollback-member-launch-gate.sql', phrase: 'REMOVE THE STAGING MEMBER LAUNCH GATE' },
   { version: '20261128000000', name: 'photo_audience', file: 'supabase/migrations/20261128000000_photo_audience.sql', rollback: 'scripts/db/staging-rollback-photo-audience.sql', phrase: 'REMOVE THE STAGING PHOTO AUDIENCE' },
   { version: '20261127000000', name: 'post_photos', file: 'supabase/migrations/20261127000000_post_photos.sql', rollback: 'scripts/db/staging-rollback-post-photos.sql', phrase: 'REMOVE THE STAGING PHOTO POSTS' },
   { version: '20261126000000', name: 'feedback', file: 'supabase/migrations/20261126000000_feedback.sql', rollback: 'scripts/db/staging-rollback-feedback.sql', phrase: 'REMOVE THE STAGING FEEDBACK' },
@@ -50,6 +51,8 @@ function reapplyLater() {
     execFileSync('psql', [DB!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', m.file])
     sql(`insert into supabase_migrations.schema_migrations (version, name) values ('${m.version}', '${m.name}')`)
   }
+  // The launch gate (20261129000000) comes back closed: reopen it (recorded) for the test accounts.
+  execFileSync('scripts/db/local-open-launch-gate.sh', { env: { ...process.env, DB_URL: DB! } })
 }
 
 describe.skipIf(!enabled)('posting against the old and the new database schema (local Supabase)', () => {

@@ -232,7 +232,7 @@ guard "production workflow: the subset is tested on its own, and Production chec
 guard "the Production subset verifies: approved, in order, and without the social core or its check" \
   "scripts/db/production-subset.sh verify >/dev/null 2>&1 && ! grep -qE '^20261117000000' supabase/production-migrations.txt && ! grep -qE '^005_' supabase/production-checks.txt"
 guard "only the three Production workflows name Production; no staging, rollback or CI workflow does" \
-  "[ \"\$(grep -lE 'PRODUCTION_DATABASE_URL|hmrliwoychnqrbbydorg' .github/workflows/*.yml | sort | paste -sd,)\" = '.github/workflows/deploy-db-production.yml,.github/workflows/waitlist-admin-production.yml,.github/workflows/waitlist-health-production.yml' ]"
+  "[ \"\$(grep -lE '(^|[^A-Z_])PRODUCTION_DATABASE_URL|hmrliwoychnqrbbydorg' .github/workflows/*.yml | sort | paste -sd,)\" = '.github/workflows/deploy-db-production.yml,.github/workflows/waitlist-admin-production.yml,.github/workflows/waitlist-health-production.yml' ]"
 guard "the Production admin and health workflows never name the staging project" \
   "! grep -q 'kpudeppgokpjhvaqrprn' .github/workflows/waitlist-admin-production.yml .github/workflows/waitlist-health-production.yml"
 
@@ -309,10 +309,80 @@ guard "staging deploy: before activation, check mode skips only the post-gate ch
   "grep -q 'GATE_PENDING: \${{ steps.gate.outputs.gate_pending }}' $dw && grep -q 'if \[ \"\$GATE_PENDING\" != \"false\" \]; then' $dw && grep -q '002_\*|005_\*|007_\*) echo' $dw"
 guard "staging deploy protection: refuses apply while 20261122000000 is pending, and fails closed" \
   "grep -q '^GATE=20261122000000\$' scripts/db/staging-membership-gate.sh && grep -q 'if \[ \"\$MODE\" = apply \]; then' scripts/db/staging-membership-gate.sh && grep -q '^set -euo pipefail\$' scripts/db/staging-membership-gate.sh && grep -q 'Unknown or missing mode' scripts/db/staging-membership-gate.sh && grep -q 'default_transaction_read_only=on' scripts/db/staging-pending-migrations.sh"
-guard "no other path pushes migrations: only the staging and Production deploy workflows run a non-dry-run db push" \
-  "[ \"\$(grep -lE 'supabase .*db push' .github/workflows/*.yml | sort | paste -sd,)\" = '.github/workflows/deploy-db-production.yml,.github/workflows/deploy-db-staging.yml' ]"
+guard "no other path pushes migrations: only the staging, waitlist Production and member Production deploy workflows run db push" \
+  "[ \"\$(grep -lE 'supabase .*db push' .github/workflows/*.yml | sort | paste -sd,)\" = '.github/workflows/deploy-db-members-production.yml,.github/workflows/deploy-db-production.yml,.github/workflows/deploy-db-staging.yml' ]"
 guard "Production never receives the pilot membership migration (not on the Production list)" \
   "! grep -q '^20261122000000' supabase/production-migrations.txt && grep -q 'production-migrations.txt' .github/workflows/deploy-db-production.yml"
+
+# ---------------------------------------------------------------------------
+# Member Production: its own target check (scripts/db/verify-members-target.sh).
+# (MEMBERS_PRODUCTION_DATABASE_URL contains PRODUCTION_DATABASE_URL, so the
+# guards match the waitlist secret as a whole name only.)
+# The approved reference comes only from config/supabase-projects.json, which
+# holds null today, so the real repository must fail closed; the other cases
+# run on a scratch copy with a made-up reference.
+MREF=membersprodfakerefab
+out=$(GITHUB_ACTIONS=true MEMBERS_PROJECT_REF=$MREF CONFIRM_PROJECT_REF=$MREF \
+      MEMBERS_PRODUCTION_DATABASE_URL="postgresql://postgres.$MREF:$PW@$POOL:5432/postgres" scripts/db/verify-members-target.sh 2>&1); code=$?
+if [ $code -ne 0 ] && grep -q 'memberProduction.ref in config/supabase-projects.json is null' <<<"$out" && [[ "$out" != *"$PW"* ]]; then
+  echo "PASS  members: with memberProduction.ref null (today), the target check fails closed"; pass=$((pass+1))
+else echo "FAIL  members: null memberProduction.ref (exit $code): $out"; failed=$((failed+1)); fi
+mdir=$(mktemp -d)
+mkdir -p "$mdir/config" "$mdir/scripts/db"; cp scripts/db/verify-members-target.sh "$mdir/scripts/db/"
+member_config() { # member_config <memberProduction ref>
+  python3 -c "import json,sys;c=json.load(open('config/supabase-projects.json'));c['memberProduction']['ref']=sys.argv[1];json.dump(c,open(sys.argv[2],'w'))" "$1" "$mdir/config/supabase-projects.json"
+}
+expect_members() { # expect_members <ok|fail> <description> <url> [env_ref] [confirm] [message]
+  local want=$1 desc=$2 url=$3 eref=${4-$MREF} conf=${5-$MREF} msg=${6-} out visible code
+  out=$(cd "$mdir" && GITHUB_ACTIONS=true REQUIRE_VERIFY_FULL=${RVF:-} MEMBERS_PROJECT_REF=$eref CONFIRM_PROJECT_REF=$conf \
+        MEMBERS_PRODUCTION_DATABASE_URL=$url scripts/db/verify-members-target.sh 2>&1); code=$?
+  visible=$(grep -v '^::add-mask::' <<<"$out" || true)
+  if [[ "$visible" == *"$PW"* ]]; then echo "FAIL  members: $desc (password appeared in output)"; failed=$((failed+1)); return; fi
+  if [ "$want" = ok ] && ! grep -q "^::add-mask::.*$PW" <<<"$out"; then echo "FAIL  members: $desc (password was not masked)"; failed=$((failed+1)); return; fi
+  if { [ "$want" = ok ] && [ $code -eq 0 ]; } || { [ "$want" = fail ] && [ $code -ne 0 ] && { [ -z "$msg" ] || grep -qi -- "$msg" <<<"$out"; }; }; then
+    echo "PASS  members: $desc"; pass=$((pass+1))
+  else
+    echo "FAIL  members: $desc (exit $code): $out"; failed=$((failed+1))
+  fi
+}
+member_config "$MREF"
+expect_members ok   "session pooler URL for the member Production project"          "postgresql://postgres.$MREF:$PW@$POOL:5432/postgres"
+expect_members ok   "direct URL for the member Production project"                  "postgresql://postgres:$PW@db.$MREF.supabase.co:5432/postgres"
+RVF=1 expect_members ok "verify-full is allowed when required"                     "postgresql://postgres.$MREF:$PW@$POOL:5432/postgres?sslmode=verify-full"
+expect_members fail "the staging project's URL is refused"                          "postgresql://postgres.$REF:$PW@$POOL:5432/postgres" "$MREF" "$MREF" "points at the staging project"
+expect_members fail "the staging project's direct URL is refused"                   "postgresql://postgres:$PW@db.$REF.supabase.co:5432/postgres" "$MREF" "$MREF" "points at the staging project"
+expect_members fail "the waitlist project's URL is refused"                         "postgresql://postgres.$PREF:$PW@$POOL:5432/postgres" "$MREF" "$MREF" "points at the waitlist project"
+expect_members fail "the waitlist project's direct URL is refused"                  "postgresql://postgres:$PW@db.$PREF.supabase.co:5432/postgres" "$MREF" "$MREF" "points at the waitlist project"
+expect_members fail "another Supabase project in the URL"                           "postgresql://postgres.abcdefghijabcdefghij:$PW@$POOL:5432/postgres" "$MREF" "$MREF" "different Supabase project"
+expect_members fail "the environment variable names staging"                        "postgresql://postgres.$MREF:$PW@$POOL:5432/postgres" "$REF" "$MREF" "MEMBERS_PROJECT_REF does not match"
+expect_members fail "the typed confirmation names the waitlist project"            "postgresql://postgres.$MREF:$PW@$POOL:5432/postgres" "$MREF" "$PREF" "typed confirmation"
+expect_members fail "typed confirmation empty"                                      "postgresql://postgres.$MREF:$PW@$POOL:5432/postgres" "$MREF" "" "No project reference was typed"
+expect_members fail "environment variable empty"                                    "postgresql://postgres.$MREF:$PW@$POOL:5432/postgres" "" "$MREF" "MEMBERS_PROJECT_REF is not set"
+expect_members fail "a waitlist login, not postgres"                                "postgresql://waitlist_admin.$MREF:$PW@$POOL:5432/postgres" "$MREF" "$MREF" "must log in as postgres"
+expect_members fail "transaction pooler port 6543"                                  "postgresql://postgres.$MREF:$PW@$POOL:6543/postgres" "$MREF" "$MREF" "port 5432"
+expect_members fail "TLS disabled"                                                  "postgresql://postgres.$MREF:$PW@$POOL:5432/postgres?sslmode=disable" "$MREF" "$MREF" "weaken TLS"
+RVF=1 expect_members fail "an extra connection setting when verify-full is required" "postgresql://postgres.$MREF:$PW@$POOL:5432/postgres?sslrootcert=x" "$MREF" "$MREF" "must not carry connection settings"
+expect_members fail "non-Supabase host"                                             "postgresql://postgres.$MREF:$PW@db.example.com:5432/postgres" "$MREF" "$MREF" "Supabase host"
+expect_members fail "missing password"                                              "postgresql://postgres.$MREF@$POOL:5432/postgres" "$MREF" "$MREF" "no password"
+expect_members fail "empty connection string"                                       "" "$MREF" "$MREF" "is not set"
+member_config "$REF"
+expect_members fail "config naming staging as member Production is refused"         "postgresql://postgres.$REF:$PW@$POOL:5432/postgres" "$REF" "$REF" "is the staging project"
+member_config "$PREF"
+expect_members fail "config naming the waitlist project as member Production is refused" "postgresql://postgres.$PREF:$PW@$POOL:5432/postgres" "$PREF" "$PREF" "is the waitlist project"
+member_config "NotARef"
+expect_members fail "a malformed reference in config is refused"                    "postgresql://postgres.$MREF:$PW@$POOL:5432/postgres" "NotARef" "NotARef" "malformed"
+rm -rf "$mdir"
+
+# The member Production workflows push migrations only as the member sets allow.
+mw=.github/workflows/deploy-db-members-production.yml
+guard "member deploy: apply-foundation pushes only the foundation set, apply refuses until 20261122000000 is recorded" \
+  "grep -q 'members-subset.sh prepare \"\$RUNNER_TEMP/members\" foundation' $mw && grep -q 'apply needs pilot membership (20261122000000) to be activated first' $mw && grep -q 'apply-foundation is only for the new, empty project' $mw"
+guard "member activation: only the activation workflow runs the member activation SQL" \
+  "[ \"\$(grep -l 'members-activate-member-access.sql' .github/workflows/*.yml | paste -sd,)\" = '.github/workflows/members-activate-member-access.yml' ]"
+guard "member workflows: never name the staging or waitlist secrets, environments or target checks" \
+  "! grep -qE 'STAGING_DATABASE_URL|(^|[^A-Z_])PRODUCTION_DATABASE_URL|WAITLIST_ADMIN_DATABASE_URL|environment: (staging|production)\$|verify-(staging|production)-target' $mw .github/workflows/members-activate-member-access.yml"
+guard "staging and waitlist workflows: never name a member Production secret, environment or script" \
+  "! grep -lE 'MEMBERS_|members-production|verify-members-|members-subset|members-lock' \$(ls .github/workflows/*.yml | grep -v -e deploy-db-members-production.yml -e members-activate-member-access.yml)"
 
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]

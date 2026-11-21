@@ -30,6 +30,7 @@ supabase db reset --local --no-seed >/dev/null
 status="$(supabase status -o json 2>/dev/null)"
 val() { node -e 'const s=JSON.parse(process.argv[1]); process.stdout.write(s[process.argv[2]] || "")' "$status" "$1"; }
 export API_URL="$(val API_URL)" MAILPIT_URL="$(val MAILPIT_URL)" DB_URL="$(val DB_URL)"
+DB_URL="$DB_URL" scripts/db/local-open-launch-gate.sh  # test databases only: the launch gate (20261129000000) starts closed
 export PUBLISHABLE_KEY="$(val PUBLISHABLE_KEY)" SERVICE_ROLE_KEY="$(val SERVICE_ROLE_KEY)"
 case "$API_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "Refusing: API_URL is not local ($API_URL)" >&2; exit 1 ;; esac
 for _ in $(seq 1 60); do

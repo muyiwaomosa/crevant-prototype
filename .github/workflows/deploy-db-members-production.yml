@@ -1,0 +1,300 @@
+name: Deploy database to member Production
+
+# The MEMBER Production Supabase project (splitpost-members-production,
+# ca-central-1) only. Separate workflow, environment, secrets, variable,
+# target check and queue from staging (deploy-db-staging.yml) and the waitlist
+# project (deploy-db-production.yml), so none can reach another.
+#
+# It never runs automatically: the founder starts it by hand from the Actions
+# tab, on main, at an exact commit, types the project reference, and approves
+# the GitHub "members-production" environment.
+#
+# Modes:
+#   check             (default) Read only: the identity marker, the member
+#                     Production check and the shared checks for what is applied.
+#   plan              The same verification, then a dry run listing what the
+#                     next apply would push. Changes nothing.
+#   apply-foundation  The new, empty project only: pushes the foundation
+#                     migrations (20261106000000 to 20261121000000), locks the
+#                     waitlist logins (connection limit 0), then the checks.
+#                     Phrase: APPLY MEMBER PRODUCTION FOUNDATION
+#   apply             After membership is activated (20261122000000, by
+#                     members-activate-member-access.yml): pushes the later
+#                     migrations, the launch gate included, then every check.
+#                     Phrase: APPLY TO MEMBER PRODUCTION
+# Both apply modes also need confirmation that a backup or restore point exists.
+#
+# Safety, none depending on the others:
+#   * Owner only (github.actor and github.triggering_actor), main only, and
+#     expected_commit must equal the commit being run.
+#   * The members-production environment (required reviewer) holds the only
+#     credentials: MEMBERS_PRODUCTION_DATABASE_URL and MEMBERS_DB_IDENTITY_MARKER.
+#     A first job with no environment refuses if either name is visible at
+#     repository or organization level.
+#   * The target: memberProduction.ref in config/supabase-projects.json (null
+#     means not provisioned: refused), the MEMBERS_PROJECT_REF variable, the
+#     typed reference and the URL must agree, and none may be staging or the
+#     waitlist project (scripts/db/verify-members-target.sh).
+#   * The database identity, independent of the URL: the first step that
+#     connects checks the immutable identity marker against the secret
+#     (scripts/db/verify-members-identity.sh). Nothing else connects before it.
+#   * Full TLS verification (verify-full, committed CA).
+#   * Approved, unchanged migrations only, passing on a throwaway database first.
+#   * 20261122000000 is never pushed here: apply-foundation pushes only the
+#     foundation set, and apply refuses until 20261122000000 is recorded.
+#   * The approvals in config/member-production.json (both false) are
+#     enforced by supabase/tests-members/001_member_production.sql.
+#   * Its own queue; no rollback (the staging rollbacks refuse elsewhere).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = read only (default). plan = dry run. apply-foundation = new project only. apply = later migrations, after activation."
+        type: choice
+        options:
+          - check
+          - plan
+          - apply-foundation
+          - apply
+        default: check
+        required: true
+      expected_commit:
+        description: "The full commit SHA you reviewed (must equal the commit this run uses)"
+        type: string
+        required: true
+      confirm_project_ref:
+        description: "Type the member Production project reference to confirm"
+        type: string
+        required: true
+      confirm_phrase:
+        description: "apply-foundation: APPLY MEMBER PRODUCTION FOUNDATION. apply: APPLY TO MEMBER PRODUCTION"
+        type: string
+        required: false
+      backup_confirmed:
+        description: "For both apply modes: a current backup or restore point exists for the member Production project"
+        type: boolean
+        default: false
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-members-production
+  cancel-in-progress: false
+
+env:
+  # Pinned Supabase CLI, the same version as staging. Update deliberately, in a reviewed PR.
+  SUPABASE_CLI_VERSION: 2.122.1
+
+jobs:
+  # No environment on purpose: this job sees only repository and organization
+  # secrets, never the members-production environment's.
+  secret-scope:
+    name: Refuse member Production secrets stored outside their environment
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # Connects to nothing; it names the URL secret only to refuse it outside the
+    # environment. Every job naming that secret carries the verify-full settings.
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - name: Refuse if a member Production secret exists at repository or organization level
+        env:
+          OUTSIDE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          OUTSIDE_MARKER: ${{ secrets.MEMBERS_DB_IDENTITY_MARKER }}
+          OUTSIDE_FOUNDER: ${{ secrets.MEMBERS_FOUNDER_ACCOUNT_ID }}
+        run: |
+          if [ -n "$OUTSIDE_URL$OUTSIDE_MARKER$OUTSIDE_FOUNDER" ]; then
+            echo "::error::A member Production secret is set at repository or organization level. Only the members-production environment may hold it. Delete that secret. Nothing was done."
+            exit 1
+          fi
+
+      - name: The run is at the reviewed commit, and the mode and phrase agree
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          RUN_COMMIT: ${{ github.sha }}
+          MODE: ${{ inputs.mode }}
+          PHRASE: ${{ inputs.confirm_phrase }}
+          BACKUP: ${{ inputs.backup_confirmed }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::expected_commit must be a full 40 character commit SHA. Nothing was done."; exit 1; }
+          [ "$EXPECTED_COMMIT" = "$RUN_COMMIT" ] || { echo "::error::This run uses $RUN_COMMIT, not the reviewed commit $EXPECTED_COMMIT. Nothing was done."; exit 1; }
+          case "$MODE" in
+            check|plan) ;;
+            apply-foundation) [ "$PHRASE" = "APPLY MEMBER PRODUCTION FOUNDATION" ] || { echo "::error::apply-foundation needs the phrase APPLY MEMBER PRODUCTION FOUNDATION. Nothing was done."; exit 1; } ;;
+            apply) [ "$PHRASE" = "APPLY TO MEMBER PRODUCTION" ] || { echo "::error::apply needs the phrase APPLY TO MEMBER PRODUCTION. Nothing was done."; exit 1; } ;;
+            *) echo "::error::Unknown mode. Nothing was done."; exit 1 ;;
+          esac
+          if [ "$MODE" = apply-foundation ] || [ "$MODE" = apply ]; then
+            [ "$BACKUP" = "true" ] || { echo "::error::$MODE needs confirmation that a current backup or restore point exists. Nothing was done."; exit 1; }
+          fi
+          echo "Mode $MODE at $RUN_COMMIT"
+
+  verify-migrations:
+    name: Verify migrations on throwaway databases
+    needs: secret-scope
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: crevant_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard tests (target checks and approved list)
+        run: scripts/db/test-guards.sh
+      - name: Only approved, unchanged migrations are present
+        run: scripts/db/check-approved-migrations.sh
+      - name: The member Production migration sets are as approved
+        run: scripts/db/members-subset.sh verify
+      - name: Migrations and security checks pass on an empty database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/crevant_test
+        run: scripts/db/test.sh
+      - name: The member Production sequence passes end to end on throwaway databases
+        env:
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          REQUIRE_POOLER_TEST: '1'
+        run: scripts/db/members-workflow-test.sh
+
+  members-production:
+    name: ${{ inputs.mode == 'apply' && 'Apply to member Production' || inputs.mode == 'apply-foundation' && 'Apply the foundation to member Production' || inputs.mode == 'plan' && 'Plan for member Production (no changes)' || 'Read-only checks on member Production' }}
+    needs: verify-migrations
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: members-production
+    # Full certificate and host name verification for every hosted database
+    # connection in this job, against Supabase's public root CA committed at
+    # config/certs. REQUIRE_VERIFY_FULL makes the target check refuse a URL
+    # that would override them.
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved member Production project (connects to nothing)
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_PROJECT_REF: ${{ vars.MEMBERS_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-members-target.sh
+
+      - name: Verify the database identity marker (the first connection; read only)
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_DB_IDENTITY_MARKER: ${{ secrets.MEMBERS_DB_IDENTITY_MARKER }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/verify-members-identity.sh
+
+      - name: Only approved, unchanged migrations are present
+        run: scripts/db/check-approved-migrations.sh
+
+      - name: What is applied, and what this mode may push (read only)
+        id: pending
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MODE: ${{ inputs.mode }}
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          pending="$(scripts/db/members-pending-migrations.sh)"
+          echo "Not yet applied on member Production: ${pending:-none}"
+          all="$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | tr '\n' ' ' | sed 's/ $//')"
+          if [ "$pending" = "$all" ]; then state=empty
+          elif [[ " $pending " == *" 20261122000000 "* ]]; then state=foundation
+          else state=activated; fi
+          echo "State: $state"
+          case "$MODE" in
+            apply-foundation) [ "$state" = empty ] || { echo "::error::apply-foundation is only for the new, empty project; this one already has migrations. Nothing was done."; exit 1; } ;;
+            apply) [ "$state" = activated ] || { echo "::error::apply needs pilot membership (20261122000000) to be activated first, by the \"Activate pilot membership on member Production\" workflow, which grants the founder in the same transaction. Nothing was done."; exit 1; } ;;
+          esac
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare the migration folder for this mode
+        if: inputs.mode == 'plan' || inputs.mode == 'apply-foundation' || inputs.mode == 'apply'
+        env:
+          STATE: ${{ steps.pending.outputs.state }}
+        run: |
+          set -euo pipefail
+          case "$STATE" in
+            empty) scripts/db/members-subset.sh prepare "$RUNNER_TEMP/members" foundation ;;
+            activated) scripts/db/members-subset.sh prepare "$RUNNER_TEMP/members" all ;;
+            foundation) echo "Membership activation is pending; it is applied only by the activation workflow. Nothing to push."; echo "NOTHING_TO_PUSH=1" >> "$GITHUB_ENV" ;;
+          esac
+
+      - uses: actions/setup-node@v4
+        if: (inputs.mode == 'plan' || inputs.mode == 'apply-foundation' || inputs.mode == 'apply') && env.NOTHING_TO_PUSH != '1'
+        with:
+          node-version: 22
+
+      - name: Install the pinned Supabase CLI
+        if: (inputs.mode == 'plan' || inputs.mode == 'apply-foundation' || inputs.mode == 'apply') && env.NOTHING_TO_PUSH != '1'
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/supabase-cli" "supabase@${SUPABASE_CLI_VERSION}"
+          echo "$RUNNER_TEMP/supabase-cli/node_modules/.bin" >> "$GITHUB_PATH"
+          installed="$("$RUNNER_TEMP/supabase-cli/node_modules/.bin/supabase" --version | tr -d '[:space:]')"
+          [ "$installed" = "$SUPABASE_CLI_VERSION" ] || { echo "::error::Expected Supabase CLI $SUPABASE_CLI_VERSION but found $installed."; exit 1; }
+
+      - name: Plan (dry run, lists what would be pushed, changes nothing)
+        if: (inputs.mode == 'plan' || inputs.mode == 'apply-foundation' || inputs.mode == 'apply') && env.NOTHING_TO_PUSH != '1'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+        run: supabase --workdir "$RUNNER_TEMP/members" db push --db-url "$MEMBERS_PRODUCTION_DATABASE_URL" --dry-run
+
+      - name: Apply the foundation migrations
+        if: inputs.mode == 'apply-foundation'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+        run: supabase --workdir "$RUNNER_TEMP/members" db push --db-url "$MEMBERS_PRODUCTION_DATABASE_URL" --yes
+
+      - name: Lock the waitlist logins (connection limit 0)
+        if: inputs.mode == 'apply-foundation'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -f scripts/db/members-lock-waitlist-roles.sql
+
+      - name: Apply the later migrations (the launch gate included)
+        if: inputs.mode == 'apply'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+        run: supabase --workdir "$RUNNER_TEMP/members" db push --db-url "$MEMBERS_PRODUCTION_DATABASE_URL" --yes
+
+      - name: After apply, every migration is recorded (read only)
+        if: inputs.mode == 'apply'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          pending="$(scripts/db/members-pending-migrations.sh)"
+          [ -z "$pending" ] || { echo "::error::Still not applied after apply: $pending"; exit 1; }
+          echo "Every migration is applied."
+
+      - name: Member Production checks, and the shared checks for what is applied
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MODE: ${{ inputs.mode }}
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = apply ]; then scripts/db/members-run-checks.sh --require-all; else scripts/db/members-run-checks.sh; fi

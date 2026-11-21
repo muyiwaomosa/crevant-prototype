@@ -76,3 +76,6 @@ if ! start; then
   supabase stop --no-backup || true
   start
 fi
+# Test databases only: the member launch gate (20261129000000) starts closed;
+# open it (recorded) so the suites can give their test accounts membership.
+DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" scripts/db/local-open-launch-gate.sh

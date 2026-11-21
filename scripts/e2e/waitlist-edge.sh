@@ -16,6 +16,7 @@ cd "$(dirname "$0")/../.."
 
 DB_PORT="${DB_PORT:-54322}"
 DB_URL="postgresql://postgres:postgres@127.0.0.1:${DB_PORT}/postgres"
+DB_URL="$DB_URL" scripts/db/local-open-launch-gate.sh  # test databases only: the launch gate (20261129000000) starts closed
 EDGE_IMAGE="${EDGE_IMAGE:-supabase/edge-runtime:v1.78.1}"
 EDGE_PORT="${EDGE_PORT:-54398}"
 EDGE_BAD_PORT="$((EDGE_PORT + 1))"

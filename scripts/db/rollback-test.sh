@@ -16,8 +16,10 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: the photo audience (20261128000000,
-# scripts/db/rollback-photo-audience-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: the member launch gate (20261129000000,
+# scripts/db/rollback-member-launch-gate-test.sh, the newest, so it goes
+# first), the photo audience (20261128000000,
+# scripts/db/rollback-photo-audience-test.sh),
 # photo posts (20261127000000, scripts/db/rollback-post-photos-test.sh),
 # feedback (20261126000000, scripts/db/rollback-feedback-test.sh),
 # profile pictures (20261125000000, scripts/db/rollback-avatars-test.sh),
@@ -106,9 +108,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+GATE=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261129000000')")
+if [ "$GATE" = t ]; then
+  # The newest migration (the member launch gate) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-photo-audience.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the photo audience rollback refuses while the member launch gate is recorded" \
+    || bad "the photo audience rollback did not refuse while the member launch gate is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-member-launch-gate-test.sh; then
+    ok "the member launch gate: no trigger bypass for postgres or service_role, the founder set only when unambiguous, existing access kept, and its rollback refuses safely and removes exactly its own objects"
+  else
+    bad "the member launch gate tests failed"
+  fi
+fi
 AUDIENCE=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261128000000')")
 if [ "$AUDIENCE" = t ]; then
-  # The newest migration (the photo audience) goes first.
+  # Then the photo audience.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-post-photos.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the photo posts rollback refuses while the photo audience is recorded" \
@@ -527,5 +542,7 @@ else
   [ $code -eq 0 ] && ok "after reapplying, a new check run passes again" || bad "check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
 fi
 
+# Everything is reapplied, so the launch gate is closed again: reopen it (recorded) for the suites that follow.
+DB_URL="$DB_URL" scripts/db/local-open-launch-gate.sh >/dev/null || bad "could not reopen the launch gate for the next suites"
 echo "Rollback tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]
