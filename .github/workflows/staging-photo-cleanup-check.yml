@@ -1,0 +1,75 @@
+name: Photo cleanup schedule check on staging
+
+# Runs scripts/db/staging-schedule-media-drain.sql against the Crevant STAGING
+# Supabase project in CHECK MODE ONLY (scripts/db/staging-schedule-check.sh):
+# it shows the http cleanup job that would replace the current one, inside a
+# single transaction that is always rolled back. Nothing persists.
+#
+# It cannot apply or remove the schedule, and it cannot remove pg_net: there
+# is no mode input, and the wrapper fixes mode=check with an empty
+# confirmation. Those steps need their own reviewed change and approval.
+#
+# Safeguards, none of which depend on the others:
+#   * Started by hand only, from main, by the repository owner, and only
+#     re-run by the repository owner (github.actor and github.triggering_actor).
+#   * The staging environment (and its approval rule, where configured).
+#   * The typed project reference must match the staging project, as must the
+#     environment variable and the project inside the connection string
+#     (scripts/db/verify-staging-target.sh). A Production project can never match.
+#   * Full TLS certificate and host name verification (sslmode=verify-full).
+#   * The scheduler script must match the reviewed checksum pinned in the wrapper.
+#   * Read-only fingerprints of the cron jobs (commands as md5 only) and the
+#     installed extensions, before and after: any difference fails the run.
+#   * Never starts within a minute before or 90 seconds after a quarter hour,
+#     or while a cleanup run is in progress.
+#   * Only the STAGING_DATABASE_URL secret. No Production secret, workflow,
+#     Supabase CLI, migration, Edge Function, Vercel or app build.
+#   * Shares the database deploy queue, so it never overlaps a deploy or rollback.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_project_ref:
+        description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-staging
+  cancel-in-progress: false
+
+env:
+  # The one project this workflow may ever touch. Changing it requires a reviewed PR.
+  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
+
+jobs:
+  check:
+    name: Photo cleanup schedule, check mode on staging (rolled back)
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved staging project
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-staging-target.sh
+
+      - name: Check the photo cleanup schedule (check mode, rolled back)
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/staging-schedule-check.sh

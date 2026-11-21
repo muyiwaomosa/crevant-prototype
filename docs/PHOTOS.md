@@ -308,7 +308,14 @@ here touches Production, photos or billing):
    select jobname, schedule, active from cron.job;
    select count(*) from net.http_request_queue;
    ```
-2. **Schedule check** (rolls back; shows `http (synchronous)`):
+2. **Schedule check** (rolls back; shows `http (synchronous)`). Without psql
+   on your computer, use the GitHub workflow **Photo cleanup schedule check
+   on staging** (Actions > Run workflow, on `main`, typing
+   `kpudeppgokpjhvaqrprn`). It runs only this check, with the staging
+   environment's existing secret, the staging target and TLS checks, the
+   script's pinned checksum, and before and after fingerprints of the cron
+   jobs and extensions (any difference fails it). It can't apply, remove or
+   touch pg_net. With psql, the same check is:
    ```bash
    psql "<staging connection string>" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-schedule-media-drain.sql
    ```

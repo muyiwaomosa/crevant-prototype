@@ -165,6 +165,13 @@ jobs:
       # move off pg_net and staging security checks 001 to 013.
       - name: Photo cleanup schedule on local Supabase (http runs, timeout, pg_net removal, checks 001-013)
         run: scripts/db/schedule-media-drain-test.sh
+      # The "Photo cleanup schedule check on staging" workflow's wrapper, on
+      # local Supabase set up like staging: every refusal before connecting
+      # (branch, arguments, credentials, project, TLS, changed script), check
+      # mode leaving nothing behind, apply attempts, a committing script
+      # caught by the fingerprints, and the 15 minute boundary.
+      - name: Photo cleanup schedule check workflow on local Supabase (check only, refusals)
+        run: scripts/db/staging-schedule-check-test.sh
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup || true
