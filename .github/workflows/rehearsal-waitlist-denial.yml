@@ -1,0 +1,74 @@
+name: "Rehearsal: waitlist login denial through the pooler"
+
+# REHEARSAL BRANCH ONLY (rehearsal/members-disposable, never merged into main).
+# On the disposable rehearsal project: the waitlist logins are refused
+# through the Supabase pooler on both ports (5432 session, 6543 transaction).
+# Not a direct (IPv6) connection test. scripts/rehearsal/waitlist-denial-probe.sh.
+# Uses only the members-rehearsal environment, never members-production.
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: "The full commit SHA you reviewed (must equal the commit this run uses)"
+        type: string
+        required: true
+      confirm_project_ref:
+        description: "Type the disposable rehearsal project reference to confirm"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-members-rehearsal
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Waitlist logins are refused through the pooler (both ports)
+    if: github.ref == 'refs/heads/rehearsal/members-disposable' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: members-rehearsal
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The run is at the reviewed commit
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          RUN_COMMIT: ${{ github.sha }}
+        run: |
+          [ "$EXPECTED_COMMIT" = "$RUN_COMMIT" ] || { echo "::error::This run uses $RUN_COMMIT, not the reviewed commit. Nothing was done."; exit 1; }
+
+      - name: Verify the target is the rehearsal project (connects to nothing)
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_PROJECT_REF: ${{ vars.MEMBERS_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-members-target.sh
+
+      - name: Verify the database identity marker (the first connection; read only)
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_DB_IDENTITY_MARKER: ${{ secrets.MEMBERS_DB_IDENTITY_MARKER }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/verify-members-identity.sh
+
+      - name: Try each waitlist login through the pooler on both ports
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/rehearsal/waitlist-denial-probe.sh
+
+      - name: Remove the temporary passwords (always, even after a failure)
+        if: always()
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/rehearsal/waitlist-denial-probe.sh cleanup

@@ -142,7 +142,7 @@ export function unexpectedFunctions(list, expected) {
 /** The member database identity check run: yours, check mode, at the commit, identity step passed, recent. */
 export function checkDbRun(run, jobs, { owner, commit, now = Date.now() }) {
   if (!run || run.path !== DB_WORKFLOW) refuse('--db-check-run is not a run of the member Production database workflow')
-  if (run.event !== 'workflow_dispatch' || run.head_branch !== 'main') refuse('--db-check-run was not started by hand on main')
+  if (run.event !== 'workflow_dispatch' || run.head_branch !== 'rehearsal/members-disposable') refuse('--db-check-run was not started by hand on rehearsal/members-disposable')
   if (run.display_title !== `member database check at ${commit}`) refuse(`--db-check-run is not a check-mode run at ${commit.slice(0, 12)} (its title: "${run.display_title}")`)
   if (run.head_sha !== commit) refuse('--db-check-run ran at another commit')
   if (run.actor?.login !== owner || run.triggering_actor?.login !== owner) refuse('--db-check-run was not started (and re-run) by the repository owner')
@@ -157,7 +157,7 @@ export function checkDbRun(run, jobs, { owner, commit, now = Date.now() }) {
 export function checkVerifyRun(run, entry, target, { owner }) {
   if (!run || run.path !== VERIFY_WORKFLOW) refuse('the recorded verification run is not a verify-functions run')
   if (run.id !== entry.verifyRunId) refuse('the recorded verification run id does not match')
-  if (run.event !== 'workflow_dispatch' || run.head_branch !== 'main') refuse('the recorded verification run was not started by hand on main')
+  if (run.event !== 'workflow_dispatch' || run.head_branch !== 'rehearsal/members-disposable') refuse('the recorded verification run was not started by hand on rehearsal/members-disposable')
   if (run.actor?.login !== owner || run.triggering_actor?.login !== owner) refuse('the recorded verification run was not started by the repository owner')
   if (run.status !== 'completed' || run.conclusion !== 'success') refuse('the recorded verification run did not succeed')
   const title = `verify ${target} ${entry.function} deployed ${entry.commit} v${entry.version}`
@@ -280,9 +280,9 @@ export async function main(argv) {
   const cli = pinnedCli()
   const v = run('supabase', ['--version']).trim()
   if (v !== cli) refuse(`expected Supabase CLI ${cli}, found ${v}`)
-  git('fetch', '--quiet', 'origin', 'main')
-  const main = git('rev-parse', 'origin/main')
-  const atMain = (p) => json(git('show', `origin/main:${p}`), p)
+  git('fetch', '--quiet', 'origin', 'rehearsal/members-disposable')
+  const main = git('rev-parse', 'origin/rehearsal/members-disposable')
+  const atMain = (p) => json(git('show', `origin/rehearsal/members-disposable:${p}`), p)
   const projects = atMain('config/supabase-projects.json')
   const approvals = atMain('config/member-production.json')
   const p = targetProject(o.target, projects)
@@ -320,7 +320,7 @@ export async function main(argv) {
   }
 
   // The commit.
-  if (run('git', ['merge-base', '--is-ancestor', commit, 'origin/main'], { allowFail: true }) === null) refuse(`${commit.slice(0, 12)} is not on origin/main`)
+  if (run('git', ['merge-base', '--is-ancestor', commit, 'origin/rehearsal/members-disposable'], { allowFail: true }) === null) refuse(`${commit.slice(0, 12)} is not on origin/rehearsal/members-disposable`)
   if (o.action === 'deploy') {
     if (git('rev-parse', 'HEAD') !== commit) refuse('--commit is not HEAD: check out the approved commit first')
     const dirty = git('status', '--porcelain').split('\n').filter(Boolean).filter((l) => !l.endsWith(EVIDENCE))

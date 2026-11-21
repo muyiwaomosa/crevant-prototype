@@ -56,13 +56,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: verify-functions-${{ inputs.target }}
+  group: verify-functions-rehearsal-${{ inputs.target }}
   cancel-in-progress: false
 
 jobs:
   verify:
     name: Verify ${{ inputs.function }} on ${{ inputs.target }} (${{ inputs.mode }})
-    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    if: github.ref == 'refs/heads/rehearsal/members-disposable' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

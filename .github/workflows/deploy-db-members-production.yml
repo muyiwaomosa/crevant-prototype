@@ -86,7 +86,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-database-members-production
+  group: deploy-database-members-rehearsal
   cancel-in-progress: false
 
 env:
@@ -98,7 +98,7 @@ jobs:
   # secrets, never the members-production environment's.
   secret-scope:
     name: Refuse member Production secrets stored outside their environment
-    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    if: github.ref == 'refs/heads/rehearsal/members-disposable' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
     timeout-minutes: 2
     # Connects to nothing; it names the URL secret only to refuse it outside the
@@ -144,7 +144,7 @@ jobs:
   verify-migrations:
     name: Verify migrations on throwaway databases
     needs: secret-scope
-    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    if: github.ref == 'refs/heads/rehearsal/members-disposable' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -180,10 +180,10 @@ jobs:
   members-production:
     name: ${{ inputs.mode == 'apply' && 'Apply to member Production' || inputs.mode == 'apply-foundation' && 'Apply the foundation to member Production' || inputs.mode == 'plan' && 'Plan for member Production (no changes)' || 'Read-only checks on member Production' }}
     needs: verify-migrations
-    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    if: github.ref == 'refs/heads/rehearsal/members-disposable' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: members-production
+    environment: members-rehearsal
     # Full certificate and host name verification for every hosted database
     # connection in this job, against Supabase's public root CA committed at
     # config/certs. REQUIRE_VERIFY_FULL makes the target check refuse a URL
