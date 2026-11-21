@@ -115,6 +115,37 @@ In the function logs:
 * many `notice_changed` lines mean the database notice version and `VITE_PRIVACY_NOTICE_VERSION` disagree
 * a flood of `rate_limited` lines may be an attack, so close if needed
 
+## Troubleshooting: Turnstile shows Success but the form says "Please complete the check above"
+
+That message means the server function answered `verification_failed`. The
+browser did send a token; Cloudflare's check on the server rejected it. The
+function's log line (Supabase, Edge Functions, `join-waitlist`, Logs) gives the
+reason as `cloudflare_rejected:<HTTP status and Cloudflare's codes>`, or
+`hostname_not_allowed`, `action_mismatch`, `no_token`. It never contains the
+token, the secret, the email or an address.
+
+| Reason contains | Meaning | Fix (needs approval) |
+| --- | --- | --- |
+| `invalid-input-secret` | Cloudflare rejects `TURNSTILE_SECRET_KEY` | Copy the secret key from the same Production widget whose site key is in Vercel, and update the Supabase function secret |
+| `invalid-input-response` | The token isn't valid for this secret (for example the site key and secret come from different widgets) | Use one widget's pair; a new site key needs a Vercel rebuild |
+| `timeout-or-duplicate` | The token expired or was already used | Submit sooner after Success; the form fetches a new token after each attempt |
+| `hostname_not_allowed` | Cloudflare reported a hostname not in `WAITLIST_ALLOWED_HOSTNAMES` | Correct the setting or the widget's hostname |
+
+### Incident, 2026-11-18 (Production launch)
+
+* **Symptom:** on www.splitpost.ca/join, Turnstile showed Success, and every
+  submission answered "Please complete the check above and try again."
+* **Root cause:** Cloudflare's siteverify rejected the Production
+  `TURNSTILE_SECRET_KEY` with `invalid-input-secret` (HTTP 400). Why the stored
+  value was invalid was not established.
+* **Resolution:** the founder checked the Production Turnstile widget and
+  corrected the secret key configured for the function. The next signup
+  succeeded.
+* **What made it findable:** PRs #60, #61 and #62 added a fixed-label reason
+  to the function's log, including Cloudflare's error codes from HTTP error
+  replies. Before #62 the reply body of an HTTP error was not read, so the code
+  was lost.
+
 ## Emergency shutdown
 
 Use these in order. Any one of them stops new signups.
