@@ -7,6 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const ci = read('.github/workflows/ci.yml')
@@ -82,4 +83,30 @@ test('the local runner refuses anything but a local stack, and clears hosted con
   assert.match(local, /^export DB_URL="\$LOCAL_DB_URL"$/m)
   // The checks come before the first suite runs.
   assert.ok(local.indexOf('Refusing: the database is not local') < local.indexOf('$cmd; code=$?'))
+})
+
+test('on CI, every host port a suite helper binds in the temporary-connection range is reserved before start-up', () => {
+  const start = read('scripts/ci/start-local-supabase.sh')
+  const helper = /^HELPER_PORTS=([0-9,-]+)$/m.exec(start)?.[1]
+  assert.ok(helper, 'no HELPER_PORTS in scripts/ci/start-local-supabase.sh')
+  assert.match(start, /ip_local_reserved_ports="\$\{current:\+\$current,\}\$PORTS,\$HELPER_PORTS"/, 'the helper ports are reserved with the stack ports')
+  const ranges = helper.split(',').map((r) => r.split('-').map(Number)).map(([a, b = a]) => [a, b])
+  const reserved = (p) => ranges.some(([a, b]) => p >= a && p <= b)
+  const config = new Set([...read('supabase/config.toml').matchAll(/^\s*(?:port|shadow_port)\s*=\s*(\d+)/gm)].map((m) => Number(m[1])))
+  const files = execFileSync('git', ['ls-files', 'scripts/e2e/*.sh'], { encoding: 'utf8' }).split('\n').filter(Boolean)
+  const found = []
+  for (const f of files) {
+    const text = readFileSync(f, 'utf8')
+    for (const m of text.matchAll(/^([A-Z_]*PORT)="\$\{[A-Z_]+:-(\d+)\}"$/gm)) {
+      const base = Number(m[2])
+      found.push([f, m[1], base])
+      // Ports derived from it, e.g. EDGE_REAL_PORT="$((EDGE_PORT + 2))".
+      for (const o of text.matchAll(new RegExp(`^[A-Z_]+PORT="\\$\\(\\(${m[1]} \\+ (\\d+)\\)\\)"$`, 'gm'))) found.push([f, `${m[1]} + ${o[1]}`, base + Number(o[1])])
+    }
+  }
+  assert.ok(found.length >= 10, `too few helper ports found (${found.length})`)
+  for (const [f, name, p] of found) {
+    if (p < 32768 || config.has(p)) continue // outside the range, or a stack port (reserved as PORTS)
+    assert.ok(reserved(p), `${f}: ${name} defaults to ${p}, which is not in HELPER_PORTS`)
+  }
 })
