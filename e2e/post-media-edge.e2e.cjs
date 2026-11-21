@@ -160,6 +160,16 @@ function frame(b) {
   sql("select ops.set_media_settings('founder', true, 2000000000, 10, 20)")
   check('with the checks passed, a cap and both thresholds, photos turn on', sql('select photos_enabled from ops.media_settings') === 't')
 
+  // 2b. Who may post (20261128000000): founder-only by default, enforced through the function too.
+  check('the audience is founder-only by default', sql('select photos_audience from ops.media_settings') === 'founder')
+  const testerRefused = await photo(A.token, landscape)
+  check('with photos on and the audience at founder, a tester\'s upload is refused (photos_unavailable) and nothing is stored',
+    testerRefused.status === 403 && testerRefused.json?.error === 'photos_unavailable' && photoFiles() === 0, `${testerRefused.status} ${JSON.stringify(testerRefused.json)}`)
+  const founderUp = await photo(F.token, makePhoto(1200, 900, 21))
+  check('the founder\'s upload is accepted through the function', founderUp.status === 200 && typeof founderUp.json?.uploadId === 'string', `${founderUp.status} ${JSON.stringify(founderUp.json)}`)
+  sql("select ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS')")
+  check('opening to all members is recorded', sql("select count(*) from ops.media_admin_events where action = 'audience_changed'") === '1')
+
   // 3. A valid photo: checked, decoded, re-encoded into two copies; nothing else stored.
   const up = await photo(A.token, landscape)
   check('a 1600 px photo with camera metadata is accepted', up.status === 200 && typeof up.json?.uploadId === 'string' && up.json.width === 1600 && up.json.height === 1067, `${up.status} ${JSON.stringify(up.json)}`)
@@ -291,6 +301,7 @@ function frame(b) {
   check('nothing in the avatars bucket changed, and no photo file is outside post-photos', avatarFiles() === avatarsBefore
     && sql(`select count(*) from storage.objects where bucket_id = 'avatars' and name like '%${up.json.uploadId}%'`) === '0')
 
+  sql("select ops.set_photo_audience('founder', 'founder')")
   sql("select ops.set_media_settings('founder', false, 2000000000, 10, 20)")
   console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`)
   process.exit(failures === 0 ? 0 : 1)

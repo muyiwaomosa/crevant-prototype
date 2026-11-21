@@ -85,6 +85,10 @@ begin
   perform pg_temp.expect_error_ph('select ops.set_media_settings(''founder'', true, 1000000000, 30, 20)', 'media_settings_thresholds', 'a review threshold above the pause threshold');
   perform ops.set_media_settings('founder', true, 1000000000, 10, 20);
   if not (select photos_enabled from ops.media_settings) then raise exception 'FAIL: photos did not turn on'; end if;
+  -- The audience (20261128000000) defaults to the founder; these tests post as testers.
+  if to_regprocedure('ops.set_photo_audience(text, text, text)') is not null then
+    perform ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS');
+  end if;
   if (select count(*) from ops.media_admin_events where action = 'settings_changed') <> 1 then raise exception 'FAIL: the change was not recorded'; end if;
   raise notice 'PASS: photos turn on only with a cap, both egress thresholds and six recent passing processing checks (each under 1 second); recorded';
 end $$;

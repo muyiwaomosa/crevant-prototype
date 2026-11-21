@@ -115,6 +115,40 @@ so it is the harder case. **Hosted staging is unverified** and is a mandatory
 gate: the switch can't be turned on until the six most recent hosted checks
 (within 7 days) each pass under 1 second.
 
+## Who may post photos (20261128000000)
+
+The switch has an **audience**, `ops.media_settings.photos_audience`:
+
+* `founder` (the default): only the signed-in member who is active and in
+  the founder cohort may post photos. This is the same founder rule as the
+  feedback inbox and the processing check. Everyone else is refused exactly
+  as if photos were off (`photos_unavailable`) and sees no Add photo.
+* `members`: every active pilot member may post photos.
+
+It is enforced in the database, for the caller, at every photo-posting
+step: status, upload authorisation (which the post-media function's upload
+goes through) and publishing. It fails closed: no signed-in caller, or a
+founder-cohort account without active access, gets no photo posting.
+Viewing photos, text posting, cleanup and evidence are not affected:
+members still see and open the founder's photo posts.
+
+Changing it is server only and recorded in `ops.media_admin_events`
+(`audience_changed`). `ops.set_media_settings` never changes it. Opening
+photo posting to all members needs the exact phrase (a separate, explicit
+approval):
+
+```sql
+select ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS');
+```
+
+Back to founder-only (no phrase needed):
+
+```sql
+select ops.set_photo_audience('founder', 'founder');
+```
+
+To check it: `select photos_enabled, photos_audience from ops.media_settings;`
+
 ## Activation gates (all required, enforced by `ops.set_media_settings`)
 
 1. Six passing hosted processing checks (Moderation > Photo storage > Run
@@ -215,6 +249,13 @@ photos off never does.
    upload limit, at least 600 KB). Then turn photos on with the cap and
    thresholds (above).
 10. Founder phone test (below).
+
+**Rollback of the audience** (`scripts/db/staging-rollback-photo-audience.sql`,
+phrase `REMOVE THE STAGING PHOTO AUDIENCE`): it refuses while photos are on,
+because the restored switch would let every member post photos, and once
+any audience change has been recorded. Turn photos off first. It must run
+before the photo posts rollback, which refuses while the audience is
+recorded.
 
 **Rollback, in order:** turn photos off (step above); unschedule
 (`-v mode=remove -v confirm='UNSCHEDULE THE STAGING PHOTO CLEANUP'`; this
