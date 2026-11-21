@@ -280,6 +280,19 @@ read-only verification and the deploy workflow.
    confirms their email; store their account id as `MEMBERS_FOUNDER_ACCOUNT_ID`.
 6. Activation: `rehearse`, then `activate` (membership, the founder's
    grant and the launch gate, in one transaction). Then `check`.
+7. Edge Functions (Phase 1B-2, `docs/FUNCTIONS-DEPLOYMENT.md`): deploy
+   **avatar only** with `scripts/functions/deploy.mjs` at the commit of a
+   successful member database `check` run (step 6), then run **Verify Edge
+   Functions**, then record the deployment in `config/function-deployments.json`
+   by reviewed PR. post-media needs `postMediaFunctionApproved` first (a
+   separate approval). join-waitlist is never deployed here.
+
+Acceptance criteria for the disposable-project rehearsal: the Supabase CLI
+migration-history compatibility test passes (`supabase db push --dry-run`
+and `supabase migration list` recognise every migration the activation
+recorded); the function deployment passes A, B and C2, with C1 (source
+download) recorded as `match` or, if unsupported, as a documented limitation;
+the waitlist login denial is confirmed through the pooler and directly.
 
 ## Privileged bypasses
 

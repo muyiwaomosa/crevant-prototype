@@ -30,6 +30,7 @@ cleanup
 docker run -d --name crevant-avatar-guard --network host \
   -e SUPABASE_URL=https://hmrliwoychnqrbbydorg.supabase.co -e SUPABASE_ANON_KEY=dummy -e SUPABASE_SERVICE_ROLE_KEY=dummy \
   -v "$PWD/supabase/functions/avatar:/home/deno/functions/avatar:ro" \
+  -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
   "$EDGE_IMAGE" start --main-service /home/deno/functions/avatar --ip 127.0.0.1 --port "$GUARD_PORT" >/dev/null
 for _ in $(seq 1 60); do
   curl -s -o /dev/null -X OPTIONS "http://127.0.0.1:$GUARD_PORT/avatar/upload" && break

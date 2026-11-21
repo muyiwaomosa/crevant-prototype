@@ -26,13 +26,13 @@ test('the shared jpeg-js is byte for byte the avatar function\'s reviewed copy',
   }
 })
 
-test('the avatar function is unchanged by Build 5.3', () => {
+test('the avatar function is unchanged by Build 5.3 (its entry point changed only for the Phase 1B-2 project policy)', () => {
   assert.deepEqual(
     Object.fromEntries(['handler.ts', 'image.ts', 'index.ts'].map((f) => [f, sha(`supabase/functions/avatar/${f}`)])),
     {
       'handler.ts': '6653dfd6f602378139decabd2dfaddaff2db92a51f40f0e289833f815567d0f3',
       'image.ts': '436fc7c60f391df9baf4f93cbfbb75974d9f97a53e3a510864dde3050fb76a44',
-      'index.ts': '6f83254fe78a01adb4bea3b860c183c00ff85566cfec3b174c16cbc38ef7357b',
+      'index.ts': '7281337a225f1b63dc2b0ca6750863957dd0f67c8910b375302a3ae8d83c9395',
     },
   )
 })
@@ -44,10 +44,12 @@ test('no remote or npm import', () => {
   }
 })
 
-test('the entry point serves only staging, verifies members with Supabase Auth, and guards the drain key', () => {
+test('the entry point serves only the projects the shared policy allows, verifies members with Supabase Auth, and guards the drain key', () => {
   const index = code(read(`${dir}/index.ts`))
-  assert.match(index, /const PROJECT = 'kpudeppgokpjhvaqrprn'/)
-  assert.ok(!/hmrliwoychnqrbbydorg/.test(index), 'no reference to the Production project')
+  assert.ok(!/'[a-z0-9]{20}'/.test(index), 'no project reference in the entry point (Phase 1B-2: ../_shared/policy.ts)')
+  assert.ok(!/vercel\.app|splitpost\.ca/.test(index), 'no origin in the entry point')
+  assert.match(index, /const configured = role !== null && anon !== '' && service !== ''/)
+  assert.match(index, /corsHeaders\(role, req\.headers\.get\('origin'\)\)/)
   assert.match(index, /if \(!configured\) \{\s*return respond\(new Response\(JSON\.stringify\(\{ error: 'unavailable' \}\), \{ status: 503/)
   const envs = [...index.matchAll(/env\('([A-Z_]+)'\)/g)].map((m) => m[1]).sort()
   assert.deepEqual(envs, ['MEDIA_DRAIN_KEY', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL'])

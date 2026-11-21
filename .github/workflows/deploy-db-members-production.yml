@@ -1,4 +1,7 @@
 name: Deploy database to member Production
+# The run title names the mode and commit; scripts/functions/deploy.mjs reads it
+# to accept only a check-mode run at the approved commit as identity evidence.
+run-name: member database ${{ inputs.mode }} at ${{ inputs.expected_commit }}
 
 # The MEMBER Production Supabase project (splitpost-members-production,
 # ca-central-1) only. Separate workflow, environment, secrets, variable,

@@ -49,3 +49,30 @@ export function projectRefProblems(refs) {
   }
   return problems
 }
+
+export const NAME = /^[a-z0-9][a-z0-9-]{0,62}$/
+export const REGION = /^[a-z]{2}-[a-z]+-[0-9]$/
+
+/** The member Production project's { ref, name, region } (each may be null). */
+export function loadMemberProduction(raw = JSON.parse(readFileSync(new URL('../config/supabase-projects.json', import.meta.url), 'utf8'))) {
+  const m = raw?.memberProduction ?? {}
+  return { ref: m.ref ?? null, name: m.name ?? null, region: m.region ?? null }
+}
+
+/**
+ * Problems with the member Production identity; [] when sound. While the
+ * reference is null the project isn't provisioned: name and region may be
+ * null too (deployments refuse anyway). Once anything is set, all three must
+ * be set, valid and consistent.
+ */
+export function memberProductionProblems(m) {
+  const where = 'config/supabase-projects.json memberProduction'
+  const set = [m?.ref, m?.name, m?.region].filter((v) => v !== null && v !== undefined && v !== '')
+  if (set.length === 0) return []
+  const problems = []
+  if (set.length !== 3) problems.push(`${where}: ref, name and region must be set together`)
+  if (m.ref && !REF.test(m.ref)) problems.push(`${where}: the ref is malformed`)
+  if (m.name && !NAME.test(m.name)) problems.push(`${where}: the name is malformed`)
+  if (m.region && !REGION.test(m.region)) problems.push(`${where}: the region is malformed`)
+  return problems
+}

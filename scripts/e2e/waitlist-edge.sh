@@ -60,6 +60,7 @@ start_edge() { # name port db_url [trusted_hops, or "ignore" for WAITLIST_CLIENT
     "${mode[@]}" \
     -e TEST_ORIGIN=https://site.test -e TEST_HOSTNAME=site.test \
     -v "$PWD/supabase/functions/join-waitlist:/home/deno/functions/join-waitlist:ro" \
+    -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
     -v "$PWD/e2e/edge/waitlist-e2e:/home/deno/functions/waitlist-e2e:ro" \
     "$EDGE_IMAGE" start --main-service /home/deno/functions/waitlist-e2e --ip 127.0.0.1 --port "$2" >/dev/null
 }
@@ -79,6 +80,7 @@ docker run -d --name crevant-waitlist-edge-real --network host "${EXTRA[@]}" \
   -e SUPABASE_URL="$LOCAL_SUPABASE_URL" -e WAITLIST_TRUSTED_PROXY_HOPS=1 \
   -e WAITLIST_RATE_SALT="$SALT" -e WAITLIST_DB_URL="postgresql://waitlist_writer:${WRITER_PW}@127.0.0.1:${DB_PORT}/postgres" \
   -v "$PWD/supabase/functions/join-waitlist:/home/deno/functions/join-waitlist:ro" \
+  -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
   "$EDGE_IMAGE" start --main-service /home/deno/functions/join-waitlist --ip 127.0.0.1 --port "$EDGE_REAL_PORT" >/dev/null
 
 # The real entry point, fully set up but WITHOUT a confirmed proxy hop count.
@@ -92,6 +94,7 @@ start_real() { # name port supabase_url extra_env...
     -e WAITLIST_RATE_SALT="$SALT" -e SUPABASE_URL="$supa" "$@" \
     -e WAITLIST_DB_URL="postgresql://waitlist_writer:${WRITER_PW}@127.0.0.1:${DB_PORT}/postgres" \
     -v "$PWD/supabase/functions/join-waitlist:/home/deno/functions/join-waitlist:ro" \
+    -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
     "$EDGE_IMAGE" start --main-service /home/deno/functions/join-waitlist --ip 127.0.0.1 --port "$port" >/dev/null
 }
 start_real crevant-waitlist-edge-nohops "$EDGE_NOHOPS_PORT" "$LOCAL_SUPABASE_URL" -e TURNSTILE_SECRET_KEY=placeholder-never-sent

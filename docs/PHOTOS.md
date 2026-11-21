@@ -242,10 +242,13 @@ photos off never does.
    ```
    Store it twice, in the staging dashboard: Edge Functions > Secrets as
    `MEDIA_DRAIN_KEY`, and Project Settings > Vault as `media_drain_key`.
-5. **Deploy the function from your computer** (staging only; `_shared` is
-   bundled automatically):
+5. **Deploy the function from your computer** with the commit-pinned
+   deploy script (Phase 1B-2, `docs/FUNCTIONS-DEPLOYMENT.md`; `_shared` is
+   bundled automatically), then run the **Verify Edge Functions** workflow.
+   On member Production, post-media also needs `postMediaFunctionApproved`
+   (a separate approval):
    ```bash
-   supabase functions deploy post-media --no-verify-jwt --project-ref kpudeppgokpjhvaqrprn
+   node scripts/functions/deploy.mjs deploy --target staging --function post-media --commit <full sha> --operator <your label> --confirm "DEPLOY post-media TO kpudeppgokpjhvaqrprn"
    ```
 6. **Schedule the cleanup** (pg_cron and the http extension) with the
    GitHub workflows, first **Photo cleanup schedule check on staging**, then

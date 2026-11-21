@@ -1,0 +1,103 @@
+name: Verify Edge Functions
+
+# Independent verification of an Edge Function deployment (Phase 1B-2):
+# endpoint behaviour, the build stamp and, on member Production, functions
+# that must NOT be deployed. scripts/functions/verify.mjs, against the public
+# function URL only. docs/FUNCTIONS-DEPLOYMENT.md.
+#
+# It changes nothing and holds no secret: no environment, no credential, only
+# public HTTPS requests. Deploying is never done here: only the founder's
+# scripts/functions/deploy.mjs deploys, from their own computer.
+#
+# A passing run is evidence, not authorization. A deployment counts as
+# approved (and as a rollback target) only once the founder records it,
+# with this run's id, in config/function-deployments.json in a reviewed PR.
+#
+# The run title records exactly what was verified; scripts/functions/deploy.mjs
+# matches it when checking a rollback target's verification.
+run-name: verify ${{ inputs.target }} ${{ inputs.function }} ${{ inputs.mode }} ${{ inputs.expected_commit }} v${{ inputs.deployed_version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "staging or member-production"
+        type: choice
+        options:
+          - staging
+          - member-production
+        required: true
+      function:
+        description: "The function verified (join-waitlist: removed mode on member Production only)"
+        type: choice
+        options:
+          - avatar
+          - post-media
+          - join-waitlist
+        required: true
+      mode:
+        description: "deployed = the deployment behaves and carries the expected build. removed = the function is gone (404)."
+        type: choice
+        options:
+          - deployed
+          - removed
+        default: deployed
+        required: true
+      expected_commit:
+        description: "The full commit SHA that was deployed (removed mode: the current main commit)"
+        type: string
+        required: true
+      deployed_version:
+        description: "The function version the deploy script reported (removed mode: 0)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-functions-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify ${{ inputs.function }} on ${{ inputs.target }} (${{ inputs.mode }})
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The inputs are well formed, and the commit is on main
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          DEPLOYED_VERSION: ${{ inputs.deployed_version }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::expected_commit must be a full 40 character commit SHA."; exit 1; }
+          [[ "$DEPLOYED_VERSION" =~ ^[0-9]{1,6}$ ]] || { echo "::error::deployed_version must be a number."; exit 1; }
+          if [ "$MODE" = deployed ] && [ "$DEPLOYED_VERSION" = 0 ]; then echo "::error::deployed mode needs the version the deploy script reported."; exit 1; fi
+          git merge-base --is-ancestor "$EXPECTED_COMMIT" HEAD || { echo "::error::$EXPECTED_COMMIT is not on main."; exit 1; }
+
+      - name: Export the deployed commit's source (for the build stamp)
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/src"
+          git archive --format=tar "$EXPECTED_COMMIT" supabase/functions | tar -x -C "$RUNNER_TEMP/src"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify (public requests only)
+        env:
+          TARGET: ${{ inputs.target }}
+          FUNCTION: ${{ inputs.function }}
+          MODE: ${{ inputs.mode }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: node scripts/functions/verify.mjs --target "$TARGET" --function "$FUNCTION" --mode "$MODE" --commit "$EXPECTED_COMMIT" --source-root "$RUNNER_TEMP/src"

@@ -1,0 +1,4 @@
+{
+  "_comment": "The ledger of founder-approved Edge Function deployments (Phase 1B-2). An entry is added only by a reviewed PR, after the deployment's independent verification (.github/workflows/verify-functions.yml) has passed, and records the exact target, project reference, function, commit, deployed version, build stamp, the approving founder (a label, never an email), the approval date and the verification run. Rollback (scripts/functions/deploy.mjs rollback) accepts only a commit with an entry here on main AND a successful verification run matching it exactly. A passing verification alone never authorizes anything. docs/FUNCTIONS-DEPLOYMENT.md.",
+  "deployments": []
+}
