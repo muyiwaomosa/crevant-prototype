@@ -3,8 +3,8 @@
 # staging" wrappers (scripts/db/staging-photo-cleanup.sh and
 # scripts/db/staging-pgnet-removal.sh) against a LOCAL Supabase set up like
 # staging today: pg_cron and pg_net, the old pg_net cleanup job, the drain key
-# in Vault, http not installed. Real pg_cron runs (every 5 seconds here) call
-# real endpoints beside the database:
+# in Vault, http not installed. Real pg_cron runs (every second here, while
+# waiting for runs) call real endpoints beside the database:
 #   * a copy of post-media with the key (a real drain pass, recorded by the
 #     function in ops.media_drain_runs);
 #   * the gateway's copy, which has no key (HTTP 401);
@@ -12,63 +12,52 @@
 # Every hosted connection string here is fake and refused before connecting.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-DB_URL="${DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
-case "$DB_URL" in
-  *@127.0.0.1:*|*@localhost:*) ;;
-  *) echo "Refusing: this test only runs against a local database." >&2; exit 1 ;;
-esac
-DB_CONTAINER="${DB_CONTAINER:-supabase_db_crevant-prototype}"
-STORAGE_CONTAINER="${STORAGE_CONTAINER:-supabase_storage_crevant-prototype}"
-EDGE_IMAGE="${EDGE_IMAGE:-supabase/edge-runtime:v1.78.1}"
+# The local-only guard, the staging-like state and the keyed copy of
+# post-media beside the database, shared by the schedule suites.
+# shellcheck source=scripts/db/scheduler-test-fixture.sh
+. scripts/db/scheduler-test-fixture.sh
+# The schedule while waiting for runs. Every run is still a real pg_cron run
+# against a real endpoint; the cleanup's own 20 second limit is unchanged.
+INTERVAL='1 seconds'
 REF=kpudeppgokpjhvaqrprn
 PW='Fake-Pw-For-Tests-73'
 POOL=aws-0-us-west-2.pooler.supabase.com
-GATEWAY='http://kong:8000/functions/v1/post-media/drain'
-KEYED='http://127.0.0.1:54397/functions/v1/post-media/drain'
 FAKE200='http://127.0.0.1:54992/functions/v1/post-media/drain'
 APPLY='SCHEDULE THE STAGING PHOTO CLEANUP'
 PAUSE='UNSCHEDULE THE STAGING PHOTO CLEANUP'
 REMOVE='REMOVE PG_NET FROM STAGING'
-PSQL=(psql "$DB_URL" -X -q -At -v ON_ERROR_STOP=1)
 pass=0; failed=0
 ok()  { echo "PASS  cleanup workflows: $1"; pass=$((pass + 1)); }
 bad() { echo "FAIL  cleanup workflows: $1"; failed=$((failed + 1)); }
 tmp=$(mktemp -d)
-KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
-WRONG="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
+KEY="$(new_key)"
+WRONG="$(new_key)"
 printf '#!/usr/bin/env bash\necho "slept $1" >> "%s/slept"\n' "$tmp" > "$tmp/fake-sleep"; chmod +x "$tmp/fake-sleep"
 SAFE_EPOCH=$(( 1700000000 - 1700000000 % 900 + 420 ))
 
 cleanup() {
   "${PSQL[@]}" -c "select cron.unschedule(jobname) from cron.job where jobname in ('post-media-drain', 'crevant-test-other', 'crevant-test-caller')" >/dev/null 2>&1 || true
+  # The run history this test made up (job_pid 0; pg_cron's own runs have a
+  # real one). Left behind, its high run ids hide every later real run from
+  # a suite that waits for "a run after the latest".
+  "${PSQL[@]}" -c "delete from cron.job_run_details where job_pid = 0" >/dev/null 2>&1 || true
+  [ "$("${PSQL[@]}" -c "select count(*) from cron.job_run_details where job_pid = 0" 2>/dev/null)" = 0 ] || echo "FIXTURE FAIL  made-up cron run history is still in cron.job_run_details" >&2
   "${PSQL[@]}" -c "delete from vault.secrets where name = 'media_drain_key'" >/dev/null 2>&1 || true
-  docker rm -f crevant-drain-beside-db crevant-fake-200 >/dev/null 2>&1 || true
+  stop_keyed_drain
+  docker rm -f crevant-fake-200 >/dev/null 2>&1 || true
   rm -rf "$tmp"
 }
 trap cleanup EXIT
 cleanup >/dev/null 2>&1; tmp=$(mktemp -d); printf '#!/usr/bin/env bash\necho "slept $1" >> "%s/slept"\n' "$tmp" > "$tmp/fake-sleep"; chmod +x "$tmp/fake-sleep"
 
-store_key() { "${PSQL[@]}" -c "delete from vault.secrets where name = 'media_drain_key'" -c "select vault.create_secret('$1', 'media_drain_key', 'local test')" >/dev/null; }
-legacy_job() { # staging today: the old pg_net cleanup job (pointed at the local gateway here)
-  "${PSQL[@]}" -c "select cron.unschedule('post-media-drain') where exists (select 1 from cron.job where jobname = 'post-media-drain')" >/dev/null
-  "${PSQL[@]}" -c "select cron.schedule('post-media-drain', '*/15 * * * *', \$job\$
-      select net.http_post(
-        url := '$GATEWAY',
-        headers := pg_catalog.jsonb_build_object(
-          'Content-Type', 'application/json',
-          'x-media-drain-key', (select s.decrypted_secret from vault.decrypted_secrets s where s.name = 'media_drain_key')),
-        body := '{}'::jsonb,
-        timeout_milliseconds := 20000)
-    \$job\$)" >/dev/null
-}
 jobid() { "${PSQL[@]}" -c "select coalesce(max(jobid), 0) from cron.job where jobname = 'post-media-drain'"; }
 jobcount() { "${PSQL[@]}" -c "select count(*) from cron.job where jobname = 'post-media-drain'"; }
-method() { "${PSQL[@]}" -c "select case when command ~ 'extensions\.http\(' then 'http' when command ~ 'net\.http_post' then 'pg_net' else 'other' end from cron.job where jobname = 'post-media-drain'"; }
+method() { cleanup_job_method; }
 has_ext() { "${PSQL[@]}" -c "select count(*) from pg_extension where extname = '$1'"; }
 every() { "${PSQL[@]}" -c "select cron.alter_job((select jobid from cron.job where jobname = 'post-media-drain'), schedule := '$1')" >/dev/null; }
 finished() { "${PSQL[@]}" -c "select count(*) from cron.job_run_details where jobid = $(jobid) and status in ('succeeded', 'failed') and end_time is not null"; }
-wait_finished() { # wait_finished <at least n> (the job runs every 5 seconds meanwhile)
-  every '5 seconds'
+wait_finished() { # wait_finished <at least n> (the job runs every second meanwhile)
+  every "$INTERVAL"
   for _ in $(seq 1 60); do [ "$(finished)" -ge "$1" ] && break; sleep 1; done
   every '*/15 * * * *'
   # Let a run that started just before the change finish.
@@ -77,7 +66,7 @@ wait_finished() { # wait_finished <at least n> (the job runs every 5 seconds mea
 others_fp() { "${PSQL[@]}" -c "select jobid || '|' || jobname || '|' || md5(command) || '|' || schedule from cron.job where jobname <> 'post-media-drain' order by jobid"; }
 
 base_env=(GITHUB_ACTIONS=true GITHUB_REF=refs/heads/main STAGING_DATABASE_URL="$DB_URL" SCHEDULE_CHECK_LOCAL_TEST=1
-          SCHEDULE_CHECK_EPOCH="$SAFE_EPOCH" SCHEDULE_CHECK_SLEEP="$tmp/fake-sleep" SCHEDULE_TEST_INTERVAL='5 seconds' SCHEDULE_TEST_WAIT_MAX=60
+          SCHEDULE_CHECK_EPOCH="$SAFE_EPOCH" SCHEDULE_CHECK_SLEEP="$tmp/fake-sleep" SCHEDULE_TEST_INTERVAL="$INTERVAL" SCHEDULE_TEST_WAIT_MAX=60
           EXPECTED_PROJECT_REF=$REF SUPABASE_PROJECT_REF=$REF CONFIRM_PROJECT_REF=$REF)
 A() { # A <mode> <phrase> [VAR=value ...] -- [args]
   local mode=$1 phrase=$2; shift 2
@@ -94,20 +83,16 @@ visible() { grep -v '^::add-mask::' <<<"$1"; }
 clean_out() { ! grep -q "$KEY" <<<"$1" && ! grep -q "$WRONG" <<<"$1" && ! grep -q 'jsonb_build_object\|decrypted_secret\|postgres:postgres@' <<<"$1"; }
 
 # --- Set up: staging today, and the endpoints beside the database ----------------
-"${PSQL[@]}" -c "drop extension if exists http" -c "create extension if not exists pg_cron" -c "create extension if not exists pg_net with schema extensions" >/dev/null 2>&1
-store_key "$KEY"
-legacy_job
-"${PSQL[@]}" -c "select cron.schedule('crevant-test-other', '0 3 * * *', 'select 1')" >/dev/null
-ev() { docker inspect "$STORAGE_CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n "s/^$1=//p"; }
-docker run -d --name crevant-drain-beside-db --network "container:$DB_CONTAINER" \
-  -e SUPABASE_URL=http://kong:8000 -e SUPABASE_ANON_KEY="$(ev ANON_KEY)" -e SUPABASE_SERVICE_ROLE_KEY="$(ev SERVICE_KEY)" -e MEDIA_DRAIN_KEY="$KEY" \
-  -v "$PWD/supabase/functions/post-media:/home/deno/functions/post-media:ro" -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
-  "$EDGE_IMAGE" start --main-service /home/deno/functions/post-media --ip 127.0.0.1 --port 54397 >/dev/null
+staging_like_state "$KEY"
+"${PSQL[@]}" -c "select cron.schedule('crevant-test-other', '0 3 * * *', 'select 1')" >/dev/null || fixture_fail "could not schedule the unrelated cron job"
+start_keyed_drain "$KEY"
 docker run -d --name crevant-fake-200 --network "container:$DB_CONTAINER" --entrypoint sh "$(docker inspect -f '{{.Config.Image}}' "$DB_CONTAINER")" \
-  -c "while true; do printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}' | nc -l -p 54992; done" >/dev/null
-for _ in $(seq 1 60); do docker exec "$DB_CONTAINER" nc -z 127.0.0.1 54397 2>/dev/null && break; sleep 1; done
-for _ in $(seq 1 30); do docker exec "$DB_CONTAINER" netstat -ltn 2>/dev/null | grep -q ':54992 ' && break; sleep 1; done
+  -c "while true; do printf 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}' | nc -l -p 54992; done" >/dev/null \
+  || fixture_fail "could not start the fake 200 endpoint"
+wait_listening 54992 "the fake 200 endpoint"
 OTHERS=$(others_fp)
+grep -q '|crevant-test-other|' <<<"$OTHERS" || fixture_fail "the unrelated cron job is missing from the fingerprint"
+
 
 # --- 1. Refusals before connecting --------------------------------------------------
 out=$(A verify '' GITHUB_REF=refs/heads/claude/x); code=$?
@@ -217,7 +202,10 @@ legacy_job; old=$(jobid)
                  insert into ops.media_drain_runs (source, claimed, deleted, failed, finished_at) select 'scheduled', 0, 0, 0, start_time + interval '1 second' from ins" >/dev/null \
   || bad "fixture: could not add the old job's history"
 [ "$("${PSQL[@]}" -c "select count(*) from cron.job_run_details where jobid = $old and status = 'succeeded'")" -ge 3 ] || bad "fixture: the old job's history is missing"
-out=$(A apply "$APPLY"); code=$?
+# The gate check below needs exactly one run since this apply: the wrapper
+# puts the 15 minute schedule back about a second after the first run ends,
+# so this apply's runs come every 5 seconds (not every second) meanwhile.
+out=$(A apply "$APPLY" SCHEDULE_TEST_INTERVAL='5 seconds'); code=$?
 [ $code -eq 0 ] && grep -q 'APPLIED AND VERIFIED' <<<"$out" && grep -q 'Replaced, not duplicated' <<<"$out" && grep -q 'verified (drain pass' <<<"$out" \
   && [ "$(jobcount)" = 1 ] && [ "$(jobid)" != "$old" ] && [ "$(method)" = http ] && [ "$(has_ext pg_net)" = 1 ] && [ "$(has_ext http)" = 1 ] \
   && [ "$("${PSQL[@]}" -c "select schedule from cron.job where jobname = 'post-media-drain'")" = '*/15 * * * *' ] && [ "$(others_fp)" = "$OTHERS" ] && clean_out "$out" \
@@ -227,7 +215,8 @@ out=$(A apply "$APPLY"); code=$?
 
 # --- 7. The removal gate ---------------------------------------------------------------
 out=$(B check ''); code=$?
-[ $code -ne 0 ] && grep -q '1 in a row so far' <<<"$out" && [ "$(has_ext pg_net)" = 1 ] && ok "removal refuses after only one verified run" || bad "gate with one run (exit $code): $out"
+[ $code -ne 0 ] && grep -q '1 in a row so far' <<<"$out" && [ "$(has_ext pg_net)" = 1 ] && [ "$(finished)" = 1 ] \
+  && ok "removal refuses after only one verified run" || bad "gate with one run (exit $code, $(finished) finished runs): $out"
 wait_finished 3
 out=$(A verify ''); code=$?
 [ $code -eq 0 ] && grep -q 'VERIFIED\. [3-9] consecutive' <<<"$out" && ok "verify: several consecutive verified runs" || bad "verify (exit $code): $out"
