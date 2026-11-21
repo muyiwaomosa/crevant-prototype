@@ -2380,27 +2380,100 @@ describe('photo posts (Build 5.3)', () => {
     expect(f.photo.calls).toEqual([])
   })
 
-  it('posts a photo with no caption: one upload, one post, shown with its description', async () => {
+  it('posts a photo with no caption: one upload, one post, with an accessible fallback name', async () => {
     const f = fakeApi('me', { photos: true })
     renderApp('/app', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose()
     expect(await screen.findByRole('img', { name: "The photo you're adding" })).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'Write a post' }).getAttribute('placeholder')).toBe('Add a caption (optional)')
-    fireEvent.change(screen.getByRole('textbox', { name: 'Photo description (optional)' }), { target: { value: 'A red bicycle by a canal' } })
     const post = screen.getByRole('button', { name: 'Post' })
     expect(post.hasAttribute('disabled')).toBe(false)
     fireEvent.click(post)
     fireEvent.click(post)
-    const photo = await screen.findByRole('img', { name: 'A red bicycle by a canal' })
+    const photo = await screen.findByRole('img', { name: /^Photo by / })
     expect(photo.getAttribute('src')).toMatch(/-feed\.jpg$/)
     expect(f.photo.calls.filter((c) => c === 'upload')).toHaveLength(1)
     expect(f.photo.calls.filter((c) => c.startsWith('publish'))).toHaveLength(1)
     const mine = f.posts.find((p) => p.media)!
     expect(mine.body).toBe('')
+    // No description is asked for or sent.
+    expect(mine.media?.description).toBeNull()
     // No empty caption paragraph.
     const card = screen.getByTestId('post')
     expect(within(card).queryByText((_, el) => el?.tagName === 'P' && el.textContent === '')).toBeNull()
+  })
+
+  it('with a photo: the preview, then Change photo and Remove photo, then one caption field, then Post; no other inputs', async () => {
+    const f = fakeApi('me', { photos: true })
+    renderApp('/app', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
+    choose()
+    const preview = await screen.findByRole('img', { name: "The photo you're adding" })
+    const change = screen.getByRole('button', { name: 'Change photo' })
+    const remove = screen.getByRole('button', { name: 'Remove photo' })
+    const caption = screen.getByRole('textbox', { name: 'Write a post' })
+    const post = screen.getByRole('button', { name: 'Post' })
+    const form = caption.closest('form')!
+    // One writing field only: no description, alt text or tags.
+    expect(within(form).getAllByRole('textbox')).toEqual([caption])
+    expect(within(form).queryByLabelText(/description|alt text|tag/i)).toBeNull()
+    // Add photo becomes Change photo; it isn't shown twice.
+    expect(within(form).queryByRole('button', { name: 'Add photo' })).toBeNull()
+    // Reading and keyboard (Tab) order: preview, Change photo, Remove photo, caption, Post.
+    const order = [preview, change, remove, caption, post]
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+    // Native buttons (keyboard operable), at least 44 px tall for touch.
+    for (const b of [change, remove]) {
+      expect(b.tagName).toBe('BUTTON')
+      expect(b.getAttribute('type')).toBe('button')
+      expect(b.className).toMatch(/\bh-11\b/)
+    }
+  })
+
+  it('changing or removing the photo keeps the caption', async () => {
+    const f = fakeApi('me', { photos: true })
+    renderApp('/app', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
+    choose()
+    await screen.findByRole('img', { name: "The photo you're adding" })
+    const caption = screen.getByRole('textbox', { name: 'Write a post' }) as HTMLTextAreaElement
+    fireEvent.change(caption, { target: { value: 'Morning at the canal' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change photo' }))
+    choose('IMG_0002.HEIC')
+    await screen.findByRole('img', { name: "The photo you're adding" })
+    expect((screen.getByRole('textbox', { name: 'Write a post' }) as HTMLTextAreaElement).value).toBe('Morning at the canal')
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo' }))
+    await waitFor(() => expect(screen.queryByRole('img', { name: "The photo you're adding" })).toBeNull())
+    const after = screen.getByRole('textbox', { name: 'Write a post' }) as HTMLTextAreaElement
+    expect(after.value).toBe('Morning at the canal')
+    // The same field throughout (nothing remounted), back to the text composer.
+    expect(after).toBe(caption)
+    expect(after.getAttribute('placeholder')).not.toBe('Add a caption (optional)')
+    expect(screen.getByRole('button', { name: 'Add photo' })).toBeTruthy()
+    // It still posts as text only.
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    expect(await screen.findByText('Morning at the canal')).toBeTruthy()
+    expect(f.photo.calls.filter((c) => c === 'upload')).toHaveLength(0)
+  })
+
+  it('a saved photo description is the image alt text only, never a visible second caption', async () => {
+    const f = fakeApi()
+    f.follows.add(f.key('me', 'c1'))
+    const id = f.seedPost('c1', 'The caption')
+    f.posts.find((p) => p.id === id)!.media = { kind: 'photo', width: 1600, height: 1067, description: 'A red bicycle by a canal' }
+    renderApp('/app', f.api)
+    expect(await screen.findByRole('img', { name: 'A red bicycle by a canal' })).toBeTruthy()
+    const card = screen.getByTestId('post')
+    expect(within(card).getByText('The caption')).toBeTruthy()
+    expect(within(card).queryByText('A red bicycle by a canal')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open the photo: A red bicycle by a canal' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Photo' })
+    expect(within(dialog).getByRole('img', { name: 'A red bicycle by a canal' })).toBeTruthy()
+    expect(within(dialog).queryByText('A red bicycle by a canal')).toBeNull()
+    expect(dialog.querySelector('figcaption')).toBeNull()
   })
 
   it('a failed publish is retried with the same upload and request id (posted once)', async () => {
