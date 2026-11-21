@@ -168,8 +168,8 @@ jobs:
     # The photo cleanup schedule suites, on their own real local Supabase in
     # Docker so they run alongside the Integration job instead of after it
     # (they were its last 3.5 minutes). Same pinned CLI and images, same
-    # start-up script, a fresh database with every migration applied (as
-    # `supabase start` leaves it); they need nothing the other suites leave
+    # start-up script, a fresh database with every migration applied (as the
+    # start-up leaves it); they need nothing the other suites leave
     # behind. Standard local development keys only, no secrets, never
     # contacts staging: every hosted connection string in them is fake and
     # refused before connecting.

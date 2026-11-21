@@ -87,16 +87,17 @@ else
   echo "FAIL  staging workflow: db push steps=$installs, non-dry-run=$writes, apply-only guard=$guard"; failed=$((failed+1))
 fi
 
-# CI start-up of local Supabase: both jobs go through the shared script, which
+# CI start-up of local Supabase: all three jobs (Integration, Scheduler,
+# Browser) go through the shared script, which
 # reserves every configured port before images are pulled and never retries
 # the tests themselves.
 ci=.github/workflows/ci.yml
 raw_starts=$(grep -c 'supabase start' "$ci" || true)
 script_starts=$(grep -c 'run: scripts/ci/start-local-supabase.sh$' "$ci" || true)
-if [ "$raw_starts" = 0 ] && [ "$script_starts" = 2 ]; then
+if [ "$raw_starts" = 0 ] && [ "$script_starts" = 3 ]; then
   echo "PASS  CI starts local Supabase only through the port-reserving script"; pass=$((pass+1))
 else
-  echo "FAIL  CI start-up: raw supabase start=$raw_starts, script uses=$script_starts (expected 0 and 2)"; failed=$((failed+1))
+  echo "FAIL  CI start-up: raw supabase start=$raw_starts, script uses=$script_starts (expected 0 and 3)"; failed=$((failed+1))
 fi
 config_ports=$(grep -E '^[[:space:]]*(port|shadow_port)[[:space:]]*=' supabase/config.toml | grep -oE '[0-9]+$' | sort -un | paste -sd, -)
 script_ports=$(scripts/ci/start-local-supabase.sh --ports)
