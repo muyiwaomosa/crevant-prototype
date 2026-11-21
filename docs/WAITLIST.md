@@ -182,7 +182,7 @@ Setup, once approved (each step needs approval):
 1. **Turnstile:** create two Cloudflare Turnstile widgets. A test widget for one fixed Preview address, deleted after testing, and a Production widget for the production domain only. Site keys go in Vercel; secret keys go in the function.
 2. **Migration:** apply it to staging through the existing approved migration workflow (`plan`, then `apply`, then `check`).
 3. **Role passwords:** set the two passwords (see "Database access").
-4. **Deploy the function** from the founder's computer with `supabase login` (no access token stored in GitHub): `supabase functions deploy join-waitlist --no-verify-jwt`.
+4. **Deploy the function** from the founder's computer with `supabase login` (no access token stored in GitHub), always naming the project explicitly, never with `--prune` and never as a bare `supabase functions deploy` (which would deploy every function): `supabase functions deploy join-waitlist --no-verify-jwt --project-ref kpudeppgokpjhvaqrprn` for the staging checks, or `--project-ref hmrliwoychnqrbbydorg` for the waitlist project. Never to member Production: there the function's runtime guard keeps it closed without reading any secret, and `node scripts/functions/deploy.mjs delete` removes it (`docs/FUNCTIONS-DEPLOYMENT.md`).
 5. **Function secrets:**
    * `WAITLIST_DB_URL` (the `waitlist_writer` pooler URL)
    * `TURNSTILE_SECRET_KEY`

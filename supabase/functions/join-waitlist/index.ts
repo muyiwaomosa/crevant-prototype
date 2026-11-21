@@ -38,14 +38,23 @@
 // which Supabase provides to every function. It uses only the restricted login.
 //
 // Deploy with JWT verification off (the function checks the origin and
-// Turnstile itself, and the public site sends no key):
-//   supabase functions deploy join-waitlist --no-verify-jwt
+// Turnstile itself, and the public site sends no key), always naming the
+// project explicitly (docs/WAITLIST.md), never to member Production:
+//   supabase functions deploy join-waitlist --no-verify-jwt --project-ref <waitlist or staging ref>
 
 import postgres from 'npm:postgres@3.4.9'
 import { cachedHealthCheck, clientIpFor, handleJoin, parseClientAddressMode, rateKeysForMode, verifyWithCloudflare } from './handler.ts'
 import { checkDatabaseTarget, databaseOptions, databaseReachable, previewWithDatabase, submitWithDatabase, type Sql } from './db.ts'
+import { waitlistProjectAllowed } from '../_shared/policy.ts'
 
-const env = (k: string) => (Deno.env.get(k) ?? '').trim()
+// Runtime project guard (Phase 1B-2): this function may run only on the
+// waitlist project, staging or local Supabase (../_shared/policy.ts, from
+// config/supabase-projects.json). On any other project, member Production
+// above all, it reads no secret at all: every setting below reads as empty,
+// so it stays closed (no database, no Turnstile secret). On the allowed
+// projects nothing below changes.
+const projectAllowed = waitlistProjectAllowed(Deno.env.get('SUPABASE_URL') ?? '')
+const env = (k: string) => (projectAllowed ? (Deno.env.get(k) ?? '') : '').trim()
 const list = (k: string) =>
   env(k)
     .split(',')
@@ -53,6 +62,7 @@ const list = (k: string) =>
     .filter(Boolean)
 
 const configProblem = (problem: string) => console.error(JSON.stringify({ event: 'config', problem }))
+if (!projectAllowed) configProblem('not an approved project for join-waitlist (only the waitlist project, staging or local Supabase); closed, no secret read')
 
 // Build the database client once per instance. Any problem with the URL
 // (wrong login, another project, connection settings, no password, a bad

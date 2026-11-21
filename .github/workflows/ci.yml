@@ -25,6 +25,8 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run check:secrets
+      - name: The Edge Functions' committed project references match config
+        run: node scripts/functions/projects-sync.mjs --check
 
   public-site:
     # The public site build (npm run build:site): landing page, /join and the
@@ -191,6 +193,15 @@ jobs:
       # unattributed runs), removal, and checks 001 to 013 afterwards.
       - name: Photo cleanup apply and pg_net removal workflows on local Supabase (gate, verification, pause)
         run: scripts/db/staging-photo-cleanup-test.sh
+      # Phase 1B-2: the Edge Functions' project and origin policy and the
+      # independent verifier, on the real Edge runtime without a gateway
+      # (staging, a test member Production reference, refused projects,
+      # join-waitlist identical to main where allowed), then authorization
+      # independent of the Origin through the local gateway.
+      - name: Edge Function project isolation, origins and the verifier (Edge runtime)
+        run: scripts/e2e/functions-policy-edge.sh
+      - name: Authorization does not depend on the Origin (local Supabase)
+        run: scripts/e2e/functions-policy-local.sh
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup || true

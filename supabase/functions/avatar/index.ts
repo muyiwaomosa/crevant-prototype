@@ -1,18 +1,21 @@
 // Supabase Edge Function: avatar (Build 5.2b). Profile pictures: upload,
 // remove, signed links, and the moderator's storage cleanup.
 //
-// STAGING ONLY. Deployed by hand by the founder after the database migration
-// (docs/AVATARS.md), with the platform's gateway JWT check off, because the
-// function verifies every caller itself with Supabase Auth (handler.ts),
-// which supports staging's ES256 signing keys and refuses signed-out sessions:
-//   supabase functions deploy avatar --no-verify-jwt --project-ref kpudeppgokpjhvaqrprn
-// It refuses to run in any other hosted project (see PROJECT below), so a
-// deploy to Production would serve nothing.
+// Staging, and member Production once approved and recorded. Deployed only with
+// scripts/functions/deploy.sh (docs/FUNCTIONS-DEPLOYMENT.md), commit pinned,
+// by the founder, after the database migration (docs/AVATARS.md), with the
+// gateway JWT check off, because the function verifies every caller itself
+// with Supabase Auth (handler.ts), which supports ES256 signing keys and
+// refuses signed-out sessions. It refuses to run in any project other than
+// those ../_shared/policy.ts allows (the waitlist project, an unknown one, or
+// member Production while its reference is null), so a deploy there serves
+// nothing. Every response carries X-Splitpost-Build (the deployed commit and
+// source digest, stamped by the deploy script; 'unstamped' otherwise).
 //
 // Environment: only what Supabase provides to every hosted function. No
 // secret is created for it, and none is stored in the repository, GitHub or
 // Vercel:
-//   SUPABASE_URL               the project (checked against PROJECT)
+//   SUPABASE_URL               the project (checked by ../_shared/policy.ts)
 //   SUPABASE_ANON_KEY          fallback project key for the caller's own calls,
 //                              used only if the request carries no publishable
 //                              key (the app always sends staging's publishable key)
@@ -27,25 +30,21 @@
 //   /avatar/urls     body: {"ids": [member ids, at most 100]}
 //   /avatar/cleanup  body: {"plan": <dry run id>, "confirm": <exact phrase>} (moderators)
 import { handle, type Deps, type RpcResult } from './handler.ts'
+import { BUILD_HEADER, BUILD_ID, corsHeaders, memberFunctionRole, refusalReason } from '../_shared/policy.ts'
 
-// The one hosted project this function may serve. Changing it needs a reviewed PR.
-const PROJECT = 'kpudeppgokpjhvaqrprn'
-const HOSTED = `https://${PROJECT}.supabase.co`
-// Local Supabase (development and CI) is also allowed.
-const LOCAL = /^http:\/\/(127\.0\.0\.1|localhost|kong|host\.docker\.internal)(:\d+)?$/
-
-// Browsers may call it only from the member app's Previews and local development.
-const ALLOWED_ORIGIN = /^https:\/\/splitpost-app-[a-z0-9-]+-crevant\.vercel\.app$/
-const LOCAL_ORIGIN = /^http:\/\/(127\.0\.0\.1|localhost):\d+$/
-
+// Which projects this function may serve, and which browser origins may call
+// it there, come only from ../_shared/policy.ts (references generated from
+// config/supabase-projects.json): staging with the member app's Previews,
+// member Production (only once its reference is set) with exactly
+// https://app.splitpost.ca, and local Supabase. Anywhere else it refuses.
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
 const url = env('SUPABASE_URL').replace(/\/+$/, '')
 const anon = env('SUPABASE_ANON_KEY')
 const service = env('SUPABASE_SERVICE_ROLE_KEY')
-const local = LOCAL.test(url)
-const configured = (url === HOSTED || local) && anon !== '' && service !== ''
+const role = memberFunctionRole(url)
+const configured = role !== null && anon !== '' && service !== ''
 const log = (event: string, detail: Record<string, string | number | boolean> = {}) => console.log(JSON.stringify({ fn: 'avatar', event, ...detail }))
-if (!configured) log('refusing_to_run', { reason: url === '' ? 'no SUPABASE_URL' : url === HOSTED || local ? 'missing keys' : 'not the staging project' })
+if (!configured) log('refusing_to_run', { reason: role === null ? refusalReason(url) : 'missing keys' })
 
 // Supabase Auth checks the token: signature (current ES256 key or the previous
 // HS256 key), expiry, and that its session still exists. Only a signed-in
@@ -136,22 +135,9 @@ const deps: Deps = {
   log,
 }
 
-function cors(origin: string | null): Record<string, string> {
-  const allowed = origin && (ALLOWED_ORIGIN.test(origin) || (local && LOCAL_ORIGIN.test(origin))) ? origin : null
-  return allowed
-    ? {
-        'Access-Control-Allow-Origin': allowed,
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
-        'Access-Control-Max-Age': '600',
-        Vary: 'Origin',
-      }
-    : { Vary: 'Origin' }
-}
-
 Deno.serve(async (req) => {
-  const headers = cors(req.headers.get('origin'))
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers })
+  const headers: Record<string, string> = { ...corsHeaders(role, req.headers.get('origin')), [BUILD_HEADER]: BUILD_ID }
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...headers, 'X-Content-Type-Options': 'nosniff' } })
   const respond = (res: Response) => {
     for (const [k, v] of Object.entries(headers)) res.headers.set(k, v)
     res.headers.set('X-Content-Type-Options', 'nosniff')

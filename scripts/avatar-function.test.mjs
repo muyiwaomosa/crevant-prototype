@@ -35,19 +35,23 @@ test('the vendored jpeg-js is the reviewed 0.4.4 code plus one export line', () 
 test('no remote or npm import: nothing is downloaded at deploy or run time', () => {
   for (const f of ['index.ts', 'handler.ts', 'image.ts']) {
     const imports = [...code(read(`${dir}/${f}`)).matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1])
-    for (const i of imports) assert.ok(i.startsWith('./'), `${f} imports ${i}`)
+    // Local files, plus the shared project and origin policy (Phase 1B-2), nothing else.
+    for (const i of imports) assert.ok(i.startsWith('./') || i === '../_shared/policy.ts', `${f} imports ${i}`)
   }
 })
 
-test('the entry point serves only the staging project, with the provided keys only', () => {
+test('the entry point serves only the projects the shared policy allows, with the provided keys only', () => {
   const index = code(read(`${dir}/index.ts`))
-  assert.match(index, /const PROJECT = 'kpudeppgokpjhvaqrprn'/)
-  assert.ok(!/hmrliwoychnqrbbydorg/.test(index), 'no reference to the Production project')
-  assert.match(index, /const configured = \(url === HOSTED \|\| local\) && anon !== '' && service !== ''/)
+  // Phase 1B-2: no project reference or origin of its own; both come from ../_shared/policy.ts.
+  assert.ok(!/'[a-z0-9]{20}'/.test(index), 'no project reference in the entry point')
+  assert.ok(!/vercel\.app|splitpost\.ca/.test(index), 'no origin in the entry point')
+  assert.match(index, /const role = memberFunctionRole\(url\)/)
+  assert.match(index, /const configured = role !== null && anon !== '' && service !== ''/)
+  assert.match(index, /corsHeaders\(role, req\.headers\.get\('origin'\)\)/)
+  assert.match(index, /\[BUILD_HEADER\]: BUILD_ID/)
   assert.match(index, /if \(!configured\) \{\s*return respond\(new Response\(JSON\.stringify\(\{ error: 'unavailable' \}\), \{ status: 503/)
   const envs = [...index.matchAll(/env\('([A-Z_]+)'\)/g)].map((m) => m[1]).sort()
   assert.deepEqual(envs, ['SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL'], 'only the keys Supabase provides to every function')
-  assert.match(index, /ALLOWED_ORIGIN = \/\^https:\\\/\\\/splitpost-app-\[a-z0-9-\]\+-crevant\\\.vercel\\\.app\$\//)
   // The gateway check is off ON PURPOSE: the function verifies every caller with Supabase Auth.
   assert.match(read('supabase/config.toml'), /\[functions\.avatar\]\nverify_jwt = false/)
   assert.match(index, /fetch\(`\$\{url\}\/auth\/v1\/user`, \{ headers: \{ apikey: key \?\? anon, Authorization: `Bearer \$\{token\}` \} \}\)/)

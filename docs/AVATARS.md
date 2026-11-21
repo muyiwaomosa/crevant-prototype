@@ -93,14 +93,17 @@ Profile > Moderation > Picture storage:
 3. **Same workflow, `apply`** (staging approval): applies it and runs checks
    001 to 010, including "one private avatars bucket (JPEG only, 200 KB) and
    no storage policy for members or visitors".
-4. **Deploy the function from your own computer** (staging only):
+4. **Deploy the function from your own computer** with the commit-pinned
+   deploy script (Phase 1B-2, `docs/FUNCTIONS-DEPLOYMENT.md`), never a raw
+   `supabase functions deploy`:
    ```bash
    supabase login
    ```
    ```bash
-   supabase functions deploy avatar --no-verify-jwt --project-ref kpudeppgokpjhvaqrprn
+   node scripts/functions/deploy.mjs deploy --target staging --function avatar --commit <full sha> --operator <your label> --confirm "DEPLOY avatar TO kpudeppgokpjhvaqrprn"
    ```
-   `--no-verify-jwt` is required (it matches `supabase/config.toml`): the
+   Then run the **Verify Edge Functions** workflow. The script passes
+   `--no-verify-jwt`, which is required (it matches `supabase/config.toml`): the
    gateway's check doesn't handle staging's ES256 keys, and the function
    verifies every caller with Supabase Auth itself. No secret is created. In the dashboard (Edge
    Functions > Secrets), confirm `SUPABASE_URL`, `SUPABASE_ANON_KEY` and

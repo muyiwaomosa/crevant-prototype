@@ -49,6 +49,7 @@ docker run -d --name crevant-waitlist-journey --network host "${EXTRA[@]}" \
   -e WAITLIST_RATE_SALT="$SALT" -e SUPABASE_URL="http://127.0.0.1:54321" -e WAITLIST_TRUSTED_PROXY_HOPS=1 \
   -e TEST_ORIGIN="$HARNESS_URL" -e TEST_HOSTNAME=127.0.0.1 \
   -v "$PWD/supabase/functions/join-waitlist:/home/deno/functions/join-waitlist:ro" \
+  -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
   -v "$PWD/e2e/edge/waitlist-e2e:/home/deno/functions/waitlist-e2e:ro" \
   "$EDGE_IMAGE" start --main-service /home/deno/functions/waitlist-e2e --ip 127.0.0.1 --port "$EDGE_PORT" >/dev/null
 for _ in $(seq 1 90); do curl -fs "${ENDPOINT}__config" >/dev/null 2>&1 && break; sleep 2; done

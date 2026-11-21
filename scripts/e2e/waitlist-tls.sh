@@ -101,6 +101,7 @@ if [ -n "${EDGE_CA_FILE:-}" ]; then EXTRA+=(-v "${EDGE_CA_FILE}:/extra-ca.crt:ro
 docker run -d --name crevant-tls-probe --network host "${EXTRA[@]}" \
   --add-host db.tls.test:127.0.0.1 --add-host other.tls.test:127.0.0.1 \
   -v "$PWD/supabase/functions/join-waitlist:/home/deno/functions/join-waitlist:ro" \
+  -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
   -v "$PWD/e2e/edge/tls-probe:/home/deno/functions/tls-probe:ro" \
   "$EDGE_IMAGE" start --main-service /home/deno/functions/tls-probe --ip 127.0.0.1 --port "$PROBE_PORT" >/dev/null
 
