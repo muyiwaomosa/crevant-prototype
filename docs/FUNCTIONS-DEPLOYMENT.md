@@ -98,19 +98,29 @@ script refuses every option it doesn't know).
 
 | Result | Checked by | Pass means |
 | --- | --- | --- |
-| A. Deployment | the deploy script, after deploying | the function is listed ACTIVE, with a new version, the gateway JWT check off, and nothing unexpected beside it. It records the version and the bundle hash (`ezbr_sha256`) |
+| A. Deployment | the deploy script, after deploying | the function is listed ACTIVE, with a new version, the gateway JWT check off, and nothing unexpected beside it; and the public endpoint is then seen **serving exactly the new build** (`X-Splitpost-Build`), so the recorded deployment is the one answering, not only what the CLI reported. It records the CLI's version number and bundle hash (`ezbr_sha256`) |
 | B. Endpoint behaviour | `verify-functions.yml` (independent, no secrets) | CORS for the approved origin only; no CORS header for any other origin, on preflight and POST; 401 without a session, with a malformed token, and from the approved origin (CORS grants nothing); the drain refuses without its key; no 503; `nosniff`; on member Production join-waitlist (and post-media unless approved) answer 404 |
-| C. Deployed source | C1: the deploy script downloads the function and compares every file with the export. C2: the verify workflow recomputes the digest from the commit and compares it with `X-Splitpost-Build` | C1 `match`; C2 equal |
+| C. Deployed source | C1 (required): the deploy script downloads the deployed function and compares it **exactly** with the approved commit. C2: the verify workflow recomputes the digest from the commit and compares it with `X-Splitpost-Build` | C1 exact match; C2 equal |
 
-The deploy script reports C1 as `match`, `differs` (a failure) or
-`unavailable`. **Limitation:** whether `supabase functions download` (CLI
-2.122.1, `--use-api`) returns byte-identical files can only be confirmed on
-a real project; until the rehearsal shows it does, C1 `unavailable` is
-expected and is never counted as a pass. C2 always runs: it proves which
-commit and source the deployed code reports, which catches a wrong commit,
-function or stale deploy, but not a deliberate forgery by someone with
-deploy access. The recorded bundle hash lets a later `functions list` show
-whether the function changed without a deploy.
+**C1 is exact and required.** The expected files are exactly the ones the
+deployed function is built from: its `index.ts` and every file it imports,
+transitively (`importClosure` in `scripts/functions/source-digest.mjs`), as
+exported and stamped. Every one must be in the download byte for byte; any
+other downloaded file must be byte-identical to the commit too. A missing,
+different or extra file, an empty download, or a download the CLI can't
+perform all fail the deployment ("failed verification"). Whether
+`supabase functions download` (CLI 2.122.1, `--use-api`) reproduces the
+files exactly is confirmed in the disposable-project rehearsal; if it
+doesn't, deployments fail closed until that is resolved in a reviewed change.
+
+**Deployment version evidence.** The CLI's version number is recorded but
+is self-reported by the founder's computer, so it is never trusted on its
+own. The independent evidence is the build actually served: the verify
+workflow, on GitHub's runner, records what it observed as a run annotation
+(`Verified deployment: target, ref, function, mode, commit, observed_build`),
+only when every check passed. A rollback requires that runner-observed
+build to equal the ledger entry's build, for the same target, project,
+function and commit.
 
 ### Deployment states
 
@@ -147,8 +157,10 @@ node scripts/functions/deploy.mjs rollback --target <t> --function <f> --commit 
 
 Accepted only when **both**: the commit has a founder-approved entry for
 exactly this target, project, function and commit in the ledger **on main**;
-and that entry's verification run succeeded, was yours, and its title matches
-the entry's target, function, commit and version exactly. A ledger that fails
+and that entry's verification run succeeded, was yours, its title matches the
+entry's target, function, commit and version exactly, and its one
+runner-recorded "Verified deployment" annotation shows the same target,
+project, function, commit and **observed build** as the entry. A ledger that fails
 validation refuses every rollback. All deploy checks also apply (project
 identity, phrase, a database check run at current main for member Production,
 scope, CLI), and the export is of the rollback commit only. The result is
@@ -181,7 +193,7 @@ approved deploy.
 ## Residual risks
 
 * Your Supabase CLI login can deploy anything to any project your account can reach, by hand, `--prune` included. The script prevents mistakes, not a deliberate manual command.
-* C1 source download fidelity is unconfirmed until the rehearsal; C2 is what the deployed code reports about itself.
+* C1 (exact source comparison) is required; if the pinned CLI's download can't reproduce the files exactly, deployments fail closed until fixed (confirmed in the rehearsal).
 * `X-Splitpost-Build` exposes the deployed commit and a source digest to any caller.
 * Emergency deletion skips the approval and database checks by design.
 * Rollback eligibility relies on GitHub run history (deleting old runs removes rollback targets) and on the ledger on main.

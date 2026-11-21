@@ -44,7 +44,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { memberProductionProblems, NAME, REF, REGION } from '../supabase-projects.mjs'
-import { sourceDigest } from './source-digest.mjs'
+import { importClosure, sourceDigest } from './source-digest.mjs'
 import { approvedDeployment, ledgerProblems } from './ledger.mjs'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
@@ -171,24 +171,63 @@ function walk(dir) {
     return statSync(p).isDirectory() ? walk(p) : [p]
   })
 }
-/** Compares a downloaded function with the export: 'match', 'differs' or 'unavailable'. */
+/**
+ * Exact source comparison (C1). The expected files are exactly the ones the
+ * deployed function is built from: its index.ts and every file it imports,
+ * transitively (importClosure), as exported and stamped. Every one must be in
+ * the download, byte for byte; any other downloaded file must be byte-identical
+ * to the export too. Returns { result: 'match' | 'differs' | 'unavailable', problems }.
+ */
 export function compareSource(exportRoot, downloadRoot, fn) {
-  const files = (root) => {
-    const base = join(root, 'supabase', 'functions')
-    const out = {}
-    for (const p of [...walk(join(base, fn)), ...walk(join(base, '_shared'))]) {
-      const rel = relative(base, p).split(sep).join('/')
-      if (!rel.endsWith('.test.ts')) out[rel] = sha256(readFileSync(p))
-    }
-    return out
+  const base = (root) => join(root, 'supabase', 'functions')
+  const got = {}
+  for (const p of walk(base(downloadRoot))) got[relative(base(downloadRoot), p).split(sep).join('/')] = sha256(readFileSync(p))
+  if (Object.keys(got).length === 0) return { result: 'unavailable', problems: ['the download returned no files'] }
+  const hashOf = (rel) => { try { return sha256(readFileSync(join(base(exportRoot), rel))) } catch { return null } }
+  const problems = []
+  for (const rel of importClosure(exportRoot, fn)) {
+    if (!(rel in got)) problems.push(`missing from the deployment: ${rel}`)
+    else if (got[rel] !== hashOf(rel)) problems.push(`differs from the approved commit: ${rel}`)
   }
-  const got = files(downloadRoot)
-  if (Object.keys(got).length === 0) return 'unavailable'
-  const want = files(exportRoot)
-  const used = Object.keys(got)
-  // Every downloaded file must be byte-identical to the export, and the function's own files all present.
-  const same = used.every((k) => want[k] === got[k]) && Object.keys(want).filter((k) => k.startsWith(`${fn}/`)).every((k) => got[k] === want[k])
-  return same ? 'match' : 'differs'
+  for (const rel of Object.keys(got)) {
+    const want = hashOf(rel)
+    if (want === null) problems.push(`not in the approved commit: ${rel}`)
+    else if (got[rel] !== want && !problems.some((x) => x.endsWith(rel))) problems.push(`differs from the approved commit: ${rel}`)
+  }
+  return { result: problems.length ? 'differs' : 'match', problems }
+}
+
+/**
+ * Waits until the public endpoint serves this build (X-Splitpost-Build), so the
+ * recorded deployment is the one actually answering, not only what the CLI
+ * reported. An unauthenticated POST: refused (401), changes nothing.
+ */
+export async function servedBuild(baseUrl, fn, route, build, { tries = 30, waitMs = 3000, fetchImpl = fetch } = {}) {
+  let last = null
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetchImpl(`${baseUrl}/${fn}/${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      await r.body?.cancel?.()
+      last = r.headers.get('x-splitpost-build')
+      if (last === build) return { ok: true, served: last }
+    } catch {
+      last = null
+    }
+    if (i + 1 < tries) await new Promise((res) => setTimeout(res, waitMs))
+  }
+  return { ok: false, served: last }
+}
+
+/** The runner-observed evidence a verification run recorded (its "Verified deployment" annotation). */
+export function checkVerifyEvidence(annotations, entry, target) {
+  if (!Array.isArray(annotations)) refuse('the verification run\'s evidence could not be read')
+  const notes = annotations.filter((a) => a.title === 'Verified deployment' && a.annotation_level === 'notice')
+  if (notes.length !== 1) refuse(`the verification run has ${notes.length} "Verified deployment" record(s) (exactly one expected)`)
+  const kv = Object.fromEntries(String(notes[0].message).trim().split(/\s+/).map((x) => x.split('=')).filter((x) => x.length === 2))
+  const want = { target, ref: entry.ref, function: entry.function, mode: 'deployed', commit: entry.commit, observed_build: entry.build }
+  for (const [k, v] of Object.entries(want)) {
+    if (kv[k] !== v) refuse(`the verification run observed ${k}=${kv[k] ?? 'nothing'}, not ${v}: it is not evidence for this deployment`)
+  }
 }
 
 function evidence(row) {
@@ -197,6 +236,16 @@ function evidence(row) {
   const line = `| ${new Date().toISOString()} | ${row.map(clean).join(' | ')} |\n`
   appendFileSync(path, line)
   return line
+}
+
+// The public functions address. Only the script's own tests (origin not GitHub) may point it at a local stand-in.
+function baseUrl(ref) {
+  const test = process.env.FUNCTIONS_TEST_BASE_URL
+  if (test) {
+    if (/github\.com/.test(git('remote', 'get-url', 'origin')) || !/^http:\/\/127\.0\.0\.1:\d+$/.test(test)) refuse('FUNCTIONS_TEST_BASE_URL is for the script\'s own tests only')
+    return test
+  }
+  return `https://${ref}.supabase.co/functions/v1`
 }
 
 function repoSlug() {
@@ -220,7 +269,7 @@ function label(v, what) {
   return v
 }
 
-export function main(argv) {
+export async function main(argv) {
   const o = parseArgs(argv)
   const operator = label(o.operator, '--operator')
   if (o.action !== 'deploy' && (typeof o.reason !== 'string' || o.reason.trim().length < 5 || o.reason.length > 300)) refuse('--reason (5 to 300 characters) is required')
@@ -284,6 +333,12 @@ export function main(argv) {
     if (!entry) refuse(`${commit.slice(0, 12)} has no founder-approved ${fn} deployment on ${o.target} (${p.ref}) in config/function-deployments.json on main; only a recorded, verified deployment can be rolled back to`)
     const vrun = json(run('gh', ['api', `repos/${owner.slug}/actions/runs/${entry.verifyRunId}`]), 'the verification run')
     checkVerifyRun(vrun, entry, o.target, { owner: owner.login })
+    // Independent evidence: what GitHub's runner itself observed being served.
+    const vjobs = json(run('gh', ['api', `repos/${owner.slug}/actions/runs/${entry.verifyRunId}/jobs`]), 'the verification jobs')
+    const job = (vjobs.jobs ?? [])[0]
+    if (!job || (vjobs.jobs ?? []).length !== 1) refuse('the verification run does not have exactly one job')
+    const notes = json(run('gh', ['api', `repos/${owner.slug}/check-runs/${job.id}/annotations`]), 'the verification evidence')
+    checkVerifyEvidence(notes, entry, o.target)
   }
   // The commit's own references must serve this project.
   const commitProjects = json(git('show', `${commit}:config/supabase-projects.json`), 'the commit config')
@@ -336,18 +391,23 @@ export function main(argv) {
       refuse(`deployed, but failed verification: ${problems.join('; ')}. Roll back to an approved deployment or delete it.`)
     }
 
-    // Source download comparison (C1): reported, never assumed.
+    // Exact source comparison (C1): required. A download that is missing,
+    // incomplete or different means the deployment is not verified.
     const dl = join(tmp, 'download')
     mkdirSync(join(dl, 'supabase'), { recursive: true })
     const got = run('supabase', ['functions', 'download', fn, '--project-ref', p.ref, '--use-api', '--workdir', dl], { allowFail: true })
-    const source = got === null ? 'unavailable' : compareSource(out, dl, fn)
-    if (source === 'differs') {
-      evidence([`${o.action} FAILED VERIFICATION`, o.target, p.ref, fn, commit, `v${f.version}`, operator, o.reason ?? '', 'downloaded source differs from the approved commit'])
-      refuse('deployed, but the downloaded source differs from the approved commit. Roll back to an approved deployment or delete it.')
+    const source = got === null ? { result: 'unavailable', problems: ['supabase functions download failed'] } : compareSource(out, dl, fn)
+    const failed = (why) => {
+      evidence([`${o.action} FAILED VERIFICATION`, o.target, p.ref, fn, commit, `v${f.version}`, operator, o.reason ?? '', why])
+      refuse(`deployed, but failed verification: ${why}. Roll back to an approved deployment or delete it.`)
     }
-    const summary = { state: 'deployed, unverified', target: o.target, ref: p.ref, function: fn, commit, version: f.version, build, bundle: f.ezbr_sha256 ?? null, sourceDownload: source }
-    evidence([`${o.action}ed, unverified`, o.target, p.ref, fn, commit, `v${f.version}`, operator, o.reason ?? '', `bundle ${f.ezbr_sha256 ?? 'n/a'}; source download ${source}`])
-    summary.next = `Run verify-functions.yml with target ${o.target}, function ${fn}, mode deployed, expected_commit ${commit}, deployed_version ${f.version}. Only after it passes, record the approval in config/function-deployments.json in a reviewed PR (build ${build}).`
+    if (source.result !== 'match') failed(`the deployed source could not be compared exactly with the approved commit (${source.result}: ${source.problems.slice(0, 3).join('; ')})`)
+    // The public endpoint must now serve this exact build.
+    const served = await servedBuild(baseUrl(p.ref), fn, fn === 'avatar' ? 'upload' : 'photo', build, process.env.FUNCTIONS_TEST_BASE_URL ? { tries: 3, waitMs: 100 } : {})
+    if (!served.ok) failed(`the endpoint serves build ${served.served ?? 'none'}, not ${build}`)
+    const summary = { state: 'deployed, unverified', target: o.target, ref: p.ref, function: fn, commit, cliVersion: f.version, build, served: served.served, bundle: f.ezbr_sha256 ?? null, sourceComparison: 'exact match' }
+    evidence([`${o.action}ed, unverified`, o.target, p.ref, fn, commit, `v${f.version} (CLI)`, operator, o.reason ?? '', `served build ${served.served}; bundle ${f.ezbr_sha256 ?? 'n/a'}; source exact match`])
+    summary.next = `Run verify-functions.yml with target ${o.target}, function ${fn}, mode deployed, expected_commit ${commit}, deployed_version ${f.version}. Only after it passes, record the approval in config/function-deployments.json in a reviewed PR (build ${build}, verifyRunId of that run).`
     return summary
   } finally {
     rmSync(tmp, { recursive: true, force: true })
@@ -357,7 +417,7 @@ export function main(argv) {
 // Run directly (not when imported by the tests), on Linux, macOS or Windows paths.
 if (/[\\/]scripts[\\/]functions[\\/]deploy\.mjs$/.test(process.argv[1] ?? '')) {
   try {
-    const r = main(process.argv.slice(2))
+    const r = await main(process.argv.slice(2))
     console.log(JSON.stringify(r, null, 2))
   } catch (e) {
     if (e instanceof Refused) {

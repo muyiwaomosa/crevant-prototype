@@ -99,6 +99,13 @@ for fn in avatar post-media; do
   P=$(start "fnpol-$fn-staging" "$S" "$fn" "https://$STAGING.supabase.co")
   verify pass "$fn as staging: the verifier passes (Preview origin only, no CORS for others, 401 without a session, build stamp)" '' \
     --target staging --function "$fn" --mode deployed --commit "$COMMIT" --source-root "$S" --base-url "http://127.0.0.1:$P"
+  # On GitHub, a passing run records what the runner itself observed being served.
+  digest=$(node scripts/functions/source-digest.mjs "$S" "$fn")
+  note=$(GITHUB_ACTIONS=true node scripts/functions/verify.mjs --target staging --function "$fn" --mode deployed --commit "$COMMIT" --source-root "$S" --base-url "http://127.0.0.1:$P" 2>&1 | grep '^::notice title=Verified deployment::' || true)
+  if [ "$note" = "::notice title=Verified deployment::target=staging ref=$STAGING function=$fn mode=deployed commit=$COMMIT observed_build=$COMMIT.$digest" ]; then ok "$fn: a passing verification records the runner-observed build"
+  else bad "$fn: verification evidence line: $note"; fi
+  note=$(GITHUB_ACTIONS=true node scripts/functions/verify.mjs --target staging --function "$fn" --mode deployed --commit "$OTHER_COMMIT" --source-root "$S" --base-url "http://127.0.0.1:$P" 2>&1 | grep -c '^::notice title=Verified deployment' || true)
+  if [ "$note" = 0 ]; then ok "$fn: a failing verification records no evidence"; else bad "$fn: a failing verification recorded evidence"; fi
   # 2. The verifier catches mismatched build metadata and source.
   verify fail "$fn: a stamp for another commit is caught" 'build:' \
     --target staging --function "$fn" --mode deployed --commit "$OTHER_COMMIT" --source-root "$S" --base-url "http://127.0.0.1:$P"

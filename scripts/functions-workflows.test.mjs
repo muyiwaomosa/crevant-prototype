@@ -9,7 +9,8 @@ import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ledgerProblems } from './functions/ledger.mjs'
-import { originsFor, ROUTES } from './functions/verify.mjs'
+import { evidenceAnnotation, originsFor, ROUTES } from './functions/verify.mjs'
+import { checkVerifyEvidence } from './functions/deploy.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const read = (p) => readFileSync(join(root, p), 'utf8')
@@ -111,4 +112,16 @@ test('the deploy script, the verifier, the policy and the database workflow agre
     const handler = read(`supabase/functions/${fn}/handler.ts`)
     for (const r of ROUTES[fn]) assert.ok(handler.includes(`action === '${r}'`), `${fn} has route ${r}`)
   }
+})
+
+test('the verifier\'s evidence line is exactly what the rollback check reads (round trip)', () => {
+  const commit = 'a'.repeat(40)
+  const build = `${commit}.${'b'.repeat(64)}`
+  const line = evidenceAnnotation({ target: 'member-production', function: 'avatar', mode: 'deployed', commit }, { ref: 'membersprodtestrefab', observedBuild: build })
+  const m = /^::notice title=Verified deployment::(.*)$/.exec(line)
+  assert.ok(m, line)
+  const entry = { ref: 'membersprodtestrefab', function: 'avatar', commit, build }
+  assert.doesNotThrow(() => checkVerifyEvidence([{ title: 'Verified deployment', annotation_level: 'notice', message: m[1] }], entry, 'member-production'))
+  const other = evidenceAnnotation({ target: 'member-production', function: 'avatar', mode: 'deployed', commit }, { ref: 'membersprodtestrefab', observedBuild: `${commit}.${'c'.repeat(64)}` })
+  assert.throws(() => checkVerifyEvidence([{ title: 'Verified deployment', annotation_level: 'notice', message: other.split('::').pop() }], entry, 'member-production'), /observed_build/)
 })

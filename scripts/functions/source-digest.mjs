@@ -49,3 +49,31 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   console.log(sourceDigest(root, name))
 }
+
+/**
+ * The exact files a deployed function is built from: supabase/functions/<name>/index.ts
+ * and every file it imports, transitively, through relative imports
+ * (paths relative to supabase/functions). A relative import that points
+ * outside supabase/functions, or at a missing file, is an error.
+ */
+export function importClosure(root, name) {
+  const base = join(root, 'supabase', 'functions')
+  const seen = new Set()
+  const visit = (rel) => {
+    if (seen.has(rel)) return
+    let text
+    try { text = readFileSync(join(base, rel), 'utf8') } catch { throw new Error(`${rel} is imported but missing`) }
+    seen.add(rel)
+    const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    for (const m of code.matchAll(/(?:from|import)\s*['"](\.{1,2}\/[^'"]+)['"]/g)) {
+      const parts = rel.split('/').slice(0, -1)
+      for (const seg of m[1].split('/')) {
+        if (seg === '..') { if (!parts.length) throw new Error(`${rel} imports outside supabase/functions`); parts.pop() }
+        else if (seg !== '.') parts.push(seg)
+      }
+      visit(parts.join('/'))
+    }
+  }
+  visit(`${name}/index.ts`)
+  return [...seen].sort()
+}

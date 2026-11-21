@@ -96,7 +96,11 @@ export async function verify(o, fetchImpl = fetch) {
   if (!o['source-root']) throw new Error('--source-root (an export of the expected commit) is required')
   const expectedBuild = `${o.commit}.${sourceDigest(o['source-root'], o.function)}`
   const { approved, disallowed } = originsFor(o.target)
-  const buildOk = (r) => r.headers.get('x-splitpost-build') === expectedBuild
+  const observed = new Set()
+  const buildOk = (r) => {
+    observed.add(r.headers.get('x-splitpost-build') ?? 'none')
+    return r.headers.get('x-splitpost-build') === expectedBuild
+  }
   const common = (r, what) => {
     check(r.status !== 503, 'auth', `${what}: not refusing to run (got ${r.status}: a 503 means the wrong project or missing keys)`)
     check(buildOk(r), 'build', `${what}: build stamp is ${expectedBuild.slice(0, 12)}... (got ${r.headers.get('x-splitpost-build') ?? 'none'})`)
@@ -155,14 +159,28 @@ export async function verify(o, fetchImpl = fetch) {
       check(r.status === 404, 'absence', `${fn} is not deployed on member Production (got ${r.status})`)
     }
   }
-  return { ref, failures, passes }
+  // Exactly one build must have been served throughout (no mix of versions).
+  check(observed.size === 1 && observed.has(expectedBuild), 'build', `one build served throughout (${[...observed].map((b) => b.slice(0, 12)).join(', ')})`)
+  return { ref, failures, passes, observedBuild: observed.size === 1 ? [...observed][0] : null }
+}
+
+/**
+ * The evidence line a passing GitHub run records (as a run annotation): what
+ * the runner itself observed, independently of the founder's computer. The
+ * rollback check in scripts/functions/deploy.mjs requires it to match the ledger.
+ */
+export function evidenceAnnotation(o, r) {
+  const observed = o.mode === 'removed' ? 'none' : r.observedBuild
+  return `::notice title=Verified deployment::target=${o.target} ref=${r.ref} function=${o.function} mode=${o.mode} commit=${o.commit} observed_build=${observed}`
 }
 
 if (/[\\/]scripts[\\/]functions[\\/]verify\.mjs$/.test(process.argv[1] ?? '')) {
   try {
-    const r = await verify(parse(process.argv.slice(2)))
+    const o = parse(process.argv.slice(2))
+    const r = await verify(o)
     for (const f of r.failures) console.log(`FAIL  ${f}`)
     console.log(`Verification of ${r.ref}: ${r.passes.length} passed, ${r.failures.length} failed`)
+    if (!r.failures.length && process.env.GITHUB_ACTIONS === 'true') console.log(evidenceAnnotation(o, r))
     process.exit(r.failures.length ? 1 : 0)
   } catch (e) {
     console.error(`REFUSED: ${e.message}`)

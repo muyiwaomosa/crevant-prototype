@@ -3,11 +3,12 @@
 // that record every call. Nothing here reaches a real project or GitHub.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { checkDbRun, checkProjectIdentity, checkVerifyRun, phraseFor, targetProject } from './functions/deploy.mjs'
+import { checkDbRun, checkProjectIdentity, checkVerifyEvidence, checkVerifyRun, compareSource, phraseFor, servedBuild, targetProject } from './functions/deploy.mjs'
+import { importClosure } from './functions/source-digest.mjs'
 import { ledgerProblems } from './functions/ledger.mjs'
 
 const SRC = new URL('..', import.meta.url).pathname
@@ -47,6 +48,9 @@ if (a[0] === 'functions' && a[1] === 'download') {
   const from = path.join(process.env.FAKE_DIR, 'deployed', ref, 'functions')
   for (const d of [name, '_shared']) fs.cpSync(path.join(from, d), path.join(wd, 'supabase/functions', d), { recursive: true })
   if (st.download === 'differs') fs.appendFileSync(path.join(wd, 'supabase/functions', name, 'index.ts'), '\\n// changed\\n')
+  if (st.download === 'missing') fs.rmSync(path.join(wd, 'supabase/functions', name, 'handler.ts'))
+  if (st.download === 'extra') fs.writeFileSync(path.join(wd, 'supabase/functions', name, 'extra.ts'), 'export const x = 1\\n')
+  if (st.download === 'empty') fs.rmSync(path.join(wd, 'supabase/functions'), { recursive: true, force: true })
   process.exit(0)
 }
 if (a[0] === 'functions' && a[1] === 'delete') {
@@ -62,6 +66,21 @@ const a = process.argv.slice(2)
 fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(['gh', ...a]) + '\\n')
 if (a[0] === 'api' && st.gh[a[1]] !== undefined) { console.log(JSON.stringify(st.gh[a[1]])); process.exit(0) }
 console.error('HTTP 404'); process.exit(1)
+`
+
+// A stand-in for the public function endpoint: answers with the build the fake
+// CLI last deployed (or state.served, to simulate an old version still serving).
+const FAKE_ENDPOINT = `
+const fs = require('fs'), http = require('http')
+const server = http.createServer((req, res) => {
+  let st = {}
+  try { st = JSON.parse(fs.readFileSync(process.env.FAKE_STATE, 'utf8')) } catch {}
+  const m = /BUILD = '([^']*)'/.exec(st.lastBuild || '')
+  const build = st.served !== undefined ? st.served : (m ? m[1] : 'none')
+  res.writeHead(401, { 'Content-Type': 'application/json', 'X-Splitpost-Build': build })
+  res.end('{"error":"not_signed_in"}')
+})
+server.listen(0, '127.0.0.1', () => { fs.writeFileSync(process.env.FAKE_PORT_FILE, String(server.address().port)) })
 `
 
 /** A throwaway repository: main has (optionally) a member Production config; returns helpers. */
@@ -93,6 +112,11 @@ function setup({ member = true, postMediaApproved = false } = {}) {
   mkdirSync(bin)
   writeFileSync(join(bin, 'supabase'), FAKE_SUPABASE); chmodSync(join(bin, 'supabase'), 0o755)
   writeFileSync(join(bin, 'gh'), FAKE_GH); chmodSync(join(bin, 'gh'), 0o755)
+  writeFileSync(join(dir, 'endpoint.cjs'), FAKE_ENDPOINT)
+  writeFileSync(join(dir, 'state.json'), '{}')
+  const endpoint = spawn('node', [join(dir, 'endpoint.cjs')], { env: { ...process.env, FAKE_STATE: join(dir, 'state.json'), FAKE_PORT_FILE: join(dir, 'port') }, stdio: 'ignore' })
+  for (let i = 0; i < 200 && !existsSync(join(dir, 'port')); i++) execFileSync('sleep', ['0.05'])
+  const port = readFileSync(join(dir, 'port'), 'utf8')
   const head = () => g('rev-parse', 'HEAD')
   const state = (patch = {}) => {
     const commit = head()
@@ -119,14 +143,14 @@ function setup({ member = true, postMediaApproved = false } = {}) {
     writeFileSync(join(dir, 'log'), '')
     const r = spawnSync('node', [join(repo, 'scripts/functions/deploy.mjs'), ...args], {
       cwd: repo, encoding: 'utf8',
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_STATE: join(dir, 'state.json'), FAKE_LOG: join(dir, 'log'), FAKE_DIR: dir, FUNCTIONS_TEST_GITHUB_REPO: 'test/repo' },
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_STATE: join(dir, 'state.json'), FAKE_LOG: join(dir, 'log'), FAKE_DIR: dir, FUNCTIONS_TEST_GITHUB_REPO: 'test/repo', FUNCTIONS_TEST_BASE_URL: `http://127.0.0.1:${port}` },
     })
     const calls = readFileSync(join(dir, 'log'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
     return { code: r.status, out: r.stdout + r.stderr, calls, deploys: calls.filter((c) => c[0] === 'supabase' && c[1] === 'functions' && c[2] === 'deploy') }
   }
   const st = () => JSON.parse(readFileSync(join(dir, 'state.json'), 'utf8'))
   const evidence = () => readFileSync(join(repo, 'docs/function-evidence-log.md'), 'utf8')
-  return { dir, repo, g, head, state, run, st, evidence, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+  return { dir, repo, g, head, state, run, st, evidence, cleanup: () => { endpoint.kill(); rmSync(dir, { recursive: true, force: true }) } }
 }
 function dbRun(commit, over = {}) {
   return { id: 500, path: '.github/workflows/deploy-db-members-production.yml', event: 'workflow_dispatch', head_branch: 'main', display_title: `member database check at ${commit}`, head_sha: commit, actor: { login: 'founder' }, triggering_actor: { login: 'founder' }, status: 'completed', conclusion: 'success', updated_at: new Date().toISOString(), ...over }
@@ -221,7 +245,8 @@ test('staging: deploys exactly the HEAD commit export, stamped, with the exact C
     const digest = sh(t.repo, 'node', ['scripts/functions/source-digest.mjs', '.', 'avatar'])
     assert.match(t.st().lastBuild, new RegExp(`BUILD = '${c}\\.${digest}'`))
     const out = JSON.parse(r.out.slice(r.out.indexOf('{')))
-    assert.equal(out.state, 'deployed, unverified'); assert.equal(out.version, 5); assert.equal(out.sourceDownload, 'match')
+    assert.equal(out.state, 'deployed, unverified'); assert.equal(out.cliVersion, 5); assert.equal(out.sourceComparison, 'exact match')
+    assert.equal(out.served, `${c}.${digest}`, 'the endpoint was seen serving the new build')
     assert.match(out.next, /verify-functions\.yml/)
     assert.match(t.evidence(), /deploy started \| staging/); assert.match(t.evidence(), /deployed, unverified \| staging/)
     assert.equal(sh(t.repo, 'git', ['show', 'HEAD:supabase/functions/_shared/build-info.ts']).includes("'unstamped'"), true, 'the repository copy is never stamped')
@@ -313,7 +338,7 @@ test('refusals before anything is deployed', () => {
   } finally { t.cleanup() }
 })
 
-test('after the deploy: JWT on, an unexpected function, an unchanged version or different source fail verification', () => {
+test('after the deploy: JWT on, an unexpected function, an unchanged version, inexact source or an old served build fail verification', () => {
   const t = setup()
   try {
     const c = t.head()
@@ -321,7 +346,12 @@ test('after the deploy: JWT on, an unexpected function, an unchanged version or 
       [{ deploy: 'jwt-on' }, /JWT check on/],
       [{ deploy: 'extra' }, /unexpected function\(s\) on .*join-waitlist/],
       [{ deploy: 'no-bump' }, /version did not change/],
-      [{ download: 'differs' }, /downloaded source differs/],
+      [{ download: 'differs' }, /could not be compared exactly .*differs from the approved commit: avatar\/index\.ts/],
+      [{ download: 'missing' }, /missing from the deployment: avatar\/handler\.ts/],
+      [{ download: 'extra' }, /not in the approved commit: avatar\/extra\.ts/],
+      [{ download: 'unsupported' }, /could not be compared exactly .*unavailable/],
+      [{ download: 'empty' }, /could not be compared exactly .*unavailable/],
+      [{ served: 'old.build' }, /the endpoint serves build old\.build, not/],
       [{ deploy: 'fail' }, /supabase functions failed/],
     ]) {
       t.state({ ...patch, functions: { [MEMBER]: [{ slug: 'avatar', name: 'avatar', version: 2, status: 'ACTIVE', verify_jwt: false }] } })
@@ -329,10 +359,6 @@ test('after the deploy: JWT on, an unexpected function, an unchanged version or 
       assert.equal(r.code, 1, JSON.stringify(patch)); assert.match(r.out, re, JSON.stringify(patch))
     }
     assert.match(t.evidence(), /FAILED VERIFICATION/)
-    t.state({ download: 'unsupported' })
-    const r = t.run(deployArgs('avatar', MEMBER, c))
-    assert.equal(r.code, 0, r.out)
-    assert.equal(JSON.parse(r.out.slice(r.out.indexOf('{'))).sourceDownload, 'unavailable', 'an unsupported download is reported, never a pass')
   } finally { t.cleanup() }
 })
 
@@ -347,7 +373,9 @@ test('rollback: only to a recorded, founder-approved deployment whose verificati
     const entry = { target: 'member-production', ref: MEMBER, function: 'avatar', commit: old, version: 3, build: `${old}.${digest}`, approvedBy: 'founder', approvedAt: '2026-12-01', verifyRunId: 77 }
     const vrun = (over = {}) => ({ id: 77, path: '.github/workflows/verify-functions.yml', event: 'workflow_dispatch', head_branch: 'main', actor: { login: 'founder' }, triggering_actor: { login: 'founder' }, status: 'completed', conclusion: 'success', display_title: `verify member-production avatar deployed ${old} v3`, ...over })
     const args = (commit = old) => ['rollback', '--target', 'member-production', '--function', 'avatar', '--commit', commit, '--confirm', phraseFor('rollback', 'avatar', MEMBER, commit), '--operator', 'founder', '--reason', 'avatar upload regression', '--db-check-run', '500']
-    const gh = (v) => ({ 'repos/test/repo/actions/runs/500': dbRun(main), 'repos/test/repo/actions/runs/500/jobs': dbJobs('success'), ...(v ? { 'repos/test/repo/actions/runs/77': v } : {}) })
+    const note = (over = {}) => ({ title: 'Verified deployment', annotation_level: 'notice', message: Object.entries({ target: 'member-production', ref: MEMBER, function: 'avatar', mode: 'deployed', commit: old, observed_build: `${old}.${digest}`, ...over }).map(([k, v]) => `${k}=${v}`).join(' ') })
+    const evidenceFor = (notes) => ({ 'repos/test/repo/actions/runs/77/jobs': { jobs: [{ id: 900 }] }, 'repos/test/repo/check-runs/900/annotations': notes })
+    const gh = (v, notes = [note()]) => ({ 'repos/test/repo/actions/runs/500': dbRun(main), 'repos/test/repo/actions/runs/500/jobs': dbJobs('success'), ...(v ? { 'repos/test/repo/actions/runs/77': v } : {}), ...evidenceFor(notes) })
     const withLedger = (deployments) => {
       writeFileSync(join(t.repo, 'config/function-deployments.json'), JSON.stringify({ deployments }, null, 2))
       t.g('add', '-A'); t.g('commit', '-q', '-m', 'ledger'); t.g('push', '-q', 'origin', 'main')
@@ -370,6 +398,19 @@ test('rollback: only to a recorded, founder-approved deployment whose verificati
       r = t.run(args())
       assert.equal(r.code, 1, what); assert.match(r.out, re, what); assert.equal(r.deploys.length, 0, what)
     }
+    // The verification passed, but its runner-observed evidence is missing or does not match the ledger.
+    for (const [what, notes, re] of [
+      ['no evidence', [], /0 "Verified deployment" record/],
+      ['two evidence records', [note(), note()], /2 "Verified deployment" record/],
+      ['another served build', [note({ observed_build: `${old}.${'0'.repeat(64)}` })], /observed observed_build=/],
+      ['another project', [note({ ref: STAGING })], /observed ref=/],
+      ['another function', [note({ function: 'post-media' })], /observed function=/],
+      ['a removed-mode check', [note({ mode: 'removed', observed_build: 'none' })], /observed mode=/],
+    ]) {
+      t.state({ gh: { ...gh(vrun(), notes), 'repos/test/repo/actions/runs/500': dbRun(m2) } })
+      r = t.run(args())
+      assert.equal(r.code, 1, what); assert.match(r.out, re, what); assert.equal(r.deploys.length, 0, what)
+    }
     // A commit that is not on main.
     t.state({ gh: { ...gh(vrun()), 'repos/test/repo/actions/runs/500': dbRun(m2) } })
     r = t.run(args('f'.repeat(40)))
@@ -389,7 +430,7 @@ test('rollback: only to a recorded, founder-approved deployment whose verificati
     assert.equal(r.code, 0, r.out)
     assert.match(t.st().lastBuild, new RegExp(`'${old}\\.${digest}'`))
     const out = JSON.parse(r.out.slice(r.out.indexOf('{')))
-    assert.equal(out.state, 'deployed, unverified'); assert.equal(out.version, 6)
+    assert.equal(out.state, 'deployed, unverified'); assert.equal(out.cliVersion, 6)
     assert.match(t.evidence(), /rollback started .*avatar upload regression/)
     assert.ok(noPrune(r.calls))
   } finally { t.cleanup() }
@@ -426,6 +467,35 @@ test('emergency deletion: exact target, function and phrase, operator and reason
     r = t.run(del('avatar'))
     assert.equal(r.code, 1); assert.match(r.out, /still listed/); assert.match(t.evidence(), /delete FAILED/)
   } finally { t.cleanup() }
+})
+
+test('unit: exact source comparison, served build and runner evidence', async () => {
+  const d = mkdtempSync(join(tmpdir(), 'fn-compare-'))
+  try {
+    const exp = join(d, 'exp'), dl = join(d, 'dl')
+    cpSync(join(SRC, 'supabase/functions'), join(exp, 'supabase/functions'), { recursive: true })
+    const closure = importClosure(exp, 'avatar')
+    assert.ok(closure.includes('avatar/vendor/jpeg-js-0.4.4/decoder.js') && closure.includes('_shared/policy.ts') && !closure.includes('_shared/jpeg-js-0.4.4/decoder.js'))
+    const put = (files) => { rmSync(dl, { recursive: true, force: true }); for (const f of files) cpSync(join(exp, 'supabase/functions', f), join(dl, 'supabase/functions', f)) }
+    put(closure)
+    assert.deepEqual(compareSource(exp, dl, 'avatar'), { result: 'match', problems: [] }, 'exactly the imported files')
+    put([...closure, '_shared/jpeg-js-0.4.4/decoder.js'])
+    assert.equal(compareSource(exp, dl, 'avatar').result, 'match', 'an extra file identical to the commit is accepted')
+    put(closure.filter((f) => f !== '_shared/policy.ts'))
+    assert.deepEqual(compareSource(exp, dl, 'avatar').problems, ['missing from the deployment: _shared/policy.ts'])
+    put(closure); writeFileSync(join(dl, 'supabase/functions/_shared/projects.ts'), 'export const STAGING_REF = "x"\n')
+    assert.deepEqual(compareSource(exp, dl, 'avatar').problems, ['differs from the approved commit: _shared/projects.ts'])
+    rmSync(dl, { recursive: true, force: true })
+    assert.equal(compareSource(exp, dl, 'avatar').result, 'unavailable')
+  } finally { rmSync(d, { recursive: true, force: true }) }
+  const fakeFetch = (builds) => { let i = 0; return async () => ({ headers: { get: () => builds[Math.min(i++, builds.length - 1)] }, body: null }) }
+  assert.deepEqual(await servedBuild('http://x', 'avatar', 'upload', 'new', { tries: 3, waitMs: 1, fetchImpl: fakeFetch(['old', 'new']) }), { ok: true, served: 'new' })
+  assert.deepEqual(await servedBuild('http://x', 'avatar', 'upload', 'new', { tries: 3, waitMs: 1, fetchImpl: fakeFetch(['old']) }), { ok: false, served: 'old' })
+  const entry = { ref: MEMBER, function: 'avatar', commit: 'c'.repeat(40), build: `${'c'.repeat(40)}.${'d'.repeat(64)}` }
+  const msg = `target=member-production ref=${MEMBER} function=avatar mode=deployed commit=${entry.commit} observed_build=${entry.build}`
+  assert.doesNotThrow(() => checkVerifyEvidence([{ title: 'Verified deployment', annotation_level: 'notice', message: msg }], entry, 'member-production'))
+  assert.throws(() => checkVerifyEvidence([{ title: 'Verified deployment', annotation_level: 'warning', message: msg }], entry, 'member-production'), /0 "Verified deployment"/)
+  assert.throws(() => checkVerifyEvidence([{ title: 'Verified deployment', annotation_level: 'notice', message: msg }], entry, 'staging'), /observed target=/)
 })
 
 test('the deploy script never passes --prune, never deploys without a name, and only deploys from an export', () => {
