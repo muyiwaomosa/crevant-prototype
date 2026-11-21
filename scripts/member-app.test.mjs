@@ -146,6 +146,16 @@ test('the member app project always builds the member app, with the bundle and s
   }
 })
 
+test('the member bundle check runs in every member app build and receives the build environment (so Production is checked against the member project)', () => {
+  for (const target of ['production', 'preview']) {
+    const env = { VERCEL_ENV: target, VERCEL_PROJECT_ID: APP_ID }
+    const plan = planBuild(env, [], PROJECTS)
+    assert.ok(commands(plan).includes('node scripts/check-member-app-bundle.mjs dist'), target)
+    assert.ok(commands(plan).indexOf('node scripts/check-member-app-bundle.mjs dist') > commands(plan).indexOf('npx vite build'), 'after the build')
+    assert.equal(stepEnv(plan, env).VERCEL_ENV, target)
+  }
+})
+
 test('member-only routing is compiled in for the member app build only, and never taken from project settings', () => {
   const member = planBuild({ VERCEL_ENV: 'preview', VERCEL_PROJECT_ID: APP_ID }, [], PROJECTS)
   assert.equal(stepEnv(member, {}).CREVANT_MEMBER_APP_BUILD, 'true')
@@ -245,13 +255,80 @@ test('Previews in the member app project are not blocked by the Production guard
 const memberEnv = (target, extra = {}) => ({ VERCEL_ENV: target, VERCEL_PROJECT_ID: APP_ID, VITE_SUPABASE_URL: STAGING_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB, ...extra })
 const supa = (env) => checkSupabaseTarget(env, { project: 'memberApp' })
 
-test('allowed: the staging (pilot) project with a publishable key, in Preview and Production', () => {
-  for (const target of ['production', 'preview']) {
+test('allowed: Preview, development and local builds use the staging (pilot) project with a publishable key (unchanged)', () => {
+  for (const target of ['preview', 'development', '']) {
     const r = supa(memberEnv(target))
     assert.equal(r.ok, true, r.message)
     assert.match(r.message, /staging \(pilot\) project/)
   }
-  assert.equal(supa(memberEnv('production', { VITE_SUPABASE_URL: `${STAGING_SUPABASE_URL}/` })).ok, true)
+  assert.equal(supa(memberEnv('preview', { VITE_SUPABASE_URL: `${STAGING_SUPABASE_URL}/` })).ok, true)
+})
+
+// The member Production project's reference is null in the committed config
+// until it is provisioned and recorded in a reviewed PR. Tests that need it
+// use this stand-in (never a real project).
+const MEMBER_REF = 'memberprodtestonly01'
+const MEMBER_URL = `https://${MEMBER_REF}.supabase.co`
+const WITH_MEMBER = { staging: REFS.staging, production: REFS.production, memberProduction: MEMBER_REF }
+const supaWith = (env, refs = WITH_MEMBER) => checkSupabaseTarget(env, { project: 'memberApp', refs })
+
+test('committed config: member Production fails closed (no member project yet), whatever is set, staging included', () => {
+  assert.equal(REFS.memberProduction, null)
+  for (const extra of [{}, { VITE_SUPABASE_URL: MEMBER_URL }, { VITE_SUPABASE_URL: '', VITE_SUPABASE_PUBLISHABLE_KEY: '' }, { VITE_SUPABASE_URL: 'https://abcdefghijabcdefghij.supabase.co' }]) {
+    const r = supa(memberEnv('production', extra))
+    assert.equal(r.ok, false, JSON.stringify(extra))
+    assert.match(r.message, /member Production Supabase project is not configured/, JSON.stringify(extra))
+  }
+})
+
+test('matrix, once the member project is configured: Production allows only it; Preview only staging; swapped values refused', () => {
+  const cases = [
+    // [target, extra env, ok, message]
+    ['production', { VITE_SUPABASE_URL: MEMBER_URL }, true, /member Production project \(memberprodtestonly01\)/],
+    ['production', { VITE_SUPABASE_URL: `${MEMBER_URL}/` }, true, /member Production project/],
+    ['production', {}, false, /never use the staging \(pilot\) project/], // Preview values swapped into Production
+    ['production', { VITE_SUPABASE_URL: PRODUCTION_URL }, false, /never use the Production waitlist project/],
+    ['production', { VITE_SUPABASE_URL: '' }, false, /exactly the member Production project/],
+    ['production', { VITE_SUPABASE_URL: MEMBER_URL, VITE_SUPABASE_PUBLISHABLE_KEY: '' }, false, /member Production publishable key/],
+    ['production', { VITE_SUPABASE_URL: MEMBER_URL, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_abc12345678' }, false, /secret or service key/],
+    ['production', { VITE_SUPABASE_URL: MEMBER_URL, VITE_SUPABASE_PUBLISHABLE_KEY: jwt('service_role') }, false, /secret or service key/],
+    ['production', { VITE_SUPABASE_URL: MEMBER_URL, VITE_WAITLIST_ENDPOINT: `${PRODUCTION_URL}/functions/v1/join-waitlist` }, false, /must not be set/],
+    ['production', { VITE_SUPABASE_URL: 'https://abcdefghijabcdefghij.supabase.co' }, false, /exactly the member Production project/],
+    ['preview', {}, true, /staging \(pilot\) project/],
+    ['preview', { VITE_SUPABASE_URL: MEMBER_URL }, false, /never use the member Production project/], // Production values swapped into a Preview
+    ['preview', { VITE_SUPABASE_URL: PRODUCTION_URL }, false, /never use the Production waitlist project/],
+    ['preview', { VITE_SUPABASE_URL: '' }, false, /exactly the staging \(pilot\) project/],
+    ['preview', { VITE_SUPABASE_PUBLISHABLE_KEY: '' }, false, /staging publishable key/],
+    ['preview', { VITE_WAITLIST_ENDPOINT: `${STAGING_SUPABASE_URL}/functions/v1/join-waitlist` }, false, /must not be set/],
+    ['', { VITE_SUPABASE_URL: MEMBER_URL }, false, /never use the member Production project/],
+    ['development', { VITE_SUPABASE_URL: MEMBER_URL }, false, /never use the member Production project/],
+    ['staging', {}, false, /unknown build environment "staging"/],
+    ['prod', { VITE_SUPABASE_URL: MEMBER_URL }, false, /unknown build environment "prod"/],
+  ]
+  for (const [target, extra, ok, message] of cases) {
+    const r = supaWith(memberEnv(target, extra))
+    assert.equal(r.ok, ok, `${target} ${JSON.stringify(extra)}: ${r.message}`)
+    assert.match(r.message, message, `${target} ${JSON.stringify(extra)}`)
+  }
+})
+
+test('matrix: a broken project list fails every member build (missing, malformed or duplicate references)', () => {
+  const broken = [
+    { staging: null, production: REFS.production, memberProduction: MEMBER_REF },
+    { staging: 'Not-A-Ref', production: REFS.production, memberProduction: MEMBER_REF },
+    { staging: REFS.staging, production: REFS.production, memberProduction: 'too-short' },
+    { staging: REFS.staging, production: REFS.production, memberProduction: 'MEMBERPRODTESTONLY01' },
+    { staging: REFS.staging, production: REFS.production, memberProduction: REFS.staging },
+    { staging: REFS.staging, production: REFS.production, memberProduction: REFS.production },
+    { staging: REFS.staging, production: REFS.staging, memberProduction: MEMBER_REF },
+  ]
+  for (const refs of broken) {
+    for (const [target, url] of [['production', MEMBER_URL], ['preview', STAGING_SUPABASE_URL]]) {
+      const r = supaWith(memberEnv(target, { VITE_SUPABASE_URL: url }), refs)
+      assert.equal(r.ok, false, `${target} ${JSON.stringify(refs)}`)
+      assert.match(r.message, /Supabase project list/, JSON.stringify(refs))
+    }
+  }
 })
 
 test('refused: the Production waitlist project, in any form, in any environment', () => {
@@ -289,9 +366,22 @@ test('refused: any waitlist address (members never use the waitlist form), stagi
 })
 
 test('refused: a broken project list (missing staging, or staging the same as Production)', () => {
-  const env = memberEnv('production')
+  const env = memberEnv('preview')
   assert.equal(checkSupabaseTarget(env, { project: 'memberApp', refs: { staging: null, production: REFS.production } }).ok, false)
   assert.equal(checkSupabaseTarget(env, { project: 'memberApp', refs: { staging: REFS.staging, production: REFS.staging } }).ok, false)
+})
+
+test('other projects never use the member Production project, in any environment', () => {
+  for (const project of ['publicSite', 'demo', 'unknown', 'none']) {
+    for (const target of ['production', 'preview', '']) {
+      for (const extra of [{ VITE_SUPABASE_URL: MEMBER_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB }, { VITE_WAITLIST_ENDPOINT: `${MEMBER_URL}/functions/v1/join-waitlist` }]) {
+        const r = checkSupabaseTarget({ VERCEL_ENV: target, ...extra }, { project, refs: WITH_MEMBER })
+        assert.equal(r.ok, false, `${project} ${target} ${JSON.stringify(extra)}`)
+        // Refused by the dedicated rule, not only by other rules that happen to overlap today.
+        assert.match(r.message, /points at the member Production project/, `${project} ${target} ${JSON.stringify(extra)}`)
+      }
+    }
+  }
 })
 
 test('the existing rules for other projects are unchanged', () => {
@@ -335,23 +425,54 @@ test('bundle: refused when it carries a waitlist address or anything secret', ()
   }
 })
 
+test('bundle, Production: fails closed with the committed config (no member project yet)', () => {
+  const problems = checkMemberAppBundle({ 'index.html': HTML, 'a.js': `"https://${stagingHost}"` }, REFS, 'production')
+  assert.equal(problems.length, 1)
+  assert.match(problems[0], /member Production project is not configured/)
+})
+
+test('bundle matrix, once the member project is configured', () => {
+  const memberHost = `${MEMBER_REF}.supabase.co`
+  const js = (body) => ({ 'index.html': HTML, 'assets/index.js': body })
+  // Production: only the member project.
+  assert.deepEqual(checkMemberAppBundle(js(`"https://${memberHost}" "${PUB}"`), WITH_MEMBER, 'production'), [])
+  assert.ok(checkMemberAppBundle(js(`"https://${stagingHost}"`), WITH_MEMBER, 'production').some((p) => /staging \(pilot\) project reference, in a Production build/.test(p)))
+  assert.ok(checkMemberAppBundle(js(`"https://${memberHost}" "https://${stagingHost}"`), WITH_MEMBER, 'production').some((p) => /staging/.test(p)))
+  assert.ok(checkMemberAppBundle(js('no supabase here'), WITH_MEMBER, 'production').some((p) => /does not point at the member Production project/.test(p)))
+  assert.ok(checkMemberAppBundle(js(`"https://${memberHost}" ${REFS.production}`), WITH_MEMBER, 'production').some((p) => /Production waitlist database/.test(p)))
+  assert.ok(checkMemberAppBundle(js(`"https://${memberHost}" "https://abcdefghijabcdefghij.supabase.co"`), WITH_MEMBER, 'production').some((p) => /other than the member Production project/.test(p)))
+  // Previews: only staging, never the member project.
+  assert.deepEqual(checkMemberAppBundle(js(`"https://${stagingHost}"`), WITH_MEMBER, 'preview'), [])
+  assert.ok(checkMemberAppBundle(js(`"https://${stagingHost}" ${MEMBER_REF}`), WITH_MEMBER, 'preview').some((p) => /member Production project reference, in a non-Production build/.test(p)))
+  assert.ok(checkMemberAppBundle(js(`"https://${memberHost}"`), WITH_MEMBER, '').some((p) => /does not point at the staging/.test(p)))
+  // A broken list fails both.
+  for (const target of ['production', 'preview']) {
+    assert.ok(checkMemberAppBundle(js(`"https://${memberHost}"`), { ...WITH_MEMBER, memberProduction: REFS.staging }, target).some((p) => /are the same/.test(p)), target)
+    assert.ok(checkMemberAppBundle(js(`"https://${memberHost}"`), { ...WITH_MEMBER, memberProduction: 'bad' }, target).some((p) => /malformed/.test(p)), target)
+  }
+})
+
 test('bundle: refused when the project list itself is broken', () => {
   assert.ok(checkMemberAppBundle({ 'a.js': stagingHost }, { staging: null, production: REFS.production }).length > 0)
   assert.ok(checkMemberAppBundle({ 'a.js': stagingHost }, { staging: REFS.staging, production: REFS.staging }).length > 0)
 })
 
-// --- Headers on app.splitpost.ca (vercel.json, unchanged) -----------------------------
+// --- Headers on app.splitpost.ca (vercel.json) -----------------------------------------
 
-test('app.splitpost.ca gets the staging-only security policy and the other security headers', async () => {
+test('app.splitpost.ca gets its own host-specific policy: no Supabase host until the member project is configured, and never staging or the waitlist', async () => {
+  // Defence in depth only: the build checks above are the boundary, and work without this.
   const { VERCEL } = await import('./vercel-robots.mjs')
   const host = VERCEL_PROJECTS.memberApp.host
   const applies = (rule) => (!rule.has || rule.has.every((c) => c.type === 'host' && c.value === host)) && (!rule.missing || !rule.missing.some((c) => c.type === 'host' && c.value === host))
   const headers = VERCEL.headers.filter(applies).flatMap((r) => r.headers)
   const csps = headers.filter((h) => h.key === 'Content-Security-Policy').map((h) => h.value)
   assert.equal(csps.length, 1, 'exactly one security policy applies')
-  const connect = csps[0].split(';').map((d) => d.trim()).find((d) => d.startsWith('connect-src')).split(/\s+/).slice(1)
-  assert.deepEqual(connect, ["'self'", `https://${REFS.staging}.supabase.co`])
-  assert.ok(!csps[0].includes(REFS.production), 'the Production project is never reachable from the member app address')
+  const directive = (name) => csps[0].split(';').map((d) => d.trim()).find((d) => d.startsWith(name)).split(/\s+/).slice(1)
+  const expected = REFS.memberProduction ? [`https://${REFS.memberProduction}.supabase.co`] : []
+  assert.deepEqual(directive('connect-src'), ["'self'", ...expected])
+  assert.deepEqual(directive('img-src'), ["'self'", 'data:', 'blob:', ...expected])
+  assert.ok(!csps[0].includes(REFS.staging), 'the staging project is never reachable from the member Production address')
+  assert.ok(!csps[0].includes(REFS.production), 'the Production waitlist project is never reachable from the member app address')
   for (const [k, v] of [['X-Frame-Options', 'DENY'], ['X-Content-Type-Options', 'nosniff'], ['Referrer-Policy', 'strict-origin-when-cross-origin']]) {
     assert.ok(headers.some((h) => h.key === k && h.value === v), k)
   }

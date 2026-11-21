@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 // Inspects a member app build (the full app, built in the splitpost-app
-// project for app.splitpost.ca) and fails unless it can reach ONLY the
-// staging (pilot) Supabase project:
+// project for app.splitpost.ca) and fails unless it can reach ONLY its one
+// expected Supabase project: staging (pilot) for Previews and local builds,
+// the member Production project (memberProduction) for Production. A
+// Production build fails closed while memberProduction is unset.
 //
-//   * it must contain the staging project's address (the build really points
-//     at the pilot database);
-//   * it must never contain the Production project reference (the Production
-//     waitlist database), anywhere, in any form;
+//   * it must contain the expected project's address (the build really
+//     points there);
+//   * it must never contain the Production waitlist project reference,
+//     anywhere, in any form;
+//   * a Production build must never contain the staging reference, and any
+//     other build never the member Production reference;
 //   * it must contain no other Supabase project address;
 //   * it must contain no waitlist function address (members never use the
 //     waitlist form);
@@ -20,11 +24,11 @@
 // build; this checks the result after it. Both must pass.
 //
 // Usage: node scripts/check-member-app-bundle.mjs [dir]   (default: dist)
+// The build environment comes from VERCEL_ENV (scripts/build.mjs passes it on).
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
-const projects = JSON.parse(readFileSync(new URL('../config/supabase-projects.json', import.meta.url), 'utf8'))
-const REF = /^[a-z0-9]{20}$/
+import { REF, loadProjectRefs, projectRefProblems } from './supabase-projects.mjs'
 
 /** Written into index.html by vite.config.ts in a member app build. */
 export const MEMBER_APP_MARKER = '<meta name="crevant-build" content="member-app" />'
@@ -45,31 +49,42 @@ function files(dir) {
 }
 
 /**
- * @param texts  { [path]: contents } of the built files
- * @param refs   { staging, production } project references (default: config)
+ * @param texts   { [path]: contents } of the built files
+ * @param refs    { staging, production, memberProduction } project references (default: config)
+ * @param target  the build environment (VERCEL_ENV): 'production', or anything else
  */
-export function checkMemberAppBundle(texts, refs = { staging: projects.staging?.ref, production: projects.production?.ref }) {
+export function checkMemberAppBundle(texts, refs = loadProjectRefs(), target = '') {
   const problems = []
-  if (!refs.staging || !REF.test(refs.staging)) return ['the staging project reference is not configured (config/supabase-projects.json)']
-  if (refs.production && refs.production === refs.staging) return ['the staging and Production project references are the same (config/supabase-projects.json)']
-  const stagingHost = `${refs.staging}.supabase.co`
+  const configProblems = projectRefProblems(refs)
+  if (configProblems.length) return configProblems
+  const production = String(target || '').trim().toLowerCase() === 'production'
+  if (production && !refs.memberProduction) {
+    return ['the member Production project is not configured (memberProduction in config/supabase-projects.json): member Production builds fail closed']
+  }
+  const expected = production ? refs.memberProduction : refs.staging
+  const name = production ? 'the member Production project' : 'the staging (pilot) project'
+  const expectedHost = `${expected}.supabase.co`
   const html = Object.entries(texts).find(([p]) => p === 'index.html' || p.endsWith('/index.html'))
   if (!html) problems.push('index.html is missing')
   else if (!html[1].includes(MEMBER_APP_MARKER)) {
     problems.push('index.html: the member app build marker is missing, so member-only routing was not compiled in (Previews would show public pages)')
   }
-  let sawStaging = false
+  let sawExpected = false
   for (const [path, text] of Object.entries(texts)) {
-    if (text.includes(stagingHost)) sawStaging = true
+    if (text.includes(expectedHost)) sawExpected = true
     if (refs.production && REF.test(refs.production) && text.includes(refs.production)) {
       problems.push(`${path}: the Production project reference (the Production waitlist database)`)
     }
+    if (production && text.includes(refs.staging)) problems.push(`${path}: the staging (pilot) project reference, in a Production build`)
+    if (!production && refs.memberProduction && text.includes(refs.memberProduction)) {
+      problems.push(`${path}: the member Production project reference, in a non-Production build`)
+    }
     for (const m of text.matchAll(/([a-z0-9]{20})\.supabase\.(co|com)/g)) {
-      if (m[1] !== refs.staging) problems.push(`${path}: a Supabase project other than staging (${m[1]})`)
+      if (m[1] !== expected) problems.push(`${path}: a Supabase project other than ${production ? 'the member Production project' : 'staging'} (${m[1]})`)
     }
     for (const [label, re] of FORBIDDEN) if (re.test(text)) problems.push(`${path}: ${label}`)
   }
-  if (!sawStaging) problems.push(`the build does not point at the staging (pilot) project (${stagingHost} not found)`)
+  if (!sawExpected) problems.push(`the build does not point at ${name} (${expectedHost} not found)`)
   return [...new Set(problems)]
 }
 
@@ -81,10 +96,11 @@ if (isMain) {
       .filter((p) => /\.(js|mjs|css|html|json|txt|map|webmanifest)$/.test(p))
       .map((p) => [relative(dir, p), readFileSync(p, 'utf8')]),
   )
-  const problems = checkMemberAppBundle(texts)
+  const target = (process.env.VERCEL_ENV || '').trim().toLowerCase()
+  const problems = checkMemberAppBundle(texts, loadProjectRefs(), target)
   if (problems.length) {
     console.error(`\n✖ The member app build is not safe to deploy:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`)
     process.exit(1)
   }
-  console.log(`Member app bundle check passed: staging (pilot) project only, ${Object.keys(texts).length} files checked.`)
+  console.log(`Member app bundle check passed: ${target === 'production' ? 'member Production project' : 'staging (pilot) project'} only, ${Object.keys(texts).length} files checked.`)
 }

@@ -85,6 +85,11 @@ test('a Production build may not contain the staging project, and no other build
   assert.deepEqual(forbiddenProjectRefs({ VERCEL_ENV: 'production' }, projects), ['kpudeppgokpjhvaqrprn'])
   assert.deepEqual(forbiddenProjectRefs({ VERCEL_ENV: 'preview' }, projects), ['abcdefghijabcdefghij'])
   assert.deepEqual(forbiddenProjectRefs({ VERCEL_ENV: 'preview' }, { ...projects, production: { ref: null } }), [])
+  // The member Production project, once recorded, is forbidden in every public site build.
+  const withMember = { ...projects, memberProduction: { ref: 'memberprodtestonly01' } }
+  assert.deepEqual(forbiddenProjectRefs({ VERCEL_ENV: 'production' }, withMember), ['kpudeppgokpjhvaqrprn', 'memberprodtestonly01'])
+  assert.deepEqual(forbiddenProjectRefs({ VERCEL_ENV: 'preview' }, withMember), ['abcdefghijabcdefghij', 'memberprodtestonly01'])
+  assert.deepEqual(forbiddenProjectRefs({ VERCEL_ENV: 'preview' }, { ...projects, memberProduction: { ref: null } }), ['abcdefghijabcdefghij'])
   const stagingFn = 'fetch("https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/join-waitlist")'
   assert.deepEqual(checkSiteBundle(bundle({ js: `${CLEAN_JS};${stagingFn}` })), [])
   assert.match(checkSiteBundle(bundle({ js: `${CLEAN_JS};${stagingFn}` }), { forbiddenRefs: ['kpudeppgokpjhvaqrprn'] }).join('\n'), /must never use/)

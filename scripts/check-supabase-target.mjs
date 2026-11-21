@@ -11,25 +11,32 @@
 //                       While the Production project reference is unset
 //                       (config/supabase-projects.json), any address fails:
 //                       Production fails closed.
-//   Member app project  (splitpost-app, app.splitpost.ca) Preview and
-//                       Production alike: exactly the staging (pilot)
-//                       project and a publishable key, never the Production
-//                       waitlist project, and no waitlist address at all
-//                       (members never use the waitlist form). Anything
-//                       else, or a misconfigured project list, fails.
+//   Member app project  (splitpost-app, app.splitpost.ca):
+//                       Preview (and local): exactly the staging (pilot)
+//                       project and a publishable key; never the member
+//                       Production project.
+//                       Production: exactly the member Production project
+//                       (memberProduction) and a publishable key; never
+//                       staging. While memberProduction is unset, every
+//                       member Production build fails closed.
+//                       Both: never the waitlist project, and no waitlist
+//                       address at all (members never use the waitlist
+//                       form). Any other build environment fails.
+//   Every other build   never the member Production project, anywhere.
 //   Local builds        staging, a local development stack, or nothing.
-//   Any build           fails if the key looks like a secret or service key.
+//   Any build           fails if the key looks like a secret or service key,
+//                       or if the project list is broken (a malformed or
+//                       missing staging reference, or two the same:
+//                       scripts/supabase-projects.mjs).
 //
 // Project references live in config/supabase-projects.json; changing them
 // requires a reviewed pull request.
 
-import { readFileSync } from 'node:fs'
 import { identifyProject } from './vercel-project.mjs'
+import { REF, loadProjectRefs, projectRefProblems } from './supabase-projects.mjs'
 
-const projects = JSON.parse(readFileSync(new URL('../config/supabase-projects.json', import.meta.url), 'utf8'))
-const REF = /^[a-z0-9]{20}$/
-
-export const PROJECTS = { staging: projects.staging?.ref ?? null, production: projects.production?.ref ?? null }
+/** { staging, production (the waitlist project), memberProduction }. */
+export const PROJECTS = loadProjectRefs()
 export const STAGING_SUPABASE_URL = `https://${PROJECTS.staging}.supabase.co`
 export const functionAddress = (ref) => `https://${ref}.supabase.co/functions/v1/join-waitlist`
 /** The staging project's waitlist function. */
@@ -66,34 +73,66 @@ function waitlistEndpointProblem(target, endpoint, refs) {
   return `VITE_WAITLIST_ENDPOINT must be the staging waitlist function (${staging}).`
 }
 
-/** The member app project: staging (pilot) only, publishable key only, no waitlist address. Fails closed. */
+const MEMBER_TARGETS = ['', 'development', 'preview', 'production']
+
+/**
+ * The member app project. Preview, development and local builds: the staging
+ * (pilot) project only. Production: the member Production project only, and
+ * nothing at all until it is configured. Publishable key only, no waitlist
+ * address. Fails closed.
+ */
 function checkMemberApp(env, target, refs) {
   const url = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '')
   const key = (env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim()
   const fail = (message) => ({ ok: false, message: `Member app: ${message}` })
-  if (!refs.staging || !REF.test(refs.staging)) return fail('the staging project reference is not configured (config/supabase-projects.json).')
-  if (refs.production && refs.production === refs.staging) return fail('the staging and Production project references are the same (config/supabase-projects.json).')
-  const stagingUrl = `https://${refs.staging}.supabase.co`
+  if (!MEMBER_TARGETS.includes(target)) return fail(`unknown build environment "${target}". Only Preview, Production, development or a local build may build the member app.`)
   if (refs.production && REF.test(refs.production) && url.includes(refs.production)) {
-    return fail('it must never use the Production waitlist project. Use the staging (pilot) project.')
+    return fail(target === 'production'
+      ? 'it must never use the Production waitlist project. Use the member Production project.'
+      : 'it must never use the Production waitlist project. Use the staging (pilot) project.')
   }
   if ((env.VITE_WAITLIST_ENDPOINT || '').trim()) return fail('VITE_WAITLIST_ENDPOINT must not be set. Members never use the waitlist form.')
-  if (url !== stagingUrl) return fail(`VITE_SUPABASE_URL must be exactly the staging (pilot) project (${stagingUrl}).`)
   if (key && isPrivilegedKey(key)) return fail('VITE_SUPABASE_PUBLISHABLE_KEY looks like a secret or service key. Only the publishable key may be used in the browser.')
+
+  if (target === 'production') {
+    if (!refs.memberProduction) {
+      return fail('the member Production Supabase project is not configured (memberProduction in config/supabase-projects.json). Member Production builds fail closed until its reference is added in a reviewed pull request.')
+    }
+    const memberUrl = `https://${refs.memberProduction}.supabase.co`
+    if (url.includes(refs.staging)) return fail(`Production must never use the staging (pilot) project. Use the member Production project (${memberUrl}).`)
+    if (url !== memberUrl) return fail(`VITE_SUPABASE_URL must be exactly the member Production project (${memberUrl}).`)
+    if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return fail('VITE_SUPABASE_PUBLISHABLE_KEY must be the member Production publishable key (sb_publishable_...).')
+    return { ok: true, message: `Supabase: member Production project (${refs.memberProduction}), publishable key, member app (production).` }
+  }
+
+  const stagingUrl = `https://${refs.staging}.supabase.co`
+  if (refs.memberProduction && url.includes(refs.memberProduction)) {
+    return fail('Previews and local builds must never use the member Production project. Use the staging (pilot) project.')
+  }
+  if (url !== stagingUrl) return fail(`VITE_SUPABASE_URL must be exactly the staging (pilot) project (${stagingUrl}).`)
   if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return fail('VITE_SUPABASE_PUBLISHABLE_KEY must be the staging publishable key (sb_publishable_...).')
   return { ok: true, message: `Supabase: staging (pilot) project (${refs.staging}), publishable key, member app (${target || 'local'}).` }
 }
 
 /**
  * @param env  the build environment
- * @param opts { mode: 'app' | 'site', refs: { staging, production }, project } (refs default to config; project to the Vercel project this build runs in)
+ * @param opts { mode: 'app' | 'site', refs: { staging, production, memberProduction }, project } (refs default to config; project to the Vercel project this build runs in)
  */
 export function checkSupabaseTarget(env, { mode = env.CREVANT_BUILD_MODE === 'site' ? 'site' : 'app', refs = PROJECTS, project = identifyProject(env) } = {}) {
   const target = (env.VERCEL_ENV || '').trim().toLowerCase()
+  // A broken project list fails every build.
+  const configProblems = projectRefProblems(refs)
+  if (configProblems.length) return { ok: false, message: `Supabase project list: ${configProblems.join('; ')}.` }
   if (project === 'memberApp') return checkMemberApp(env, target, refs)
   const url = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '')
   const key = (env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim()
   const fail = (message) => ({ ok: false, message })
+  // Only the member app's Production build may ever use the member Production project.
+  if (refs.memberProduction) {
+    for (const [name, value] of [['VITE_SUPABASE_URL', url], ['VITE_WAITLIST_ENDPOINT', (env.VITE_WAITLIST_ENDPOINT || '').trim()]]) {
+      if (value.includes(refs.memberProduction)) return fail(`${name} points at the member Production project. Only the member app's Production build may use it.`)
+    }
+  }
   const stagingUrl = `https://${refs.staging}.supabase.co`
 
   const endpointProblem = waitlistEndpointProblem(target, (env.VITE_WAITLIST_ENDPOINT || '').trim(), refs)
