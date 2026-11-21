@@ -49,7 +49,17 @@ make_users() { # make_users <n...>: test accounts with no membership
     q "insert into auth.users (id, email, email_confirmed_at) values ('$(U "$n")', 'lg-$n@example.test', now()) on conflict do nothing" >/dev/null
   done
 }
-drop_users() { psql "$DB_URL" -X -q -c "delete from ops.member_access where user_id in (select id from auth.users where email like 'lg-%@example.test')" -c "delete from auth.users where email like 'lg-%@example.test'" >/dev/null 2>&1 || true; }
+# Cleanup on this throwaway local database: the membership history is append
+# only, so the test's own records are removed with triggers skipped
+# (session_replication_role = replica, the documented bypass), leaving no
+# membership data for the rollback tests that follow.
+drop_users() {
+  psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -c "begin" -c "set local session_replication_role = replica" \
+    -c "delete from ops.member_access_events where user_id in (select id from auth.users where email like 'lg-%@example.test')" \
+    -c "delete from ops.member_access where user_id in (select id from auth.users where email like 'lg-%@example.test')" \
+    -c "delete from public.profiles where id in (select id from auth.users where email like 'lg-%@example.test')" \
+    -c "delete from auth.users where email like 'lg-%@example.test'" -c "commit" >/dev/null 2>&1 || true
+}
 founders() { q "select count(*) from ops.member_access where cohort = 'founder' and status = 'active' and (expires_at is null or expires_at > now())"; }
 trap drop_users EXIT
 drop_users
@@ -153,7 +163,9 @@ after=$(q "select concat_ws('|',
   && ok "apply removes exactly the gate's objects and record, and keeps every membership" || bad "apply (exit $code, state $after)"
 out=$(rollback check ""); code=$?
 [ $code -ne 0 ] && grep -q 'missing' <<<"$out" && ok "a second run refuses (nothing left to remove)" || bad "a second run did not refuse (exit $code)"
-q "delete from ops.member_access where user_id in ('$(U 1)', '$(U 2)', '$(U 5)')" >/dev/null
+drop_users
+left=$(q "select (select count(*) from ops.member_access) + (select count(*) from ops.member_access_events)")
+[ "$left" = 0 ] && ok "the test leaves no membership data behind" || bad "membership data left behind ($left rows)"
 
 echo "Member launch gate tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]

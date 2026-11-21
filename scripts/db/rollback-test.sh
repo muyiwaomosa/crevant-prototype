@@ -385,11 +385,25 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "after reapplying, the waitlist rollback refuses while a later migration is recorded" \
     || bad "the waitlist rollback did not refuse while a later migration is recorded (exit $code)"
+  if [ "$GATE" = t ]; then
+    # The gate is back, closed as the migration leaves it; reopened (recorded) for the local tests, its own rollback check passes.
+    DB_URL="$DB_URL" scripts/db/local-open-launch-gate.sh >/dev/null || bad "could not reopen the launch gate"
+    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-member-launch-gate.sql 2>&1); code=$?
+    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+      && ok "after reapplying, the member launch gate rollback check passes again" \
+      || bad "member launch gate rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+  fi
   if [ "$AUDIENCE" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-photo-audience.sql 2>&1); code=$?
+    if [ "$GATE" = t ]; then
+      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+        && ok "after reapplying, the photo audience rollback refuses while the member launch gate is recorded" \
+        || bad "the photo audience rollback did not refuse after reapply while the gate is recorded (exit $code)"
+    else
     [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
       && ok "after reapplying, the photo audience rollback check passes again" \
       || bad "photo audience rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    fi
   fi
   if [ "$PHOTOS" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-post-photos.sql 2>&1); code=$?
