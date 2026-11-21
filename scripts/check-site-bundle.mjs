@@ -43,12 +43,16 @@ export const FORBIDDEN = [
 /**
  * Project references a build must never contain, from
  * config/supabase-projects.json: a Production build may never contain the
- * staging project, and no other build may contain the Production project.
+ * staging project, and no other build may contain the Production (waitlist)
+ * project. No public site build, in any environment, may ever contain the
+ * member Production project.
  */
 export function forbiddenProjectRefs(env, projects = JSON.parse(readFileSync(new URL('../config/supabase-projects.json', import.meta.url), 'utf8'))) {
   const production = (env.VERCEL_ENV || '').trim().toLowerCase() === 'production'
   const ref = production ? projects.staging?.ref : projects.production?.ref
-  return ref ? [ref] : []
+  const refs = ref ? [ref] : []
+  if (projects.memberProduction?.ref) refs.push(projects.memberProduction.ref)
+  return refs
 }
 
 const TEXT = /\.(js|mjs|css|html|json|map|txt|svg)$/

@@ -13,7 +13,7 @@ manual step below needs the founder's explicit approval at the time.
 | Address | Vercel project | What it serves | Supabase project |
 |---|---|---|---|
 | `www.splitpost.ca` | `splitpost` | The public site only (no sign in, no member code) | Production (waitlist only) |
-| `app.splitpost.ca` | `splitpost-app` (`prj_FWOmj8cCOMBpQZFA36e1mKId557n`, created 2026-11-19) | The member app: sign in, invitations, the members area | **Staging (the pilot database)** |
+| `app.splitpost.ca` | `splitpost-app` (`prj_FWOmj8cCOMBpQZFA36e1mKId557n`, created 2026-11-19) | The member app: sign in, invitations, the members area | Previews: **staging**. Production: the **member Production project** (`splitpost-members-production`, not yet provisioned, so member Production builds fail closed) |
 | `crevant-prototype.vercel.app` | `crevant-prototype` | The frozen demo (`demo` branch) | none |
 
 The member app must never use the Production (waitlist) project, and the
@@ -41,30 +41,46 @@ build.
    and Vercel built it from Git, `muyiwaomosa/crevant-prototype@main`. The
    public site and demo rules are unchanged.
 4. **Supabase target, before the build** (`scripts/check-supabase-target.mjs`).
-   In the member app project, Preview and Production alike, the build must
-   use exactly the staging (pilot) project and a publishable key. The
-   Production project, in any form, is refused; so are a local stack, any
-   other project, a missing key, a secret or service key, and any waitlist
-   address (members never use the waitlist form).
+   In the member app project, Previews (and local builds) must use exactly
+   the staging (pilot) project, and Production exactly the member Production
+   project (`memberProduction` in `config/supabase-projects.json`), each with
+   a publishable key. While `memberProduction` is unset, every member
+   Production build fails closed. The waitlist project, in any form, is
+   refused everywhere; so are staging in Production, the member project in a
+   Preview, any other project, a missing key, a secret or service key, any
+   waitlist address, and any other build environment. No other build may
+   ever use the member Production project. A broken project list (missing,
+   malformed or duplicate references, `scripts/supabase-projects.mjs`) fails
+   every build.
 5. **The finished bundle, after the build** (`scripts/check-member-app-bundle.mjs`).
-   The built files must point at the staging project, and must never contain
-   the Production project reference, any other project, a waitlist address,
-   or anything secret. Then the existing secret scan runs.
+   The built files must point at that one project, and must never contain
+   the waitlist project reference, the other member project (staging in
+   Production, or the member project in a Preview), any other project, a
+   waitlist address, or anything secret. Then the existing secret scan runs.
+   The public site's bundle check also refuses the member Production
+   project, in every environment.
 6. **The address itself** (`src/entry.ts`). On `app.splitpost.ca` only the
    member pages are served (`/app`, sign in, password reset, the invitation
    link, the privacy notice); every other path goes to `/app`. The
    invitation link's `#token_hash` is never touched by a redirect. Pages
    there are marked `noindex`.
-7. **Headers** (`vercel.json`, unchanged). `app.splitpost.ca` already gets the
-   security policy that allows connections only to this site and the staging
-   project, the other security headers, and `X-Robots-Tag: noindex` on every
-   path. Tests prove it (`scripts/member-app.test.mjs`).
+7. **Headers, defence in depth** (`vercel.json`). `app.splitpost.ca` has its
+   own host-specific security policy: it allows no Supabase project at all
+   until the member Production project is recorded, then only that one, and
+   never staging or the waitlist project. Previews keep the staging policy
+   and `www.splitpost.ca` the waitlist one; exactly one policy applies to any
+   address. It also gets the other security headers and `X-Robots-Tag:
+   noindex` on every path. The build checks above are the boundary on their
+   own; this is a second layer. Tests prove it (`scripts/member-app.test.mjs`,
+   `scripts/vercel-headers.test.mjs`).
 
 Tests: `scripts/member-app.test.mjs` (every allowed and refused build
 configuration, and the pinned build command), `src/entry.test.ts` (the
 address rules), `src/public/member-host.test.tsx` (member pages only on the
-member address), and the existing build, guard, Supabase target and header
-tests, which are unchanged.
+member address), `scripts/supabase-projects.test.mjs` (the project list and
+its validator), and the build, guard, Supabase target, site bundle and header
+tests, which also prove the staging Preview, public site and demo rules are
+unchanged.
 
 ### The build command is pinned
 

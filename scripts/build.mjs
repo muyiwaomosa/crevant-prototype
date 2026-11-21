@@ -2,9 +2,11 @@
 // The one build entry point (npm run build). Chooses what to build:
 //
 //   the splitpost-app project  always the member app (the full app), Previews
-//   (memberApp)                and Production alike; Production only once
-//                              approved, from main, against the staging
-//                              (pilot) Supabase project (guard-build-target,
+//   (memberApp)                and Production alike: Previews against the
+//                              staging (pilot) Supabase project; Production
+//                              only once approved, from main, against the
+//                              member Production project, and never while it
+//                              is unset (guard-build-target,
 //                              check-supabase-target, check-member-app-bundle)
 //   Vercel Production          otherwise always the public site build (and
 //                              only once approved, in the splitpost project,
@@ -20,7 +22,8 @@
 // site`, the bundle check and the secret scan. The full app build runs the
 // guard, the Supabase check, type checking and `vite build`, as before. The
 // member app build runs the same, then a bundle check that it can reach only
-// the staging (pilot) project, never the Production waitlist project.
+// its one project (staging for Previews, the member Production project for
+// Production), never the Production waitlist project.
 //
 // The demo branch (Vercel Production today) has its own package.json and
 // never runs this file.

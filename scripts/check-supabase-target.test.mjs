@@ -106,3 +106,34 @@ test('with the real configuration, Production may use only the Production functi
   assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: STAGING_FN }, { mode: 'site' }).ok, false)
   assert.equal(checkSupabaseTarget({ VERCEL_ENV: 'preview', VITE_WAITLIST_ENDPOINT: real }, { mode: 'site' }).ok, false)
 })
+
+test('Phase 1A changes nothing for other builds: staging Previews, local builds, the public site and the demo give the same result with a member project recorded', async () => {
+  const { PROJECTS } = await import('./check-supabase-target.mjs')
+  const withMember = { ...PROJECTS, memberProduction: 'memberprodtestonly01' }
+  const STAGING_URL = `https://${PROJECTS.staging}.supabase.co`
+  const PUB = 'sb_publishable_f_Rjmc-I3QYgSiqYd5bIUw_P-vQxvUz'
+  const stagingFn = `${STAGING_URL}/functions/v1/join-waitlist`
+  const waitlistFn = `https://${PROJECTS.production}.supabase.co/functions/v1/join-waitlist`
+  const cases = [
+    // [project, env, expected ok]
+    ['none', { VERCEL_ENV: 'preview', VITE_SUPABASE_URL: STAGING_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB }, true],
+    ['none', { VERCEL_ENV: 'preview', VITE_SUPABASE_URL: STAGING_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB, VITE_WAITLIST_ENDPOINT: stagingFn }, true],
+    ['none', { VERCEL_ENV: 'preview' }, false],
+    ['none', {}, true],
+    ['none', { VITE_SUPABASE_URL: 'http://127.0.0.1:54321', VITE_SUPABASE_PUBLISHABLE_KEY: PUB }, true],
+    ['publicSite', { VERCEL_ENV: 'production' }, true],
+    ['publicSite', { VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: waitlistFn }, true],
+    ['publicSite', { VERCEL_ENV: 'production', VITE_WAITLIST_ENDPOINT: stagingFn }, false],
+    ['publicSite', { VERCEL_ENV: 'production', VITE_SUPABASE_URL: STAGING_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB }, false],
+    ['publicSite', { VERCEL_ENV: 'preview', CREVANT_BUILD_MODE: 'site', VITE_WAITLIST_ENDPOINT: stagingFn }, true],
+    ['publicSite', { VERCEL_ENV: 'preview', CREVANT_BUILD_MODE: 'site', VITE_WAITLIST_ENDPOINT: waitlistFn }, false],
+    ['demo', { VERCEL_ENV: 'preview', VITE_SUPABASE_URL: STAGING_URL, VITE_SUPABASE_PUBLISHABLE_KEY: PUB }, true],
+    ['demo', { VERCEL_ENV: 'production' }, true],
+  ]
+  for (const [project, env, ok] of cases) {
+    const before = checkSupabaseTarget(env, { project, refs: PROJECTS })
+    const after = checkSupabaseTarget(env, { project, refs: withMember })
+    assert.equal(before.ok, ok, `${project} ${JSON.stringify(env)}: ${before.message}`)
+    assert.deepEqual(after, before, `${project} ${JSON.stringify(env)}`)
+  }
+})
