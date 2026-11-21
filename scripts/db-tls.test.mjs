@@ -12,7 +12,7 @@ const CA_PATH = 'config/certs/supabase-root-2021-ca.crt'
 // Supabase Root 2021 CA, as downloaded from Supabase and compared with the
 // certificate from the staging project's dashboard (docs/WAITLIST.md).
 const CA_SHA256 = '80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA'
-const SECRET = /secrets\.(STAGING_DATABASE_URL|PRODUCTION_DATABASE_URL|WAITLIST_ADMIN_DATABASE_URL)\b/
+const SECRET = /secrets\.(STAGING_DATABASE_URL|PRODUCTION_DATABASE_URL|MEMBERS_PRODUCTION_DATABASE_URL|WAITLIST_ADMIN_DATABASE_URL)\b/
 const JOB_ENV = [
   '    env:',
   '      PGSSLMODE: verify-full',
@@ -40,11 +40,13 @@ test('the committed CA is exactly Supabase Root 2021 CA: a public CA certificate
   assert.ok(new Date(cert.validTo).getTime() - Date.now() > 180 * 86400e3, `renew before ${cert.validTo}`)
 })
 
-test('the workflows that use a hosted database secret are the expected nine', () => {
+test('the workflows that use a hosted database secret are the expected eleven', () => {
   const users = workflows.filter((f) => SECRET.test(read(f))).sort()
   assert.deepEqual(users, [
+    '.github/workflows/deploy-db-members-production.yml',
     '.github/workflows/deploy-db-production.yml',
     '.github/workflows/deploy-db-staging.yml',
+    '.github/workflows/members-activate-member-access.yml',
     '.github/workflows/staging-activate-member-access.yml',
     '.github/workflows/staging-photo-cleanup-check.yml',
     '.github/workflows/staging-photo-cleanup-schedule.yml',
@@ -78,7 +80,7 @@ test('no workflow weakens or overrides it', () => {
 })
 
 test('the target checks refuse a URL that would override verify-full', () => {
-  for (const s of ['scripts/db/verify-staging-target.sh', 'scripts/db/verify-production-target.sh']) {
+  for (const s of ['scripts/db/verify-staging-target.sh', 'scripts/db/verify-production-target.sh', 'scripts/db/verify-members-target.sh']) {
     const t = read(s)
     assert.match(t, /REQUIRE_VERIFY_FULL/)
     assert.match(t, /any\(k != "sslmode" for k in params\) or params\.get\("sslmode", \["verify-full"\]\) != \["verify-full"\]/)

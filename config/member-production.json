@@ -1,0 +1,5 @@
+{
+  "_comment": "Approvals for the member Production project (splitpost-members-production). Both stay false until the founder approves them in a reviewed PR. photosApproved: whether photo posting may be switched on there (ops.media_settings.photos_enabled). invitationsApproved: whether accounts other than the launch founder may be given membership (ops.member_launch_settings.external_access_approved) or invited (ops.invitations). Setting a flag to true does not change the database: it only allows a separately approved, recorded change. While a flag is false, supabase/tests-members/001_member_production.sql fails if the database shows the feature on, and every member workflow stops.",
+  "photosApproved": false,
+  "invitationsApproved": false
+}

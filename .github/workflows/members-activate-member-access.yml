@@ -1,0 +1,256 @@
+name: Activate pilot membership on member Production
+
+# Applies 20261122000000_member_access to the MEMBER Production project
+# (splitpost-members-production), makes the founder's account an active pilot
+# member, and applies 20261123000000 to 20261129000000, the founder-only
+# launch gate last, IN ONE DATABASE TRANSACTION
+# (scripts/db/members-activate-member-access.sql). The gate names this founder
+# as the launch founder (the only founder-cohort member) and starts closed.
+# Membership and the gate commit together or not at all: an interrupted run
+# leaves neither.
+#
+# Modes:
+#   rehearse  (default) The whole activation, then rolled back, then a check
+#             that nothing was left behind. Changes nothing.
+#   activate  The same, committed, then a read-only verification.
+#             Phrase: ACTIVATE MEMBER PRODUCTION ACCESS
+#   verify    Read only: reports whether member Production is activated.
+#
+# Safeguards, none depending on the others:
+#   * Owner only, main only, expected_commit must equal the commit being run.
+#   * The members-production environment (required reviewer) holds the only
+#     credentials: MEMBERS_PRODUCTION_DATABASE_URL, MEMBERS_DB_IDENTITY_MARKER
+#     and MEMBERS_FOUNDER_ACCOUNT_ID. A first job with no environment refuses
+#     if any of them is visible at repository or organization level.
+#   * Target check (scripts/db/verify-members-target.sh), then the identity
+#     marker check (scripts/db/verify-members-identity.sh) as the first
+#     connection, then the SQL itself refuses any database without the marker,
+#     the foundation, the locked waitlist logins and no waitlist data.
+#   * 20261122000000 must be the first pending migration; nothing later recorded.
+#   * The founder's id is passed only through the environment, never printed.
+#   * Full TLS verification. Shares the member Production database queue.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "rehearse = run everything, then roll it back (no changes). activate = commit (needs the phrase). verify = read-only status."
+        type: choice
+        options:
+          - rehearse
+          - activate
+          - verify
+        default: rehearse
+        required: true
+      expected_commit:
+        description: "The full commit SHA you reviewed (must equal the commit this run uses)"
+        type: string
+        required: true
+      confirm_project_ref:
+        description: "Type the member Production project reference to confirm"
+        type: string
+        required: true
+      confirm_phrase:
+        description: "For activate only, type exactly: ACTIVATE MEMBER PRODUCTION ACCESS"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-members-production
+  cancel-in-progress: false
+
+jobs:
+  # No environment on purpose: this job sees only repository and organization
+  # secrets, never the members-production environment's.
+  secret-scope:
+    name: Refuse member Production secrets stored outside their environment
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # Connects to nothing; it names the URL secret only to refuse it outside the
+    # environment. Every job naming that secret carries the verify-full settings.
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - name: Refuse if a member Production secret exists at repository or organization level
+        env:
+          OUTSIDE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          OUTSIDE_MARKER: ${{ secrets.MEMBERS_DB_IDENTITY_MARKER }}
+          OUTSIDE_FOUNDER: ${{ secrets.MEMBERS_FOUNDER_ACCOUNT_ID }}
+        run: |
+          if [ -n "$OUTSIDE_URL$OUTSIDE_MARKER$OUTSIDE_FOUNDER" ]; then
+            echo "::error::A member Production secret is set at repository or organization level. Only the members-production environment may hold it. Delete that secret. Nothing was done."
+            exit 1
+          fi
+
+      - name: The run is at the reviewed commit, and the mode and phrase agree
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          RUN_COMMIT: ${{ github.sha }}
+          MODE: ${{ inputs.mode }}
+          PHRASE: ${{ inputs.confirm_phrase }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::expected_commit must be a full 40 character commit SHA. Nothing was done."; exit 1; }
+          [ "$EXPECTED_COMMIT" = "$RUN_COMMIT" ] || { echo "::error::This run uses $RUN_COMMIT, not the reviewed commit $EXPECTED_COMMIT. Nothing was done."; exit 1; }
+          case "$MODE" in
+            rehearse|verify) ;;
+            activate) [ "$PHRASE" = "ACTIVATE MEMBER PRODUCTION ACCESS" ] || { echo "::error::activate needs the exact confirmation phrase. Nothing was done."; exit 1; } ;;
+            *) echo "::error::Unknown mode. Nothing was done."; exit 1 ;;
+          esac
+
+  verify-migrations:
+    name: Verify migrations and the member Production sequence on throwaway databases
+    needs: secret-scope
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: crevant_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard tests (target checks and approved list)
+        run: scripts/db/test-guards.sh
+      - name: Only approved, unchanged migrations are present
+        run: scripts/db/check-approved-migrations.sh
+      - name: Migrations and security checks pass on an empty database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/crevant_test
+        run: scripts/db/test.sh
+      - name: The member Production sequence passes end to end on throwaway databases
+        env:
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          REQUIRE_POOLER_TEST: '1'
+        run: scripts/db/members-workflow-test.sh
+
+  activate:
+    name: ${{ inputs.mode == 'activate' && 'Activate pilot membership on member Production' || inputs.mode == 'verify' && 'Verify the activation state on member Production (read only)' || 'Rehearse the activation on member Production (no changes)' }}
+    needs: verify-migrations
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: members-production
+    # Full certificate and host name verification for every hosted database
+    # connection in this job, against Supabase's public root CA committed at
+    # config/certs. REQUIRE_VERIFY_FULL makes the target check refuse a URL
+    # that would override them.
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved member Production project (connects to nothing)
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_PROJECT_REF: ${{ vars.MEMBERS_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-members-target.sh
+
+      - name: Verify the database identity marker (the first connection; read only)
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_DB_IDENTITY_MARKER: ${{ secrets.MEMBERS_DB_IDENTITY_MARKER }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/verify-members-identity.sh
+
+      - name: Only approved, unchanged migrations are present
+        run: scripts/db/check-approved-migrations.sh
+
+      - name: The founder account id is set in the members-production environment (its value is never printed)
+        env:
+          MEMBERS_FOUNDER_ACCOUNT_ID: ${{ secrets.MEMBERS_FOUNDER_ACCOUNT_ID }}
+        run: |
+          if [ -z "$MEMBERS_FOUNDER_ACCOUNT_ID" ]; then
+            echo "::error::The members-production environment secret MEMBERS_FOUNDER_ACCOUNT_ID is not set. Nothing was done."
+            exit 1
+          fi
+          echo "MEMBERS_FOUNDER_ACCOUNT_ID is set (value not shown)."
+
+      - name: 20261122000000 is the next migration, and nothing later is recorded (read only)
+        if: inputs.mode == 'rehearse' || inputs.mode == 'activate'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          pending="$(scripts/db/members-pending-migrations.sh)"
+          echo "Not yet applied on member Production: ${pending:-none}"
+          expected="$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | awk '$0 >= "20261122000000"' | tr '\n' ' ' | sed 's/ $//')"
+          if [ "$pending" != "$expected" ]; then
+            echo "::error::Expected exactly the migrations from 20261122000000 on to be pending (the foundation applied, nothing later). Nothing was done."
+            exit 1
+          fi
+
+      - name: Before the transaction, the schema separation checks (they manage their own transactions)
+        if: inputs.mode == 'rehearse' || inputs.mode == 'activate'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/001_schema_separation.sql
+
+      - name: Run the activation in one transaction (rehearse rolls back; activate commits)
+        if: inputs.mode == 'rehearse' || inputs.mode == 'activate'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_FOUNDER_ACCOUNT_ID: ${{ secrets.MEMBERS_FOUNDER_ACCOUNT_ID }}
+          MODE: ${{ inputs.mode }}
+          PHRASE: ${{ inputs.confirm_phrase }}
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          read -r photos invites < <(python3 -c "import json; c = json.load(open('config/member-production.json')); print(str(c['photosApproved']).lower(), str(c['invitationsApproved']).lower())")
+          psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v mode="$MODE" -v confirm="$PHRASE" \
+            -v photos_approved="$photos" -v invitations_approved="$invites" -f scripts/db/members-activate-member-access.sql
+
+      # Read only from here on.
+      - name: After activating, verify the committed state (read only; the founder id is never printed)
+        if: inputs.mode == 'activate'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_FOUNDER_ACCOUNT_ID: ${{ secrets.MEMBERS_FOUNDER_ACCOUNT_ID }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v expect=activated -f scripts/db/members-verify-activation.sql
+
+      - name: After rehearsing, confirm nothing was left behind (read only)
+        if: inputs.mode == 'rehearse'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_FOUNDER_ACCOUNT_ID: ${{ secrets.MEMBERS_FOUNDER_ACCOUNT_ID }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+          PGCONNECT_TIMEOUT: '15'
+        run: |
+          set -euo pipefail
+          out="$(psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v expect=any -f scripts/db/members-verify-activation.sql 2>&1)"
+          echo "$out"
+          if ! grep -q 'STATE: not activated' <<<"$out"; then
+            echo "::error::The rehearsal left something behind. Investigate before going further."
+            exit 1
+          fi
+          echo "Rehearsal left no migration record and no membership objects."
+
+      - name: Report the activation state (read only; the founder id is never printed)
+        if: inputs.mode == 'verify'
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_FOUNDER_ACCOUNT_ID: ${{ secrets.MEMBERS_FOUNDER_ACCOUNT_ID }}
+          PGOPTIONS: '-c default_transaction_read_only=on'
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v expect=any -f scripts/db/members-verify-activation.sql

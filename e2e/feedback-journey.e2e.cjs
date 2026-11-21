@@ -39,6 +39,8 @@ async function member(tag, name, cohort = 'tester') {
   const r = await fetch(`${API}/auth/v1/admin/users`, { method: 'POST', headers: admin, body: JSON.stringify({ email, password: PASSWORD, email_confirm: true }) })
   const { id } = await r.json()
   sql(`update public.profiles set username = '${tag}_${RUN}', display_name = '${name}' where id = '${id}'`)
+  // The launch gate (20261129000000) gives the founder cohort to the launch founder only: pin this account first (once per database).
+  if (cohort === 'founder') sql(`select ops.set_launch_founder('feedback-journey', '${id}', 'SET THE LAUNCH FOUNDER') where (select founder_user_id from ops.member_launch_settings) is null`)
   sql(`select ops.grant_member_access('${id}', '${cohort}', 'feedback-journey')`)
   sql(`insert into social.profile_details (user_id, onboarded_at) values ('${id}', now())`)
   return { id, email, name, username: `${tag}_${RUN}` }

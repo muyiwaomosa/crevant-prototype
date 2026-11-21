@@ -2,21 +2,21 @@
 -- real signed-in accounts and server code. Runs after 115, which leaves
 -- photos on (cap set, checks passed) with the audience opened to members.
 --
---   F = ...c601: the founder (founder cohort, active).
+--   F = ...0f01: the founder: the launch founder pinned in 105 (since
+--       20261129000000 only that account may hold the founder cohort).
 --   T = ...c602: a tester.
 --   G = ...c603: a founder-cohort account whose access is revoked.
 
 set role supabase_auth_admin;
 insert into auth.users (id, email, email_confirmed_at) values
-  ('00000000-0000-4000-8000-00000000c601', 'au-f@example.test', now()),
   ('00000000-0000-4000-8000-00000000c602', 'au-t@example.test', now()),
   ('00000000-0000-4000-8000-00000000c603', 'au-g@example.test', now());
 reset role;
 update public.profiles set username = 'au_' || right(id::text, 1), display_name = 'Au ' || right(id::text, 1) where id::text like '00000000-0000-4000-8000-00000000c60_';
-select ops.grant_member_access('00000000-0000-4000-8000-00000000c601', 'founder', 'test');
+select ops.grant_member_access('00000000-0000-4000-8000-000000000f01', 'founder', 'test');
 select ops.grant_member_access('00000000-0000-4000-8000-00000000c602', 'tester', 'test');
-select ops.grant_member_access('00000000-0000-4000-8000-00000000c603', 'founder', 'test');
-select ops.revoke_member_access('00000000-0000-4000-8000-00000000c603', 'test');
+-- G: a revoked founder-cohort record, written directly (it gives no access, so the gate allows it).
+insert into ops.member_access (user_id, cohort, status, revoked_at, updated_by) values ('00000000-0000-4000-8000-00000000c603', 'founder', 'revoked', now(), 'test');
 
 create function pg_temp.expect_error_au(sql text, expected text, what text)
 returns void language plpgsql as $$
@@ -51,7 +51,7 @@ end $$;
 
 -- 2. Founder-only: the founder may post photos; a tester is refused at every step.
 begin;
-select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000c601","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000f01","role":"authenticated"}', true);
 set local role authenticated;
 do $$
 begin
@@ -98,11 +98,11 @@ do $$
 declare u uuid := '00000000-0000-4000-8000-00000000c6a1';
 begin
   insert into social.media_uploads (id, user_id, kind, full_path, feed_path, status, width, height, full_bytes, feed_bytes, stored_at)
-  values (u, '00000000-0000-4000-8000-00000000c601', 'photo', '00000000-0000-4000-8000-00000000c601/' || u || '.jpg',
-          '00000000-0000-4000-8000-00000000c601/' || u || '-feed.jpg', 'stored', 1600, 1067, 300000, 90000, now());
+  values (u, '00000000-0000-4000-8000-000000000f01', 'photo', '00000000-0000-4000-8000-000000000f01/' || u || '.jpg',
+          '00000000-0000-4000-8000-000000000f01/' || u || '-feed.jpg', 'stored', 1600, 1067, 300000, 90000, now());
 end $$;
 begin;
-select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000c601","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000f01","role":"authenticated"}', true);
 set local role authenticated;
 select public.app_create_post('From the founder', gen_random_uuid(), '00000000-0000-4000-8000-00000000c6a1') is not null as founder_posted;
 commit;
@@ -121,7 +121,7 @@ commit;
 
 -- 4. Changing the audience: server only, explicit, recorded.
 begin;
-select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000c601","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000f01","role":"authenticated"}', true);
 set local role authenticated;
 do $$ begin
   perform pg_temp.expect_error_au($q$select ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS')$q$, 'permission denied', 'even the founder''s session changing the audience');
@@ -163,7 +163,7 @@ commit;
 do $$
 begin
   perform ops.set_media_settings('founder', false, 2000000000, 10, 20);
-  perform set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000c601","role":"authenticated"}', true);
+  perform set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000f01","role":"authenticated"}', true);
   if ops.photos_open() then raise exception 'FAIL: the founder can post with photos switched off'; end if;
   perform set_config('request.jwt.claims', '', true);
   perform ops.set_media_settings('founder', true, 2000000000, 10, 20);

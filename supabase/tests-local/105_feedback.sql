@@ -24,14 +24,20 @@ update public.profiles set username = 'fb_b', display_name = 'Fb B' where id = '
 update public.profiles set username = 'fb_m', display_name = 'Fb M' where id = '00000000-0000-4000-8000-000000000f04';
 update public.profiles set username = 'fb_r', display_name = 'Fb R' where id = '00000000-0000-4000-8000-000000000f05';
 update public.profiles set username = 'fb_g', display_name = 'Fb G' where id = '00000000-0000-4000-8000-000000000f06';
+-- F is the launch founder (20261129000000): the only account that may hold
+-- the founder cohort. Later tests (116, 117) use the same founder.
+select ops.set_launch_founder('test', '00000000-0000-4000-8000-000000000f01', 'SET THE LAUNCH FOUNDER');
 select ops.grant_member_access('00000000-0000-4000-8000-000000000f01', 'founder', 'test');
 select ops.grant_member_access('00000000-0000-4000-8000-000000000f02', 'tester', 'test');
 select ops.grant_member_access('00000000-0000-4000-8000-000000000f03', 'creator', 'test');
 select ops.grant_member_access('00000000-0000-4000-8000-000000000f04', 'tester', 'test');
 select ops.grant_member_access('00000000-0000-4000-8000-000000000f05', 'fan', 'test');
-select ops.grant_member_access('00000000-0000-4000-8000-000000000f06', 'founder', 'test');
+-- G: a founder-cohort record whose access is revoked. Only the launch founder
+-- may ever be GIVEN the founder cohort now, so the revoked record is written
+-- directly (a write that gives no access, which the gate always allows), as
+-- a record from before the gate would look.
 select ops.grant_moderator('00000000-0000-4000-8000-000000000f04', 'test', 'feedback test');
-select ops.revoke_member_access('00000000-0000-4000-8000-000000000f06', 'test');
+insert into ops.member_access (user_id, cohort, status, revoked_at, updated_by) values ('00000000-0000-4000-8000-000000000f06', 'founder', 'revoked', now(), 'test');
 
 create function pg_temp.expect_error_fb(sql text, expected text, what text)
 returns void

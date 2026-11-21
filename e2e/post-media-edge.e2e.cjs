@@ -40,6 +40,9 @@ async function account(tag, { member = true, moderator = false, cohort = 'tester
   const r = await fetch(`${API}/auth/v1/admin/users`, { method: 'POST', headers: admin, body: JSON.stringify({ email, password: PASSWORD, email_confirm: true }) })
   const { id } = await r.json()
   sql(`update public.profiles set username = '${tag}_${RUN}', display_name = '${tag}' where id = '${id}'`)
+  // Only the launch founder may hold the founder cohort (20261129000000): on a fresh
+  // test database none is set yet, so this account becomes it (recorded, with its phrase).
+  if (member && cohort === 'founder') sql(`select ops.set_launch_founder('media-edge', '${id}', 'SET THE LAUNCH FOUNDER') where (select founder_user_id from ops.member_launch_settings) is null`)
   if (member) sql(`select ops.grant_member_access('${id}', '${cohort}', 'media-edge')`)
   if (moderator) sql(`select ops.grant_moderator('${id}', 'founder', 'media-edge')`)
   const t = await fetch(`${API}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: PUB, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: PASSWORD }) })

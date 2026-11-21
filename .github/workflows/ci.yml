@@ -95,6 +95,16 @@ jobs:
           ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
           SUPABASE: ${{ runner.temp }}/supabase-cli/node_modules/.bin/supabase
         run: scripts/db/activation-cli-compat-test.sh
+      # The member Production sequence on throwaway databases: the identity
+      # marker, the waitlist login lock (denial tested directly and through a
+      # PgBouncer pooler in Docker), the activation, the launch gate and every
+      # member check. Last, because it changes the shared waitlist roles while
+      # it runs (and restores them).
+      - name: The member Production sequence passes end to end
+        env:
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          REQUIRE_POOLER_TEST: '1'
+        run: scripts/db/members-workflow-test.sh
 
   integration:
     # Real local Supabase in Docker, isolated to this runner: standard local

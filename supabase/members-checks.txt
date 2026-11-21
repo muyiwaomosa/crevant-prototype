@@ -1,0 +1,21 @@
+# The read-only checks the member Production workflows run, each with the
+# migration that must be recorded before it applies. A check whose migration
+# isn't recorded yet is skipped and named in the log; once every migration is
+# applied (the end of an apply run), all of them must run and pass.
+# Format: <check file in supabase/tests> <migration version>
+# 002, 005 and 007 describe the state after membership is activated
+# (20261122000000), as on staging.
+001_schema_separation.sql 20261106000000
+002_profiles_and_ops.sql 20261122000000
+003_waitlist.sql 20261111000000
+004_acquisition.sql 20261116000000
+005_social_core.sql 20261122000000
+006_platform_functions.sql 20261118000000
+007_member_access.sql 20261122000000
+008_profile_details.sql 20261123000000
+009_moderation.sql 20261124000000
+010_avatars.sql 20261125000000
+011_feedback.sql 20261126000000
+012_post_photos.sql 20261127000000
+013_photo_audience.sql 20261128000000
+014_member_launch_gate.sql 20261129000000
