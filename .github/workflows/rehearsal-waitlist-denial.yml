@@ -47,6 +47,7 @@ jobs:
           [ "$EXPECTED_COMMIT" = "$RUN_COMMIT" ] || { echo "::error::This run uses $RUN_COMMIT, not the reviewed commit. Nothing was done."; exit 1; }
 
       - name: Verify the target is the rehearsal project (connects to nothing)
+        id: target
         env:
           MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
           MEMBERS_PROJECT_REF: ${{ vars.MEMBERS_PROJECT_REF }}
@@ -54,6 +55,7 @@ jobs:
         run: scripts/db/verify-members-target.sh
 
       - name: Verify the database identity marker (the first connection; read only)
+        id: identity
         env:
           MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
           MEMBERS_DB_IDENTITY_MARKER: ${{ secrets.MEMBERS_DB_IDENTITY_MARKER }}
@@ -61,13 +63,16 @@ jobs:
         run: scripts/db/verify-members-identity.sh
 
       - name: Try each waitlist login through the pooler on both ports
+        id: probe
         env:
           MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
           PGCONNECT_TIMEOUT: '15'
         run: scripts/rehearsal/waitlist-denial-probe.sh
 
+      # Only if the target and identity checks passed and the probe started
+      # (it may have set temporary passwords); never against an unverified database.
       - name: Remove the temporary passwords (always, even after a failure)
-        if: always()
+        if: always() && steps.target.outcome == 'success' && steps.identity.outcome == 'success' && (steps.probe.outcome == 'success' || steps.probe.outcome == 'failure' || steps.probe.outcome == 'cancelled')
         env:
           MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
           PGCONNECT_TIMEOUT: '15'

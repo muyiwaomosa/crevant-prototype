@@ -44,7 +44,7 @@ on:
         default: deployed
         required: true
       expected_commit:
-        description: "The full commit SHA that was deployed (removed mode: the current main commit)"
+        description: "The full commit SHA that was deployed (removed mode: the current rehearsal/members-disposable commit)"
         type: string
         required: true
       deployed_version:
@@ -70,7 +70,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: The inputs are well formed, and the commit is on main
+      - name: The inputs are well formed, and the commit is on rehearsal/members-disposable
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           DEPLOYED_VERSION: ${{ inputs.deployed_version }}
@@ -80,7 +80,7 @@ jobs:
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::expected_commit must be a full 40 character commit SHA."; exit 1; }
           [[ "$DEPLOYED_VERSION" =~ ^[0-9]{1,6}$ ]] || { echo "::error::deployed_version must be a number."; exit 1; }
           if [ "$MODE" = deployed ] && [ "$DEPLOYED_VERSION" = 0 ]; then echo "::error::deployed mode needs the version the deploy script reported."; exit 1; fi
-          git merge-base --is-ancestor "$EXPECTED_COMMIT" HEAD || { echo "::error::$EXPECTED_COMMIT is not on main."; exit 1; }
+          git merge-base --is-ancestor "$EXPECTED_COMMIT" origin/rehearsal/members-disposable || { echo "::error::$EXPECTED_COMMIT is not on rehearsal/members-disposable."; exit 1; }
 
       - name: Export the deployed commit's source (for the build stamp)
         env:
