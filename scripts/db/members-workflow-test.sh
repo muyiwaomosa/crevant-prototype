@@ -112,7 +112,9 @@ identity() {
 }
 expect_identity() { # expect_identity <ok|fail> <description> <url> <marker> [message]
   identity "$3" "$4"
-  if [[ "$out" == *"$MARKER"* || "$out" == *"$OTHER_MARKER"* ]]; then bad "identity: $2 (the marker appeared in the output)"; return; fi
+  # "::add-mask::" lines are consumed by the GitHub runner and never shown; the marker must not appear anywhere else.
+  local visible; visible=$(grep -v '^::add-mask::' <<<"$out" || true)
+  if [[ "$visible" == *"$MARKER"* || "$visible" == *"$OTHER_MARKER"* ]]; then bad "identity: $2 (the marker appeared in the output)"; return; fi
   if [ "$1" = ok ] && [ $code -eq 0 ] && grep -q 'Database identity verified' <<<"$out"; then ok "identity: $2"
   elif [ "$1" = fail ] && [ $code -ne 0 ] && { [ -z "${5:-}" ] || grep -qi -- "$5" <<<"$out"; }; then ok "identity refused: $2"
   else bad "identity: $2 (exit $code): $out"; fi
