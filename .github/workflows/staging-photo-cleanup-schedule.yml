@@ -1,0 +1,97 @@
+name: Photo cleanup schedule on staging
+
+# Replaces the Crevant STAGING photo cleanup job (pg_net) with the http one,
+# verifies it, or pauses it (scripts/db/staging-photo-cleanup.sh):
+#
+#   verify  (default) Read only. The cleanup job and its runs, each matched to
+#           the post-media function's own record of its drain pass.
+#   apply   Needs the phrase SCHEDULE THE STAGING PHOTO CLEANUP. One
+#           transaction replaces the job (never duplicates it); then it waits
+#           for the first scheduled run (up to 18 minutes) and verifies it end
+#           to end. If that can't be verified, the run fails and reports the
+#           new job as INSTALLED BUT UNVERIFIED: it is not rolled back.
+#   remove  Pause. Needs the phrase UNSCHEDULE THE STAGING PHOTO CLEANUP.
+#           Unschedules only the cleanup job; Run cleanup now keeps working.
+#
+# It cannot remove pg_net (the separate "Remove pg_net from staging" workflow)
+# or restore the old pg_net job.
+#
+# Safeguards, none of which depend on the others:
+#   * Started by hand only, from main, by the repository owner, and only
+#     re-run by the repository owner (github.actor and github.triggering_actor).
+#   * The staging environment (and its approval rule, where configured).
+#   * The typed project reference must match the staging project, as must the
+#     environment variable and the project inside the connection string
+#     (scripts/db/verify-staging-target.sh). A Production project can never match.
+#   * Full TLS certificate and host name verification (sslmode=verify-full).
+#   * The scheduler script must match the reviewed checksum pinned in the wrapper.
+#   * Fingerprints of the cron jobs (commands as md5 only) and extensions
+#     before and after; never prints a connection string, command or key.
+#   * Never applies within a minute before or 90 seconds after a quarter hour,
+#     or while a cleanup run is in progress.
+#   * Only the STAGING_DATABASE_URL secret. No Production secret, workflow,
+#     Supabase CLI, migration, Edge Function, Vercel or app build.
+#   * Shares the database deploy queue, so it never overlaps a deploy or rollback.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "verify = read only. apply = replace the pg_net job with the http job and verify its first run (needs the phrase). remove = pause the cleanup job (needs the phrase)."
+        type: choice
+        options:
+          - verify
+          - apply
+          - remove
+        default: verify
+        required: true
+      confirm_project_ref:
+        description: "Type the staging project reference to confirm: kpudeppgokpjhvaqrprn"
+        type: string
+        required: true
+      confirm_phrase:
+        description: "apply: SCHEDULE THE STAGING PHOTO CLEANUP. remove: UNSCHEDULE THE STAGING PHOTO CLEANUP. verify: leave empty."
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-staging
+  cancel-in-progress: false
+
+env:
+  # The one project this workflow may ever touch. Changing it requires a reviewed PR.
+  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
+
+jobs:
+  schedule:
+    name: Photo cleanup schedule on staging (${{ inputs.mode }})
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved staging project
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-staging-target.sh
+
+      - name: Photo cleanup schedule (verify, apply or pause)
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+          MODE: ${{ inputs.mode }}
+          CONFIRM_PHRASE: ${{ inputs.confirm_phrase }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/staging-photo-cleanup.sh

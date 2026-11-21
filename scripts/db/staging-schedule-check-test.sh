@@ -51,7 +51,7 @@ trap cleanup EXIT
 "${PSQL[@]}" -c "delete from vault.secrets where name = 'media_drain_key'" -c "select vault.create_secret('$KEY', 'media_drain_key', 'local test')" >/dev/null
 "${PSQL[@]}" -c "select cron.schedule('post-media-drain', '*/15 * * * *', \$job\$
       select net.http_post(
-        url := 'https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/post-media/drain',
+        url := 'http://kong:8000/functions/v1/post-media/drain',
         headers := pg_catalog.jsonb_build_object(
           'Content-Type', 'application/json',
           'x-media-drain-key', (select s.decrypted_secret from vault.decrypted_secrets s where s.name = 'media_drain_key')),
@@ -148,7 +148,7 @@ out=$(WRAP="$tmp/repo/scripts/db/staging-schedule-check.sh" wrap); code=$?
 "${PSQL[@]}" -c "select cron.unschedule('post-media-drain')" -c "drop extension if exists http" >/dev/null
 "${PSQL[@]}" -c "select cron.schedule('post-media-drain', '*/15 * * * *', \$job\$
       select net.http_post(
-        url := 'https://kpudeppgokpjhvaqrprn.supabase.co/functions/v1/post-media/drain',
+        url := 'http://kong:8000/functions/v1/post-media/drain',
         headers := pg_catalog.jsonb_build_object(
           'Content-Type', 'application/json',
           'x-media-drain-key', (select s.decrypted_secret from vault.decrypted_secrets s where s.name = 'media_drain_key')),
