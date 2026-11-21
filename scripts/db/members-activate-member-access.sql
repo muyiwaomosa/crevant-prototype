@@ -5,9 +5,11 @@
 --   1. the approved migration file itself (unchanged, read from the repository);
 --   2. its record in supabase_migrations.schema_migrations, as the Supabase CLI writes it;
 --   3. the founder's membership (cohort founder), recorded in the append-only
---      history with the database login that made it;
+--      history with the database login that made it; then the later
+--      migrations 20261123000000 to 20261129000000, the launch gate last,
+--      each recorded, so membership never exists without the gate;
 --   4. the critical security checks: the shared checks (supabase/tests/002 to
---      007), the read-only member authorization audit, the member Production
+--      014), the read-only member authorization audit, the member Production
 --      check (supabase/tests-members/001), and activation checks (the founder,
 --      and only the founder, is an active member; anyone else is refused).
 --
@@ -35,7 +37,7 @@
 
 begin;
 set local lock_timeout = '10s';
-set local statement_timeout = '120s';
+set local statement_timeout = '300s';
 
 -- An unset -v mode or -v confirm stops here with a syntax error, by design.
 -- Only booleans are shown, never the founder's id.
@@ -116,15 +118,44 @@ insert into supabase_migrations.schema_migrations (version, name) values ('20261
 -- 3. The founder's membership.
 select ops.grant_member_access(current_setting('crevant.activate_founder')::uuid, 'founder', 'founder', null, 'member production activation') is null as founder_granted;
 
+-- 3b. In the SAME transaction, the later migrations, the launch gate last
+--     (20261123000000 to 20261129000000), each recorded as the Supabase CLI
+--     records it. The gate migration finds exactly one active founder-cohort
+--     account (the grant above) and names it the launch founder, closed. So
+--     membership and the founder-only gate commit together or not at all:
+--     there is never a moment with an active member and no gate.
+\echo 'Founder granted. Applying 20261123000000 to 20261129000000 (the launch gate last) inside the same transaction.'
+\ir ../../supabase/migrations/20261123000000_profile_details.sql
+insert into supabase_migrations.schema_migrations (version, name) values ('20261123000000', 'profile_details');
+\ir ../../supabase/migrations/20261124000000_moderation.sql
+insert into supabase_migrations.schema_migrations (version, name) values ('20261124000000', 'moderation');
+\ir ../../supabase/migrations/20261125000000_avatars.sql
+insert into supabase_migrations.schema_migrations (version, name) values ('20261125000000', 'avatars');
+\ir ../../supabase/migrations/20261126000000_feedback.sql
+insert into supabase_migrations.schema_migrations (version, name) values ('20261126000000', 'feedback');
+\ir ../../supabase/migrations/20261127000000_post_photos.sql
+insert into supabase_migrations.schema_migrations (version, name) values ('20261127000000', 'post_photos');
+\ir ../../supabase/migrations/20261128000000_photo_audience.sql
+insert into supabase_migrations.schema_migrations (version, name) values ('20261128000000', 'photo_audience');
+\ir ../../supabase/migrations/20261129000000_member_launch_gate.sql
+insert into supabase_migrations.schema_migrations (version, name) values ('20261129000000', 'member_launch_gate');
+
 \echo 'Running the critical security checks inside the transaction.'
 
--- 4a. The shared checks (002 to 007 contain no transaction control of their own).
+-- 4a. The shared checks (002 to 014 contain no transaction control of their own).
 \ir ../../supabase/tests/002_profiles_and_ops.sql
 \ir ../../supabase/tests/003_waitlist.sql
 \ir ../../supabase/tests/004_acquisition.sql
 \ir ../../supabase/tests/005_social_core.sql
 \ir ../../supabase/tests/006_platform_functions.sql
 \ir ../../supabase/tests/007_member_access.sql
+\ir ../../supabase/tests/008_profile_details.sql
+\ir ../../supabase/tests/009_moderation.sql
+\ir ../../supabase/tests/010_avatars.sql
+\ir ../../supabase/tests/011_feedback.sql
+\ir ../../supabase/tests/012_post_photos.sql
+\ir ../../supabase/tests/013_photo_audience.sql
+\ir ../../supabase/tests/014_member_launch_gate.sql
 
 -- 4b. The read-only member authorization audit (catalog reads only).
 \ir audit/member-surface-checks.sql
@@ -150,7 +181,13 @@ begin
   if not ops.member_access_active(v_founder) then
     raise exception 'FAIL: the founder''s membership is not active';
   end if;
-  raise notice 'PASS: the founder, and only the founder, is an active member, and the grant is recorded';
+  if not exists (select 1 from pg_trigger where tgrelid = 'ops.member_access'::regclass and tgname = 'member_access_launch_gate' and tgenabled = 'O' and not tgisinternal)
+     or (select founder_user_id from ops.member_launch_settings where id) is distinct from v_founder
+     or (select external_access_approved from ops.member_launch_settings where id)
+     or not exists (select 1 from ops.member_launch_events where action = 'founder_set_by_migration') then
+    raise exception 'FAIL: the launch gate must be enabled, closed, with the activated founder as the launch founder';
+  end if;
+  raise notice 'PASS: the founder, and only the founder, is an active member, the grant is recorded, and the launch gate is enabled and closed with the founder as launch founder';
 end $$;
 
 -- As the founder (signed in), the member app answers; as anyone else, it refuses.
@@ -188,7 +225,7 @@ select set_config('request.jwt.claims', '', true) is not null as session_cleared
 select current_setting('crevant.activate_mode') = 'activate' as activate \gset
 \if :activate
   commit;
-  \echo 'Activated on member Production: 20261122000000_member_access is applied and recorded, and the founder is an active member. All in one transaction. Next: apply the later migrations, which include the launch gate.'
+  \echo 'Activated on member Production: 20261122000000 to 20261129000000 are applied and recorded, the founder is an active member, and the founder-only launch gate is enabled and closed. All in one transaction.'
 \else
   rollback;
   \echo 'Rehearsal only: every step and every check succeeded inside the transaction, and all of it was rolled back. Nothing changed.'

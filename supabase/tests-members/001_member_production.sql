@@ -130,7 +130,9 @@ begin
     raise notice 'PASS: the launch gate is enabled; external member access is %',
       case when (select external_access_approved from ops.member_launch_settings where id) then 'APPROVED' else 'closed (founder only)' end;
   elsif '20261122000000' = any(recorded) then
-    raise notice 'NOTE: membership is active but the launch gate (20261129000000) is not applied yet; apply it next';
+    -- The activation installs membership and the gate in one transaction, so
+    -- this state should never exist: fail closed.
+    raise exception 'FAIL: membership (20261122000000) is recorded without the launch gate (20261129000000); the activation installs both together';
   else
     raise notice 'NOTE: the launch gate is not applied yet';
   end if;

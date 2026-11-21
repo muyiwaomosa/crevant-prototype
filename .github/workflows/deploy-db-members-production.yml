@@ -18,9 +18,10 @@ name: Deploy database to member Production
 #                     migrations (20261106000000 to 20261121000000), locks the
 #                     waitlist logins (connection limit 0), then the checks.
 #                     Phrase: APPLY MEMBER PRODUCTION FOUNDATION
-#   apply             After membership is activated (20261122000000, by
-#                     members-activate-member-access.yml): pushes the later
-#                     migrations, the launch gate included, then every check.
+#   apply             After activation (members-activate-member-access.yml,
+#                     which installs 20261122000000 to 20261129000000, the
+#                     launch gate included, in one transaction): pushes any
+#                     migration after 20261129000000, then every check.
 #                     Phrase: APPLY TO MEMBER PRODUCTION
 # Both apply modes also need confirmation that a backup or restore point exists.
 #
@@ -40,8 +41,9 @@ name: Deploy database to member Production
 #     (scripts/db/verify-members-identity.sh). Nothing else connects before it.
 #   * Full TLS verification (verify-full, committed CA).
 #   * Approved, unchanged migrations only, passing on a throwaway database first.
-#   * 20261122000000 is never pushed here: apply-foundation pushes only the
-#     foundation set, and apply refuses until 20261122000000 is recorded.
+#   * 20261122000000 to 20261129000000 are never pushed here: apply-foundation
+#     pushes only the foundation set, and apply refuses until the activation
+#     has recorded them all (membership without the gate is refused).
 #   * The approvals in config/member-production.json (both false) are
 #     enforced by supabase/tests-members/001_member_production.sql.
 #   * Its own queue; no rollback (the staging rollbacks refuse elsewhere).
@@ -220,6 +222,9 @@ jobs:
           all="$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | tr '\n' ' ' | sed 's/ $//')"
           if [ "$pending" = "$all" ]; then state=empty
           elif [[ " $pending " == *" 20261122000000 "* ]]; then state=foundation
+          elif [[ " $pending " == *" 20261129000000 "* ]]; then
+            # The activation installs membership and the launch gate together; one without the other must never happen.
+            echo "::error::Membership (20261122000000) is recorded without the launch gate (20261129000000). Stop and investigate. Nothing was done."; exit 1
           else state=activated; fi
           echo "State: $state"
           case "$MODE" in
@@ -273,7 +278,7 @@ jobs:
           PGCONNECT_TIMEOUT: '15'
         run: psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -f scripts/db/members-lock-waitlist-roles.sql
 
-      - name: Apply the later migrations (the launch gate included)
+      - name: Apply migrations after the activation set (none yet)
         if: inputs.mode == 'apply'
         env:
           MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}

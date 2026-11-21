@@ -3,8 +3,10 @@
 --
 -- ops.member_launch_settings (one row):
 --   * external_access_approved: false until ops.set_external_access opens it
---     (the exact phrase APPROVE EXTERNAL MEMBER ACCESS; recorded). Nothing
---     here opens it: not this migration, on any database.
+--     (database owner only; the exact phrase APPROVE EXTERNAL MEMBER ACCESS,
+--     an operational safeguard, not an authorization boundary; recorded).
+--     Nothing here opens it: not this migration, on any database. Opening is
+--     a separately approved operation (docs/MEMBER-PRODUCTION.md).
 --   * founder_user_id: the one account that may hold the founder cohort.
 --     Set here only if exactly one account has an active founder-cohort
 --     membership; otherwise left empty (fail closed), and then set once with
@@ -115,7 +117,7 @@ create trigger member_access_launch_gate
 before insert or update on ops.member_access
 for each row execute function ops.member_launch_gate();
 
--- Server only, recorded. Opening needs the exact phrase; closing needs none and revokes nobody.
+-- Owner only, recorded. Opening needs the exact phrase; closing needs none and revokes nobody.
 create function ops.set_external_access(p_actor text, p_approved boolean, p_confirm text default null)
 returns void
 language plpgsql
@@ -142,10 +144,14 @@ begin
   insert into ops.member_launch_events (actor, action) values (p_actor, case when p_approved then 'external_access_opened' else 'external_access_closed' end);
 end;
 $$;
-revoke all on function ops.set_external_access(text, boolean, text) from public, anon, authenticated;
-grant execute on function ops.set_external_access(text, boolean, text) to service_role;
+-- Owner only: no API role may run it, service_role included (the Edge
+-- Functions hold that key). Only a direct session as the database owner,
+-- whose password the founder alone holds, can open or close the gate. The
+-- phrase is an operational safeguard against a mistaken call, not an
+-- authorization boundary: anyone who can run this function can type it.
+revoke all on function ops.set_external_access(text, boolean, text) from public, anon, authenticated, service_role;
 
--- Server only, once, recorded: only while no founder is set.
+-- Owner only, once, recorded: only while no founder is set.
 create function ops.set_launch_founder(p_actor text, p_user uuid, p_confirm text)
 returns void
 language plpgsql
@@ -170,5 +176,5 @@ begin
   insert into ops.member_launch_events (actor, action) values (p_actor, 'founder_set');
 end;
 $$;
-revoke all on function ops.set_launch_founder(text, uuid, text) from public, anon, authenticated;
-grant execute on function ops.set_launch_founder(text, uuid, text) to service_role;
+-- Owner only, for the same reason (choosing the founder decides who may hold membership).
+revoke all on function ops.set_launch_founder(text, uuid, text) from public, anon, authenticated, service_role;

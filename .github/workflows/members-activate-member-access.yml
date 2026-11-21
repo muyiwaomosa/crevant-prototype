@@ -1,12 +1,13 @@
 name: Activate pilot membership on member Production
 
 # Applies 20261122000000_member_access to the MEMBER Production project
-# (splitpost-members-production) and makes the founder's account an active
-# pilot member IN ONE DATABASE TRANSACTION
-# (scripts/db/members-activate-member-access.sql), as staging was activated.
-# The later migrations, the launch gate included, follow with
-# deploy-db-members-production.yml (apply); the gate then names this founder
-# as the launch founder, because they are the only founder-cohort member.
+# (splitpost-members-production), makes the founder's account an active pilot
+# member, and applies 20261123000000 to 20261129000000, the founder-only
+# launch gate last, IN ONE DATABASE TRANSACTION
+# (scripts/db/members-activate-member-access.sql). The gate names this founder
+# as the launch founder (the only founder-cohort member) and starts closed.
+# Membership and the gate commit together or not at all: an interrupted run
+# leaves neither.
 #
 # Modes:
 #   rehearse  (default) The whole activation, then rolled back, then a check

@@ -23,8 +23,13 @@
 #      external access open, an invitation, a waitlist row, a creator link, an
 #      unlocked login, waitlist submissions on, the gate trigger disabled, the
 #      marker's triggers disabled, pg_net's schema present.
-#   5. The launch gate on member Production: the founder is the launch founder
-#      after the later migrations; nobody else can be given membership.
+#   5. The launch gate on member Production: the activation installs it in the
+#      same transaction as membership, naming the founder; nobody else can be
+#      given membership. Interrupted activations (the connection terminated
+#      after the founder grant, mid-migrations; the gate migration itself
+#      failing) leave no membership, no gate and no record, and a new
+#      activation then succeeds. Membership without the gate, made by hand,
+#      is refused by the member check and the verification.
 #
 # Roles are shared by every database on a server, so the waitlist logins'
 # connection limits and passwords are restored on exit (trap).
@@ -45,6 +50,7 @@ SECOND=00000000-0000-4000-8000-0000000ab002
 CONTROL_PW="ctrl$(openssl rand -hex 12)"
 POOLER_PORT=${POOLER_PORT:-6439}
 pass=0; failed=0
+tmpd=$(mktemp -d)
 ok()  { echo "PASS  members: $1"; pass=$((pass + 1)); }
 bad() { echo "FAIL  members: $1"; failed=$((failed + 1)); }
 A=(psql "$ADMIN_DATABASE_URL" -X -q -v ON_ERROR_STOP=1)
@@ -67,6 +73,7 @@ end $$;
 SQL
 }
 cleanup() {
+  rm -rf "$tmpd"
   docker rm -f members-pooler-test >/dev/null 2>&1 || true
   restore_roles
   # new_db runs in a subshell, so its databases are found by name (this run's process id).
@@ -296,23 +303,83 @@ if [ $code -eq 0 ] && grep -q 'Rehearsal only' <<<"$out" && [ "$(recorded "$M")"
 else bad "rehearsal (exit $code): $(grep -E 'ERROR|FAIL' <<<"$out" | head -3)"; fi
 if grep -qiF "$FOUNDER" <<<"$out"; then bad "the founder id appeared in the activation output"; else ok "the founder id never appears in the output"; fi
 activate "$M" "$FOUNDER" activate "ACTIVATE MEMBER PRODUCTION ACCESS"
-if [ $code -eq 0 ] && grep -q 'Activated on member Production' <<<"$out"; then ok "the activation commits"; else bad "activation (exit $code): $(grep -E 'ERROR|FAIL' <<<"$out" | head -3)"; fi
+if [ $code -eq 0 ] && grep -q 'Activated on member Production' <<<"$out" && grep -q 'the launch gate is enabled and closed with the founder as launch founder' <<<"$out"; then
+  ok "the activation commits membership and the launch gate together"
+else bad "activation (exit $code): $(grep -E 'ERROR|FAIL' <<<"$out" | head -3)"; fi
 out=$(MEMBERS_FOUNDER_ACCOUNT_ID="$FOUNDER" PGOPTIONS='-c default_transaction_read_only=on' psql "$M" -X -q -v ON_ERROR_STOP=1 -v expect=activated -f scripts/db/members-verify-activation.sql 2>&1); code=$?
-if [ $code -eq 0 ] && grep -q 'STATE: activated' <<<"$out"; then ok "the read-only verification reports activated"; else bad "verification after activation (exit $code): $out"; fi
+if [ $code -eq 0 ] && grep -q 'STATE: activated' <<<"$out"; then ok "the read-only verification reports activated, gate included"; else bad "verification after activation (exit $code): $out"; fi
 activate "$M" "$FOUNDER" activate "ACTIVATE MEMBER PRODUCTION ACCESS"
 if [ $code -ne 0 ] && grep -q 'already recorded' <<<"$out"; then ok "a second activation is refused"; else bad "second activation (exit $code)"; fi
-out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-run-checks.sh 2>&1); code=$?
-if [ $code -eq 0 ] && grep -q 'membership is active but the launch gate (20261129000000) is not applied yet' <<<"$out"; then ok "between activation and the later migrations, check mode passes and names the missing gate"
-else bad "check mode after activation (exit $code): $(grep -E 'ERROR|FAIL' <<<"$out" | head -3)"; fi
-
-# The later migrations, the launch gate included.
-apply_range "$M" 20261123000000 29991231000000 || bad "could not apply the later migrations"
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>&1)
-if [ -z "$out" ]; then ok "after apply, nothing is pending"; else bad "pending after apply: $out"; fi
+if [ -z "$out" ]; then ok "after the activation, nothing is pending (20261122000000 to 20261129000000 recorded)"; else bad "pending after activation: $out"; fi
+want=$(ls supabase/migrations/*.sql | xargs -n1 basename | sed 's/\.sql$//' | tr '\n' ' ' | sed 's/ $//')
+got=$(psql "$M" -X -At -c "select string_agg(version || '_' || name, ' ' order by version) from supabase_migrations.schema_migrations")
+if [ "$got" = "$want" ]; then ok "the migration history records every migration once, in order, with its name (as db push would)"; else bad "migration history: $got"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-run-checks.sh --require-all 2>&1); code=$?
 if [ $code -eq 0 ] && grep -q '(0 skipped)' <<<"$out" && grep -q 'external member access is closed (founder only)' <<<"$out" && grep -q 'PASS: photo posting is off' <<<"$out"; then
-  ok "after apply, every check runs and passes; the gate is closed, photos are off"
-else bad "checks after apply (exit $code): $(grep -E 'ERROR|FAIL' <<<"$out" | head -3)"; fi
+  ok "after the activation, every check runs and passes; the gate is closed, photos are off"
+else bad "checks after activation (exit $code): $(grep -E 'ERROR|FAIL' <<<"$out" | head -3)"; fi
+
+# Interrupted activations: none may leave active membership without an enabled gate.
+# ready_db <name>: a new project with the marker, the foundation, the lock and the two accounts.
+ready_db() {
+  local url; url=$(new_db "$1") || return 1
+  provision "$url" "$MARKER_SHA" >/dev/null && apply_range "$url" 20261106000000 20261121000000 \
+    && psql "$url" -X -q -v ON_ERROR_STOP=1 -f scripts/db/members-lock-waitlist-roles.sql >/dev/null 2>&1 || return 1
+  psql "$url" -X -q -v ON_ERROR_STOP=1 -c "insert into auth.users (id, email, email_confirmed_at) values ('$FOUNDER', 'founder@members.test', now()), ('$SECOND', 'second@members.test', now())" >/dev/null || return 1
+  echo "$url"
+}
+untouched() { # untouched <url> <recorded before>: no membership, no gate, history unchanged
+  [ "$(recorded "$1")" = "$2" ] && [ "$(psql "$1" -X -At -c "select to_regclass('ops.member_access') is null and to_regclass('ops.member_launch_settings') is null")" = t ]
+}
+# a) The connection is terminated in the middle, after the founder grant (blocked at 20261125000000).
+K=$(ready_db killed) || bad "could not build the interruption database"
+kbefore=$(recorded "$K")
+PGAPPNAME=members-lock-holder psql "$K" -X -q -c "begin" -c "lock table storage.buckets in access exclusive mode" -c "select pg_sleep(60)" >/dev/null 2>&1 &
+holder=$!
+for i in $(seq 1 100); do [ "$(psql "$K" -X -At -c "select count(*) from pg_locks l join pg_class c on c.oid = l.relation where c.relname = 'buckets' and l.mode = 'AccessExclusiveLock' and l.granted")" = 1 ] && break; sleep 0.1; done
+( MEMBERS_FOUNDER_ACCOUNT_ID="$FOUNDER" PGAPPNAME=members-activation-killed psql "$K" -X -q -v ON_ERROR_STOP=1 -v mode=activate -v confirm='ACTIVATE MEMBER PRODUCTION ACCESS' \
+    -v photos_approved=false -v invitations_approved=false -f scripts/db/members-activate-member-access.sql > "$tmpd/killed.log" 2>&1; echo $? > "$tmpd/killed.code" ) &
+act=$!
+waiting=""
+for i in $(seq 1 150); do
+  waiting=$(psql "$K" -X -At -c "select a.pid from pg_stat_activity a join pg_locks l on l.pid = a.pid and not l.granted where a.application_name = 'members-activation-killed' and a.query like '%storage.buckets%' limit 1")
+  [ -n "$waiting" ] && break; sleep 0.1
+done
+if [ -n "$waiting" ]; then
+  psql "$K" -X -q -c "select pg_terminate_backend($waiting)" >/dev/null
+  wait $act
+  # Release the lock: end the holder's session on the server (killing the client alone leaves it sleeping).
+  psql "$K" -X -q -c "select pg_terminate_backend(pid) from pg_stat_activity where application_name = 'members-lock-holder'" >/dev/null
+  wait $holder 2>/dev/null
+  if [ "$(cat "$tmpd/killed.code")" != 0 ] && grep -qi 'terminat\|connection to server was lost\|server closed the connection' "$tmpd/killed.log" && untouched "$K" "$kbefore"; then
+    ok "an activation terminated after the founder grant (mid-migrations) leaves no membership, no gate and no migration record"
+  else bad "terminated activation (exit $(cat "$tmpd/killed.code")): $(tail -3 "$tmpd/killed.log" | tr '\n' ' ')"; fi
+else
+  kill $holder $act 2>/dev/null; wait 2>/dev/null
+  bad "the activation never reached 20261125000000 while blocked (could not interrupt it mid-way)"
+fi
+out=$(MEMBERS_FOUNDER_ACCOUNT_ID="$FOUNDER" PGOPTIONS='-c default_transaction_read_only=on' psql "$K" -X -q -v ON_ERROR_STOP=1 -v expect=any -f scripts/db/members-verify-activation.sql 2>&1)
+if grep -q 'STATE: not activated' <<<"$out"; then ok "after the interruption, the verification reports not activated (safe to run again)"; else bad "verification after interruption: $out"; fi
+activate "$K" "$FOUNDER" activate "ACTIVATE MEMBER PRODUCTION ACCESS"
+if [ $code -eq 0 ] && grep -q 'Activated on member Production' <<<"$out"; then ok "after the interruption, a new activation succeeds"; else bad "activation after interruption (exit $code): $(grep -E 'ERROR|FAIL' <<<"$out" | head -2)"; fi
+# b) The last step, the launch gate itself, fails: everything before it is undone too.
+G=$(ready_db gatefails) || bad "could not build the gate failure database"
+gbefore=$(recorded "$G")
+psql "$G" -X -q -c "create function ops.set_launch_founder(text, uuid, text) returns void language sql as 'select null'" >/dev/null
+activate "$G" "$FOUNDER" activate "ACTIVATE MEMBER PRODUCTION ACCESS"
+if [ $code -ne 0 ] && grep -q 'already exists' <<<"$out" && untouched "$G" "$gbefore"; then
+  ok "if the launch gate migration fails, the membership, the grant and the earlier migrations are all undone"
+else bad "gate failure (exit $code): $(grep -E 'ERROR' <<<"$out" | head -2)"; fi
+# c) Membership without the gate (made by hand; the workflows can't produce it) is refused everywhere.
+H=$(ready_db nogate) || bad "could not build the inconsistent database"
+psql "$H" -X -q -v ON_ERROR_STOP=1 -f supabase/migrations/20261122000000_member_access.sql >/dev/null 2>&1 \
+  && psql "$H" -X -q -v ON_ERROR_STOP=1 -c "insert into supabase_migrations.schema_migrations (version, name) values ('20261122000000', 'member_access')" \
+       -c "select ops.grant_member_access('$FOUNDER', 'founder', 'founder', null, 'member production activation')" >/dev/null || bad "could not build membership without the gate"
+out=$(MEMBERS_PRODUCTION_DATABASE_URL="$H" scripts/db/members-run-checks.sh 2>&1); code=$?
+if [ $code -ne 0 ] && grep -q 'recorded without the launch gate' <<<"$out"; then ok "membership without the gate: the member check fails"; else bad "member check without the gate (exit $code)"; fi
+out=$(MEMBERS_FOUNDER_ACCOUNT_ID="$FOUNDER" PGOPTIONS='-c default_transaction_read_only=on' psql "$H" -X -q -v ON_ERROR_STOP=1 -v expect=any -f scripts/db/members-verify-activation.sql 2>&1); code=$?
+if [ $code -ne 0 ] && grep -q 'launch gate is not recorded and enabled' <<<"$out"; then ok "membership without the gate: the verification reports it inconsistent"; else bad "verification without the gate (exit $code): $(grep FAIL <<<"$out")"; fi
 
 # 5. The launch gate on member Production.
 if [ "$(psql "$M" -X -At -c "select founder_user_id = '$FOUNDER' and not external_access_approved from ops.member_launch_settings")" = t ]; then

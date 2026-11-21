@@ -65,9 +65,10 @@ begin
       raise exception 'FAIL: % may read the launch gate', r;
     end if;
   end loop;
-  -- 5. The two changes are server only, and need their exact phrases.
+  -- 5. The two changes are for the database owner only (no API role, service_role
+  --    included), and need their exact phrases (a safeguard, not the authorization).
   foreach f in array array['ops.set_external_access(text, boolean, text)', 'ops.set_launch_founder(text, uuid, text)'] loop
-    foreach r in array array['anon', 'authenticated'] loop
+    foreach r in array array['anon', 'authenticated', 'service_role'] loop
       if has_function_privilege(r, f, 'EXECUTE') then
         raise exception 'FAIL: % may run %', r, f;
       end if;
@@ -83,7 +84,7 @@ begin
      or position('a launch founder is already set' in (select prosrc from pg_proc where oid = 'ops.set_launch_founder(text, uuid, text)'::regprocedure)) = 0 then
     raise exception 'FAIL: setting the launch founder no longer needs its phrase, or can replace an existing founder';
   end if;
-  raise notice 'PASS: the launch gate trigger is enabled and complete, its settings and records are server only, and its changes need their phrases';
+  raise notice 'PASS: the launch gate trigger is enabled and complete, its settings and records are server only, and only the database owner can change it (with its phrases)';
 end $$;
 
 -- 6. The settings are sound (counts only).

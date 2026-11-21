@@ -11,7 +11,9 @@
 -- Exactly one of these states is reported:
 --   STATE: activated      the migration is recorded, its objects exist, the
 --                         founder (MEMBERS_FOUNDER_ACCOUNT_ID) is an active
---                         member, and the activation grant is in the history.
+--                         member, the activation grant is in the history, and
+--                         the launch gate (20261129000000) is recorded, enabled,
+--                         closed, and names the founder.
 --   STATE: not activated  no migration record and no membership objects: the
 --                         activation did not commit. Nothing was changed; it
 --                         is safe to rehearse and activate again.
@@ -79,7 +81,18 @@ begin
   if not v_founder_ok or not v_history_ok then
     raise exception 'FAIL: activated, but the founder''s membership or its activation grant is missing. Stop and investigate.';
   end if;
-  raise notice 'STATE: activated. The migration is recorded, and the founder is an active member.';
+  -- On member Production the launch gate is installed in the same transaction
+  -- as the activation, so membership without an enabled gate is inconsistent.
+  if not exists (select 1 from supabase_migrations.schema_migrations where version = '20261129000000')
+     or to_regclass('ops.member_launch_settings') is null
+     or not exists (select 1 from pg_trigger where tgrelid = 'ops.member_access'::regclass and tgname = 'member_access_launch_gate' and tgenabled = 'O' and not tgisinternal) then
+    raise exception 'FAIL: inconsistent: membership is active but the founder-only launch gate is not recorded and enabled. Stop and investigate.';
+  end if;
+  execute 'select founder_user_id = $1::uuid and not external_access_approved from ops.member_launch_settings where id' into v_founder_ok using v_founder;
+  if v_founder_ok is not true then
+    raise exception 'FAIL: the launch gate does not name this founder as launch founder, or external access is open. Stop and investigate.';
+  end if;
+  raise notice 'STATE: activated. Membership and the launch gate are recorded, the founder is an active member and the launch founder, and external access is closed.';
 end $$;
 
 rollback;

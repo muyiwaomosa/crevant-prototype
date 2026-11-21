@@ -72,7 +72,11 @@ begin
   perform pg_temp.expect_error_lg($q$select ops.grant_member_access('00000000-0000-4000-8000-00000000c702', 'tester', 'test')$q$, 'external member access is not approved', 'the server key granting while closed');
   perform pg_temp.expect_error_lg($q$update ops.member_launch_settings set external_access_approved = true$q$, 'permission denied', 'the server key opening the gate directly');
   perform pg_temp.expect_error_lg($q$update ops.member_launch_settings set founder_user_id = '00000000-0000-4000-8000-00000000c702'$q$, 'permission denied', 'the server key replacing the founder directly');
-  raise notice 'PASS: the server key (service_role) can neither grant nor change the gate directly while it is closed';
+  -- The phrase is not an authorization: the server key can't run the functions at all, even with it.
+  perform pg_temp.expect_error_lg($q$select ops.set_external_access('server', true, 'APPROVE EXTERNAL MEMBER ACCESS')$q$, 'permission denied', 'the server key opening the gate with the phrase');
+  perform pg_temp.expect_error_lg($q$select ops.set_external_access('server', false)$q$, 'permission denied', 'the server key closing the gate');
+  perform pg_temp.expect_error_lg($q$select ops.set_launch_founder('server', '00000000-0000-4000-8000-00000000c702', 'SET THE LAUNCH FOUNDER')$q$, 'permission denied', 'the server key setting the founder with the phrase');
+  raise notice 'PASS: the server key (service_role) can neither grant nor change the gate, directly or through its functions, even with the phrases';
 end $$;
 commit;
 

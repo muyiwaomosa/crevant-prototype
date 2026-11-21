@@ -33,7 +33,7 @@ recorded, and invitations stay blocked until the privacy notice is published.
 | Identity marker: provisioning and check | `scripts/db/members-identity-provision.sql`, `scripts/db/verify-members-identity.sh` |
 | Waitlist login lock | `scripts/db/members-lock-waitlist-roles.sql` |
 | Migration sets | `scripts/db/members-subset.sh` |
-| Activation (one transaction) and its read-only verification | `scripts/db/members-activate-member-access.sql`, `scripts/db/members-verify-activation.sql` |
+| Activation (membership, founder grant and launch gate in one transaction) and its read-only verification | `scripts/db/members-activate-member-access.sql`, `scripts/db/members-verify-activation.sql` |
 | Check runner, pending list | `scripts/db/members-run-checks.sh`, `scripts/db/members-pending-migrations.sh` |
 | Staging rollback of the gate | `scripts/db/staging-rollback-member-launch-gate.sql` |
 | Tests | `scripts/db/members-workflow-test.sh`, `scripts/members-workflows.test.mjs`, `scripts/db/rollback-member-launch-gate-test.sh`, `supabase/tests-local/117_member_launch_gate.sql`, violations 100 to 105, `scripts/db/test-guards.sh` |
@@ -59,8 +59,9 @@ refused.
 
 Settings and records are server only: no role can write them directly (not
 even `service_role`); members and visitors can't read them. Changes go
-through two functions, executable by `service_role` only (and by the
-database owner), each recorded in the append-only `ops.member_launch_events`:
+through two functions, **executable by the database owner (`postgres`) only**,
+not by any API role (`service_role`, which the Edge Functions hold, included),
+each recorded in the append-only `ops.member_launch_events`:
 
 * `ops.set_external_access(actor, approved, confirm)`: opening needs the
   phrase `APPROVE EXTERNAL MEMBER ACCESS`; closing needs none. An actor label
@@ -68,9 +69,35 @@ database owner), each recorded in the append-only `ops.member_launch_events`:
 * `ops.set_launch_founder(actor, user, confirm)`: needs `SET THE LAUNCH
   FOUNDER`, only while no founder is set; it never replaces one.
 
-`ops` is not exposed through the Data API, so neither function can be called
-with an API key over HTTP; it needs a direct database session as
-`service_role` or the owner.
+`ops` is not exposed through the Data API either, so neither function can be
+reached with an API key over HTTP. Check 014 fails if `anon`, `authenticated`,
+`service_role` or `PUBLIC` can run either one.
+
+**The phrases are operational safeguards, not authorization boundaries.**
+They stop a mistaken or half-typed call; anyone who can run the function can
+type them. The authorization boundary is the database owner credential
+(the `postgres` password), held by the founder only.
+
+### Opening external access: a separate, approved operation
+
+Nothing in this repository opens external access: no migration, no workflow,
+and no script outside the local test harness (`scripts/db/test-guards.sh`
+fails if one does). On member Production, opening it needs, in order:
+
+1. the privacy notice published (external invitations stay blocked until then);
+2. a **reviewed PR** setting `invitationsApproved` to `true` in
+   `config/member-production.json` (until then, every member workflow fails
+   if external access is open, so an unapproved opening is caught on the next
+   run);
+3. the founder's own explicit approval of the opening itself, recorded in the
+   evidence log below (date, reason, who approved);
+4. then, as the database owner, `select ops.set_external_access('<label>', true, 'APPROVE EXTERNAL MEMBER ACCESS')`
+   (recorded in `ops.member_launch_events`), followed by the `check` workflow.
+
+On staging the same applies except step 2: opening it there is still a
+separately approved, recorded operation, never part of a migration or deploy.
+A future workflow for opening would be its own reviewed PR with its own
+environment approval.
 
 ### How the migration picks the founder: zero, one or several
 
@@ -184,9 +211,10 @@ session by every member workflow:
    submissions off;
 3. no rows in any waitlist or creator acquisition table; no invitations
    unless approved;
-4. the launch gate trigger present and enabled; external access closed unless
-   invitations are approved, and then nobody but the launch founder holding
-   active membership (this catches membership given around the gate);
+4. the launch gate trigger present and enabled once membership exists
+   (membership recorded without the gate fails); external access closed
+   unless invitations are approved, and then nobody but the launch founder
+   holding active membership (this catches membership given around the gate);
 5. photo posting off unless approved;
 6. no `pg_net` extension and no `net` schema.
 
@@ -218,12 +246,26 @@ reviewer.
 | `check` (default) | Read only: identity, member check, shared checks for what is applied. |
 | `plan` | The same, then a dry run of what the next apply would push. |
 | `apply-foundation` | New, empty project only: pushes 20261106000000 to 20261121000000, locks the waitlist logins, runs the checks. Phrase `APPLY MEMBER PRODUCTION FOUNDATION`, backup confirmed. |
-| `apply` | Only after activation: pushes 20261123000000 onwards (the gate included); every migration must then be recorded and every check must run. Phrase `APPLY TO MEMBER PRODUCTION`, backup confirmed. |
+| `apply` | Only after activation: pushes migrations after 20261129000000 (none yet); every migration must then be recorded and every check must run. Refuses membership recorded without the gate. Phrase `APPLY TO MEMBER PRODUCTION`, backup confirmed. |
 
-`members-activate-member-access.yml` applies 20261122000000 and the founder's
-grant in one transaction (`rehearse` by default, `activate` with
-`ACTIVATE MEMBER PRODUCTION ACCESS`, `verify` read only). 20261122000000 is
-never pushed by `db push`.
+`members-activate-member-access.yml` applies 20261122000000, the founder's
+grant, then 20261123000000 to 20261129000000 with **the launch gate last, in
+one transaction**, recording each migration exactly as `db push` would
+(`rehearse` by default, `activate` with `ACTIVATE MEMBER PRODUCTION ACCESS`,
+`verify` read only). The gate migration finds exactly one active
+founder-cohort account, the one just granted, and names it the launch
+founder, closed. None of 20261122000000 to 20261129000000 is ever pushed by
+`db push`. `scripts/db/members-subset.sh verify` fails unless the activation
+applies and records exactly that set, in order, the gate last.
+
+There is no moment with an active member and no gate: if the run is
+interrupted (connection lost, timeout, any failed statement or check), the
+whole transaction is rolled back and the project is left with neither.
+`scripts/db/members-workflow-test.sh` proves this by terminating an
+activation mid-way, after the founder grant, and by making the gate
+migration itself fail; then a new activation succeeds. A state with
+membership but no gate (only possible by hand) fails the member check, the
+read-only verification and the deploy workflow.
 
 ## Sequence (each step separately approved; none is done by this PR)
 
@@ -236,14 +278,8 @@ never pushed by `db push`.
    rehearsal (above).
 5. The founder signs up in the member app against this project (needs 1B-2),
    confirms their email; store their account id as `MEMBERS_FOUNDER_ACCOUNT_ID`.
-6. Activation: `rehearse`, then `activate`.
-7. `apply` (the later migrations, the gate included; the gate names the
-   founder, the only founder-cohort member, as the launch founder). Then `check`.
-
-Between steps 6 and 7 there is no launch gate yet. Nothing can grant
-membership in that window except a direct database session (no Edge Function
-is deployed, `ops` is not exposed over HTTP, and `ops.invitations` is empty
-and checked), so run step 7 straight after step 6.
+6. Activation: `rehearse`, then `activate` (membership, the founder's
+   grant and the launch gate, in one transaction). Then `check`.
 
 ## Privileged bypasses
 
@@ -256,7 +292,7 @@ privileged paths can get around them; each is listed with what detects it.
 | **`session_replication_role = replica`** (skips ordinary triggers for a session) | The gate, the marker's immutability and the append-only log, for that session's writes. | **`postgres` can set it**: Supabase's supautils extension lets its privileged role set this parameter, although `postgres` is not a superuser (proven on local Supabase, Postgres 17, in a rolled-back transaction; assume hosted Supabase is the same). `service_role` cannot (also proven). Not preventable from SQL. Detected afterwards: while invitations are not approved, the member Production check fails if anyone but the launch founder holds active membership, and check 014 fails on a second active founder. |
 | **Logical replication and restore** | A subscription applies rows with replication role `replica`, so triggers don't fire; `pg_restore --disable-triggers` likewise. | Needs replication or superuser rights (`pg_create_subscription` or superuser). No subscriptions are configured; adding one is a reviewed change. Run check 014 and the member check after any restore. |
 | **Supabase superuser and platform** (`supabase_admin`, Supabase staff) | Everything. | Outside this repository's control; the provider's access controls. |
-| **`service_role` session** | Can call `ops.set_external_access` and `ops.set_launch_founder` with their phrases (the phrase is a confirmation, not an authorization). | No HTTP path (`ops` not exposed). Needs a direct database session as `service_role`. Every change is recorded; the member check fails if external access is open while invitations are not approved. |
+| **`service_role`** (the Edge Functions' key) | Nothing here: it can't write the settings or records, can't run `ops.set_external_access` or `ops.set_launch_founder` (even with the phrases), and can't set `session_replication_role`. It can call `ops.grant_member_access`, which the gate still binds. | Tested in `117` and on local Supabase; check 014 fails if it is ever granted either function. |
 | **`CONNECTION LIMIT 0`** | Stops new sessions only. A member of the role (or a superuser) can `SET ROLE waitlist_writer` inside an existing session; the owner can raise the limit or set a password. | No one is granted those roles. The member check fails if the limit is not 0; the lock refuses if a session is open. |
 | **Identity marker** | Proves the hash is present, not who put it there; anyone with owner access can read the hash and copy it into another database, or (after disabling the triggers) change it. | A guard against a wrong connection string, not an insider. The member check fails if the marker's triggers are disabled. |
 

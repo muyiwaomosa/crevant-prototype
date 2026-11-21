@@ -384,5 +384,31 @@ guard "member workflows: never name the staging or waitlist secrets, environment
 guard "staging and waitlist workflows: never name a member Production secret, environment or script" \
   "! grep -lE 'MEMBERS_|members-production|verify-members-|members-subset|members-lock' \$(ls .github/workflows/*.yml | grep -v -e deploy-db-members-production.yml -e members-activate-member-access.yml)"
 
+# The activation installs membership and the launch gate in one transaction:
+# the sets check refuses an activation without the gate, or with the gate
+# not last, or with an unrecorded migration.
+adir=$(mktemp -d)
+activation_copy() { # activation_copy <ok|fail> <description> <edit applied to the activation SQL>
+  local want=$1 desc=$2 code
+  rm -rf "$adir/r"; mkdir -p "$adir/r/scripts/db"; cp -r supabase "$adir/r/"; cp scripts/db/members-subset.sh scripts/db/members-activate-member-access.sql "$adir/r/scripts/db/"
+  (cd "$adir/r" && eval "$3")
+  "$adir/r/scripts/db/members-subset.sh" verify >/dev/null 2>&1; code=$?
+  if { [ "$want" = ok ] && [ $code -eq 0 ]; } || { [ "$want" = fail ] && [ $code -ne 0 ]; }; then echo "PASS  members: $desc"; pass=$((pass+1)); else echo "FAIL  members: $desc (exit $code)"; failed=$((failed+1)); fi
+}
+A=scripts/db/members-activate-member-access.sql
+activation_copy ok   "the activation applies 20261122000000 to 20261129000000, the gate last, each recorded" "true"
+activation_copy fail "an activation without the launch gate migration is refused" "sed -i '/20261129000000_member_launch_gate.sql/d' $A"
+activation_copy fail "an activation that does not record the gate is refused" "sed -i \"/values ('20261129000000'/d\" $A"
+activation_copy fail "an activation with the gate before another migration is refused" "python3 -c \"import re;p='$A';s=open(p).read();g='\\\\ir ../../supabase/migrations/20261129000000_member_launch_gate.sql\\n';s=s.replace(g,'');s=s.replace('\\\\ir ../../supabase/migrations/20261128000000',g+'\\\\ir ../../supabase/migrations/20261128000000');open(p,'w').write(s)\""
+activation_copy fail "a new migration after the gate may not join the activation unrecorded" "echo 'select 1;' > supabase/migrations/20261130000000_later.sql; sha256sum supabase/migrations/20261130000000_later.sql >> supabase/approved-migrations.sha256; echo '\\ir ../../supabase/migrations/20261130000000_later.sql' >> $A"
+rm -rf "$adir"
+
+# Opening external member access is never automated: no workflow, and no
+# script outside the local test harness, calls ops.set_external_access to open it.
+guard "no workflow or non-test script opens external member access" \
+  "[ -z \"\$(grep -rlE \"set_external_access\\([^)]*true\" .github scripts supabase/migrations supabase/tests supabase/tests-members | grep -vxE 'scripts/db/(local-open-launch-gate\\.sh|rollback-member-launch-gate-test\\.sh|members-workflow-test\\.sh)' )\" ]"
+guard "the member deploy refuses membership recorded without the launch gate" \
+  "grep -q 'Membership (20261122000000) is recorded without the launch gate (20261129000000)' $mw"
+
 echo "Guard tests: $pass passed, $failed failed"
 [ $failed -eq 0 ]
