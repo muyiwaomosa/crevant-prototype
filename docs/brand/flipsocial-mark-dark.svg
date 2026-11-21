@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-110 -110 220 220" role="img" aria-labelledby="t">
+  <title id="t">FlipSocial mark, reversed for dark backgrounds (concept): a dominant inverted pyramid over a smaller upright pyramid, forming a six pointed star</title>
+  <!-- Upright pyramid: smaller, behind, brass. Two faces suggest a pyramid. -->
+  <polygon points="0,-82 -71,41 0,41" fill="#B8955A"/>
+  <polygon points="0,-82 71,41 0,41" fill="#7D5F2C"/>
+  <!-- Inverted pyramid: full size, in front, midnight. Visually dominant. -->
+  <polygon points="0,100 -86.6,-50 0,-50" fill="#F7F4EE"/>
+  <polygon points="0,100 86.6,-50 0,-50" fill="#D9D1C1"/>
+</svg>
