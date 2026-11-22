@@ -21,8 +21,11 @@ function renderSite(path: string) {
     </MemoryRouter>,
   )
 }
+// Links to member pages of THIS site. The member app's own sign-in page
+// (https://app.splitpost.ca/sign-in, a plain link) is the one approved exception.
+const MEMBER_SIGN_IN = 'https://app.splitpost.ca/sign-in'
 const memberHrefs = (root: HTMLElement) =>
-  [...root.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') || '').filter((h) => /sign-in|forgot-password|\/auth\/|^\/app(\/|$)/.test(h))
+  [...root.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') || '').filter((h) => h !== MEMBER_SIGN_IN && /sign-in|forgot-password|\/auth\/|^\/app(\/|$)/.test(h))
 
 beforeEach(() => {
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
@@ -37,28 +40,33 @@ describe('public site build', () => {
     expect(container.textContent).not.toMatch(/Sign in|Already invited|Your account/)
   })
 
-  it('offers Sign In in the header and footer, to /pilot-access only, never the member sign-in page', () => {
+  it('offers Sign In in the header and footer, to the member app sign-in page only (a plain link, no member route here)', () => {
     const { container } = renderSite('/')
     const header = container.querySelector('header')!
     const signIn = header.querySelector('[data-testid="header-sign-in"]')!
-    expect(signIn.getAttribute('href')).toBe('/pilot-access')
+    expect(signIn.getAttribute('href')).toBe(MEMBER_SIGN_IN)
     expect(signIn.getAttribute('aria-label')).toBe('Sign In')
+    // Join the Waitlist stays the header's primary action, after Sign In.
+    const waitlist = header.querySelector('[data-testid="header-waitlist-cta"]')!
+    expect(waitlist.getAttribute('href')).toBe('/join')
+    expect(signIn.compareDocumentPosition(waitlist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     const footer = [...container.querySelectorAll('footer a')].map((a) => [a.textContent?.trim(), a.getAttribute('href')])
-    expect(footer).toContainEqual(['Sign In', '/pilot-access'])
+    expect(footer).toContainEqual(['Sign In', 'https://app.splitpost.ca/sign-in'])
+    expect(container.querySelector('a[href="/pilot-access"]')).toBeNull()
     expect(memberHrefs(container)).toEqual([])
   })
 
-  it('serves /pilot-access: says sign-in is coming and is invitation only, with nothing to type into', () => {
+  it('serves /pilot-access: invited members sign in at the member app, newcomers join the waitlist; nothing to type into', () => {
     const { container, getByTestId } = renderSite('/pilot-access')
     expect(getByTestId('where').textContent).toBe('/pilot-access')
-    expect(container.querySelector('h1')?.textContent).toBe('Member Sign In')
+    expect(container.querySelector('h1')?.textContent).toBe('Already part of Splitpost?')
     const note = getByTestId('pilot-access').textContent ?? ''
-    expect(note).toContain('Member sign-in is coming soon.')
-    expect(note).toContain('invitation only')
+    expect(note).toContain('Splitpost is currently open to invited members only.')
+    expect(note).toContain("If you've received access, sign in to your account. If you're new here, join the waitlist to be considered for the pilot.")
     expect(container.querySelector('form, input, select, textarea, button[type="submit"]')).toBeNull()
     expect(memberHrefs(container)).toEqual([])
-    const links = [...container.querySelectorAll('main a')].map((a) => a.getAttribute('href'))
-    expect(links).toEqual(['/', '/join', '/'])
+    const links = [...container.querySelectorAll('main a')].map((a) => [a.textContent?.trim(), a.getAttribute('href')])
+    expect(links).toEqual([['Back to Splitpost', '/'], ['Sign In', 'https://app.splitpost.ca/sign-in'], [expect.any(String), '/join']])
     expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex')
   })
 

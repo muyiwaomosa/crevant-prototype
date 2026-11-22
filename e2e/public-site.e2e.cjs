@@ -21,6 +21,7 @@ const SECURITY_HEADERS = Object.fromEntries(vercel.headers.find((h) => h.source 
 
 // Member pages that exist in the full app. In the site build every one of
 // them must be the public "not found" page, with nothing to type into.
+const MEMBER_SIGN_IN = 'https://app.splitpost.ca/sign-in'
 const MEMBER_PATHS = ['/sign-in', '/sign-in?next=%2Fapp', '/forgot-password', '/auth/confirm', '/auth/confirm#token_hash=abc&type=invite', '/auth/set-password', '/app', '/app/account', '/app/anything']
 
 let failures = 0
@@ -100,8 +101,9 @@ async function newContext(browser, options = {}) {
       check(`${label}: the waitlist button says it opens soon while registration is closed`, await shows(page.getByRole('link', { name: 'Waitlist Opens Soon' })))
       check(`${label}: no button invites a signup that isn't possible yet`, (await page.getByRole('link', { name: 'Join the Waitlist' }).count()) === 0)
 
-      // 2. No member links anywhere on the landing page.
-      const memberHrefs = await page.$$eval('a[href]', (as) => as.map((a) => a.getAttribute('href')).filter((h) => /sign-in|forgot-password|\/auth\/|^\/app(\/|$)/.test(h)))
+      // 2. No links to member pages of this site. The member app's own sign-in
+      //    page (a plain link to app.splitpost.ca) is the one approved exception.
+      const memberHrefs = await page.$$eval('a[href]', (as, allowed) => as.map((a) => a.getAttribute('href')).filter((h) => h !== allowed && /sign-in|forgot-password|\/auth\/|^\/app(\/|$)/.test(h)), MEMBER_SIGN_IN)
       check(`${label}: no links to sign in or member pages`, memberHrefs.length === 0, memberHrefs.join(', '))
       check(`${label}: no "Sign in" text`, (await page.getByText(/Sign in|Already invited/).count()) === 0)
 
@@ -128,12 +130,22 @@ async function newContext(browser, options = {}) {
       check(`${label}: /privacy has nothing to type into`, (await page.locator('form, input, select, textarea').count()) === 0)
       check(`${label}: /privacy is noindex`, (await page.locator('meta[name="robots"]').getAttribute('content')) === 'noindex')
 
-      // 4c. Sign In: the header links to /pilot-access, which explains that member
-      //     sign-in is coming and is invitation only. No form, never indexed.
+      // 4c. Sign In: the header and footer link to the member app's sign-in
+      //     page, a plain link (the public site has no sign-in code). Join the
+      //     Waitlist stays the header's primary action, after Sign In.
       await page.goto(`${BASE}/`)
       const signIn = page.locator('header [data-testid="header-sign-in"]')
-      check(`${label}: the header offers Sign In, to /pilot-access`,
-        (await shows(signIn)) && (await signIn.getAttribute('href')) === '/pilot-access' && (await signIn.getAttribute('aria-label')) === 'Sign In')
+      check(`${label}: the header offers Sign In, to the member app sign-in page`,
+        (await shows(signIn)) && (await signIn.getAttribute('href')) === MEMBER_SIGN_IN && (await signIn.getAttribute('aria-label')) === 'Sign In')
+      const order = await page.evaluate(() => {
+        const a = document.querySelector('header [data-testid="header-sign-in"]')
+        const b = document.querySelector('header [data-testid="header-waitlist-cta"]')
+        return !!a && !!b && b.getAttribute('href') === '/join' && Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+      })
+      check(`${label}: the waitlist button is still in the header, after Sign In`, order)
+      check(`${label}: the footer offers Sign In, to the member app sign-in page`,
+        (await page.locator('footer a', { hasText: 'Sign In' }).getAttribute('href')) === MEMBER_SIGN_IN)
+      check(`${label}: nothing links to /pilot-access any more`, (await page.locator('a[href="/pilot-access"]').count()) === 0)
       let reached = false
       let ring = ''
       for (let i = 0; i < 10 && !reached; i++) {
@@ -142,11 +154,13 @@ async function newContext(browser, options = {}) {
         if (reached) ring = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle)
       }
       check(`${label}: the keyboard reaches Sign In, with a visible focus ring`, reached && ring !== 'none' && ring !== '', `outline ${ring}`)
-      await page.keyboard.press('Enter')
-      await page.waitForURL(/\/pilot-access$/)
-      check(`${label}: Sign In opens the pilot access page`, await shows(page.getByRole('heading', { level: 1, name: 'Member Sign In' })))
-      check(`${label}: /pilot-access says sign-in is coming soon and is invitation only`,
-        /Member sign-in is coming soon\./.test(await page.getByTestId('pilot-access').innerText()) && /invitation only/.test(await page.getByTestId('pilot-access').innerText()))
+      // /pilot-access, for older links: members sign in at the member app; newcomers join the waitlist.
+      await page.goto(`${BASE}/pilot-access`)
+      check(`${label}: /pilot-access asks whether you're already part of Splitpost`, await shows(page.getByRole('heading', { level: 1, name: 'Already part of Splitpost?' })))
+      check(`${label}: /pilot-access says it's for invited members only`,
+        /Splitpost is currently open to invited members only\./.test(await page.getByTestId('pilot-access').innerText()))
+      check(`${label}: /pilot-access offers Sign In to the member app, then the waitlist`,
+        (await page.locator('main a', { hasText: 'Sign In' }).getAttribute('href')) === MEMBER_SIGN_IN && (await page.locator('main a[href="/join"]').count()) === 1)
       check(`${label}: /pilot-access has nothing to type into`, (await page.locator('form, input, select, textarea').count()) === 0)
       check(`${label}: /pilot-access is noindex`, (await page.locator('meta[name="robots"]').getAttribute('content')) === 'noindex')
       await page.evaluate(AXE)
@@ -344,7 +358,10 @@ async function newContext(browser, options = {}) {
         if (!(await page.locator(`[id="${id}"]`).count())) bad.push(`${path}#${id}: no such anchor`)
       }
       check(`${label}: link audit of ${seen.size} pages: every link works and shows Splitpost`, bad.length === 0, bad.slice(0, 5).join(' | '))
-      check(`${label}: no links to outside sites from the public pages`, external.size === 0, [...external].join(', '))
+      // The member app's sign-in page is the one approved outside link.
+      const outside = [...external].filter((h) => h !== MEMBER_SIGN_IN)
+      check(`${label}: no links to outside sites from the public pages, except the member sign-in page`, outside.length === 0, outside.join(', '))
+      check(`${label}: the member sign-in page is linked from the public pages`, external.has(MEMBER_SIGN_IN))
       await ctx.close()
     }
 

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { checkSiteBundle, forbiddenProjectRefs } from './check-site-bundle.mjs'
+import { ALLOWED_MEMBER_LINK, checkSiteBundle, forbiddenProjectRefs } from './check-site-bundle.mjs'
 
 const INDEX = '<!doctype html><html><head><meta charset="UTF-8" />\n<meta name="crevant-build" content="public-site" /></head><body><script type="module" src="/assets/index-abc.js"></script></body></html>'
 const CLEAN_JS = 'const a=`/join`,b=`/tour`;function ul(e){if(/^sb_secret_/i.test(e))return!0}'
@@ -133,5 +133,49 @@ test('the member app address code (app.splitpost.ca routes and layout) never rea
   for (const js of ['const h=["app.splitpost.ca"]', '"data-testid":"member-host-header"', '"data-testid":"member-host-footer"', '"data-testid":"public-site-link"', '<meta name="crevant-build" content="member-app" />']) {
     const problems = checkSiteBundle(bundle({ js: `${CLEAN_JS};${js}` }))
     assert.ok(problems.some((p) => /member app address code/.test(p)), js)
+  }
+})
+
+test('the member sign-in link is allowed only as the exact, complete address', () => {
+  assert.equal(ALLOWED_MEMBER_LINK, 'https://app.splitpost.ca/sign-in')
+  for (const q of ['"', "'", '`']) {
+    const js = `${CLEAN_JS};const s=${q}https://app.splitpost.ca/sign-in${q},t=${q}https://app.splitpost.ca/sign-in${q};`
+    assert.deepEqual(checkSiteBundle(bundle({ js })), [], `quoted with ${q}`)
+  }
+  // In the HTML too (an <a href>).
+  assert.deepEqual(checkSiteBundle(bundle({ extra: { 'pilot-access.html': '<a href="https://app.splitpost.ca/sign-in">Sign In</a>' } })), [])
+  const refused = [
+    'https://app.splitpost.ca/sign-in?next=/app',
+    'https://app.splitpost.ca/sign-in/',
+    'https://app.splitpost.ca/sign-in#x',
+    'https://app.splitpost.ca/sign-inx',
+    'https://app.splitpost.ca/sign-in/../app',
+    'https://app.splitpost.ca/app',
+    'https://app.splitpost.ca/',
+    'https://app.splitpost.ca',
+    'http://app.splitpost.ca/sign-in',
+    '//app.splitpost.ca/sign-in',
+    'https://APP.SPLITPOST.CA/sign-in',
+    'https://App.Splitpost.ca/sign-in',
+    'https://app.splitpost.ca:443/sign-in',
+    'https://evil.app.splitpost.ca/sign-in',
+    'https://app.splitpost.ca.evil.example/sign-in',
+    'x https://app.splitpost.ca/sign-in',
+    'https://app.splitpost.ca/sign-in https://app.splitpost.ca/app',
+  ]
+  for (const url of refused) {
+    const problems = checkSiteBundle(bundle({ js: `${CLEAN_JS};const u="${url}";` }))
+    assert.ok(problems.some((p) => /member app address code/.test(p)), url)
+  }
+  // Unquoted, or the allowed link next to other member app code: the rest is still caught.
+  assert.ok(checkSiteBundle(bundle({ js: `${CLEAN_JS};u=https://app.splitpost.ca/sign-in;` })).some((p) => /member app address code/.test(p)))
+  assert.ok(checkSiteBundle(bundle({ js: `${CLEAN_JS};a="https://app.splitpost.ca/sign-in";b="member-host-header";` })).some((p) => /member app address code/.test(p)))
+  // The allowance never lets in sign-in code, a member route or the Supabase client.
+  for (const [js, label] of [
+    ['a="https://app.splitpost.ca/sign-in";x.auth.signInWithPassword(e)', /sign in or password code/],
+    ['a="https://app.splitpost.ca/sign-in";r="/sign-in"', /a member route/],
+    ['a="https://app.splitpost.ca/sign-in";import("@supabase/supabase-js")', /Supabase client library/],
+  ]) {
+    assert.ok(checkSiteBundle(bundle({ js: `${CLEAN_JS};${js}` })).some((p) => label.test(p)), js)
   }
 })
