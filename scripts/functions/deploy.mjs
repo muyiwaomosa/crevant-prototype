@@ -28,7 +28,14 @@
 //     or at current main (rollback), finished within 24 hours;
 //   * the pinned Supabase CLI; the project holds no unexpected function.
 // The deployed code is a `git archive` export of the commit, with only
-// _shared/build-info.ts stamped '<commit>.<digest>'. The CLI is always called
+// _shared/build-info.ts stamped '<commit>.<digest>'. The export also holds
+// supabase/config.toml and exactly the files it references (its content_path
+// settings, the Auth email templates): the CLI reads and validates the whole
+// config before deploying, so a missing one fails the deploy. They must
+// exist in the commit, inside supabase/, or the script refuses before any
+// functions call (after only the read-only project identity check).
+// If the deploy command itself fails, the function list is read again and the
+// evidence log records whether anything changed remotely. The CLI is always called
 // with one named function, --no-verify-jwt, --use-api, never --prune.
 // Afterwards it checks the function list, records the version and bundle
 // hash, and tries a source download comparison (reported, never assumed).
@@ -57,12 +64,24 @@ const DAY_MS = 24 * 3600 * 1000
 class Refused extends Error {}
 const refuse = (m) => { throw new Refused(m) }
 
-function run(cmd, args, opts = {}) {
+const cliError = (e) => String(e.stderr || e.message).trim().split('\n').slice(-2).join(' ')
+// The command as named in messages: for the Supabase CLI its subcommand ("supabase functions deploy",
+// not just "supabase functions", which hid whether a list or a deploy failed); otherwise its first word.
+const cmdName = (cmd, args) => [cmd, ...args.filter((x) => !x.startsWith('-')).slice(0, cmd === 'supabase' ? 2 : 1)].join(' ')
+function run(cmd, args, { allowFail = false, ...opts } = {}) {
   try {
     return execFileSync(cmd, args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts })
   } catch (e) {
-    if (opts.allowFail) return null
-    refuse(`${cmd} ${args[0] ?? ''} failed: ${String(e.stderr || e.message).trim().split('\n').slice(-2).join(' ')}`)
+    if (allowFail) return null
+    refuse(`${cmdName(cmd, args)} failed: ${cliError(e)}`)
+  }
+}
+/** Like run, but returns { ok, out } or { ok: false, error } instead of refusing. */
+function attempt(cmd, args) {
+  try {
+    return { ok: true, out: execFileSync(cmd, args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) }
+  } catch (e) {
+    return { ok: false, error: `${cmdName(cmd, args)} failed: ${cliError(e)}` }
   }
 }
 const git = (...a) => run('git', a).trim()
@@ -269,6 +288,36 @@ function label(v, what) {
   return v
 }
 
+/**
+ * The files supabase/config.toml references, as repository paths ("supabase/...").
+ * The CLI validates the whole config before deploying and opens every Auth
+ * template it names (content_path = "./supabase/templates/invite.html",
+ * resolved from the directory holding supabase/, the --workdir), so each must be
+ * in the export. Only active (not commented) content_path settings are files the
+ * CLI opens on deploy. A path outside supabase/, absolute, or with ".." is
+ * refused: the export never reaches beyond the repository's supabase directory.
+ * Backslashes (Windows-style) are read as separators. A function file setting
+ * (entrypoint, import_map, static_files) is refused too: the export doesn't
+ * carry those, so it would silently differ from what the CLI expects.
+ */
+export function configFileRefs(toml) {
+  const refs = new Set()
+  for (const raw of String(toml).split(/\r?\n/)) {
+    const line = raw.replace(/\s+#.*$/, '').trim()
+    if (line === '' || line.startsWith('#')) continue
+    if (/^(entrypoint|import_map|static_files)\s*=/.test(line)) refuse(`supabase/config.toml sets a function file (${line.split('=')[0].trim()}); the deploy export doesn't support that yet`)
+    const m = /^content_path\s*=\s*"([^"]*)"$/.exec(line)
+    if (!m) continue
+    const value = m[1].replace(/\\\\/g, '/').replace(/\\/g, '/')
+    const bad = () => refuse(`supabase/config.toml content_path must be a relative path inside supabase/ (found "${m[1]}")`)
+    if (value === '' || /^[A-Za-z]:/.test(value) || value.startsWith('/')) bad()
+    const parts = value.replace(/^\.\//, '').split('/').filter((x) => x !== '' && x !== '.')
+    if (parts.includes('..') || parts[0] !== 'supabase' || parts.length < 2) bad()
+    refs.add(parts.join('/'))
+  }
+  return [...refs].sort()
+}
+
 export async function main(argv) {
   const o = parseArgs(argv)
   const operator = label(o.operator, '--operator')
@@ -344,6 +393,10 @@ export async function main(argv) {
   const commitProjects = json(git('show', `${commit}:config/supabase-projects.json`), 'the commit config')
   const commitRef = o.target === 'staging' ? commitProjects?.staging?.ref : commitProjects?.memberProduction?.ref
   if (commitRef !== p.ref) refuse(`at ${commit.slice(0, 12)} the ${o.target} reference is ${commitRef ?? 'null'}, not ${p.ref}: that code would not serve this project`)
+  // Everything the commit's config.toml references must be in the commit (checked before any functions call).
+  const configRefs = configFileRefs(git('show', `${commit}:supabase/config.toml`))
+  const missingRefs = configRefs.filter((r) => run('git', ['cat-file', '-e', `${commit}:${r}`], { allowFail: true }) === null)
+  if (missingRefs.length) refuse(`at ${commit.slice(0, 12)} supabase/config.toml references file(s) the commit doesn't have: ${missingRefs.join(', ')}. The CLI would refuse the deploy.`)
 
   if (o.target === 'member-production') {
     if (!/^\d+$/.test(o['db-check-run'] ?? '')) refuse('--db-check-run (the member database check run id) is required for member Production')
@@ -361,10 +414,12 @@ export async function main(argv) {
   const tmp = mkdtempSync(join(tmpdir(), 'splitpost-fn-'))
   try {
     const tar = join(tmp, 'src.tar')
-    run('git', ['archive', '--format=tar', '-o', tar, commit, 'supabase/functions', 'supabase/config.toml'])
+    run('git', ['archive', '--format=tar', '-o', tar, commit, 'supabase/functions', 'supabase/config.toml', ...configRefs])
     const out = join(tmp, 'export')
     mkdirSync(out)
     run('tar', ['-xf', tar, '-C', out])
+    const notExported = configRefs.filter((r) => !existsSync(join(out, ...r.split('/'))))
+    if (notExported.length) refuse(`the export is missing file(s) supabase/config.toml references: ${notExported.join(', ')}`)
     const projTs = readFileSync(join(out, 'supabase/functions/_shared/projects.ts'), 'utf8')
     const want = o.target === 'staging' ? `export const STAGING_REF: string = '${p.ref}'` : `export const MEMBER_PRODUCTION_REF: string | null = '${p.ref}'`
     if (!projTs.includes(want)) refuse(`the commit's supabase/functions/_shared/projects.ts does not name ${p.ref} for ${o.target}`)
@@ -373,7 +428,20 @@ export async function main(argv) {
     writeFileSync(join(out, 'supabase/functions/_shared/build-info.ts'), `// Stamped by scripts/functions/deploy.mjs for this deployment only.\nexport const BUILD = '${build}'\n`)
     evidence([`${o.action} started`, o.target, p.ref, fn, commit, prev ? `from v${prev.version}` : 'new', operator, o.reason ?? '', `build ${build}`])
 
-    run('supabase', ['functions', 'deploy', fn, '--project-ref', p.ref, '--no-verify-jwt', '--use-api', '--workdir', out])
+    const deployed = attempt('supabase', ['functions', 'deploy', fn, '--project-ref', p.ref, '--no-verify-jwt', '--use-api', '--workdir', out])
+    if (!deployed.ok) {
+      // Did anything change remotely? Compare the function list with the one read before.
+      const now = attempt('supabase', ['functions', 'list', '--project-ref', p.ref, '-o', 'json'])
+      let state = 'remote state unknown (the function list could not be read)'
+      if (now.ok) {
+        let list = null
+        try { list = JSON.parse(now.out) } catch { /* unreadable */ }
+        const g = Array.isArray(list) ? list.find((x) => fnName(x) === fn) : undefined
+        if (Array.isArray(list)) state = (g?.version ?? null) === (prev?.version ?? null) ? `remote unchanged (${prev ? `v${prev.version}` : 'not deployed'})` : `remote CHANGED (now ${g ? `v${g.version}` : 'absent'}, was ${prev ? `v${prev.version}` : 'not deployed'})`
+      }
+      evidence([`${o.action} FAILED`, o.target, p.ref, fn, commit, prev ? `v${prev.version}` : '', operator, o.reason ?? '', `${deployed.error}; ${state}`])
+      refuse(`${deployed.error}. ${state.startsWith('remote unchanged') ? `Nothing was deployed: ${state}.` : `CHECK THE PROJECT: ${state}. Verify the function, or delete it.`}`)
+    }
 
     const after = json(run('supabase', ['functions', 'list', '--project-ref', p.ref, '-o', 'json']), 'the function list')
     const f = after.find((x) => fnName(x) === fn)

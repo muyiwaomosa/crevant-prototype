@@ -90,10 +90,23 @@ It refuses, calling nothing, unless all of these hold:
 6. **The pinned CLI** version.
 
 Then it deploys a `git archive` export of exactly that commit, with only
-`_shared/build-info.ts` stamped, using exactly
+`_shared/build-info.ts` stamped. The export holds `supabase/functions`,
+`supabase/config.toml`, and exactly the files that config references
+(its `content_path` settings: today the invite and recovery email templates).
+The CLI validates the whole config before deploying and opens those files, so
+without them it refuses (`Invalid config for auth.email.template.invite.content_path:
+ENOENT`, the first staging rehearsal). Each must exist in the commit, inside
+`supabase/`: the script refuses before any functions call otherwise, and also
+refuses function file settings (`entrypoint`, `import_map`, `static_files`)
+it doesn't export. The deploy uses exactly
 `supabase functions deploy avatar --project-ref <ref> --no-verify-jwt --use-api --workdir <export>` (or `post-media`, never any other name).
 Never `--prune`, never without a function name, never any other flag (the
 script refuses every option it doesn't know).
+
+If the deploy command itself fails, the script reads the function list again
+and compares it with the one it read before: the message and the evidence log
+say "remote unchanged" (nothing was deployed) or "remote CHANGED" (check the
+function: verify it, or delete it).
 
 ### Three separate results
 
