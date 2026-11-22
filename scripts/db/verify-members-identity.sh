@@ -16,7 +16,14 @@
 # in this shell), and is masked first on GitHub Actions.
 #
 # Inputs: MEMBERS_PRODUCTION_DATABASE_URL, MEMBERS_DB_IDENTITY_MARKER.
+#
+# When psql fails, the error text is kept in a private
+# temporary file (never printed) and reduced to one fixed category word by
+# scripts/db/pg-error-category.sh, so the log says why without showing the
+# host, user, URL or anything else from the error.
 set -euo pipefail
+. "$(dirname "$0")/pg-error-category.sh"
+errf="$(mktemp)"; trap 'rm -f "$errf"' EXIT
 fail() { echo "::error::$1 Nothing was done."; exit 1; }
 LABEL=splitpost-members-production
 
@@ -32,13 +39,13 @@ unset marker MEMBERS_DB_IDENTITY_MARKER
 out="$(PGOPTIONS='-c default_transaction_read_only=on' psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 \
   -c "begin transaction read only" \
   -c "select case when to_regclass('env_identity.marker') is null then 'missing' else 'present' end" \
-  -c "rollback" 2>/dev/null)" || fail "Could not read the database to check its identity."
+  -c "rollback" 2>"$errf")" || fail "Could not read the database to check its identity (cause: $(pg_error_category <"$errf"))."
 [ "$out" = present ] || fail "This database has no identity marker (env_identity.marker), so it is not the member Production project."
 
 rows="$(PGOPTIONS='-c default_transaction_read_only=on' psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -At -F '|' -v ON_ERROR_STOP=1 \
   -c "begin transaction read only" \
   -c "select label, marker_sha256 from env_identity.marker" \
-  -c "rollback" 2>/dev/null)" || fail "Could not read the identity marker."
+  -c "rollback" 2>"$errf")" || fail "Could not read the identity marker (cause: $(pg_error_category <"$errf"))."
 n="$(grep -c . <<<"$rows" || true)"
 [ "$n" = 1 ] || fail "The identity marker table holds $n rows; exactly one is required."
 label="${rows%%|*}"; got="${rows#*|}"
