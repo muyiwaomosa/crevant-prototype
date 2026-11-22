@@ -78,7 +78,7 @@ test('the committed references match config, and functions read references only 
   assert.equal(read('supabase/functions/_shared/build-info.ts').match(/export const BUILD = '([^']*)'/)[1], 'unstamped', 'the repository copy is never stamped')
 })
 
-test('member Production is recorded (one valid project, not staging or the waitlist), avatar only, with only avatar in the ledger', () => {
+test('member Production is recorded (one valid project, not staging or the waitlist), founder-only photos approved, only avatar in the ledger', () => {
   const p = JSON.parse(read('config/supabase-projects.json'))
   assert.match(p.memberProduction.ref, /^[a-z]{20}$/)
   assert.ok(![p.staging.ref, p.production.ref].includes(p.memberProduction.ref))
