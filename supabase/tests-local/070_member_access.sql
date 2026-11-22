@@ -47,6 +47,8 @@ grant execute on function pg_temp.expect_error(text, text, text) to authenticate
 
 -- Every public.app_* function, called with null arguments, as the current role.
 -- Expects each to refuse with `expected`, except those listed in `except_fns`.
+-- (app_claim_access is never swept: it gives membership while external
+-- access is open, by design, and is tested in 118_open_registration.sql.)
 create function pg_temp.every_member_function_refuses(expected text, except_fns text[])
 returns integer
 language plpgsql
@@ -132,7 +134,7 @@ begin
   if st.status <> 'none' or st.expires_at is not null then
     raise exception 'FAIL: N''s access state is %', st;
   end if;
-  n := pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']);
+  n := pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state', 'app_claim_access']);
   if n <> 56 then
     raise exception 'FAIL: expected 56 member functions to refuse, checked %', n;
   end if;
@@ -150,7 +152,7 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000
 set local role authenticated;
 do $$
 begin
-  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 56 then
+  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state', 'app_claim_access']) <> 56 then
     raise exception 'FAIL: not every member function was checked';
   end if;
   raise notice 'PASS: an account with no profile and no membership is refused by every member function';
@@ -163,7 +165,7 @@ set local role anon;
 do $$
 begin
   perform pg_temp.expect_error('select * from public.app_access_state()', 'permission denied', 'anon reading an access state');
-  if pg_temp.every_member_function_refuses('permission denied', array[]::text[]) <> 57 then
+  if pg_temp.every_member_function_refuses('permission denied', array[]::text[]) <> 58 then
     raise exception 'FAIL: not every member function was checked for anon';
   end if;
   raise notice 'PASS: anonymous visitors can call none of the 57 member functions';
@@ -328,7 +330,7 @@ begin
   if (select status from public.app_access_state()) <> 'revoked' then
     raise exception 'FAIL: N''s state is not revoked';
   end if;
-  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 56 then
+  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state', 'app_claim_access']) <> 56 then
     raise exception 'FAIL: not every member function was checked after revocation';
   end if;
   raise notice 'PASS: revocation takes effect on the next request, for all 56 member functions';
@@ -365,7 +367,7 @@ begin
   if st.status <> 'expired' then
     raise exception 'FAIL: B''s state is % after expiry', st;
   end if;
-  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 56 then
+  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state', 'app_claim_access']) <> 56 then
     raise exception 'FAIL: not every member function was checked after expiry';
   end if;
   raise notice 'PASS: an expired membership is refused by all 56 member functions, and the account sees "expired"';

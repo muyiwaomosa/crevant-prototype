@@ -87,6 +87,7 @@ test('member Production is recorded (one valid project, not staging or the waitl
   assert.equal(a.postMediaFunctionApproved, false)
   assert.equal(a.photosApproved, false)
   assert.equal(a.invitationsApproved, false)
+  assert.equal(a.openRegistrationApproved, false)
   const ledger = JSON.parse(read('config/function-deployments.json'))
   assert.deepEqual(ledgerProblems(ledger), [])
   assert.equal(ledger.deployments.length, 0)

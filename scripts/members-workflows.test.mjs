@@ -164,8 +164,9 @@ test('the approvals stay false, and the member Production project reference is r
   const approvals = JSON.parse(read('config/member-production.json'))
   assert.equal(approvals.photosApproved, false)
   assert.equal(approvals.invitationsApproved, false)
+  assert.equal(approvals.openRegistrationApproved, false, 'open registration is approved by its own reviewed PR, once the privacy notice and community rules are published')
   assert.equal(approvals.postMediaFunctionApproved, false, 'post-media is not approved for member Production (Phase 1B-2)')
-  assert.deepEqual(Object.keys(approvals).filter((k) => !k.startsWith('_')).sort(), ['invitationsApproved', 'photosApproved', 'postMediaFunctionApproved'])
+  assert.deepEqual(Object.keys(approvals).filter((k) => !k.startsWith('_')).sort(), ['invitationsApproved', 'openRegistrationApproved', 'photosApproved', 'postMediaFunctionApproved'])
   assert.match(JSON.parse(read('config/supabase-projects.json')).memberProduction.ref, /^[a-z]{20}$/)
 })
 

@@ -17,31 +17,44 @@
 --      never collects either), or ops.invitations holds a row while
 --      invitations are not approved;
 --   4. the launch gate trigger is missing or disabled once the gate is
---      applied, external access is open while invitations are not approved,
---      or anyone but the launch founder holds active membership then (which
---      catches membership given around the gate);
+--      applied, external access is open while neither invitations nor open
+--      registration is approved, or anyone but the launch founder holds
+--      active membership then (which catches membership given around the gate);
 --   5. photo posting is on while photos are not approved;
 --   6. pg_net is installed or its schema exists (never on this project).
 
 \set ON_ERROR_STOP on
+-- open_registration_approved is optional (false when not given): only the
+-- member checks after activation pass it, from config/member-production.json.
+\if :{?open_registration_approved}
+\else
+  \set open_registration_approved false
+\endif
 select set_config('crevant.photos_approved', :'photos_approved', false) as photos_approved,
-       set_config('crevant.invitations_approved', :'invitations_approved', false) as invitations_approved;
+       set_config('crevant.invitations_approved', :'invitations_approved', false) as invitations_approved,
+       set_config('crevant.open_registration_approved', :'open_registration_approved', false) as open_registration_approved;
 
 do $$
 declare
   photos_ok boolean;
   invites_ok boolean;
+  external_ok boolean;
   recorded text[];
   t text;
   n bigint;
   r text;
 begin
   if current_setting('crevant.photos_approved') not in ('true', 'false')
-     or current_setting('crevant.invitations_approved') not in ('true', 'false') then
-    raise exception 'FAIL: photos_approved and invitations_approved must be true or false (from config/member-production.json)';
+     or current_setting('crevant.invitations_approved') not in ('true', 'false')
+     or current_setting('crevant.open_registration_approved') not in ('true', 'false') then
+    raise exception 'FAIL: photos_approved, invitations_approved and open_registration_approved must be true or false (from config/member-production.json)';
   end if;
   photos_ok := current_setting('crevant.photos_approved')::boolean;
   invites_ok := current_setting('crevant.invitations_approved')::boolean;
+  -- Accounts other than the launch founder may hold membership when either
+  -- invitations or open registration is approved. Invitation rows still
+  -- need invitations approved.
+  external_ok := invites_ok or current_setting('crevant.open_registration_approved')::boolean;
   recorded := array[]::text[];
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     -- (nested: the history table is only referenced once it is known to exist)
@@ -113,18 +126,18 @@ begin
                    and tgenabled = 'O' and not tgisinternal) then
       raise exception 'FAIL: the member launch gate trigger is missing or disabled';
     end if;
-    if not invites_ok and (select external_access_approved from ops.member_launch_settings where id) then
-      raise exception 'FAIL: external member access is open although invitations are not approved (config/member-production.json)';
+    if not external_ok and (select external_access_approved from ops.member_launch_settings where id) then
+      raise exception 'FAIL: external member access is open although neither invitations nor open registration is approved (config/member-production.json)';
     end if;
     -- Detects membership given around the gate (the owner disabling the
     -- trigger, or session_replication_role = replica): while invitations are
     -- not approved, nobody but the launch founder may hold active membership.
-    if not invites_ok then
+    if not external_ok then
       n := (select count(*) from ops.member_access a
             where a.status = 'active' and (a.expires_at is null or a.expires_at > now())
               and a.user_id is distinct from (select founder_user_id from ops.member_launch_settings where id));
       if n > 0 then
-        raise exception 'FAIL: % account(s) other than the launch founder hold active membership although invitations are not approved', n;
+        raise exception 'FAIL: % account(s) other than the launch founder hold active membership although neither invitations nor open registration is approved', n;
       end if;
     end if;
     raise notice 'PASS: the launch gate is enabled; external member access is %',

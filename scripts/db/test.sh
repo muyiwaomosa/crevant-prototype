@@ -89,7 +89,7 @@ scripts/db/viewed-state-plan-test.sh
 # must then fail with a "FAIL:" message, proving they would catch it. (Only
 # those checks files are replayed here: the Phase 0 file manages its own
 # transactions, which would end the wrapper's transaction early.)
-CHECKS=(supabase/tests/002_profiles_and_ops.sql supabase/tests/003_waitlist.sql supabase/tests/004_acquisition.sql supabase/tests/005_social_core.sql supabase/tests/006_platform_functions.sql supabase/tests/007_member_access.sql supabase/tests/008_profile_details.sql supabase/tests/009_moderation.sql supabase/tests/010_avatars.sql supabase/tests/011_feedback.sql supabase/tests/012_post_photos.sql supabase/tests/013_photo_audience.sql supabase/tests/014_member_launch_gate.sql)
+CHECKS=(supabase/tests/002_profiles_and_ops.sql supabase/tests/003_waitlist.sql supabase/tests/004_acquisition.sql supabase/tests/005_social_core.sql supabase/tests/006_platform_functions.sql supabase/tests/007_member_access.sql supabase/tests/008_profile_details.sql supabase/tests/009_moderation.sql supabase/tests/010_avatars.sql supabase/tests/011_feedback.sql supabase/tests/012_post_photos.sql supabase/tests/013_photo_audience.sql supabase/tests/014_member_launch_gate.sql supabase/tests/015_open_registration.sql)
 for v in supabase/tests-local/violations/*.sql; do
   [ -e "$v" ] || continue
   wrapper="$(mktemp)"

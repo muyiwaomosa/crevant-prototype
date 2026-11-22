@@ -98,6 +98,10 @@ begin
   if to_regclass('social.post_media') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || photos) x);
   end if;
+  -- Open registration (20261130000000), once applied.
+  if to_regprocedure('public.app_claim_access()') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || array['app_claim_access']) x);
+  end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname like 'app\_%';
@@ -255,8 +259,9 @@ begin
   if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
              where (n.nspname = 'social' or (n.nspname = 'public' and p.proname like 'app\_%'))
                -- Also allowed: the moderation objects of 20261124000000 (reports, the
-               -- audit trail, moderators, the retention purge, the note check).
-               and regexp_replace(p.prosrc, 'ops\.(member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
+               -- audit trail, moderators, the retention purge, the note check), and
+               -- the launch gate's open flag, read by app_claim_access (20261130000000).
+               and regexp_replace(p.prosrc, 'ops\.(member_access(_active)?|member_launch_settings|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (
