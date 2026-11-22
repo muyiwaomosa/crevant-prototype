@@ -4,10 +4,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { checkDbRun, checkProjectIdentity, checkVerifyEvidence, checkVerifyRun, compareSource, phraseFor, servedBuild, targetProject } from './functions/deploy.mjs'
+import { checkDbRun, checkProjectIdentity, checkVerifyEvidence, checkVerifyRun, compareSource, configFileRefs, phraseFor, servedBuild, targetProject } from './functions/deploy.mjs'
 import { importClosure } from './functions/source-digest.mjs'
 import { ledgerProblems } from './functions/ledger.mjs'
 
@@ -32,6 +32,16 @@ if (a[0] === 'functions' && a[1] === 'list') { console.log(JSON.stringify(fns));
 if (a[0] === 'functions' && a[1] === 'deploy') {
   if (st.deploy === 'fail') { console.error('deploy failed'); process.exit(1) }
   const name = a[2], wd = opt('--workdir')
+  // Like the real CLI (2.122.1): the whole config is validated first, and every
+  // active Auth template (content_path, relative to the workdir) must exist.
+  for (const line of fs.readFileSync(path.join(wd, 'supabase/config.toml'), 'utf8').split(/\\r?\\n/)) {
+    const m = /^\\s*content_path\\s*=\\s*"([^"]+)"/.exec(line)
+    if (m && !fs.existsSync(path.join(wd, m[1]))) {
+      console.error('Invalid config for auth.email.template.invite.content_path: ENOENT: no such file or directory, open ' + JSON.stringify(path.join(wd, m[1])))
+      process.exit(1)
+    }
+  }
+  st.exported = fs.readdirSync(path.join(wd, 'supabase')).sort()
   st.lastBuild = fs.readFileSync(path.join(wd, 'supabase/functions/_shared/build-info.ts'), 'utf8')
   fs.cpSync(path.join(wd, 'supabase/functions'), path.join(process.env.FAKE_DIR, 'deployed', ref, 'functions'), { recursive: true })
   let f = fns.find((x) => x.slug === name)
@@ -40,7 +50,9 @@ if (a[0] === 'functions' && a[1] === 'deploy') {
   f.ezbr_sha256 = 'b'.repeat(64)
   if (st.deploy === 'jwt-on') f.verify_jwt = true
   if (st.deploy === 'extra') fns.push({ slug: 'join-waitlist', name: 'join-waitlist', version: 1, status: 'ACTIVE', verify_jwt: false })
-  save(); process.exit(0)
+  save()
+  if (st.deploy === 'fail-after-change') { console.error('upload interrupted'); process.exit(1) }
+  process.exit(0)
 }
 if (a[0] === 'functions' && a[1] === 'download') {
   if (st.download === 'unsupported') { console.error('not supported'); process.exit(1) }
@@ -87,7 +99,7 @@ server.listen(0, '127.0.0.1', () => { fs.writeFileSync(process.env.FAKE_PORT_FIL
 function setup({ member = true, postMediaApproved = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'fn-deploy-test-'))
   const repo = join(dir, 'repo')
-  for (const p of ['scripts/functions', 'scripts/supabase-projects.mjs', 'config', 'supabase/functions', 'supabase/config.toml', '.github/workflows/deploy-db-staging.yml', 'docs/function-evidence-log.md']) {
+  for (const p of ['scripts/functions', 'scripts/supabase-projects.mjs', 'config', 'supabase/functions', 'supabase/config.toml', 'supabase/templates', '.github/workflows/deploy-db-staging.yml', 'docs/function-evidence-log.md']) {
     cpSync(join(SRC, p), join(repo, p), { recursive: true })
   }
   rmSync(join(repo, 'supabase/functions/_shared/policy.test.ts'), { force: true })
@@ -250,6 +262,7 @@ test('staging: deploys exactly the HEAD commit export, stamped, with the exact C
     assert.equal(out.served, `${c}.${digest}`, 'the endpoint was seen serving the new build')
     assert.match(out.next, /verify-functions\.yml/)
     assert.match(t.evidence(), /deploy started \| staging/); assert.match(t.evidence(), /deployed, unverified \| staging/)
+    assert.deepEqual(t.st().exported, ['config.toml', 'functions', 'templates'], 'the export holds the config and the templates it references, nothing else')
     assert.equal(sh(t.repo, 'git', ['show', 'HEAD:supabase/functions/_shared/build-info.ts']).includes("'unstamped'"), true, 'the repository copy is never stamped')
   } finally { t.cleanup() }
 })
@@ -353,7 +366,7 @@ test('after the deploy: JWT on, an unexpected function, an unchanged version, in
       [{ download: 'unsupported' }, /could not be compared exactly .*unavailable/],
       [{ download: 'empty' }, /could not be compared exactly .*unavailable/],
       [{ served: 'old.build' }, /the endpoint serves build old\.build, not/],
-      [{ deploy: 'fail' }, /supabase functions failed/],
+      [{ deploy: 'fail' }, /supabase functions deploy failed: deploy failed\. Nothing was deployed: remote unchanged \(v2\)/],
     ]) {
       t.state({ ...patch, functions: { [MEMBER]: [{ slug: 'avatar', name: 'avatar', version: 2, status: 'ACTIVE', verify_jwt: false }] } })
       const r = t.run(deployArgs('avatar', MEMBER, c))
@@ -361,6 +374,71 @@ test('after the deploy: JWT on, an unexpected function, an unchanged version, in
     }
     assert.match(t.evidence(), /FAILED VERIFICATION/)
   } finally { t.cleanup() }
+})
+
+test('the export carries the Auth templates config.toml references (the CLI validates them); a reference the commit lacks is refused before any functions call', () => {
+  const t = setup()
+  try {
+    // Regression (staging rehearsal, Windows): the export once lacked supabase/templates, and the real CLI refused:
+    // "Invalid config for auth.email.template.invite.content_path: ENOENT ... export/supabase/templates/invite.html".
+    t.state()
+    let r = t.run(deployArgs('avatar', STAGING, t.head()))
+    assert.equal(r.code, 0, r.out)
+    assert.deepEqual(t.st().exported, ['config.toml', 'functions', 'templates'])
+
+    // A template named in config.toml but missing from the commit: refused locally, before any functions call or evidence row.
+    appendFileSync(join(t.repo, 'supabase/config.toml'), '\n[auth.email.template.magic_link]\nsubject = "x"\ncontent_path = "./supabase/templates/missing.html"\n')
+    t.g('add', '-A'); t.g('commit', '-q', '-m', 'a missing template'); t.g('push', '-q', 'origin', 'main')
+    const before = t.evidence()
+    t.state()
+    r = t.run(deployArgs('avatar', STAGING, t.head()))
+    assert.equal(r.code, 1); assert.match(r.out, /config\.toml references file\(s\) the commit doesn't have: supabase\/templates\/missing\.html/)
+    assert.ok(!r.calls.some((c) => c[0] === 'supabase' && c[1] === 'functions'), 'no functions call at all')
+    assert.equal(t.evidence(), before, 'nothing recorded')
+
+    // A reference outside supabase/ (or absolute, or with ..) is refused the same way.
+    for (const bad of ['../outside.html', '/etc/hosts', 'C:\\\\templates\\\\x.html', './supabase/../secret.html']) {
+      const cfg = readFileSync(join(t.repo, 'supabase/config.toml'), 'utf8').replace(/content_path = "\.\/supabase\/templates\/missing\.html"/, `content_path = "${bad}"`)
+      writeFileSync(join(t.repo, 'supabase/config.toml'), cfg)
+      t.g('add', '-A'); t.g('commit', '-q', '-m', `bad path ${bad}`); t.g('push', '-q', 'origin', 'main')
+      t.state()
+      r = t.run(deployArgs('avatar', STAGING, t.head()))
+      assert.equal(r.code, 1, bad); assert.match(r.out, /content_path must be a relative path inside supabase\//, bad)
+      assert.ok(!r.calls.some((c) => c[0] === 'supabase' && c[1] === 'functions'), `no functions call (${bad})`)
+      writeFileSync(join(t.repo, 'supabase/config.toml'), cfg.replace(`content_path = "${bad}"`, 'content_path = "./supabase/templates/missing.html"'))
+    }
+  } finally { t.cleanup() }
+})
+
+test('a failed deploy command is recorded with the remote state: unchanged, or changed', () => {
+  const t = setup()
+  try {
+    const c = t.head()
+    // Refused before uploading anything: the version is as before.
+    t.state({ deploy: 'fail' })
+    let r = t.run(deployArgs('avatar', STAGING, c))
+    assert.equal(r.code, 1); assert.match(r.out, /supabase functions deploy failed: deploy failed\. Nothing was deployed: remote unchanged \(v4\)/)
+    assert.equal(r.calls.filter((x) => x[1] === 'functions' && x[2] === 'list').length, 2, 'the list is read again after the failure')
+    assert.match(t.evidence(), /deploy FAILED \| staging \| .* \| supabase functions deploy failed: deploy failed; remote unchanged \(v4\)/)
+    // Failed after the upload changed the function: said loudly, and recorded.
+    t.state({ deploy: 'fail-after-change' })
+    r = t.run(deployArgs('avatar', STAGING, c))
+    assert.equal(r.code, 1); assert.match(r.out, /CHECK THE PROJECT: remote CHANGED \(now v5, was v4\)\. Verify the function, or delete it\./)
+    assert.match(t.evidence(), /remote CHANGED \(now v5, was v4\)/)
+  } finally { t.cleanup() }
+})
+
+test('unit: config.toml file references (Auth templates only; Windows separators; never outside supabase/)', () => {
+  assert.deepEqual(configFileRefs(readFileSync(join(SRC, 'supabase/config.toml'), 'utf8')), ['supabase/templates/invite.html', 'supabase/templates/recovery.html'])
+  assert.deepEqual(configFileRefs('# content_path = "./supabase/templates/c.html"\n[auth.email.template.invite]\ncontent_path = "./supabase/templates/a.html" # note'), ['supabase/templates/a.html'])
+  assert.deepEqual(configFileRefs('content_path = "supabase\\\\templates\\\\w.html"\r\ncontent_path = "supabase\\templates\\w.html"'), ['supabase/templates/w.html'])
+  assert.deepEqual(configFileRefs('authorization_url_path = "/oauth/consent"\nsql_paths = ["./seed.sql"]'), [], 'URL paths and seed globs are not deploy files')
+  for (const bad of ['../x.html', '/etc/hosts', 'C:/x.html', 'C:\\\\x.html', './supabase/../x', './other/x.html', '', 'supabase']) {
+    assert.throws(() => configFileRefs(`content_path = "${bad}"`), /relative path inside supabase\//, bad)
+  }
+  for (const key of ['entrypoint', 'import_map', 'static_files']) {
+    assert.throws(() => configFileRefs(`[functions.avatar]\n${key} = "./functions/avatar/x"`), /deploy export doesn't support/, key)
+  }
 })
 
 test('rollback: only to a recorded, founder-approved deployment whose verification passed and matches it', () => {
@@ -503,7 +581,7 @@ test('the deploy script never passes --prune, never deploys without a name, and 
   const s = readFileSync(join(SRC, 'scripts/functions/deploy.mjs'), 'utf8')
   const code = s.replace(/^\s*\/\/.*$/gm, '')
   assert.equal((code.match(/'functions', 'deploy'/g) ?? []).length, 1, 'one deploy call')
-  assert.match(code, /run\('supabase', \['functions', 'deploy', fn, '--project-ref', p\.ref, '--no-verify-jwt', '--use-api', '--workdir', out\]\)/)
+  assert.match(code, /attempt\('supabase', \['functions', 'deploy', fn, '--project-ref', p\.ref, '--no-verify-jwt', '--use-api', '--workdir', out\]\)/)
   assert.ok(!/['"]--prune['"]/.test(code.replace(/--prune least of all/g, '')), 'no --prune anywhere in the calls')
   assert.ok(existsSync(join(SRC, 'docs/function-evidence-log.md')))
 })
