@@ -18,21 +18,18 @@
 #   6. Timing: it waits outside the 15 minute boundary and for a run in progress.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-DB_URL="${DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
-case "$DB_URL" in
-  *@127.0.0.1:*|*@localhost:*) ;;
-  *) echo "Refusing: this test only runs against a local database." >&2; exit 1 ;;
-esac
+# The local-only guard and the staging-like state, shared by the schedule suites.
+# shellcheck source=scripts/db/scheduler-test-fixture.sh
+. scripts/db/scheduler-test-fixture.sh
 REF=kpudeppgokpjhvaqrprn
 PW='Fake-Pw-For-Tests-91'
 POOL=aws-0-us-west-2.pooler.supabase.com
-PSQL=(psql "$DB_URL" -X -q -At -v ON_ERROR_STOP=1)
 WRAPPER=scripts/db/staging-schedule-check.sh
 pass=0; failed=0
 ok()  { echo "PASS  schedule check workflow: $1"; pass=$((pass + 1)); }
 bad() { echo "FAIL  schedule check workflow: $1"; failed=$((failed + 1)); }
 tmp=$(mktemp -d)
-KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
+KEY="$(new_key)"
 printf '#!/usr/bin/env bash\necho "slept $1" >> "%s/slept"\n' "$tmp" > "$tmp/fake-sleep"; chmod +x "$tmp/fake-sleep"
 SAFE_EPOCH=$(( 1700000000 - 1700000000 % 900 + 420 ))   # 7 minutes past a quarter hour
 
@@ -46,18 +43,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Staging today.
-"${PSQL[@]}" -c "drop extension if exists http" -c "create extension if not exists pg_cron" -c "create extension if not exists pg_net with schema extensions" >/dev/null 2>&1
-"${PSQL[@]}" -c "select cron.unschedule(jobname) from cron.job where jobname = 'post-media-drain'" >/dev/null 2>&1
-"${PSQL[@]}" -c "delete from vault.secrets where name = 'media_drain_key'" -c "select vault.create_secret('$KEY', 'media_drain_key', 'local test')" >/dev/null
-"${PSQL[@]}" -c "select cron.schedule('post-media-drain', '*/15 * * * *', \$job\$
-      select net.http_post(
-        url := 'http://kong:8000/functions/v1/post-media/drain',
-        headers := pg_catalog.jsonb_build_object(
-          'Content-Type', 'application/json',
-          'x-media-drain-key', (select s.decrypted_secret from vault.decrypted_secrets s where s.name = 'media_drain_key')),
-        body := '{}'::jsonb,
-        timeout_milliseconds := 20000)
-    \$job\$)" >/dev/null
+staging_like_state "$KEY"
 state() {
   "${PSQL[@]}" -c "select jobid || '|' || md5(command) || '|' || schedule || '|' || active from cron.job order by jobid" \
     -c "select string_agg(extname || ' ' || extversion, ',' order by extname) from pg_extension"
@@ -105,7 +91,7 @@ out=$(wrap STAGING_DATABASE_URL="postgresql://postgres.$REF:$PW@$POOL:5432/postg
 [ $code -ne 0 ] && grep -q 'only accepts a local database' <<<"$out" && ! grep -q "$PW" <<<"$(visible "$out")" \
   && ok "the local test mode can't be used to skip the checks for a hosted database" || bad "local mode bypass (exit $code): $(visible "$out")"
 mkdir -p "$tmp/repo/scripts/db" "$tmp/repo/config"
-cp scripts/db/staging-schedule-check.sh scripts/db/staging-schedule-media-drain.sql scripts/db/verify-staging-target.sh "$tmp/repo/scripts/db/"
+cp scripts/db/staging-schedule-check.sh scripts/db/staging-photo-cleanup-lib.sh scripts/db/staging-schedule-media-drain.sql scripts/db/verify-staging-target.sh "$tmp/repo/scripts/db/"
 echo "-- an unreviewed change" >> "$tmp/repo/scripts/db/staging-schedule-media-drain.sql"
 out=$(WRAP="$tmp/repo/scripts/db/staging-schedule-check.sh" wrap); code=$?
 [ $code -ne 0 ] && grep -q 'does not match the reviewed checksum' <<<"$out" && ! grep -q 'Before the check' <<<"$out" && unchanged \
@@ -145,22 +131,13 @@ out=$(WRAP="$tmp/repo/scripts/db/staging-schedule-check.sh" wrap); code=$?
 [ $code -ne 0 ] && grep -q 'changed: check mode must leave nothing behind' <<<"$out" && grep -q 'Differences' <<<"$out" \
   && ok "a script that commits is caught: the fingerprints differ and the run fails" || bad "persistence not detected (exit $code): $out"
 # Put staging's state back for the remaining tests.
-"${PSQL[@]}" -c "select cron.unschedule('post-media-drain')" -c "drop extension if exists http" >/dev/null
-"${PSQL[@]}" -c "select cron.schedule('post-media-drain', '*/15 * * * *', \$job\$
-      select net.http_post(
-        url := 'http://kong:8000/functions/v1/post-media/drain',
-        headers := pg_catalog.jsonb_build_object(
-          'Content-Type', 'application/json',
-          'x-media-drain-key', (select s.decrypted_secret from vault.decrypted_secrets s where s.name = 'media_drain_key')),
-        body := '{}'::jsonb,
-        timeout_milliseconds := 20000)
-    \$job\$)" >/dev/null
+staging_like_state "$KEY"
 STATE=$(state)
 
 # --- 5. A refused check fails and changes nothing --------------------------
 "${PSQL[@]}" -c "delete from vault.secrets where name = 'media_drain_key'" >/dev/null
 out=$(wrap); code=$?
-"${PSQL[@]}" -c "select vault.create_secret('$KEY', 'media_drain_key', 'local test')" >/dev/null
+store_key "$KEY"
 [ $code -ne 0 ] && grep -q 'drain key' <<<"$out" && grep -q 'No persistent change' <<<"$out" && grep -q 'did not complete' <<<"$out" && unchanged \
   && ok "when check mode refuses (no drain key), the run fails and nothing changed" || bad "refused check (exit $code): $out"
 

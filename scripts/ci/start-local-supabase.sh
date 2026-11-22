@@ -8,13 +8,17 @@
 # one of them can briefly take a port Supabase needs, so start-up fails with
 # "address already in use". This script:
 #   1. on CI runners, reserves those ports so temporary connections never use
-#      them (net.ipv4.ip_local_reserved_ports), before any image is pulled;
+#      them (net.ipv4.ip_local_reserved_ports), before any image is pulled,
+#      together with the host ports the test suites' own helpers bind (the
+#      extra Edge runtime copies and the TLS test servers, HELPER_PORTS below),
+#      which sit in the same range and were hit the same way;
 #   2. waits until no live connection holds them;
 #   3. starts Supabase, with one retry for start-up problems only. On failure
 #      it prints which ports were busy. Tests themselves are never retried.
 #
-# Usage: scripts/ci/start-local-supabase.sh            start the stack
-#        scripts/ci/start-local-supabase.sh --ports    print the ports and exit
+# Usage: scripts/ci/start-local-supabase.sh                  start the stack
+#        scripts/ci/start-local-supabase.sh --ports          print the stack's ports and exit
+#        scripts/ci/start-local-supabase.sh --helper-ports   print the helpers' reserved ports and exit
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -26,8 +30,19 @@ if [ -z "$PORTS" ]; then
   echo "No ports found in supabase/config.toml" >&2
   exit 1
 fi
+# Host ports the suites' helpers bind on CI runners (their defaults):
+#   54390        scripts/e2e/waitlist-tls.sh (TLS probe)
+#   54397-54406  scripts/e2e/avatar-edge.sh (54397), scripts/e2e/post-media-edge.sh
+#                (54398, 54399), scripts/e2e/waitlist-edge.sh (54398 to 54406)
+#   54410        scripts/e2e/waitlist-journey.sh
+#   55433-55434  scripts/e2e/waitlist-tls.sh (TLS and plain Postgres)
+HELPER_PORTS=54390,54397-54406,54410,55433-55434
 if [ "${1-}" = "--ports" ]; then
   echo "$PORTS"
+  exit 0
+fi
+if [ "${1-}" = "--helper-ports" ]; then
+  echo "$HELPER_PORTS"
   exit 0
 fi
 
@@ -61,7 +76,7 @@ reserve_ports() {
   local current sudo=""
   [ "$(id -u)" -eq 0 ] || sudo=sudo
   current=$(sysctl -n net.ipv4.ip_local_reserved_ports)
-  $sudo sysctl -q -w net.ipv4.ip_local_reserved_ports="${current:+$current,}$PORTS"
+  $sudo sysctl -q -w net.ipv4.ip_local_reserved_ports="${current:+$current,}$PORTS,$HELPER_PORTS"
   echo "Reserved from temporary connections: $(sysctl -n net.ipv4.ip_local_reserved_ports)"
 }
 

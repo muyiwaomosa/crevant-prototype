@@ -12,9 +12,25 @@ import { execFileSync } from 'node:child_process'
 const WF_PATH = '.github/workflows/staging-photo-cleanup-check.yml'
 const WRAPPER_PATH = 'scripts/db/staging-schedule-check.sh'
 const SCRIPT_PATH = 'scripts/db/staging-schedule-media-drain.sql'
+const LIB_PATH = 'scripts/db/staging-photo-cleanup-lib.sh'
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const wf = read(WF_PATH)
 const wrapper = read(WRAPPER_PATH)
+// The shared guards the wrapper sources (also used by the apply and removal wrappers).
+const lib = read(LIB_PATH)
+const GUARD_CALL = /^guard \$# "\$SCRIPT" "\$SCRIPT_SHA256"$/m
+/** The body of one shell function in the shared guards. */
+function libFunction(name) {
+  const m = new RegExp(`^${name}\\(\\) \\{(?:\\n([\\s\\S]*?)^\\}| (.*) \\})$`, 'm').exec(lib)
+  assert.ok(m, `no ${name}() in ${LIB_PATH}`)
+  return m[1] ?? m[2]
+}
+/** The read-only fingerprint SQL the wrapper prints before and after. */
+function fingerprintSql() {
+  const m = /^FINGERPRINT_SQL="([\s\S]*?)"$/m.exec(lib)
+  assert.ok(m, `no FINGERPRINT_SQL in ${LIB_PATH}`)
+  return m[1]
+}
 const lines = wf.split('\n')
 const code = (t) => t.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n')
 
@@ -93,7 +109,10 @@ test('only the owner may start or re-run it, and only from main', () => {
     ["a collaborator re-runs the owner's run", run({ triggering_actor: 'collaborator' }), false],
     ['a bot re-runs it', run({ triggering_actor: 'github-actions[bot]' }), false],
   ]) assert.equal(evaluate(cond, ctx), want, what)
-  assert.match(wrapper, /\[ "\$\{GITHUB_REF:-\}" = refs\/heads\/main \] \|\| fail/, 'the wrapper also refuses outside main')
+  // The wrapper also refuses outside main, through the shared guard it calls.
+  assert.match(wrapper, /^\. scripts\/db\/staging-photo-cleanup-lib\.sh$/m, 'the wrapper sources the shared guards')
+  assert.match(code(wrapper), GUARD_CALL, 'the wrapper calls the shared guard')
+  assert.match(libFunction('guard'), /\[ "\$\{GITHUB_REF:-\}" = refs\/heads\/main \] \|\| fail/, 'the shared guard refuses outside main')
 })
 
 test('steps: checkout, the staging target check, then the wrapper; nothing conditional or allowed to fail', () => {
@@ -125,8 +144,10 @@ test('check mode only: no apply, remove or pg_net removal is reachable', () => {
   assert.equal(psql.length, 1, 'exactly one psql run of a file')
   assert.match(psql[0], /psql "\$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f "\$SCRIPT"/)
   assert.match(c, /^SCRIPT=scripts\/db\/staging-schedule-media-drain\.sql$/m, 'the script path is fixed')
-  assert.match(c, /\[ \$# -eq 0 \] \|\| fail/, 'arguments are refused')
-  for (const [name, t] of [['workflow', code(wf)], ['wrapper', c]]) {
+  assert.match(c, GUARD_CALL, 'the argument count goes to the shared guard')
+  assert.match(libFunction('guard'), /^ {2}\[ "\$1" -eq 0 \] \|\| fail/m, 'arguments are refused')
+  // The shared guards are sourced into the wrapper, so they are held to the same rules.
+  for (const [name, t] of [['workflow', code(wf)], ['wrapper', c], ['shared guards', code(lib)]]) {
     for (const bad of [/mode=(apply|remove)/, /SCHEDULE THE STAGING PHOTO CLEANUP/, /staging-remove-pg-net/, /REMOVE PG_NET/i, /drop extension/i, /cron\.(schedule|unschedule|alter_job)/, /\$\{?(MODE|CONFIRM|mode|confirm)\b/]) {
       assert.ok(!bad.test(t), `${name} must not contain ${bad}`)
     }
@@ -138,31 +159,52 @@ test('the pinned checksum is the reviewed scheduler script, and the wrapper chec
   const pinned = /^SCRIPT_SHA256=([0-9a-f]{64})$/m.exec(wrapper)?.[1]
   assert.ok(pinned, 'no pinned checksum')
   assert.equal(createHash('sha256').update(readFileSync(new URL(`../${SCRIPT_PATH}`, import.meta.url))).digest('hex'), pinned)
-  const at = (re) => wrapper.search(re)
-  const firstConnect = at(/^PSQL=\(psql/m)
+  // The wrapper calls the shared guard before anything that connects.
+  const c = code(wrapper)
+  const guardAt = c.search(GUARD_CALL)
+  for (const [what, re] of [['the first wait', /^boundary_wait$/m], ['the first fingerprint', /\$\(fingerprint\)/], ['the check itself', /psql "\$STAGING_DATABASE_URL"/]]) {
+    assert.ok(guardAt > 0 && c.search(re) > guardAt, `the guard comes before ${what}`)
+  }
+  assert.ok(!/^PSQL=|\bq "/m.test(c.slice(0, guardAt)), 'nothing connects before the guard')
+  // Inside the guard, every check comes before the connection is set up.
+  const g = libFunction('guard')
+  const at = (re) => g.search(re)
+  const firstConnect = at(/^ {2}PSQL=\(psql/m)
+  assert.ok(firstConnect > 0, 'the guard sets up the connection last')
   for (const [what, re] of [
+    ['the argument check', /\[ "\$1" -eq 0 \] \|\| fail/],
     ['the branch check', /refs\/heads\/main \] \|\| fail/],
-    ['the checksum check', /\[ "\$actual" = "\$SCRIPT_SHA256" \] \|\| fail/],
+    ['the checksum check', /\[ "\$actual" = "\$3" \] \|\| fail/],
     ['the connection string check', /\[ -n "\$\{STAGING_DATABASE_URL:-\}" \] \|\| fail/],
     ['the TLS check', /\[ "\$\{PGSSLMODE:-\}" = verify-full \]/],
     ['the target check', /scripts\/db\/verify-staging-target\.sh \|\| fail/],
   ]) {
-    assert.ok(at(re) > 0 && at(re) < firstConnect, `${what} comes before any connection`)
+    assert.ok(at(re) >= 0 && at(re) < firstConnect, `${what} comes before any connection`)
   }
+  assert.match(g, /actual=\$\(sha256sum "\$2" \| cut -d' ' -f1\)/, 'the checksum is of the script the wrapper names')
 })
 
 test('it prints no secret: commands as md5 only, and never the connection string', () => {
   const c = code(wrapper)
-  assert.match(c, /pg_catalog\.md5\(j\.command\)/)
-  const uses = (c.match(/\bcommand\b/g) ?? []).length
-  assert.ok(uses > 0 && (c.match(/md5\(j\.command\)|j\.command ~/g) ?? []).length === uses, 'a cron command is only ever hashed or matched, never selected')
-  assert.ok(!/decrypted_secret|vault\./i.test(c), 'the wrapper never reads Vault')
-  assert.ok(!/(echo|printf)[^\n]*STAGING_DATABASE_URL/.test(c), 'the connection string is never echoed')
-  assert.ok(!/set -x|xtrace/.test(c), 'no command tracing')
+  // What it prints from the database: the fingerprint (shared), the in-progress count and the script's own output.
+  assert.match(c, /\$\(fingerprint\)/)
+  assert.ok(!/\bcommand\b/.test(c), 'the wrapper itself never reads a cron command')
+  assert.match(libFunction('fingerprint'), /q "\$FINGERPRINT_SQL"/)
+  const f = fingerprintSql()
+  assert.match(f, /pg_catalog\.md5\(j\.command\)/)
+  const uses = (f.match(/\bcommand\b/g) ?? []).length
+  assert.ok(uses > 0 && (f.match(/md5\(j\.command\)|j\.command ~/g) ?? []).length === uses, 'a cron command is only ever hashed or matched, never selected')
+  assert.match(libFunction('running'), /select count\(\*\) from cron\.job_run_details/, 'the in-progress check only counts runs')
+  for (const [name, t] of [['wrapper', c], ['shared guards', code(lib)]]) {
+    assert.ok(!/decrypted_secret|vault\./i.test(t), `the ${name} never read Vault`)
+    assert.ok(!/(echo|printf)[^\n]*STAGING_DATABASE_URL/.test(t), `the ${name} never echo the connection string`)
+    assert.ok(!/set -x|xtrace/.test(t), `no command tracing in the ${name}`)
+  }
+  assert.match(libFunction('q'), /begin read only; \$1; rollback;/, 'every read is in a read-only transaction')
 })
 
 test('nothing for Production, the public site, the demo or the member app', () => {
-  const c = code(wf) + '\n' + code(wrapper)
+  const c = code(wf) + '\n' + code(wrapper) + '\n' + code(lib)
   for (const bad of [/PRODUCTION/i, /hmrliwoychnqrbbydorg/, /vercel/i, /\bsupabase (db|functions|link|migration)\b/, /npm (ci|install|run)/, /git push/, /\bdemo\b/i, /deploy-db-production/, /contents: write/]) {
     assert.ok(!bad.test(c), `must not contain ${bad}`)
   }

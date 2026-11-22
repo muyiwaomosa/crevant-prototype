@@ -107,6 +107,22 @@ node e2e/release2.e2e.cjs http://localhost:4175/tour
 node e2e/release1.e2e.cjs http://localhost:4175/tour
 ```
 
+### Integration suites on local Supabase
+
+The CI Integration and Scheduler jobs run their suites against a real local Supabase in Docker. To run the same suites locally, in the same order, each timed (it refuses anything but a local stack, and starts one if none is running):
+
+```bash
+scripts/ci/local-integration.sh
+```
+
+It resets the local database first, then runs `npm test` last. While iterating on one suite, run just that one on the database as it is (`--list` shows the names, `--reset` resets first):
+
+```bash
+scripts/ci/local-integration.sh post-media-edge
+```
+
+When you wait for a CI run, use pull request notifications, or poll the run's status about every 60 seconds until it completes. Don't wait with fixed sleeps. `CLAUDE.md` has the same notes for agents.
+
 The public site itself is covered by `scripts/e2e/public-site.sh` (also the Public site CI job), which builds the site and checks it in Chromium with the real security headers, at widths from 320 to 1440 pixels. `release2` covers the unified experience and onboarding; `release1` covers creator specific CP, anti farming, redemption, and pictures.
 
 ## Technical choices

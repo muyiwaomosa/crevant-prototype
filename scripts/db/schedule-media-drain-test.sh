@@ -18,24 +18,22 @@
 #      net., database webhooks, waiting requests); the http job replaces the
 #      old one in one step; once it has run successfully, pg_net is removed;
 #      the job keeps running; and security checks 001 to 013 all pass.
+#
+# Waiting for real scheduled runs uses a 1 second schedule. The 20 second
+# timeout and the no-overlap test keep their real timings (a 5 second
+# schedule against an endpoint that never answers).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-DB_URL="${DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
-case "$DB_URL" in
-  *@127.0.0.1:*|*@localhost:*) ;;
-  *) echo "Refusing: this test only runs against a local database." >&2; exit 1 ;;
-esac
-DB_CONTAINER="${DB_CONTAINER:-supabase_db_crevant-prototype}"
-STORAGE_CONTAINER="${STORAGE_CONTAINER:-supabase_storage_crevant-prototype}"
-EDGE_IMAGE="${EDGE_IMAGE:-supabase/edge-runtime:v1.78.1}"
+# The local-only guard, the keyed copy of post-media and the old pg_net job.
+# shellcheck source=scripts/db/scheduler-test-fixture.sh
+. scripts/db/scheduler-test-fixture.sh
 SQL=scripts/db/staging-schedule-media-drain.sql
 REMOVE_SQL=scripts/db/staging-remove-pg-net.sql
-GATEWAY='http://kong:8000/functions/v1/post-media/drain'   # the gateway's copy: no drain key, so 401
-KEYED='http://127.0.0.1:54397/functions/v1/post-media/drain' # a copy with the key, beside the database
+RUN_EVERY='1 seconds'     # while waiting for a real scheduled run
+OVERLAP_EVERY='5 seconds' # the no-overlap test: much shorter than the 20 second timeout
 SILENT='http://127.0.0.1:54990/functions/v1/post-media/drain' # accepts, never answers
 NOBODY='http://127.0.0.1:54991/functions/v1/post-media/drain' # nothing listening
 GUARD_DB=crevant_pgnet_guard
-PSQL=(psql "$DB_URL" -X -q -At -v ON_ERROR_STOP=1)
 pass=0; failed=0
 ok()  { echo "PASS  photo cleanup schedule: $1"; pass=$((pass + 1)); }
 bad() { echo "FAIL  photo cleanup schedule: $1"; failed=$((failed + 1)); }
@@ -58,7 +56,6 @@ wait_run() {
   done
   printf '%s' "$r"
 }
-store_key() { "${PSQL[@]}" -c "delete from vault.secrets where name = 'media_drain_key'" -c "select vault.create_secret('$1', 'media_drain_key', 'post-media drain key (local test)')" >/dev/null; }
 # An endpoint that accepts and never answers: its own small container (the
 # database image, for its nc) sharing the database container's network.
 # Nothing is ever signalled inside the database container itself.
@@ -67,17 +64,16 @@ silent_listener() {
   stop_listener
   docker run -d --name crevant-silent-endpoint --network "container:$DB_CONTAINER" --entrypoint sh \
     "$(docker inspect -f '{{.Config.Image}}' "$DB_CONTAINER")" -c 'while true; do sleep 300 | nc -l -p 54990; done' >/dev/null
-  # (Checked without connecting: it answers one connection only.)
-  for _ in $(seq 1 30); do docker exec "$DB_CONTAINER" netstat -ltn 2>/dev/null | grep -q ":54990 " && break; sleep 1; done
+  wait_listening 54990 "the endpoint that never answers"
 }
-KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
-WRONG="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
+KEY="$(new_key)"
+WRONG="$(new_key)"
 cleanup() {
   "${PSQL[@]}" -c "delete from vault.secrets where name = 'media_drain_key'" >/dev/null 2>&1 || true
   "${PSQL[@]}" -c "select cron.unschedule(jobname) from cron.job where jobname in ('post-media-drain', 'crevant-test-net-job')" >/dev/null 2>&1 || true
   "${PSQL[@]}" -c "drop table if exists public.crevant_test_hooked" >/dev/null 2>&1 || true
   "${PSQL[@]}" -c "drop database if exists $GUARD_DB" >/dev/null 2>&1 || true
-  docker rm -f crevant-drain-beside-db >/dev/null 2>&1 || true
+  stop_keyed_drain
   stop_listener
 }
 trap cleanup EXIT
@@ -127,17 +123,10 @@ grep -q 'photo cleanup failed: the drain timed out after 20 seconds' <<<"$out" &
   && ok "the 20 second limit is enforced: an endpoint that never answers fails the run after ${took}s" || bad "timeout (${took}s): $out"
 
 # --- 4: real scheduled runs -----------------------------------------------
-ev() { docker inspect "$STORAGE_CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n "s/^$1=//p"; }
-# A copy of post-media with the drain key, sharing the database container's
-# network, so the schedule reaches it at 127.0.0.1 (as staging's reaches its own function).
-docker run -d --name crevant-drain-beside-db --network "container:$DB_CONTAINER" \
-  -e SUPABASE_URL=http://kong:8000 -e SUPABASE_ANON_KEY="$(ev ANON_KEY)" -e SUPABASE_SERVICE_ROLE_KEY="$(ev SERVICE_KEY)" -e MEDIA_DRAIN_KEY="$KEY" \
-  -v "$PWD/supabase/functions/post-media:/home/deno/functions/post-media:ro" -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
-  "$EDGE_IMAGE" start --main-service /home/deno/functions/post-media --ip 127.0.0.1 --port 54397 >/dev/null
-for _ in $(seq 1 60); do docker exec "$DB_CONTAINER" nc -z 127.0.0.1 54397 && break; sleep 1; done
+start_keyed_drain "$KEY"
 run apply 'SCHEDULE THE STAGING PHOTO CLEANUP' "$KEYED" >/dev/null
 drains=$("${PSQL[@]}" -c "select count(*) from ops.media_drain_runs where source = 'scheduled'")
-since=$(last_run); every '5 seconds'
+since=$(last_run); every "$RUN_EVERY"
 r=$(wait_run "$since")
 [ "${r%%|*}" = succeeded ] && [ "$("${PSQL[@]}" -c "select count(*) from ops.media_drain_runs where source = 'scheduled'")" -gt "$drains" ] \
   && ok "a real scheduled run with the key succeeds, and the drain records the pass" || bad "scheduled run: '$r'"
@@ -149,7 +138,7 @@ r=$(wait_run "$since")
 [ "${r%%|*}" = failed ] && grep -q 'drain key is missing from Vault' <<<"$r" && ok "with no key in Vault, the run is recorded as failed (key missing)" || bad "missing key run: '$r'"
 store_key "$KEY"
 silent_listener
-run apply 'SCHEDULE THE STAGING PHOTO CLEANUP' "$SILENT" >/dev/null; since=$(last_run); every '5 seconds'
+run apply 'SCHEDULE THE STAGING PHOTO CLEANUP' "$SILENT" >/dev/null; since=$(last_run); every "$OVERLAP_EVERY"
 sleep 32
 overlap=$("${PSQL[@]}" -c "select count(*) from cron.job_run_details a join cron.job_run_details b on a.jobid = b.jobid and a.runid < b.runid
                            join cron.job j on j.jobid = a.jobid where j.jobname = 'post-media-drain' and a.runid > $since
@@ -183,16 +172,8 @@ done
 
 # --- 6: the staged move off pg_net ----------------------------------------
 # Staging today: pg_net installed and the old pg_net job.
-"${PSQL[@]}" -c "create extension if not exists pg_net with schema extensions" >/dev/null
-"${PSQL[@]}" -c "select cron.schedule('post-media-drain', '*/15 * * * *', \$job\$
-      select net.http_post(
-        url := '$GATEWAY',
-        headers := pg_catalog.jsonb_build_object(
-          'Content-Type', 'application/json',
-          'x-media-drain-key', (select s.decrypted_secret from vault.decrypted_secrets s where s.name = 'media_drain_key')),
-        body := '{}'::jsonb,
-        timeout_milliseconds := 20000)
-    \$job\$)" >/dev/null
+"${PSQL[@]}" -c "create extension if not exists pg_net with schema extensions" >/dev/null || fixture_fail "could not install pg_net"
+legacy_job
 old_id=$("${PSQL[@]}" -c "select jobid from cron.job where jobname = 'post-media-drain'")
 out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/tests/003_waitlist.sql 2>&1); code=$?
 [ $code -ne 0 ] && ok "with pg_net installed, security check 003 fails (the exposure this removes)" || bad "check 003 passed with pg_net installed"
@@ -209,7 +190,7 @@ new_id=$("${PSQL[@]}" -c "select jobid from cron.job where jobname = 'post-media
 out=$(removal check); code=$?
 [ $code -ne 0 ] && grep -Eq '^ *2 *\| *ok' <<<"$out" && grep -Eq '^ *3 *\| *REFUSED' <<<"$out" && [ "$(has_pg_net)" = 1 ] \
   && ok "removal still refuses until the http job has succeeded once" || bad "removal before a successful run (exit $code): $(grep -E '^ *[0-9] *\|' <<<"$out" | tr '\n' ' ')"
-since=$(last_run); every '5 seconds'; r=$(wait_run "$since"); every '*/15 * * * *'
+since=$(last_run); every "$RUN_EVERY"; r=$(wait_run "$since"); every '*/15 * * * *'
 [ "${r%%|*}" = succeeded ] && ok "the http job runs successfully on schedule" || bad "http job run before removal: '$r'"
 # Other things that rely on pg_net each stop the removal.
 "${PSQL[@]}" -c "select cron.schedule('crevant-test-net-job', '0 4 * * *', \$q\$select net.http_get('http://kong:8000/')\$q\$)" >/dev/null
@@ -244,7 +225,7 @@ out=$(removal apply "$DB_URL" 'REMOVE PG_NET FROM STAGING'); code=$?
   && ok "removal apply drops pg_net and its schema; the http job stays" || bad "removal apply (exit $code): $(tail -3 <<<"$out" | tr '\n' ' ')"
 out=$(removal apply "$DB_URL" 'REMOVE PG_NET FROM STAGING'); code=$?
 [ $code -eq 0 ] && grep -q 'not installed here' <<<"$out" && ok "running the removal again is harmless" || bad "a second removal (exit $code)"
-since=$(last_run); every '5 seconds'; r=$(wait_run "$since"); every '*/15 * * * *'
+since=$(last_run); every "$RUN_EVERY"; r=$(wait_run "$since"); every '*/15 * * * *'
 [ "${r%%|*}" = succeeded ] && [ "$("${PSQL[@]}" -c "select schedule from cron.job where jobname = 'post-media-drain'")" = '*/15 * * * *' ] \
   && ok "after pg_net is gone, the cleanup still runs successfully on its 15 minute schedule" || bad "run after removal: '$r'"
 # The staging security checks, with pg_cron and http in place and pg_net gone.

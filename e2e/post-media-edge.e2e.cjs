@@ -3,6 +3,12 @@
 // through scripts/e2e/post-media-edge.sh. Test photos are generated here
 // with the reviewed jpeg-js (nothing third-party is committed).
 // Every check prints PASS or FAIL; the process exits non zero on any failure.
+//
+// Safe to run again on the same database: counts are compared with what was
+// there when this run started (on a fresh database that is zero, so the
+// checks are the same), and at the end, pass or fail, the media settings are
+// put back as they were and the processing-check gate is closed again (the
+// check history is append-only, so a failed check is recorded to close it).
 const { execFileSync } = require('node:child_process')
 const { readFileSync } = require('node:fs')
 const path = require('node:path')
@@ -73,6 +79,37 @@ async function rpc(token, fn, body) {
     return { status: r.status, json: text }
   }
 }
+// Turning photos on needs six passing processing checks as the most recent
+// ones: true while they aren't there (tried in a transaction that is rolled back).
+function gateClosed() {
+  try {
+    execFileSync('psql', [DB, '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', "begin; select ops.set_media_settings('media-edge-gate-probe', true, 2000000000, 10, 20); rollback;"], { stdio: 'pipe' })
+    return false
+  } catch (e) {
+    if (/six most recent hosted processing checks/.test(String(e.stderr))) return true
+    throw new Error(`could not probe the processing-check gate: ${String(e.stderr).trim().split('\n')[0]}`)
+  }
+}
+const closeGate = (why) => sql(`select public.svc_photo_check_record('media-edge-teardown', null, false, '${why}')`)
+let restoreAtEnd = null
+const settingsNow = () => sql(`select case when photos_enabled then 't' else 'f' end || '|' || coalesce(photo_storage_cap_bytes::text, '') || '|'
+  || coalesce(egress_review_gb::text, '') || '|' || coalesce(egress_pause_gb::text, '') || '|' || photos_audience from ops.media_settings`)
+function restoreSettings(snapshot) {
+  const [enabled, cap, review, pause, audience] = snapshot.split('|')
+  const num = (v) => (v === '' ? 'null' : v)
+  const audienceNow = sql('select photos_audience from ops.media_settings')
+  if (audienceNow !== audience) {
+    sql(audience === 'members'
+      ? "select ops.set_photo_audience('media-edge', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS')"
+      : "select ops.set_photo_audience('media-edge', 'founder')")
+  }
+  sql(`select ops.set_media_settings('media-edge', ${enabled === 't'}, ${num(cap)}, ${num(review)}, ${num(pause)})`)
+  // The history can't be deleted: a failed check closes the gate for the next run.
+  closeGate('local test teardown: closes the processing-check gate for the next run')
+  const now = settingsNow()
+  check('the media settings are put back as they were before this run', now === snapshot, `${now} (was ${snapshot})`)
+  check('the processing-check gate is closed again for the next run', gateClosed())
+}
 const photoFiles = () => Number(sql("select count(*) from storage.objects where bucket_id = 'post-photos'"))
 const avatarFiles = () => Number(sql("select count(*) from storage.objects where bucket_id = 'avatars'"))
 async function stored(p) {
@@ -120,6 +157,20 @@ function frame(b) {
   const landscape = withExif(makePhoto(1600, 1067, 7))
   const portrait = makePhoto(900, 1600, 3)
 
+  // What was there before this run (all zero on a fresh database).
+  const photosAtStart = photoFiles()
+  const uploadsAtStart = Number(sql('select count(*) from social.media_uploads'))
+  const eventsAtStart = Number(sql('select coalesce(max(id), 0) from ops.media_admin_events'))
+  const newEvents = (where) => sql(`select count(*) from ops.media_admin_events where id > ${eventsAtStart} and ${where}`)
+  const settingsAtStart = settingsNow()
+  if (!/^[tf]\|[0-9]*\|[0-9.]*\|[0-9.]*\|(founder|members)$/.test(settingsAtStart)) throw new Error(`fixture: could not read the media settings (${settingsAtStart})`)
+  restoreAtEnd = () => restoreSettings(settingsAtStart)
+  if (!gateClosed()) {
+    // Left open by a run from before this suite closed it at the end.
+    console.log('NOTE  an earlier run left the processing-check gate open: closing it first')
+    closeGate('local test set-up: closes a gate an earlier run left open')
+  }
+  check('the processing-check gate is closed before the checks run', gateClosed())
   const avatarsBefore = avatarFiles()
   const A = await account('pma') // posts photos
   const B = await account('pmb') // follows A
@@ -134,11 +185,11 @@ function frame(b) {
     for (const action of ['photo', 'links', 'cleanup', 'mod-photo', 'mod-drain', 'check']) codes.push((await call(action, token, '{}', { contentType: 'application/json' })).status)
     check(`${what} is refused (401) for every member action`, codes.every((c) => c === 401), codes.join(','))
   }
-  check('nothing was stored by any refused request', photoFiles() === 0 && sql('select count(*) from social.media_uploads') === '0')
+  check('nothing was stored by any refused request', photoFiles() === photosAtStart && Number(sql('select count(*) from social.media_uploads')) === uploadsAtStart)
 
   // 1. Off by default: no upload is authorised, nothing is stored.
   const off = await photo(A.token, landscape)
-  check('with the switch off, uploads are refused (photos_unavailable) and nothing is stored', off.status === 403 && off.json?.error === 'photos_unavailable' && photoFiles() === 0, `${off.status} ${JSON.stringify(off.json)}`)
+  check('with the switch off, uploads are refused (photos_unavailable) and nothing is stored', off.status === 403 && off.json?.error === 'photos_unavailable' && photoFiles() === photosAtStart, `${off.status} ${JSON.stringify(off.json)}`)
   const offStatus = await rpc(A.token, 'app_photo_status', {})
   check('and the app is told photos are off', offStatus.status === 200 && offStatus.json === false)
 
@@ -159,7 +210,7 @@ function frame(b) {
     if (!(r.status === 200 && r.json?.ok === true)) check(`processing check ${seed}`, false, `${r.status} ${JSON.stringify(r.json)}`)
   }
   check('six processing checks pass in the local Edge runtime (each under 1 second)', timings.every((ms) => typeof ms === 'number' && ms < 1000), `${timings.join(', ')} ms`)
-  check('the checks are recorded, and stored nothing', sql("select count(*) from ops.media_admin_events where action = 'processing_check' and ok") === '6' && photoFiles() === 0)
+  check('the checks are recorded, and stored nothing', newEvents("action = 'processing_check' and ok") === '6' && photoFiles() === photosAtStart)
   sql("select ops.set_media_settings('founder', true, 2000000000, 10, 20)")
   check('with the checks passed, a cap and both thresholds, photos turn on', sql('select photos_enabled from ops.media_settings') === 't')
 
@@ -167,11 +218,11 @@ function frame(b) {
   check('the audience is founder-only by default', sql('select photos_audience from ops.media_settings') === 'founder')
   const testerRefused = await photo(A.token, landscape)
   check('with photos on and the audience at founder, a tester\'s upload is refused (photos_unavailable) and nothing is stored',
-    testerRefused.status === 403 && testerRefused.json?.error === 'photos_unavailable' && photoFiles() === 0, `${testerRefused.status} ${JSON.stringify(testerRefused.json)}`)
+    testerRefused.status === 403 && testerRefused.json?.error === 'photos_unavailable' && photoFiles() === photosAtStart, `${testerRefused.status} ${JSON.stringify(testerRefused.json)}`)
   const founderUp = await photo(F.token, makePhoto(1200, 900, 21))
   check('the founder\'s upload is accepted through the function', founderUp.status === 200 && typeof founderUp.json?.uploadId === 'string', `${founderUp.status} ${JSON.stringify(founderUp.json)}`)
   sql("select ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS')")
-  check('opening to all members is recorded', sql("select count(*) from ops.media_admin_events where action = 'audience_changed'") === '1')
+  check('opening to all members is recorded', newEvents("action = 'audience_changed'") === '1')
 
   // 3. A valid photo: checked, decoded, re-encoded into two copies; nothing else stored.
   const up = await photo(A.token, landscape)
@@ -349,11 +400,18 @@ function frame(b) {
   check('nothing in the avatars bucket changed, and no photo file is outside post-photos', avatarFiles() === avatarsBefore
     && sql(`select count(*) from storage.objects where bucket_id = 'avatars' and name like '%${up.json.uploadId}%'`) === '0')
 
-  sql("select ops.set_photo_audience('founder', 'founder')")
-  sql("select ops.set_media_settings('founder', false, 2000000000, 10, 20)")
-  console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`)
-  process.exit(failures === 0 ? 0 : 1)
-})().catch((e) => {
-  console.error(e)
-  process.exit(1)
-})
+})()
+  .catch((e) => {
+    console.error(e)
+    failures++
+  })
+  .finally(() => {
+    // Put back what this run changed, even after a failure, and say so loudly if that fails.
+    try {
+      if (restoreAtEnd) restoreAtEnd()
+    } catch (e) {
+      check('the media settings and the processing-check gate are put back', false, String(e.message ?? e).split('\n')[0])
+    }
+    console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`)
+    process.exit(failures === 0 ? 0 : 1)
+  })
