@@ -54,6 +54,26 @@ function parse(argv) {
   return o
 }
 
+/**
+ * For a response our function didn't produce: the platform's answer, safely.
+ * Only an uppercase error code from a JSON body (e.g. BOOT_ERROR, WORKER_LIMIT)
+ * and request identifiers from an allowlist of headers, each checked against a
+ * strict pattern. Never body text, never other headers.
+ */
+export function platformNote(r, text) {
+  const parts = ['not from our function (no build stamp)']
+  try {
+    const j = text ? JSON.parse(text) : null
+    const code = j && typeof j === 'object' ? (j.code ?? j.error) : null
+    if (typeof code === 'string' && /^[A-Z][A-Z0-9_]{2,40}$/.test(code)) parts.push(`platform code ${code}`)
+  } catch { /* not JSON: nothing recorded */ }
+  for (const h of ['sb-request-id', 'x-sb-request-id', 'x-request-id', 'sb-gateway-version', 'x-sb-edge-region', 'cf-ray']) {
+    const v = r.headers.get(h)
+    if (typeof v === 'string' && /^[A-Za-z0-9._:-]{1,80}$/.test(v)) parts.push(`${h} ${v}`)
+  }
+  return parts.join(', ')
+}
+
 export async function verify(o, fetchImpl = fetch) {
   const failures = []
   const passes = []
@@ -101,8 +121,11 @@ export async function verify(o, fetchImpl = fetch) {
     observed.add(r.headers.get('x-splitpost-build') ?? 'none')
     return r.headers.get('x-splitpost-build') === expectedBuild
   }
-  const common = (r, what) => {
-    check(r.status !== 503, 'auth', `${what}: not refusing to run (got ${r.status}: a 503 means the wrong project or missing keys)`)
+  const common = (r, what, text = null) => {
+    // A response without our build stamp didn't come from our function code: say what the platform answered,
+    // safely (an allowlisted code and request identifiers only, never body text), so it can be traced in the logs.
+    const platform = r.headers.get('x-splitpost-build') ? '' : platformNote(r, text)
+    check(r.status !== 503, 'auth', `${what}: not refusing to run (got ${r.status}: ${platform || 'a 503 means the wrong project or missing keys'})`)
     check(buildOk(r), 'build', `${what}: build stamp is ${expectedBuild.slice(0, 12)}... (got ${r.headers.get('x-splitpost-build') ?? 'none'})`)
     check(r.headers.get('x-content-type-options') === 'nosniff', 'build', `${what}: nosniff`)
   }
@@ -143,7 +166,7 @@ export async function verify(o, fetchImpl = fetch) {
       const text = await r.text()
       check(r.status === 401, 'auth', `${route}: ${what} is refused (got ${r.status})`)
       check(/not_signed_in/.test(text), 'auth', `${route}: ${what} says not_signed_in`)
-      common(r, `${route} (${what})`)
+      common(r, `${route} (${what})`, text)
     }
     r = await call(path, { method: 'GET' })
     await r.body?.cancel?.()

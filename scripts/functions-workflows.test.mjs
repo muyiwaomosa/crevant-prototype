@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ledgerProblems } from './functions/ledger.mjs'
-import { evidenceAnnotation, originsFor, ROUTES } from './functions/verify.mjs'
+import { evidenceAnnotation, originsFor, platformNote, ROUTES } from './functions/verify.mjs'
 import { checkVerifyEvidence } from './functions/deploy.mjs'
 
 const root = new URL('..', import.meta.url).pathname
@@ -126,4 +126,17 @@ test('the verifier\'s evidence line is exactly what the rollback check reads (ro
   assert.doesNotThrow(() => checkVerifyEvidence([{ title: 'Verified deployment', annotation_level: 'notice', message: m[1] }], entry, 'member-production'))
   const other = evidenceAnnotation({ target: 'member-production', function: 'avatar', mode: 'deployed', commit }, { ref: 'membersprodtestrefab', observedBuild: `${commit}.${'c'.repeat(64)}` })
   assert.throws(() => checkVerifyEvidence([{ title: 'Verified deployment', annotation_level: 'notice', message: other.split('::').pop() }], entry, 'member-production'), /observed_build/)
+})
+
+test('unit: a response our function did not produce is described safely (allowlisted code and request ids only)', () => {
+  const res = (headers) => ({ headers: { get: (k) => headers[k.toLowerCase()] ?? null } })
+  assert.equal(
+    platformNote(res({ 'sb-request-id': '019a2b3c-4d5e-7f80-9a1b-2c3d4e5f6a7b', 'x-sb-edge-region': 'us-west-2', 'cf-ray': '8f1e2d3c4b5a6978-SEA' }), '{"code":"BOOT_ERROR","message":"Worker failed to boot: secret=abc"}'),
+    'not from our function (no build stamp), platform code BOOT_ERROR, sb-request-id 019a2b3c-4d5e-7f80-9a1b-2c3d4e5f6a7b, x-sb-edge-region us-west-2, cf-ray 8f1e2d3c4b5a6978-SEA',
+  )
+  // Never body text, never a lower-case or long "code", never unsafe header values, never other headers.
+  const note = platformNote(res({ 'sb-request-id': 'id with spaces', authorization: 'Bearer eyJ.x.y', 'set-cookie': 'a=b' }), '{"code":"Bearer eyJhbGciOi.x.y","error":"leaked token"}')
+  assert.equal(note, 'not from our function (no build stamp)')
+  assert.equal(platformNote(res({}), '<html>Service Unavailable eyJ.secret</html>'), 'not from our function (no build stamp)')
+  assert.equal(platformNote(res({}), null), 'not from our function (no build stamp)')
 })
