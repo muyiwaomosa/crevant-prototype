@@ -964,14 +964,19 @@ function ReplaceDialog({
   const current = adding ? all.find((f) => f.id === adding.id) : undefined
   const full = inner.length >= LIMITS.clique
 
-  useEffect(() => {
+  // Both adjustments happen during render, not in effects. An effect would run
+  // only after the render that showed the stale state was committed: after
+  // mount it could undo a first click, and after a reload the Replace button
+  // would briefly be enabled for a creator no longer listed.
+  // A different creator to add starts fresh.
+  const [shownFor, setShownFor] = useState(adding)
+  if (shownFor !== adding) {
+    setShownFor(adding)
     setChoice(null)
     setError(null)
-  }, [adding])
+  }
   // Keep the choice only while that creator is still in the Clique.
-  useEffect(() => {
-    if (choice && !inner.some((f) => f.id === choice)) setChoice(null)
-  }, [choice, inner])
+  if (choice !== null && !inner.some((f) => f.id === choice)) setChoice(null)
   // Move focus to the error, so keyboard and screen reader users land on it.
   useEffect(() => {
     if (error !== null) errorRef.current?.focus()
