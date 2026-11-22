@@ -32,6 +32,16 @@ BEFORE_GUARD=7c8a9ce360dac79dee400694104a990c6f66b6bb
 git cat-file -e "$BEFORE_GUARD^{commit}" 2>/dev/null || git fetch -q --no-tags origin "$BEFORE_GUARD"
 OTHER_COMMIT=$(printf 'f%.0s' $(seq 1 40))
 PORT=58460  # the last port used is kept in a file: start runs in a subshell
+# The copies use ports from this block, each once. It is inside Linux's range
+# for temporary outgoing connections, so on CI it is reserved from them
+# (scripts/e2e/lib/private-ports.sh), and each port is checked for any socket,
+# not only a listener, before use.
+PORT_FIRST=$((PORT + 1)) PORT_LAST=$((PORT + 60))
+# shellcheck source=lib/private-ports.sh
+. scripts/e2e/lib/private-ports.sh
+echo "Temporary connection range: $(private_ports_range). Private ports: $PORT_FIRST to $PORT_LAST"
+private_ports_reserve "$PORT_FIRST-$PORT_LAST"
+docker image inspect "$EDGE_IMAGE" >/dev/null 2>&1 || docker pull -q "$EDGE_IMAGE" >/dev/null
 pass=0; failed=0
 ok()  { echo "PASS  functions policy: $1"; pass=$((pass + 1)); }
 bad() { echo "FAIL  functions policy: $1"; failed=$((failed + 1)); }
@@ -62,20 +72,38 @@ EXTRA=()
 if [ -n "${HTTPS_PROXY:-}" ]; then EXTRA+=(-e HTTPS_PROXY -e HTTP_PROXY -e NO_PROXY=127.0.0.1,localhost); fi
 if [ -n "${EDGE_CA_FILE:-}" ]; then EXTRA+=(-v "${EDGE_CA_FILE}:/extra-ca.crt:ro" -e DENO_CERT=/extra-ca.crt); fi
 # start <container> <functions root> <function> <SUPABASE_URL> [docker args...]: prints the port.
+# The copy must answer (any HTTP reply); if it never does, the script stops
+# here with its state and output (redacted), instead of a later "fetch failed".
+# If the port was taken between the check and the bind ("Address already in
+# use"), the copy is started again on the next port, at most twice: a start-up
+# retry only, never a test retry.
 start() {
   local name=$1 root=$2 fn=$3 url=$4; shift 4
-  PORT=$(( $(cat "$TMP/port") + 1 ))
-  while (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; do PORT=$((PORT + 1)); done  # skip ports already in use
-  echo "$PORT" > "$TMP/port"
-  docker rm -f "$name" >/dev/null 2>&1 || true
-  docker run -d --name "$name" --network host "${EXTRA[@]}" -e SUPABASE_URL="$url" -e SUPABASE_ANON_KEY=dummy -e SUPABASE_SERVICE_ROLE_KEY=dummy "$@" \
-    -v "$root/supabase/functions/$fn:/home/deno/functions/$fn:ro" -v "$root/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
-    "$EDGE_IMAGE" start --main-service "/home/deno/functions/$fn" --ip 127.0.0.1 --port "$PORT" >/dev/null
-  for _ in $(seq 1 120); do
-    [ "$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "http://127.0.0.1:$PORT/$fn/x")" != 000 ] && break
-    sleep 1
+  local attempt
+  for attempt in 1 2 3; do
+    PORT=$(( $(cat "$TMP/port") + 1 ))
+    # Skip ports with any socket on them (a listener, or an outgoing connection).
+    while private_ports_holders "$PORT" >/dev/null || (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; do PORT=$((PORT + 1)); done
+    if [ "$PORT" -gt "$PORT_LAST" ]; then
+      echo "::error::functions policy: no free test port left in $PORT_FIRST to $PORT_LAST" >&2
+      return 1
+    fi
+    echo "$PORT" > "$TMP/port"
+    docker rm -f "$name" >/dev/null 2>&1 || true
+    docker run -d --name "$name" --network host "${EXTRA[@]}" -e SUPABASE_URL="$url" -e SUPABASE_ANON_KEY=dummy -e SUPABASE_SERVICE_ROLE_KEY=dummy "$@" \
+      -v "$root/supabase/functions/$fn:/home/deno/functions/$fn:ro" -v "$root/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
+      "$EDGE_IMAGE" start --main-service "/home/deno/functions/$fn" --ip 127.0.0.1 --port "$PORT" >/dev/null
+    if private_ports_wait_http "$name" "$PORT" "http://127.0.0.1:$PORT/$fn/x" 120 2>"$TMP/start.err"; then
+      echo "$PORT"
+      return 0
+    fi
+    if [ "$attempt" -lt 3 ] && grep -q 'Address already in use' "$TMP/start.err"; then
+      echo "::warning::$name could not bind port $PORT (taken after it was checked); starting it on the next port" >&2
+      continue
+    fi
+    cat "$TMP/start.err" >&2
+    return 1
   done
-  echo "$PORT"
 }
 # A config root for the verifier with the test member reference, name and region.
 CFG="$TMP/config-root"
