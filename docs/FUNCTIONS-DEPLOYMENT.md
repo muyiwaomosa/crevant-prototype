@@ -5,12 +5,13 @@ and to member Production, verified, rolled back and, in an emergency, deleted.
 `join-waitlist` keeps its own procedure (`docs/WAITLIST.md`) and is never
 deployed by anything here.
 
-**State.** Staging: `avatar` v3 (commit `e7e298d`, 22 November 2026) is in
-**failed verification**: it was exported on Windows with `git archive`, which
-converted line endings to CRLF, so its source digest isn't the commit's
-(verify run `45078411583`; see the evidence log). It needs a redeploy with the
-byte-exact export below. Member Production: no function is deployed;
-`postMediaFunctionApproved` is false. The deployment ledger is empty.
+**State.** `avatar` at commit `d2784151` (PR #102's merge) is approved on
+both projects, serving build `d2784151….6ee3e5d5…` (the commit's bytes):
+staging v4 (verify run `45080766334`) and member Production v1 (verify run
+`45081975316`; an earlier run, `45081485385`, failed one check with a 504 and
+is recorded in the evidence log). Staging v3 (CRLF export) was replaced by v4.
+`postMediaFunctionApproved` is false; post-media is deployed nowhere by these
+tools. The ledger holds exactly these two entries.
 
 ## What protects what
 
