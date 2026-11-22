@@ -1,5 +1,5 @@
 {
-  "_comment": "Supabase project references (not credentials). staging is kpudeppgokpjhvaqrprn (development, testing and member Previews). production is the WAITLIST project, hmrliwoychnqrbbydorg (splitpost-production, us-west-2), in a separate Supabase organization; the key keeps its name so the waitlist workflows stay unchanged. memberProduction is the member Production project (splitpost-members-production, ca-central-1): its ref, name and region are null until that project is provisioned, and are set together only by a reviewed PR (which also regenerates supabase/functions/_shared/projects.ts); all three must be valid and consistent before any member Production function deployment. While it is null, every member app Production build fails closed. Changing any of these requires a reviewed PR. The waitlist form still cannot appear without an approved privacy notice.",
+  "_comment": "Supabase project references (not credentials). staging is kpudeppgokpjhvaqrprn (development, testing and member Previews). production is the WAITLIST project, hmrliwoychnqrbbydorg (splitpost-production, us-west-2), in the Splitpost Production (Pro) Supabase organization, which also holds the member Production project (separate projects: separate databases, credentials and API keys); the key keeps its name so the waitlist workflows stay unchanged. memberProduction is the member Production project (splitpost-members-production, ca-central-1): its ref, name and region were set together by a reviewed PR (which also regenerates supabase/functions/_shared/projects.ts); all three must be valid and consistent before any member Production function deployment. While it is null, every member app Production build fails closed. Changing any of these requires a reviewed PR. The waitlist form still cannot appear without an approved privacy notice.",
   "staging": {
     "ref": "kpudeppgokpjhvaqrprn"
   },
@@ -7,8 +7,8 @@
     "ref": "hmrliwoychnqrbbydorg"
   },
   "memberProduction": {
-    "ref": null,
-    "name": null,
-    "region": null
+    "ref": "PENDINGMEMBERREF",
+    "name": "splitpost-members-production",
+    "region": "ca-central-1"
   }
 }

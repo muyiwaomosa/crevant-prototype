@@ -1,18 +1,28 @@
 # Member Production database (Phase 1B-1)
 
 The member app's Production database is its own Supabase project,
-`splitpost-members-production` (organization Splitpost Pro, Canada Central,
-`ca-central-1`, Micro compute). It is separate from staging
+`splitpost-members-production` (organization Splitpost Production (Pro),
+Canada Central, `ca-central-1`, Micro compute). It is separate from staging
 (`kpudeppgokpjhvaqrprn`) and from the waitlist project
 (`hmrliwoychnqrbbydorg`), and nothing in this repository can point one at
 another.
 
-**State at the end of 1B-1: nothing exists yet.** The project is not
-provisioned, `memberProduction.ref` in `config/supabase-projects.json` is
-`null` (every member workflow and every member app Production build fails
-closed while it is), and both approvals in `config/member-production.json` are
-`false`. This PR adds the migration, the workflows, the checks and this
-runbook. It changes no database. Edge Functions are Phase 1B-2; cleanup is 1B-3.
+**State: the project is recorded, for a founder-only launch.**
+`memberProduction` in `config/supabase-projects.json` names it (and
+`supabase/functions/_shared/projects.ts` is generated from it), and
+`app.splitpost.ca` may reach only it. Both approvals in
+`config/member-production.json` stay `false`: photos off, and nobody but the
+launch founder can hold membership. Its database is set up only by the member
+workflows below (`check`, `plan`, `apply-foundation`, then the activation),
+each approved in the `members-production` environment. It shares the
+Splitpost Production (Pro) organization with the waitlist project; a separate
+organization is not required, because each is its own project with its own
+database, credentials and API keys.
+
+Deferred until external access is considered (not needed for the founder
+alone): the waitlist login rehearsal on the real project (below), the avatar
+function deployment (`docs/FUNCTIONS-DEPLOYMENT.md`), and a full restore
+drill.
 
 Photo posting stays off. External members stay out: only the launch founder
 can hold membership until external access is separately approved and

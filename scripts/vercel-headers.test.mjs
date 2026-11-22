@@ -144,6 +144,7 @@ test('the three rules are otherwise identical: the same policy apart from connec
 test('the projects in the policy are the ones in config/supabase-projects.json, once recorded', () => {
   if (PROJECT_REFS.production?.ref) assert.equal(PRODUCTION, `https://${PROJECT_REFS.production.ref}.supabase.co`)
   assert.equal(STAGING, `https://${PROJECT_REFS.staging.ref}.supabase.co`)
-  // The member Production project stays unset until it is provisioned and reviewed.
-  assert.equal(PROJECT_REFS.memberProduction?.ref ?? null, null)
+  // The member Production project is recorded: app.splitpost.ca reaches exactly it.
+  assert.match(PROJECT_REFS.memberProduction.ref, /^[a-z]{20}$/)
+  assert.deepEqual(MEMBER, [`https://${PROJECT_REFS.memberProduction.ref}.supabase.co`])
 })

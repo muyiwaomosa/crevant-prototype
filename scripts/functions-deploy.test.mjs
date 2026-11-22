@@ -95,9 +95,10 @@ function setup({ member = true, postMediaApproved = false } = {}) {
   g('init', '-q', '-b', 'main')
   g('config', 'user.email', 'test@example.test'); g('config', 'user.name', 'test')
   g('add', '-A'); g('commit', '-q', '-m', 'base')
-  if (member || postMediaApproved) {
+  {
+    // Every throwaway repository names its own member project, or none (null), whatever the committed config records.
     const p = JSON.parse(readFileSync(join(repo, 'config/supabase-projects.json'), 'utf8'))
-    if (member) p.memberProduction = { ref: MEMBER, name: 'splitpost-members-production', region: 'ca-central-1' }
+    p.memberProduction = member ? { ref: MEMBER, name: 'splitpost-members-production', region: 'ca-central-1' } : { ref: null, name: null, region: null }
     writeFileSync(join(repo, 'config/supabase-projects.json'), JSON.stringify(p, null, 2) + '\n')
     const m = JSON.parse(readFileSync(join(repo, 'config/member-production.json'), 'utf8'))
     m.postMediaFunctionApproved = postMediaApproved
