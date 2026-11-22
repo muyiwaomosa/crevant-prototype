@@ -182,6 +182,9 @@ out=$(MEMBERS_DB_IDENTITY_MARKER="$MARKER" env -u MEMBERS_PRODUCTION_DATABASE_UR
 if [ $code -ne 0 ] && grep -q 'MEMBERS_PRODUCTION_DATABASE_URL is not set' <<<"$out"; then ok "identity refused: no database URL"; else bad "identity with no URL (exit $code)"; fi
 out=$(MEMBERS_DB_IDENTITY_MARKER="$MARKER" MEMBERS_PRODUCTION_DATABASE_URL="postgresql://postgres:postgres@$HOST:$PORT/members_does_not_exist_$$" scripts/db/verify-members-identity.sh 2>&1); code=$?
 if [ $code -ne 0 ] && grep -q 'Could not read the database' <<<"$out"; then ok "identity refused: the database can't be read"; else bad "identity on an unreachable database (exit $code): $out"; fi
+# REHEARSAL BRANCH ONLY: the failure category is shown, never the error text (scripts/rehearsal/pg-error-category.test.sh).
+if ADMIN_DATABASE_URL="$ADMIN_DATABASE_URL" scripts/rehearsal/pg-error-category.test.sh >"$tmpd/pg-error-category.log" 2>&1; then ok "identity failures show only a fixed category, never the error text"
+else bad "identity failure categories: $(grep -E '^FAIL' "$tmpd/pg-error-category.log" | head -3 | tr '\n' ' ')"; fi
 out=$(GITHUB_ACTIONS=true MEMBERS_DB_IDENTITY_MARKER="$MARKER" MEMBERS_PRODUCTION_DATABASE_URL="$U" scripts/db/verify-members-identity.sh 2>&1)
 if grep -qx "::add-mask::$MARKER" <<<"$out" && [ "$(grep -v '^::add-mask::' <<<"$out" | grep -c "$MARKER")" = 0 ]; then ok "on GitHub Actions the marker is masked first and never printed"; else bad "marker masking"; fi
 for c in "update env_identity.marker set marker_sha256 = repeat('0', 64)|can't be changed or removed" "delete from env_identity.marker|can't be changed or removed" \
