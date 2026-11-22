@@ -5,11 +5,12 @@ and to member Production, verified, rolled back and, in an emergency, deleted.
 `join-waitlist` keeps its own procedure (`docs/WAITLIST.md`) and is never
 deployed by anything here.
 
-**State: nothing has been deployed by these tools.** The member
-Production project is recorded (`memberProduction` ref, name and region),
-but no function is deployed there yet; the avatar deployment is deferred
-for the founder-only launch; `postMediaFunctionApproved`
-is false; the deployment ledger is empty.
+**State.** Staging: `avatar` v3 (commit `e7e298d`, 22 November 2026) is in
+**failed verification**: it was exported on Windows with `git archive`, which
+converted line endings to CRLF, so its source digest isn't the commit's
+(verify run `45078411583`; see the evidence log). It needs a redeploy with the
+byte-exact export below. Member Production: no function is deployed;
+`postMediaFunctionApproved` is false. The deployment ledger is empty.
 
 ## What protects what
 
@@ -89,8 +90,15 @@ It refuses, calling nothing, unless all of these hold:
    unexpected function (delete it first).
 6. **The pinned CLI** version.
 
-Then it deploys a `git archive` export of exactly that commit, with only
-`_shared/build-info.ts` stamped. The export holds `supabase/functions`,
+Then it deploys an export of exactly that commit, **written straight from the
+commit's Git blobs** (`git ls-tree` and `git cat-file blob`), with only
+`_shared/build-info.ts` stamped. It never uses `git archive`, which applies
+line-ending conversion (`core.autocrlf`, the Windows default, and `.gitattributes`
+`eol`/`text`) and export filters: staging avatar v3 was deployed with CRLF line
+endings that way. Before deploying, every exported file is hashed as a Git blob
+and must equal the commit's, with nothing missing or extra; otherwise the
+script refuses and deploys nothing. Only regular files are exported (no
+symbolic links or submodules). The export holds `supabase/functions`,
 `supabase/config.toml`, and exactly the files that config references
 (its `content_path` settings: today the invite and recovery email templates).
 The CLI validates the whole config before deploying and opens those files, so
@@ -118,9 +126,13 @@ function: verify it, or delete it).
 
 **C1 is exact and required.** The expected files are exactly the ones the
 deployed function is built from: its `index.ts` and every file it imports,
-transitively (`importClosure` in `scripts/functions/source-digest.mjs`), as
-exported and stamped. Every one must be in the download byte for byte; any
-other downloaded file must be byte-identical to the commit too. A missing,
+transitively (`importClosure` in `scripts/functions/source-digest.mjs`). Each
+must be in the download and byte-identical to **the commit's own blob** for
+that path (compared by Git blob id, not against the export), except
+`_shared/build-info.ts`, which must be exactly the stamp written for this
+deployment: the one permitted difference. Any other downloaded file must be
+byte-identical to the commit too. (Before this, C1 compared the download with
+the export, so a CRLF export and a CRLF deployment matched: staging avatar v3.) A missing,
 different or extra file, an empty download, or a download the CLI can't
 perform all fail the deployment ("failed verification"). Whether
 `supabase functions download` (CLI 2.122.1, `--use-api`) reproduces the

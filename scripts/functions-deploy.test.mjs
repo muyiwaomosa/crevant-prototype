@@ -7,7 +7,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { appendFileSync, chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { checkDbRun, checkProjectIdentity, checkVerifyEvidence, checkVerifyRun, compareSource, configFileRefs, phraseFor, servedBuild, targetProject } from './functions/deploy.mjs'
+import { checkDbRun, checkProjectIdentity, checkVerifyEvidence, checkVerifyRun, compareWithCommit, configFileRefs, exportProblems, gitBlobId, parseLsTree, phraseFor, servedBuild, targetProject } from './functions/deploy.mjs'
 import { importClosure } from './functions/source-digest.mjs'
 import { ledgerProblems } from './functions/ledger.mjs'
 
@@ -42,6 +42,8 @@ if (a[0] === 'functions' && a[1] === 'deploy') {
     }
   }
   st.exported = fs.readdirSync(path.join(wd, 'supabase')).sort()
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)])
+  st.crFiles = walk(path.join(wd, 'supabase/functions')).filter((f) => fs.readFileSync(f).includes(13)).length
   st.lastBuild = fs.readFileSync(path.join(wd, 'supabase/functions/_shared/build-info.ts'), 'utf8')
   fs.cpSync(path.join(wd, 'supabase/functions'), path.join(process.env.FAKE_DIR, 'deployed', ref, 'functions'), { recursive: true })
   let f = fns.find((x) => x.slug === name)
@@ -63,6 +65,10 @@ if (a[0] === 'functions' && a[1] === 'download') {
   if (st.download === 'missing') fs.rmSync(path.join(wd, 'supabase/functions', name, 'handler.ts'))
   if (st.download === 'extra') fs.writeFileSync(path.join(wd, 'supabase/functions', name, 'extra.ts'), 'export const x = 1\\n')
   if (st.download === 'empty') fs.rmSync(path.join(wd, 'supabase/functions'), { recursive: true, force: true })
+  if (st.download === 'crlf') {
+    const f = path.join(wd, 'supabase/functions', name, 'handler.ts')
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/\\r?\\n/g, '\\r\\n'))
+  }
   process.exit(0)
 }
 if (a[0] === 'functions' && a[1] === 'delete') {
@@ -441,6 +447,72 @@ test('unit: config.toml file references (Auth templates only; Windows separators
   }
 })
 
+test('unit: blob ids, the commit file list and the export check', () => {
+  // Git's own object id for the same bytes.
+  const f = 'supabase/functions/_shared/policy.ts'
+  assert.equal(gitBlobId(readFileSync(join(SRC, f))), sh(SRC, 'git', ['hash-object', f]))
+  assert.notEqual(gitBlobId(Buffer.from('a\n')), gitBlobId(Buffer.from('a\r\n')), 'line endings change the id')
+  const id = 'a'.repeat(40)
+  assert.deepEqual([...parseLsTree(`100644 blob ${id}\tsupabase/functions/a.ts\x00100755 blob ${id}\tsupabase/functions/b.sh\x00`)], [['supabase/functions/a.ts', id], ['supabase/functions/b.sh', id]])
+  assert.throws(() => parseLsTree(`120000 blob ${id}\tsupabase/functions/link.ts\x00`), /not a regular file/, 'symbolic link')
+  assert.throws(() => parseLsTree(`160000 commit ${id}\tsupabase/functions/sub\x00`), /not a regular file/, 'submodule')
+  assert.throws(() => parseLsTree('garbage\x00'), /could not read/)
+  const d = mkdtempSync(join(tmpdir(), 'fn-export-'))
+  try {
+    const blobs = new Map()
+    for (const [path, text] of [['supabase/functions/a.ts', 'export const a = 1\n'], ['supabase/config.toml', 'x = 1\n']]) {
+      mkdirSync(join(d, ...path.split('/').slice(0, -1)), { recursive: true }); writeFileSync(join(d, ...path.split('/')), text); blobs.set(path, gitBlobId(Buffer.from(text)))
+    }
+    assert.deepEqual(exportProblems(d, blobs), [], 'exact')
+    writeFileSync(join(d, 'supabase/functions/a.ts'), 'export const a = 1\r\n')
+    assert.deepEqual(exportProblems(d, blobs), ["differs from the commit's stored bytes: supabase/functions/a.ts"], 'CRLF conversion is caught')
+    writeFileSync(join(d, 'supabase/functions/a.ts'), 'export const a = 2\n')
+    assert.deepEqual(exportProblems(d, blobs), ["differs from the commit's stored bytes: supabase/functions/a.ts"], 'tampering is caught')
+    rmSync(join(d, 'supabase/functions/a.ts')); writeFileSync(join(d, 'supabase/functions/b.ts'), 'x\n')
+    assert.deepEqual(exportProblems(d, blobs), ['missing from the export: supabase/functions/a.ts', 'not in the commit: supabase/functions/b.ts'])
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('the export is the commit\'s exact bytes whatever Git converts: core.autocrlf=true and .gitattributes eol=crlf (Windows defaults)', () => {
+  const t = setup()
+  try {
+    // The hazard is real in this repository: with these settings, git archive writes CRLF (staging avatar v3).
+    t.g('config', 'core.autocrlf', 'true')
+    writeFileSync(join(t.repo, '.gitattributes'), '*.ts text eol=crlf\n*.js text eol=crlf\n')
+    t.g('add', '-A'); t.g('commit', '-q', '-m', 'Windows-style line ending settings'); t.g('push', '-q', 'origin', 'main')
+    const archived = sh(t.repo, 'git', ['archive', '--format=tar', 'HEAD', 'supabase/functions/avatar/handler.ts'])
+    assert.ok(archived.includes('\r\n'), 'git archive converts to CRLF here')
+    const c = t.head()
+    const lfDigest = (() => {
+      const x = mkdtempSync(join(tmpdir(), 'fn-lf-'))
+      try {
+        for (const path of sh(t.repo, 'git', ['ls-files', 'supabase/functions']).split('\n')) {
+          mkdirSync(join(x, ...path.split('/').slice(0, -1)), { recursive: true })
+          writeFileSync(join(x, ...path.split('/')), execFileSync('git', ['cat-file', 'blob', `${c}:${path}`], { cwd: t.repo }))
+        }
+        return sh(t.repo, 'node', ['scripts/functions/source-digest.mjs', x, 'avatar'])
+      } finally { rmSync(x, { recursive: true, force: true }) }
+    })()
+    t.state()
+    const r = t.run(deployArgs('avatar', STAGING, c))
+    assert.equal(r.code, 0, r.out)
+    assert.equal(t.st().crFiles, 0, 'nothing deployed carries a CR: the bytes stored in Git')
+    const out = JSON.parse(r.out.slice(r.out.indexOf('{')))
+    assert.equal(out.served, `${c}.${lfDigest}`, 'the build is the commit\'s true digest, the one the verifier computes on Linux')
+    assert.equal(out.sourceComparison, 'exact match')
+  } finally { t.cleanup() }
+})
+
+test('C1: a deployed copy whose line endings differ from the commit fails verification (anchoring to the commit itself is unit-tested above)', () => {
+  const t = setup()
+  try {
+    t.state({ download: 'crlf' })
+    const r = t.run(deployArgs('avatar', STAGING, t.head()))
+    assert.equal(r.code, 1); assert.match(r.out, /could not be compared exactly .*differs from the approved commit: avatar\/handler\.ts/)
+    assert.match(t.evidence(), /FAILED VERIFICATION/)
+  } finally { t.cleanup() }
+})
+
 test('rollback: only to a recorded, founder-approved deployment whose verification passed and matches it', () => {
   const t = setup()
   try {
@@ -554,18 +626,34 @@ test('unit: exact source comparison, served build and runner evidence', async ()
     const exp = join(d, 'exp'), dl = join(d, 'dl')
     cpSync(join(SRC, 'supabase/functions'), join(exp, 'supabase/functions'), { recursive: true })
     const closure = importClosure(exp, 'avatar')
-    assert.ok(closure.includes('avatar/vendor/jpeg-js-0.4.4/decoder.js') && closure.includes('_shared/policy.ts') && !closure.includes('_shared/jpeg-js-0.4.4/decoder.js'))
-    const put = (files) => { rmSync(dl, { recursive: true, force: true }); for (const f of files) cpSync(join(exp, 'supabase/functions', f), join(dl, 'supabase/functions', f)) }
+    assert.ok(closure.includes('avatar/vendor/jpeg-js-0.4.4/decoder.js') && closure.includes('_shared/policy.ts') && closure.includes('_shared/build-info.ts') && !closure.includes('_shared/jpeg-js-0.4.4/decoder.js'))
+    // The commit's blobs: the repository's own bytes (LF), independent of any export.
+    const blobs = new Map()
+    for (const f of sh(SRC, 'git', ['ls-files', 'supabase/functions']).split('\n')) blobs.set(f, gitBlobId(readFileSync(join(SRC, f))))
+    const stamp = "// Stamped by scripts/functions/deploy.mjs for this deployment only.\nexport const BUILD = 'x.y'\n"
+    const put = (files) => {
+      rmSync(dl, { recursive: true, force: true })
+      for (const f of files) cpSync(join(exp, 'supabase/functions', f), join(dl, 'supabase/functions', f))
+      if (files.includes('_shared/build-info.ts')) writeFileSync(join(dl, 'supabase/functions/_shared/build-info.ts'), stamp)
+    }
     put(closure)
-    assert.deepEqual(compareSource(exp, dl, 'avatar'), { result: 'match', problems: [] }, 'exactly the imported files')
+    assert.deepEqual(compareWithCommit(dl, closure, blobs, stamp), { result: 'match', problems: [] }, 'exactly the imported files, with the stamp')
     put([...closure, '_shared/jpeg-js-0.4.4/decoder.js'])
-    assert.equal(compareSource(exp, dl, 'avatar').result, 'match', 'an extra file identical to the commit is accepted')
+    assert.equal(compareWithCommit(dl, closure, blobs, stamp).result, 'match', 'an extra file identical to the commit is accepted')
     put(closure.filter((f) => f !== '_shared/policy.ts'))
-    assert.deepEqual(compareSource(exp, dl, 'avatar').problems, ['missing from the deployment: _shared/policy.ts'])
+    assert.deepEqual(compareWithCommit(dl, closure, blobs, stamp).problems, ['missing from the deployment: _shared/policy.ts'])
     put(closure); writeFileSync(join(dl, 'supabase/functions/_shared/projects.ts'), 'export const STAGING_REF = "x"\n')
-    assert.deepEqual(compareSource(exp, dl, 'avatar').problems, ['differs from the approved commit: _shared/projects.ts'])
+    assert.deepEqual(compareWithCommit(dl, closure, blobs, stamp).problems, ['differs from the approved commit: _shared/projects.ts'])
+    // Regression (staging avatar v3): the download matched a CRLF export, but not the commit. Anchored to the commit, it fails.
+    put(closure); writeFileSync(join(dl, 'supabase/functions/avatar/handler.ts'), readFileSync(join(exp, 'supabase/functions/avatar/handler.ts'), 'utf8').replace(/\n/g, '\r\n'))
+    assert.deepEqual(compareWithCommit(dl, closure, blobs, stamp).problems, ['differs from the approved commit: avatar/handler.ts'])
+    // The stamp is the only permitted difference, and it must be exactly the one written.
+    put(closure); writeFileSync(join(dl, 'supabase/functions/_shared/build-info.ts'), stamp.replace('x.y', 'other'))
+    assert.deepEqual(compareWithCommit(dl, closure, blobs, stamp).problems, ['the build stamp differs from the one written for this deployment: _shared/build-info.ts'])
+    put(closure); writeFileSync(join(dl, 'supabase/functions/avatar/extra.ts'), 'export const x = 1\n')
+    assert.deepEqual(compareWithCommit(dl, closure, blobs, stamp).problems, ['not in the approved commit: avatar/extra.ts'])
     rmSync(dl, { recursive: true, force: true })
-    assert.equal(compareSource(exp, dl, 'avatar').result, 'unavailable')
+    assert.equal(compareWithCommit(dl, closure, blobs, stamp).result, 'unavailable')
   } finally { rmSync(d, { recursive: true, force: true }) }
   const fakeFetch = (builds) => { let i = 0; return async () => ({ headers: { get: () => builds[Math.min(i++, builds.length - 1)] }, body: null }) }
   assert.deepEqual(await servedBuild('http://x', 'avatar', 'upload', 'new', { tries: 3, waitMs: 1, fetchImpl: fakeFetch(['old', 'new']) }), { ok: true, served: 'new' })

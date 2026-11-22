@@ -27,8 +27,12 @@
 //     check run (identity marker step included), at the deploy commit (deploy)
 //     or at current main (rollback), finished within 24 hours;
 //   * the pinned Supabase CLI; the project holds no unexpected function.
-// The deployed code is a `git archive` export of the commit, with only
-// _shared/build-info.ts stamped '<commit>.<digest>'. The export also holds
+// The deployed code is an export of the commit written straight from its Git
+// blobs (git ls-tree + git cat-file), byte for byte: no line-ending conversion
+// (core.autocrlf, core.eol, .gitattributes) and no export filters, on Windows,
+// macOS and Linux alike. Every exported file is re-hashed and must equal its
+// committed blob before anything is deployed. Only _shared/build-info.ts is then
+// stamped '<commit>.<digest>'. The export also holds
 // supabase/config.toml and exactly the files it references (its content_path
 // settings, the Auth email templates): the CLI reads and validates the whole
 // config before deploying, so a missing one fails the deploy. They must
@@ -48,7 +52,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, relative, sep } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { memberProductionProblems, NAME, REF, REGION } from '../supabase-projects.mjs'
 import { importClosure, sourceDigest } from './source-digest.mjs'
@@ -190,28 +194,75 @@ function walk(dir) {
     return statSync(p).isDirectory() ? walk(p) : [p]
   })
 }
+/** Git's object id for file content: sha1("blob <length>\0" + bytes). */
+export function gitBlobId(bytes) {
+  return createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${bytes.length}\0`), bytes])).digest('hex')
+}
+
 /**
- * Exact source comparison (C1). The expected files are exactly the ones the
- * deployed function is built from: its index.ts and every file it imports,
- * transitively (importClosure), as exported and stamped. Every one must be in
- * the download, byte for byte; any other downloaded file must be byte-identical
- * to the export too. Returns { result: 'match' | 'differs' | 'unavailable', problems }.
+ * The commit's files under the given paths, from `git ls-tree -r -z`: a map of
+ * repository path to blob id. Only regular files are allowed (no symbolic
+ * links, submodules or other entries), so the export can be exact.
  */
-export function compareSource(exportRoot, downloadRoot, fn) {
-  const base = (root) => join(root, 'supabase', 'functions')
-  const got = {}
-  for (const p of walk(base(downloadRoot))) got[relative(base(downloadRoot), p).split(sep).join('/')] = sha256(readFileSync(p))
-  if (Object.keys(got).length === 0) return { result: 'unavailable', problems: ['the download returned no files'] }
-  const hashOf = (rel) => { try { return sha256(readFileSync(join(base(exportRoot), rel))) } catch { return null } }
-  const problems = []
-  for (const rel of importClosure(exportRoot, fn)) {
-    if (!(rel in got)) problems.push(`missing from the deployment: ${rel}`)
-    else if (got[rel] !== hashOf(rel)) problems.push(`differs from the approved commit: ${rel}`)
+export function parseLsTree(output) {
+  const blobs = new Map()
+  for (const rec of String(output).split('\0')) {
+    if (!rec) continue
+    const m = /^(\d{6}) (\w+) ([0-9a-f]{40})\t(.+)$/.exec(rec)
+    if (!m) refuse(`could not read the commit's file list (${rec.slice(0, 60)})`)
+    const [, mode, type, id, path] = m
+    if (type !== 'blob' || !['100644', '100755'].includes(mode)) refuse(`${path} is not a regular file in the commit (mode ${mode}, ${type}); the export only carries regular files`)
+    blobs.set(path, id)
   }
-  for (const rel of Object.keys(got)) {
-    const want = hashOf(rel)
-    if (want === null) problems.push(`not in the approved commit: ${rel}`)
-    else if (got[rel] !== want && !problems.some((x) => x.endsWith(rel))) problems.push(`differs from the approved commit: ${rel}`)
+  return blobs
+}
+
+/**
+ * Checks an export against the commit's blobs: every file present, byte-identical
+ * (same blob id), and nothing else. Returns the problems (none means exact).
+ */
+export function exportProblems(root, blobs) {
+  const problems = []
+  const present = new Set()
+  for (const p of walk(root)) present.add(relative(root, p).split(sep).join('/'))
+  for (const [path, id] of blobs) {
+    if (!present.has(path)) { problems.push(`missing from the export: ${path}`); continue }
+    if (gitBlobId(readFileSync(join(root, ...path.split('/')))) !== id) problems.push(`differs from the commit's stored bytes: ${path}`)
+  }
+  for (const path of present) if (!blobs.has(path)) problems.push(`not in the commit: ${path}`)
+  return problems
+}
+
+/**
+ * Exact source comparison (C1), anchored to the commit, not to the export. The
+ * required files are exactly the ones the deployed function is built from: its
+ * index.ts and every file it imports, transitively (importClosure). Each
+ * downloaded file must be byte-identical to the commit's blob for that path,
+ * except _shared/build-info.ts, which must be exactly the stamp written for this
+ * deployment (the one permitted difference). Any other downloaded file must also
+ * be byte-identical to the commit, or the comparison fails.
+ *   closure: function-relative paths ("avatar/index.ts", "_shared/policy.ts")
+ *   blobs:   the commit's repository paths to blob ids
+ *   stamp:   the exact contents written to _shared/build-info.ts
+ * Returns { result: 'match' | 'differs' | 'unavailable', problems }.
+ */
+export function compareWithCommit(downloadRoot, closure, blobs, stamp) {
+  const base = join(downloadRoot, 'supabase', 'functions')
+  const got = new Map()
+  for (const p of walk(base)) got.set(relative(base, p).split(sep).join('/'), gitBlobId(readFileSync(p)))
+  if (got.size === 0) return { result: 'unavailable', problems: ['the download returned no files'] }
+  const STAMP = '_shared/build-info.ts'
+  const want = (rel) => (rel === STAMP ? gitBlobId(Buffer.from(stamp)) : blobs.get(`supabase/functions/${rel}`) ?? null)
+  const problems = []
+  for (const rel of closure) {
+    if (!got.has(rel)) problems.push(`missing from the deployment: ${rel}`)
+    else if (got.get(rel) !== want(rel)) problems.push(rel === STAMP ? `the build stamp differs from the one written for this deployment: ${rel}` : `differs from the approved commit: ${rel}`)
+  }
+  for (const [rel, id] of got) {
+    if (closure.includes(rel)) continue
+    const w = want(rel)
+    if (w === null) problems.push(`not in the approved commit: ${rel}`)
+    else if (id !== w) problems.push(`differs from the approved commit: ${rel}`)
   }
   return { result: problems.length ? 'differs' : 'match', problems }
 }
@@ -413,19 +464,28 @@ export async function main(argv) {
   // The export: exactly the commit, plus the build stamp.
   const tmp = mkdtempSync(join(tmpdir(), 'splitpost-fn-'))
   try {
-    const tar = join(tmp, 'src.tar')
-    run('git', ['archive', '--format=tar', '-o', tar, commit, 'supabase/functions', 'supabase/config.toml', ...configRefs])
+    // Written straight from the commit's blobs: the bytes stored in Git, never converted.
+    const blobs = parseLsTree(run('git', ['ls-tree', '-r', '-z', '--full-tree', commit, '--', 'supabase/functions', 'supabase/config.toml', ...configRefs]))
     const out = join(tmp, 'export')
     mkdirSync(out)
-    run('tar', ['-xf', tar, '-C', out])
+    for (const [path, id] of blobs) {
+      const dest = join(out, ...path.split('/'))
+      mkdirSync(dirname(dest), { recursive: true })
+      writeFileSync(dest, run('git', ['cat-file', 'blob', id], { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 }))
+    }
     const notExported = configRefs.filter((r) => !existsSync(join(out, ...r.split('/'))))
     if (notExported.length) refuse(`the export is missing file(s) supabase/config.toml references: ${notExported.join(', ')}`)
+    // Every exported file must equal its committed blob, before anything is deployed.
+    const exportIssues = exportProblems(out, blobs)
+    if (exportIssues.length) refuse(`the export does not match the commit byte for byte (nothing was deployed): ${exportIssues.slice(0, 5).join('; ')}`)
     const projTs = readFileSync(join(out, 'supabase/functions/_shared/projects.ts'), 'utf8')
     const want = o.target === 'staging' ? `export const STAGING_REF: string = '${p.ref}'` : `export const MEMBER_PRODUCTION_REF: string | null = '${p.ref}'`
     if (!projTs.includes(want)) refuse(`the commit's supabase/functions/_shared/projects.ts does not name ${p.ref} for ${o.target}`)
     const digest = sourceDigest(out, fn)
     const build = `${commit}.${digest}`
-    writeFileSync(join(out, 'supabase/functions/_shared/build-info.ts'), `// Stamped by scripts/functions/deploy.mjs for this deployment only.\nexport const BUILD = '${build}'\n`)
+    const closure = importClosure(out, fn)
+    const stamp = `// Stamped by scripts/functions/deploy.mjs for this deployment only.\nexport const BUILD = '${build}'\n`
+    writeFileSync(join(out, 'supabase/functions/_shared/build-info.ts'), stamp)
     evidence([`${o.action} started`, o.target, p.ref, fn, commit, prev ? `from v${prev.version}` : 'new', operator, o.reason ?? '', `build ${build}`])
 
     const deployed = attempt('supabase', ['functions', 'deploy', fn, '--project-ref', p.ref, '--no-verify-jwt', '--use-api', '--workdir', out])
@@ -464,7 +524,7 @@ export async function main(argv) {
     const dl = join(tmp, 'download')
     mkdirSync(join(dl, 'supabase'), { recursive: true })
     const got = run('supabase', ['functions', 'download', fn, '--project-ref', p.ref, '--use-api', '--workdir', dl], { allowFail: true })
-    const source = got === null ? { result: 'unavailable', problems: ['supabase functions download failed'] } : compareSource(out, dl, fn)
+    const source = got === null ? { result: 'unavailable', problems: ['supabase functions download failed'] } : compareWithCommit(dl, closure, blobs, stamp)
     const failed = (why) => {
       evidence([`${o.action} FAILED VERIFICATION`, o.target, p.ref, fn, commit, `v${f.version}`, operator, o.reason ?? '', why])
       refuse(`deployed, but failed verification: ${why}. Roll back to an approved deployment or delete it.`)
