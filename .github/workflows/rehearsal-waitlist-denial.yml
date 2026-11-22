@@ -5,18 +5,22 @@ name: "Rehearsal: waitlist login denial through the pooler"
 # through the Supabase pooler on both ports (5432 session, 6543 transaction).
 # Not a direct (IPv6) connection test. scripts/rehearsal/waitlist-denial-probe.sh.
 # Uses only the members-rehearsal environment, never members-production.
+#
+# Started by a push, not by hand: GitHub only offers manual runs for workflows
+# that also exist on main, and this one stays off main. Only a push to
+# rehearsal/members-disposable that changes scripts/rehearsal/run-probe starts
+# it; ordinary pushes don't. That file arms it once: it names the project and
+# the reviewed commit (exactly one of each; comments and blank lines aside),
+# and the run refuses unless the triggering commit is
+# exactly that reviewed commit plus a change to the trigger file alone.
+# Reruns are refused (run_attempt must be 1).
 
 on:
-  workflow_dispatch:
-    inputs:
-      expected_commit:
-        description: "The full commit SHA you reviewed (must equal the commit this run uses)"
-        type: string
-        required: true
-      confirm_project_ref:
-        description: "Type the disposable rehearsal project reference to confirm"
-        type: string
-        required: true
+  push:
+    branches:
+      - rehearsal/members-disposable
+    paths:
+      - scripts/rehearsal/run-probe
 
 permissions:
   contents: read
@@ -38,20 +42,44 @@ jobs:
       REQUIRE_VERIFY_FULL: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
-      - name: The run is at the reviewed commit
+      - name: Armed once, by the trigger file, on the reviewed commit
+        id: armed
         env:
-          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EVENT: ${{ github.event_name }}
           RUN_COMMIT: ${{ github.sha }}
+          ATTEMPT: ${{ github.run_attempt }}
         run: |
-          [ "$EXPECTED_COMMIT" = "$RUN_COMMIT" ] || { echo "::error::This run uses $RUN_COMMIT, not the reviewed commit. Nothing was done."; exit 1; }
+          set -euo pipefail
+          fail() { echo "::error::$1 Nothing was done."; exit 1; }
+          [ "$EVENT" = push ] || fail "Only a push of scripts/rehearsal/run-probe starts the probe."
+          [ "$ATTEMPT" = 1 ] || fail "This is a rerun (attempt $ATTEMPT). Reruns are refused; arm the probe again with a reviewed change to scripts/rehearsal/run-probe."
+          [ "$(git rev-parse HEAD)" = "$RUN_COMMIT" ] || fail "The checkout is not the triggering commit."
+          f=scripts/rehearsal/run-probe
+          [ -f "$f" ] || fail "$f is missing."
+          # Comments and blank lines are ignored; everything else must be exactly
+          # one project_ref= line and one reviewed_commit= line, nothing more.
+          entries=$(grep -vE '^[[:space:]]*(#|$)' "$f" || true)
+          [ "$(grep -c . <<<"$entries" || true)" = 2 ] || fail "$f must contain exactly two entries (project_ref and reviewed_commit), besides comments and blank lines."
+          [ "$(grep -c '^project_ref=' <<<"$entries" || true)" = 1 ] || fail "$f must contain project_ref exactly once."
+          [ "$(grep -c '^reviewed_commit=' <<<"$entries" || true)" = 1 ] || fail "$f must contain reviewed_commit exactly once."
+          ref=$(sed -n 's/^project_ref=//p' <<<"$entries"); reviewed=$(sed -n 's/^reviewed_commit=//p' <<<"$entries")
+          [[ "$ref" =~ ^[a-z0-9]{20}$ ]] || fail "$f has no valid project_ref."
+          [[ "$reviewed" =~ ^[0-9a-f]{40}$ ]] || fail "$f has no valid reviewed_commit."
+          [ "$(git rev-parse HEAD~1)" = "$reviewed" ] || fail "The trigger commit's parent is not the reviewed commit $reviewed."
+          changed=$(git diff --name-only HEAD~1 HEAD)
+          [ "$changed" = "$f" ] || fail "The trigger commit must change only $f (it changes: $(echo $changed))."
+          echo "project_ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "Armed: $RUN_COMMIT = reviewed commit $reviewed + the trigger file; project $ref."
 
       - name: Verify the target is the rehearsal project (connects to nothing)
         id: target
         env:
           MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
           MEMBERS_PROJECT_REF: ${{ vars.MEMBERS_PROJECT_REF }}
-          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+          CONFIRM_PROJECT_REF: ${{ steps.armed.outputs.project_ref }}
         run: scripts/db/verify-members-target.sh
 
       - name: Verify the database identity marker (the first connection; read only)
