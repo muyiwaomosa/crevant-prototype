@@ -52,6 +52,7 @@ async function call(action, token, body, { url = FN, contentType, headers: extra
   const headers = { apikey: PUB, ...extra }
   if (token) headers.Authorization = `Bearer ${token}`
   if (contentType) headers['Content-Type'] = contentType
+  const started = Date.now()
   const r = await fetch(`${url}/${action}`, { method: 'POST', headers, body })
   const text = await r.text()
   let json = null
@@ -60,9 +61,25 @@ async function call(action, token, body, { url = FN, contentType, headers: extra
   } catch {
     json = text
   }
-  return { status: r.status, json, headers: r.headers }
+  return { status: r.status, json, headers: r.headers, ms: Date.now() - started }
 }
 const photo = (token, bytes) => call('photo', token, bytes, { contentType: 'image/jpeg' })
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+// A short, safe description of a reply: the status, how long it took, and its
+// error code or the start of its body (the function only ever returns codes;
+// the Edge runtime's own errors carry no secrets), with control characters removed.
+const describe = (r) => {
+  const j = r.json
+  const body = j && typeof j === 'object' ? (j.error ?? j.code ?? j.msg ?? j.message ?? JSON.stringify(j)) : String(j ?? '')
+  return `${r.status} in ${r.ms ?? '?'} ms: ${String(body).replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 200)}`
+}
+// An upload the rest of the test depends on must have succeeded: otherwise
+// stop here, saying why, instead of failing later on a missing upload id.
+const requireUpload = (r, what) => {
+  if (r.status === 200 && typeof r.json?.uploadId === 'string' && UUID.test(r.json.uploadId)) return r.json.uploadId
+  check(`${what} was stored, with an upload id`, false, describe(r))
+  throw new Error(`stopping: ${what} was not stored (${describe(r)})`)
+}
 const jsonCall = (action, token, body, opts = {}) => call(action, token, JSON.stringify(body), { contentType: 'application/json', ...opts })
 async function rpc(token, fn, body) {
   const r = await fetch(`${API}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: PUB, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -175,7 +192,8 @@ function frame(b) {
 
   // 3. A valid photo: checked, decoded, re-encoded into two copies; nothing else stored.
   const up = await photo(A.token, landscape)
-  check('a 1600 px photo with camera metadata is accepted', up.status === 200 && typeof up.json?.uploadId === 'string' && up.json.width === 1600 && up.json.height === 1067, `${up.status} ${JSON.stringify(up.json)}`)
+  check('a 1600 px photo with camera metadata is accepted', up.status === 200 && typeof up.json?.uploadId === 'string' && up.json.width === 1600 && up.json.height === 1067, describe(up))
+  requireUpload(up, 'the 1600 px photo')
   const row = sql(`select full_path || '|' || feed_path || '|' || status || '|' || full_bytes || '|' || feed_bytes from social.media_uploads where id = '${up.json?.uploadId}'`).split('|')
   check('the paths were chosen by the database, in A\'s own folder', row[0] === `${A.id}/${up.json?.uploadId}.jpg` && row[1] === `${A.id}/${up.json?.uploadId}-feed.jpg` && row[2] === 'stored')
   const full = await stored(row[0])
@@ -190,6 +208,7 @@ function frame(b) {
   check('Storage records both as image/jpeg', full.type === 'image/jpeg' && feed.type === 'image/jpeg', `${full.type} ${feed.type}`)
   check('the sizes recorded match the files', Number(row[3]) === full.bytes.length && Number(row[4]) === feed.bytes.length)
   const pu = await photo(A.token, portrait)
+  requireUpload(pu, 'the portrait photo')
   const pf = frame((await stored(sql(`select feed_path from social.media_uploads where id = '${pu.json?.uploadId}'`))).bytes)
   check('a portrait photo keeps its shape (feed 450 x 800)', pu.status === 200 && pu.json.width === 900 && pu.json.height === 1600 && pf?.w === 450 && pf?.h === 800, `${JSON.stringify(pu.json)} ${pf?.w}x${pf?.h}`)
 
@@ -246,6 +265,7 @@ function frame(b) {
 
   // 7. Evidence: a reported photo stays while its report is kept, even after the author deletes it.
   const ev = await photo(A.token, makePhoto(1200, 900, 11))
+  requireUpload(ev, 'the photo to be reported')
   const evPost = (await rpc(A.token, 'app_create_post', { p_body: 'Reported photo', p_request_id: crypto.randomUUID(), p_media: ev.json.uploadId })).json
   const rep = await rpc(B.token, 'app_report', { p_target_type: 'post', p_target_id: evPost, p_reason: 'harassment' })
   check('B reports the photo post', rep.status === 204 || rep.status === 200, String(rep.status))
@@ -280,6 +300,7 @@ function frame(b) {
 
   // 9. A deleted post with the browser gone: the schedule alone cleans it up.
   const failUpload = await photo(A.token, makePhoto(800, 600, 5))
+  requireUpload(failUpload, 'the photo for the scheduled cleanup')
   const failPost = (await rpc(A.token, 'app_create_post', { p_body: 'Will fail to delete', p_request_id: crypto.randomUUID(), p_media: failUpload.json.uploadId })).json
   await rpc(A.token, 'app_delete_post', { p_post: failPost })
   const pending = sql(`select count(*) from ops.media_deletions where deleted_at is null and path like '${A.id}/${failUpload.json.uploadId}%'`)
@@ -293,6 +314,7 @@ function frame(b) {
   const overlapIds = []
   for (let i = 0; i < 3; i++) {
     const up = await photo(A.token, makePhoto(640, 480, 20 + i))
+    requireUpload(up, `overlap photo ${i + 1}`)
     const p = (await rpc(A.token, 'app_create_post', { p_body: `Overlap ${i}`, p_request_id: crypto.randomUUID(), p_media: up.json.uploadId })).json
     await rpc(A.token, 'app_delete_post', { p_post: p })
     overlapIds.push(up.json.uploadId)
@@ -319,6 +341,7 @@ function frame(b) {
   // scheduled (as after pausing it), a moderator's Run cleanup now still
   // deletes queued files.
   const manualUp = await photo(A.token, makePhoto(640, 480, 31))
+  requireUpload(manualUp, 'the photo for the manual cleanup')
   const manualPost = (await rpc(A.token, 'app_create_post', { p_body: 'Manual cleanup', p_request_id: crypto.randomUUID(), p_media: manualUp.json.uploadId })).json
   await rpc(A.token, 'app_delete_post', { p_post: manualPost })
   // (Two queries: SQL resolves cron.job before it could short-circuit.)

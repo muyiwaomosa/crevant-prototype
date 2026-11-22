@@ -46,6 +46,13 @@ trap cleanup EXIT
 
 "${PSQL[@]}" -c "alter role waitlist_writer password '${WRITER_PW}'; alter role waitlist_admin password '${ADMIN_PW}'"
 
+# shellcheck source=lib/private-ports.sh
+. scripts/e2e/lib/private-ports.sh
+export PRIVATE_PORTS_REDACT="$WRITER_PW $ADMIN_PW $SALT"
+# Reserve (CI), pull and wait for all nine ports before binding them.
+private_ports_prepare "$EDGE_IMAGE" "$EDGE_PORT" "$EDGE_BAD_PORT" "$EDGE_REAL_PORT" "$EDGE_HOPS2_PORT" "$EDGE_NOHOPS_PORT" \
+  "$EDGE_HOSTED_PORT" "$EDGE_IGNORE_PORT" "$EDGE_IGNORE_REAL_PORT" "$EDGE_CONFLICT_PORT"
+
 # Pass this machine's outbound proxy and extra CA to the runtime if it has
 # them (it downloads the pinned postgres driver from npm on start).
 EXTRA=()
@@ -110,11 +117,21 @@ start_real crevant-waitlist-edge-ignore-real "$EDGE_IGNORE_REAL_PORT" "$LOCAL_SU
 start_real crevant-waitlist-edge-conflict "$EDGE_CONFLICT_PORT" "$LOCAL_SUPABASE_URL" -e WAITLIST_CLIENT_ADDRESS=ignore \
   -e WAITLIST_TRUSTED_PROXY_HOPS=1 -e TURNSTILE_SECRET_KEY=placeholder-never-sent
 
-for port in "$EDGE_PORT" "$EDGE_BAD_PORT" "$EDGE_HOPS2_PORT" "$EDGE_IGNORE_PORT"; do
+# Each test copy must answer its configuration check; if one never does, stop
+# here with its state and output instead of failing later.
+for copy in "crevant-waitlist-edge $EDGE_PORT" "crevant-waitlist-edge-bad $EDGE_BAD_PORT" \
+            "crevant-waitlist-edge-hops2 $EDGE_HOPS2_PORT" "crevant-waitlist-edge-ignore $EDGE_IGNORE_PORT"; do
+  read -r name port <<<"$copy"
+  ready=""
   for _ in $(seq 1 90); do
-    curl -fs "http://127.0.0.1:${port}/__config" >/dev/null 2>&1 && break
+    if curl -fs -m 5 "http://127.0.0.1:${port}/__config" >/dev/null 2>&1; then ready=1; break; fi
     sleep 2
   done
+  if [ -z "$ready" ]; then
+    echo "::error::$name did not answer on port $port within 180 seconds" >&2
+    private_ports_explain "$name" "$port"
+    exit 1
+  fi
 done
 
 EDGE_URL="http://127.0.0.1:${EDGE_PORT}" EDGE_BAD_URL="http://127.0.0.1:${EDGE_BAD_PORT}" \
