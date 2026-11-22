@@ -264,20 +264,21 @@ test('allowed: Preview, development and local builds use the staging (pilot) pro
   assert.equal(supa(memberEnv('preview', { VITE_SUPABASE_URL: `${STAGING_SUPABASE_URL}/` })).ok, true)
 })
 
-// The member Production project's reference is null in the committed config
-// until it is provisioned and recorded in a reviewed PR. Tests that need it
-// use this stand-in (never a real project).
+// The committed config records the member Production project. The matrix
+// below uses this stand-in (never a real project) so it does not depend on it.
 const MEMBER_REF = 'memberprodtestonly01'
 const MEMBER_URL = `https://${MEMBER_REF}.supabase.co`
 const WITH_MEMBER = { staging: REFS.staging, production: REFS.production, memberProduction: MEMBER_REF }
 const supaWith = (env, refs = WITH_MEMBER) => checkSupabaseTarget(env, { project: 'memberApp', refs })
 
-test('committed config: member Production fails closed (no member project yet), whatever is set, staging included', () => {
-  assert.equal(REFS.memberProduction, null)
-  for (const extra of [{}, { VITE_SUPABASE_URL: MEMBER_URL }, { VITE_SUPABASE_URL: '', VITE_SUPABASE_PUBLISHABLE_KEY: '' }, { VITE_SUPABASE_URL: 'https://abcdefghijabcdefghij.supabase.co' }]) {
-    const r = supa(memberEnv('production', extra))
-    assert.equal(r.ok, false, JSON.stringify(extra))
-    assert.match(r.message, /member Production Supabase project is not configured/, JSON.stringify(extra))
+test('committed config: member Production builds only against the recorded member project, never staging or another project', () => {
+  assert.match(REFS.memberProduction, /^[a-z]{20}$/)
+  const url = `https://${REFS.memberProduction}.supabase.co`
+  const r = supa(memberEnv('production', { VITE_SUPABASE_URL: url }))
+  assert.equal(r.ok, true, r.message)
+  assert.match(r.message, new RegExp(`member Production project \\(${REFS.memberProduction}\\)`))
+  for (const extra of [{}, { VITE_SUPABASE_URL: '', VITE_SUPABASE_PUBLISHABLE_KEY: '' }, { VITE_SUPABASE_URL: 'https://abcdefghijabcdefghij.supabase.co' }, { VITE_SUPABASE_URL: MEMBER_URL }, { VITE_SUPABASE_URL: url, VITE_SUPABASE_PUBLISHABLE_KEY: '' }]) {
+    assert.equal(supa(memberEnv('production', extra)).ok, false, JSON.stringify(extra))
   }
 })
 
@@ -425,10 +426,12 @@ test('bundle: refused when it carries a waitlist address or anything secret', ()
   }
 })
 
-test('bundle, Production: fails closed with the committed config (no member project yet)', () => {
-  const problems = checkMemberAppBundle({ 'index.html': HTML, 'a.js': `"https://${stagingHost}"` }, REFS, 'production')
+test('bundle, Production: fails closed with no member project recorded, and with the committed one accepts only it', () => {
+  const problems = checkMemberAppBundle({ 'index.html': HTML, 'a.js': `"https://${stagingHost}"` }, { ...REFS, memberProduction: null }, 'production')
   assert.equal(problems.length, 1)
   assert.match(problems[0], /member Production project is not configured/)
+  assert.deepEqual(checkMemberAppBundle({ 'index.html': HTML, 'a.js': `"https://${REFS.memberProduction}.supabase.co" "${PUB}"` }, REFS, 'production'), [])
+  assert.ok(checkMemberAppBundle({ 'index.html': HTML, 'a.js': `"https://${stagingHost}"` }, REFS, 'production').length > 0, 'staging is refused in a Production build')
 })
 
 test('bundle matrix, once the member project is configured', () => {

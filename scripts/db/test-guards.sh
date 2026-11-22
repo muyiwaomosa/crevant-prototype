@@ -319,16 +319,23 @@ guard "Production never receives the pilot membership migration (not on the Prod
 # (MEMBERS_PRODUCTION_DATABASE_URL contains PRODUCTION_DATABASE_URL, so the
 # guards match the waitlist secret as a whole name only.)
 # The approved reference comes only from config/supabase-projects.json, which
-# holds null today, so the real repository must fail closed; the other cases
-# run on a scratch copy with a made-up reference.
+# records the member Production project, so the real repository refuses any
+# other reference; the other cases run on a scratch copy with a made-up one.
 MREF=membersprodfakerefab
 out=$(GITHUB_ACTIONS=true MEMBERS_PROJECT_REF=$MREF CONFIRM_PROJECT_REF=$MREF \
       MEMBERS_PRODUCTION_DATABASE_URL="postgresql://postgres.$MREF:$PW@$POOL:5432/postgres" scripts/db/verify-members-target.sh 2>&1); code=$?
-if [ $code -ne 0 ] && grep -q 'memberProduction.ref in config/supabase-projects.json is null' <<<"$out" && [[ "$out" != *"$PW"* ]]; then
-  echo "PASS  members: with memberProduction.ref null (today), the target check fails closed"; pass=$((pass+1))
-else echo "FAIL  members: null memberProduction.ref (exit $code): $out"; failed=$((failed+1)); fi
+if [ $code -ne 0 ] && grep -q 'MEMBERS_PROJECT_REF does not match the approved member Production project' <<<"$out" && [[ "$out" != *"$PW"* ]]; then
+  echo "PASS  members: the real repository refuses a project other than the recorded member Production project"; pass=$((pass+1))
+else echo "FAIL  members: another project against the recorded reference (exit $code): $out"; failed=$((failed+1)); fi
 mdir=$(mktemp -d)
 mkdir -p "$mdir/config" "$mdir/scripts/db"; cp scripts/db/verify-members-target.sh "$mdir/scripts/db/"
+# With no reference recorded (null), the target check still fails closed.
+python3 -c "import json,sys;c=json.load(open('config/supabase-projects.json'));c['memberProduction']['ref']=None;json.dump(c,open(sys.argv[1],'w'))" "$mdir/config/supabase-projects.json"
+out=$(cd "$mdir" && GITHUB_ACTIONS=true MEMBERS_PROJECT_REF=$MREF CONFIRM_PROJECT_REF=$MREF \
+      MEMBERS_PRODUCTION_DATABASE_URL="postgresql://postgres.$MREF:$PW@$POOL:5432/postgres" scripts/db/verify-members-target.sh 2>&1); code=$?
+if [ $code -ne 0 ] && grep -q 'memberProduction.ref in config/supabase-projects.json is null' <<<"$out" && [[ "$out" != *"$PW"* ]]; then
+  echo "PASS  members: with memberProduction.ref null, the target check fails closed"; pass=$((pass+1))
+else echo "FAIL  members: null memberProduction.ref (exit $code): $out"; failed=$((failed+1)); fi
 member_config() { # member_config <memberProduction ref>
   python3 -c "import json,sys;c=json.load(open('config/supabase-projects.json'));c['memberProduction']['ref']=sys.argv[1];json.dump(c,open(sys.argv[2],'w'))" "$1" "$mdir/config/supabase-projects.json"
 }

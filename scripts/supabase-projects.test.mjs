@@ -10,13 +10,13 @@ const STAGING = 'kpudeppgokpjhvaqrprn'
 const WAITLIST = 'hmrliwoychnqrbbydorg'
 const MEMBER = 'memberprodtestonly01' // a stand-in; never a real project
 
-test('the committed list: staging and the waitlist project as before, and the member Production project still unset', () => {
+test('the committed list: staging and the waitlist project as before, and the member Production project recorded', () => {
   const raw = JSON.parse(readFileSync(new URL('../config/supabase-projects.json', import.meta.url), 'utf8'))
   assert.deepEqual(Object.keys(raw).filter((k) => !k.startsWith('_')), ['staging', 'production', 'memberProduction'])
-  assert.deepEqual(loadProjectRefs(), { staging: STAGING, production: WAITLIST, memberProduction: null })
+  assert.match(raw.memberProduction.ref, /^[a-z]{20}$/)
+  assert.deepEqual(loadProjectRefs(), { staging: STAGING, production: WAITLIST, memberProduction: raw.memberProduction.ref })
   assert.deepEqual(projectRefProblems(loadProjectRefs()), [])
-  // Setting it is a reviewed change, made only once the project exists.
-  assert.equal(raw.memberProduction.ref, null)
+  assert.deepEqual({ name: raw.memberProduction.name, region: raw.memberProduction.region }, { name: 'splitpost-members-production', region: 'ca-central-1' })
 })
 
 test('accepted: the member reference unset, or set, valid and different from the others', () => {

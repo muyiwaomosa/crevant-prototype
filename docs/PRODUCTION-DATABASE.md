@@ -6,7 +6,7 @@ the Splitpost Production Supabase project only:
 
 | | Staging | Production |
 | --- | --- | --- |
-| Supabase project | `kpudeppgokpjhvaqrprn` | `hmrliwoychnqrbbydorg` (splitpost-production, us-west-2, separate organization) |
+| Supabase project | `kpudeppgokpjhvaqrprn` | `hmrliwoychnqrbbydorg` (splitpost-production, us-west-2, organization Splitpost Production (Pro)) |
 | Workflow | `deploy-db-staging.yml` | `deploy-db-production.yml` |
 | GitHub environment | `staging` | `production` |
 | Secret | `STAGING_DATABASE_URL` | `PRODUCTION_DATABASE_URL` |

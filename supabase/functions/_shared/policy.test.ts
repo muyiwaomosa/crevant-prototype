@@ -18,10 +18,11 @@ const DISALLOWED = [
 ]
 
 describe('the committed references match config (generated file)', () => {
-  it('has staging and the waitlist project, and no member Production reference yet', () => {
+  it('has staging, the waitlist project and the recorded member Production project, all different', () => {
     expect(STAGING_REF).toBe(STAGING)
     expect(WAITLIST_REF).toBe(WAITLIST)
-    expect(MEMBER_PRODUCTION_REF).toBeNull()
+    expect(MEMBER_PRODUCTION_REF).toMatch(/^[a-z]{20}$/)
+    expect([STAGING, WAITLIST]).not.toContain(MEMBER_PRODUCTION_REF)
   })
 })
 

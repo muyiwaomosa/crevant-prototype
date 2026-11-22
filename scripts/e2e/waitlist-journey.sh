@@ -42,6 +42,27 @@ EXTRA=()
 if [ -n "${HTTPS_PROXY:-}" ]; then EXTRA+=(-e HTTPS_PROXY -e HTTP_PROXY -e NO_PROXY=127.0.0.1,localhost); fi
 if [ -n "${EDGE_CA_FILE:-}" ]; then EXTRA+=(-v "${EDGE_CA_FILE}:/extra-ca.crt:ro" -e DENO_CERT=/extra-ca.crt); fi
 
+# The function's port (54410) is inside Linux's range for temporary outgoing
+# connections (32768 to 60999), and pulling the image opens many of those: one
+# can take the port first ("Address already in use"). As for the Supabase
+# ports (scripts/ci/start-local-supabase.sh): on CI runners reserve it before
+# the pull, pull before binding, then wait until nothing holds it.
+if [ "${GITHUB_ACTIONS:-}" = true ]; then
+  sudo_cmd=""; [ "$(id -u)" -eq 0 ] || sudo_cmd=sudo
+  reserved=$(sysctl -n net.ipv4.ip_local_reserved_ports)
+  $sudo_cmd sysctl -q -w net.ipv4.ip_local_reserved_ports="${reserved:+$reserved,}$EDGE_PORT"
+fi
+docker image inspect "$EDGE_IMAGE" >/dev/null 2>&1 || docker pull -q "$EDGE_IMAGE" >/dev/null
+port_busy() {
+  local hex t tables=()
+  hex=$(printf '%04X' "$EDGE_PORT")
+  for t in /proc/net/tcp /proc/net/tcp6; do [ -r "$t" ] && tables+=("$t"); done
+  # Any socket on the port that is not merely waiting to close (TIME_WAIT, state 06).
+  awk -v h=":$hex" 'FNR > 1 && substr($2, length($2) - 4) == h && $4 != "06" { found = 1 } END { exit !found }' "${tables[@]}"
+}
+for _ in $(seq 1 30); do port_busy || break; sleep 1; done
+port_busy && echo "::warning::Port $EDGE_PORT is still in use after 30 seconds"
+
 # The function, accepting the harness's origin and hostname only.
 docker rm -f crevant-waitlist-journey >/dev/null 2>&1 || true
 docker run -d --name crevant-waitlist-journey --network host "${EXTRA[@]}" \

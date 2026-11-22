@@ -5,9 +5,10 @@ and to member Production, verified, rolled back and, in an emergency, deleted.
 `join-waitlist` keeps its own procedure (`docs/WAITLIST.md`) and is never
 deployed by anything here.
 
-**State at the end of 1B-2: nothing has been deployed by these tools.**
-`memberProduction.ref`, `.name` and `.region` are null, so every member
-Production deployment and verification refuses; `postMediaFunctionApproved`
+**State: nothing has been deployed by these tools.** The member
+Production project is recorded (`memberProduction` ref, name and region),
+but no function is deployed there yet; the avatar deployment is deferred
+for the founder-only launch; `postMediaFunctionApproved`
 is false; the deployment ledger is empty.
 
 ## What protects what
