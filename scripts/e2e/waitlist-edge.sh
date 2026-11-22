@@ -145,8 +145,8 @@ real="$(curl -s -m 60 -X POST "http://127.0.0.1:${EDGE_REAL_PORT}/" -H 'Origin: 
 if [ "$real" = '{"status":"closed"}' ]; then
   echo "PASS  the real entry point starts, and stays closed without its Turnstile secret"
 else
-  echo "FAIL  the real entry point did not answer closed: $real" >&2
-  docker logs crevant-waitlist-edge-real 2>&1 | tail -5 >&2
+  echo "FAIL  the real entry point did not answer closed: $real" | private_ports_redact >&2
+  docker logs crevant-waitlist-edge-real 2>&1 | tail -5 | private_ports_redact crevant-waitlist-edge-real >&2
   exit 1
 fi
 
@@ -154,7 +154,7 @@ real_health="$(curl -s -m 30 "http://127.0.0.1:${EDGE_REAL_PORT}/" || true)"
 if [ "$real_health" = '{"status":"ok"}' ]; then
   echo "PASS  the real entry point's health check connects as waitlist_writer, while closed"
 else
-  echo "FAIL  the real entry point's health check answered: $real_health" >&2
+  echo "FAIL  the real entry point's health check answered: $real_health" | private_ports_redact >&2
   exit 1
 fi
 
@@ -163,7 +163,7 @@ nohops="$(curl -s -m 60 -X POST "http://127.0.0.1:${EDGE_NOHOPS_PORT}/" -H 'Orig
 if [ "$nohops" = '{"status":"closed"}' ] && grep -q 'WAITLIST_TRUSTED_PROXY_HOPS is not set' <<<"$(docker logs crevant-waitlist-edge-nohops 2>&1)"; then
   echo "PASS  without a confirmed proxy hop count the real entry point stays closed, and logs why"
 else
-  echo "FAIL  without a hop count the real entry point answered: $nohops" >&2
+  echo "FAIL  without a hop count the real entry point answered: $nohops" | private_ports_redact >&2
   exit 1
 fi
 
@@ -175,8 +175,8 @@ if [ "$ign_real" = '{"status":"closed"}' ] && [ "$ign_health" = '{"status":"ok"}
    && ! grep -q 'WAITLIST_CLIENT_ADDRESS' <<<"$(docker logs crevant-waitlist-edge-ignore-real 2>&1)"; then
   echo "PASS  in ignore mode the real entry point starts with no hop count, stays closed without Turnstile, and its health check connects"
 else
-  echo "FAIL  the ignore-mode real entry point answered: $ign_real / $ign_health" >&2
-  docker logs crevant-waitlist-edge-ignore-real 2>&1 | tail -5 >&2
+  echo "FAIL  the ignore-mode real entry point answered: $ign_real / $ign_health" | private_ports_redact >&2
+  docker logs crevant-waitlist-edge-ignore-real 2>&1 | tail -5 | private_ports_redact crevant-waitlist-edge-ignore-real >&2
   exit 1
 fi
 
@@ -185,8 +185,8 @@ conflict="$(curl -s -m 60 -X POST "http://127.0.0.1:${EDGE_CONFLICT_PORT}/" -H '
 if [ "$conflict" = '{"status":"closed"}' ] && grep -q 'or both are set' <<<"$(docker logs crevant-waitlist-edge-conflict 2>&1)"; then
   echo "PASS  ignore together with a hop count keeps the real entry point closed, and logs why"
 else
-  echo "FAIL  the contradictory configuration answered: $conflict" >&2
-  docker logs crevant-waitlist-edge-conflict 2>&1 | tail -5 >&2
+  echo "FAIL  the contradictory configuration answered: $conflict" | private_ports_redact >&2
+  docker logs crevant-waitlist-edge-conflict 2>&1 | tail -5 | private_ports_redact crevant-waitlist-edge-conflict >&2
   exit 1
 fi
 
@@ -198,8 +198,8 @@ if [ "$hosted" = '{"status":"closed"}' ] && [ "$hosted_health" = '{"status":"err
    && grep -q "own Supabase project" <<<"$(docker logs crevant-waitlist-edge-hosted 2>&1)"; then
   echo "PASS  a function on the staging project refuses a database from anywhere else (closed, health error)"
 else
-  echo "FAIL  the hosted-project instance answered: $hosted / $hosted_health" >&2
-  docker logs crevant-waitlist-edge-hosted 2>&1 | tail -5 >&2
+  echo "FAIL  the hosted-project instance answered: $hosted / $hosted_health" | private_ports_redact >&2
+  docker logs crevant-waitlist-edge-hosted 2>&1 | tail -5 | private_ports_redact crevant-waitlist-edge-hosted >&2
   exit 1
 fi
 
@@ -210,7 +210,7 @@ if out="$(DATABASE_URL="$ADMIN_DB_URL" REQUIRE_ADMIN_ROLE=1 ACTION=wave-preview 
    && ! DATABASE_URL="$DB_URL" REQUIRE_ADMIN_ROLE=1 ACTION=summary scripts/db/waitlist-admin.sh >/dev/null 2>&1; then
   echo "PASS  the admin script works as waitlist_admin and refuses the database owner's login"
 else
-  echo "FAIL  the admin script did not behave as expected: $out" >&2
+  echo "FAIL  the admin script did not behave as expected: $out" | private_ports_redact >&2
   exit 1
 fi
 
@@ -238,7 +238,7 @@ if [ "$accepted" = "Creator: accepted" ] && [ "$named" = "Public name: set" ] &&
    && grep -qE '^Acquisition counts older than 90 days deleted: [0-9]+$' <<<"$purged" && grep -q "from 30 to 400" <<<"$too_short"; then
   echo "PASS  the admin script's creator commands work as waitlist_admin (accept, name, 90 day link, pause, final revoke, no email, bounded 90 day purge)"
 else
-  echo "FAIL  the admin script's creator commands: $accepted | $named | $issued | $days | $paused | $revoked | $again | $by_email | $purged | $too_short" >&2
+  echo "FAIL  the admin script's creator commands: $accepted | $named | $issued | $days | $paused | $revoked | $again | $by_email | $purged | $too_short" | private_ports_redact >&2
   exit 1
 fi
 

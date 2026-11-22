@@ -61,18 +61,10 @@ async function call(action, token, body, { url = FN, contentType, headers: extra
   } catch {
     json = text
   }
-  return { status: r.status, json, headers: r.headers, ms: Date.now() - started }
+  return { status: r.status, json, headers: r.headers, ms: Date.now() - started, bytes: Buffer.byteLength(text) }
 }
 const photo = (token, bytes) => call('photo', token, bytes, { contentType: 'image/jpeg' })
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
-// A short, safe description of a reply: the status, how long it took, and its
-// error code or the start of its body (the function only ever returns codes;
-// the Edge runtime's own errors carry no secrets), with control characters removed.
-const describe = (r) => {
-  const j = r.json
-  const body = j && typeof j === 'object' ? (j.error ?? j.code ?? j.msg ?? j.message ?? JSON.stringify(j)) : String(j ?? '')
-  return `${r.status} in ${r.ms ?? '?'} ms: ${String(body).replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 200)}`
-}
+const { UUID, describe, scrub, unlistedCodes } = require('./lib/safe-reply.cjs')
 // An upload the rest of the test depends on must have succeeded: otherwise
 // stop here, saying why, instead of failing later on a missing upload id.
 const requireUpload = (r, what) => {
@@ -108,6 +100,7 @@ function frame(b) {
 }
 
 ;(async () => {
+  { const missing = unlistedCodes(); check('every error code the function can return is on the test output allowlist', missing.length === 0, missing.length ? `missing ${missing.length}` : '') }
   const { encode } = await import(path.join(__dirname, '..', 'supabase', 'functions', '_shared', 'jpeg-js-0.4.4', 'encoder.js'))
   // A camera-like photo: gradients and fine noise.
   const makePhoto = (w, h, seed = 1) => {
@@ -155,13 +148,13 @@ function frame(b) {
 
   // 1. Off by default: no upload is authorised, nothing is stored.
   const off = await photo(A.token, landscape)
-  check('with the switch off, uploads are refused (photos_unavailable) and nothing is stored', off.status === 403 && off.json?.error === 'photos_unavailable' && photoFiles() === 0, `${off.status} ${JSON.stringify(off.json)}`)
+  check('with the switch off, uploads are refused (photos_unavailable) and nothing is stored', off.status === 403 && off.json?.error === 'photos_unavailable' && photoFiles() === 0, describe(off))
   const offStatus = await rpc(A.token, 'app_photo_status', {})
   check('and the app is told photos are off', offStatus.status === 200 && offStatus.json === false)
 
   // 2. The founder's hosted processing check gates the switch.
   const notFounder = await jsonCall('check', A.token, { seed: 1 })
-  check('only the founder can run the processing check', notFounder.status === 403, `${notFounder.status} ${JSON.stringify(notFounder.json)}`)
+  check('only the founder can run the processing check', notFounder.status === 403, describe(notFounder))
   let enableRefused = false
   try {
     sql("select ops.set_media_settings('founder', true, 2000000000, 10, 20)")
@@ -173,7 +166,7 @@ function frame(b) {
   for (let seed = 1; seed <= 6; seed++) {
     const r = await jsonCall('check', F.token, { seed })
     timings.push(r.json?.ms)
-    if (!(r.status === 200 && r.json?.ok === true)) check(`processing check ${seed}`, false, `${r.status} ${JSON.stringify(r.json)}`)
+    if (!(r.status === 200 && r.json?.ok === true)) check(`processing check ${seed}`, false, describe(r))
   }
   check('six processing checks pass in the local Edge runtime (each under 1 second)', timings.every((ms) => typeof ms === 'number' && ms < 1000), `${timings.join(', ')} ms`)
   check('the checks are recorded, and stored nothing', sql("select count(*) from ops.media_admin_events where action = 'processing_check' and ok") === '6' && photoFiles() === 0)
@@ -184,9 +177,9 @@ function frame(b) {
   check('the audience is founder-only by default', sql('select photos_audience from ops.media_settings') === 'founder')
   const testerRefused = await photo(A.token, landscape)
   check('with photos on and the audience at founder, a tester\'s upload is refused (photos_unavailable) and nothing is stored',
-    testerRefused.status === 403 && testerRefused.json?.error === 'photos_unavailable' && photoFiles() === 0, `${testerRefused.status} ${JSON.stringify(testerRefused.json)}`)
+    testerRefused.status === 403 && testerRefused.json?.error === 'photos_unavailable' && photoFiles() === 0, describe(testerRefused))
   const founderUp = await photo(F.token, makePhoto(1200, 900, 21))
-  check('the founder\'s upload is accepted through the function', founderUp.status === 200 && typeof founderUp.json?.uploadId === 'string', `${founderUp.status} ${JSON.stringify(founderUp.json)}`)
+  check('the founder\'s upload is accepted through the function', founderUp.status === 200 && typeof founderUp.json?.uploadId === 'string', describe(founderUp))
   sql("select ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS')")
   check('opening to all members is recorded', sql("select count(*) from ops.media_admin_events where action = 'audience_changed'") === '1')
 
@@ -210,7 +203,7 @@ function frame(b) {
   const pu = await photo(A.token, portrait)
   requireUpload(pu, 'the portrait photo')
   const pf = frame((await stored(sql(`select feed_path from social.media_uploads where id = '${pu.json?.uploadId}'`))).bytes)
-  check('a portrait photo keeps its shape (feed 450 x 800)', pu.status === 200 && pu.json.width === 900 && pu.json.height === 1600 && pf?.w === 450 && pf?.h === 800, `${JSON.stringify(pu.json)} ${pf?.w}x${pf?.h}`)
+  check('a portrait photo keeps its shape (feed 450 x 800)', pu.status === 200 && pu.json.width === 900 && pu.json.height === 1600 && pf?.w === 450 && pf?.h === 800, `${describe(pu)}; feed ${pf?.w}x${pf?.h}`)
 
   // 4. Anything else is refused, and leaves nothing behind.
   const filesBefore = photoFiles()
@@ -222,7 +215,7 @@ function frame(b) {
     ['a PNG', Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'), 'not_jpeg'],
   ]) {
     const r = await photo(A.token, bytes)
-    check(`${what} is refused (${code})`, r.status === 422 && r.json?.error === code, `${r.status} ${JSON.stringify(r.json)}`)
+    check(`${what} is refused (${code})`, r.status === 422 && r.json?.error === code, describe(r))
   }
   const tooBig = await photo(A.token, Buffer.concat([landscape, Buffer.alloc(1_600_000)]))
   check('a body over 1.5 MB is refused (too_large)', tooBig.status === 413, String(tooBig.status))
@@ -234,13 +227,13 @@ function frame(b) {
   const rid = crypto.randomUUID()
   const pub = await rpc(A.token, 'app_create_post', { p_body: '', p_request_id: rid, p_media: up.json.uploadId, p_media_description: 'A test photo' })
   const again = await rpc(A.token, 'app_create_post', { p_body: '', p_request_id: rid, p_media: up.json.uploadId, p_media_description: 'A test photo' })
-  check('A publishes the photo with no caption; a retry returns the same post', pub.status === 200 && pub.json === again.json, `${pub.status} ${JSON.stringify(pub.json)}`)
+  check('A publishes the photo with no caption; a retry returns the same post', pub.status === 200 && pub.json === again.json, describe(pub))
   const postId = pub.json
   const taken = await rpc(B.token, 'app_create_post', { p_body: 'mine now', p_request_id: crypto.randomUUID(), p_media: pu.json.uploadId })
-  check('B can\'t publish A\'s upload', taken.status === 400 && taken.json?.message === 'upload_not_ready', `${taken.status} ${JSON.stringify(taken.json)}`)
+  check('B can\'t publish A\'s upload', taken.status === 400 && taken.json?.message === 'upload_not_ready', describe(taken))
   const links = await jsonCall('links', B.token, { ids: [postId] })
   const lk = links.json?.photos?.[postId]
-  check('B gets signed links for both copies of A\'s photo', links.status === 200 && /^\/object\/sign\/post-photos\//.test(lk?.feed ?? '') && /^\/object\/sign\/post-photos\//.test(lk?.full ?? ''), JSON.stringify(links.json).slice(0, 160))
+  check('B gets signed links for both copies of A\'s photo', links.status === 200 && /^\/object\/sign\/post-photos\//.test(lk?.feed ?? '') && /^\/object\/sign\/post-photos\//.test(lk?.full ?? ''), `${describe(links)}; ${Object.keys(links.json?.photos ?? {}).length} photo(s) linked`)
   const served = await fetch(`${API}/storage/v1${lk?.feed}`)
   check('the feed link serves the image', served.status === 200 && served.headers.get('content-type') === 'image/jpeg', String(served.status))
   const nonMemberLinks = await jsonCall('links', N.token, { ids: [postId] })
@@ -258,7 +251,7 @@ function frame(b) {
   check('no new links are issued for the deleted post', linksAfter.status === 200 && !linksAfter.json?.photos?.[postId])
   const clean = await call('cleanup', A.token, '{}', { contentType: 'application/json' })
   check('the cleanup request deletes the queued files at once', clean.status === 200 && (await stored(row[0])).status >= 400 && (await stored(row[1])).status >= 400,
-    `${clean.status} ${JSON.stringify(clean.json)}`)
+    describe(clean))
   check('the queue records them as deleted, and the pass is recorded', sql(`select count(*) from ops.media_deletions where path in ('${row[0]}', '${row[1]}') and deleted_at is not null`) === '2'
     && Number(sql("select count(*) from ops.media_drain_runs where source = 'request'")) >= 1)
   check('the old link no longer serves the photo', (await fetch(`${API}/storage/v1${lk?.feed}`)).status >= 400)
@@ -275,7 +268,7 @@ function frame(b) {
   check('the reported photo is held as evidence: still stored after the author deleted it and a cleanup ran', (await stored(evPaths[0])).status === 200 && (await stored(evPaths[1])).status === 200)
   const reportId = sql(`select id from ops.content_reports where target_id = '${evPost}'`)
   const modPhoto = await jsonCall('mod-photo', M.token, { report: reportId })
-  check('the moderator gets links to the reported photo', modPhoto.status === 200 && (await fetch(`${API}/storage/v1${modPhoto.json?.photo?.feed}`)).status === 200, `${modPhoto.status} ${JSON.stringify(modPhoto.json).slice(0, 120)}`)
+  check('the moderator gets links to the reported photo', modPhoto.status === 200 && (await fetch(`${API}/storage/v1${modPhoto.json?.photo?.feed}`)).status === 200, describe(modPhoto))
   const memberPhoto = await jsonCall('mod-photo', B.token, { report: reportId })
   check('a member can\'t get the reported photo', memberPhoto.status === 403, String(memberPhoto.status))
   const memberDrain = await call('mod-drain', B.token, '{}', { contentType: 'application/json' })
@@ -293,7 +286,7 @@ function frame(b) {
   const runsBefore = Number(sql("select count(*) from ops.media_drain_runs where source = 'scheduled'"))
   const sched = await call('drain', null, '{}', { url: DRAIN, contentType: 'application/json', headers: { 'x-media-drain-key': DRAIN_KEY } })
   check('with the key, the scheduled drain deletes the orphaned file and is recorded', sched.status === 200 && (await stored(orphan)).status >= 400
-    && Number(sql("select count(*) from ops.media_drain_runs where source = 'scheduled'")) === runsBefore + 1, `${sched.status} ${JSON.stringify(sched.json)}`)
+    && Number(sql("select count(*) from ops.media_drain_runs where source = 'scheduled'")) === runsBefore + 1, describe(sched))
   check('and still keeps the evidence', (await stored(evPaths[0])).status === 200)
   const modDrain = await call('mod-drain', M.token, '{}', { contentType: 'application/json' })
   check('a moderator can run a pass too', modDrain.status === 200, String(modDrain.status))
@@ -358,7 +351,7 @@ function frame(b) {
   // 10. The moderator's status panel numbers.
   const st = await rpc(M.token, 'app_mod_media_status', {})
   check('the photo storage status shows the switch, usage, queue, held evidence and the last scheduled pass',
-    st.status === 200 && st.json?.photos_enabled === true && st.json?.used_bytes > 0 && st.json?.held >= 2 && st.json?.last_scheduled_at, JSON.stringify(st.json).slice(0, 200))
+    st.status === 200 && st.json?.photos_enabled === true && st.json?.used_bytes > 0 && st.json?.held >= 2 && st.json?.last_scheduled_at, describe(st))
 
   // 11. Production can't be targeted; browsers only from the member app.
   const g = await call('photo', A.token, landscape, { url: GUARD, contentType: 'image/jpeg' })
@@ -377,6 +370,9 @@ function frame(b) {
   console.log(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`)
   process.exit(failures === 0 ? 0 : 1)
 })().catch((e) => {
-  console.error(e)
+  // Only the message (scrubbed) and where it came from: never a raw reply or connection string.
+  console.error(`Stopped: ${scrub(e?.message ?? e)}`)
+  if (e?.stderr?.length) console.error(scrub(e.stderr.toString().trim().split('\n').slice(0, 5).join('\n')))
+  if (e?.stack) console.error(scrub(e.stack.split('\n').slice(1, 4).join('\n')))
   process.exit(1)
 })

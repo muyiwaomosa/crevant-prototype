@@ -15,9 +15,18 @@
 #   4. after starting, wait until each container answers, and fail clearly
 #      (with its state and recent logs, redacted) if it stops or never answers.
 #
-# Output never includes secret values: container logs pass through
-# private_ports_redact, which masks URL credentials and every value listed in
-# PRIVATE_PORTS_REDACT (space separated; set it to the script's test secrets).
+# Output never includes secret values. Everything printed from a container
+# (its state and its logs) passes through private_ports_redact, which masks:
+#   * the value of every environment variable passed to that container whose
+#     name looks secret (KEY, SECRET, TOKEN, PASSWORD, PW, SALT, JWT, AUTH,
+#     CREDENTIAL, PRIVATE, COOKIE, DB_URL, DATABASE_URL, DSN) and is at least 6
+#     characters (shorter ones, like "1" or "dummy", aren't secrets and would
+#     mask ordinary words), read from the container itself, so no secret
+#     depends on a hand-kept list;
+#   * every value in PRIVATE_PORTS_REDACT (space separated; the script's own
+#     test secrets, for output that isn't tied to one container);
+#   * by shape, anywhere: URL passwords, JWTs, Supabase secret and publishable
+#     keys, Bearer tokens, token/key/signature query values, email addresses.
 
 # The kernel's range for temporary outgoing connections, for the log.
 private_ports_range() { tr -s '[:space:]' ' ' </proc/sys/net/ipv4/ip_local_port_range | sed 's/ $//; s/ / to /'; }
@@ -56,24 +65,41 @@ private_ports_prepare() { # image port...
   return 1
 }
 
-# Masks URL credentials and each value in PRIVATE_PORTS_REDACT.
-private_ports_redact() {
-  local v script='s#(://[^:/@[:space:]]+):[^@/[:space:]]+@#\1:***@#g'
-  for v in ${PRIVATE_PORTS_REDACT:-}; do
+# The values of a container's secret-looking environment variables, one per line.
+private_ports_container_secrets() { # container
+  docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$1" 2>/dev/null \
+    | awk -F= 'toupper($1) ~ /(KEY|SECRET|TOKEN|PASSWORD|PASSWD|_PW$|^PW$|SALT|JWT|AUTH|CREDENTIAL|PRIVATE|COOKIE|DB_URL|DATABASE_URL|DSN)/ { v = substr($0, length($1) + 2); if (length(v) >= 6) print v }'
+}
+
+# Reads stdin, writes it with secrets masked (see the top of this file).
+# Arguments: containers whose environment values are masked too.
+private_ports_redact() { # [container...]
+  local v c script=""
+  # Literal values, longest first (so one containing another is fully masked).
+  while IFS= read -r v; do
     [ -n "$v" ] && script="$script;s#$(printf '%s' "$v" | sed 's/[][\\.^$*+?(){}|#/]/\\&/g')#***#g"
-  done
+  done < <( { for v in ${PRIVATE_PORTS_REDACT:-}; do printf '%s\n' "$v"; done
+              for c in "$@"; do private_ports_container_secrets "$c"; done
+            } | awk 'length($0) > 0 && !seen[$0]++ { print length($0) "\t" $0 }' | sort -t "$(printf '\t')" -k1,1nr | cut -f2- )
+  # Then by shape.
+  script="${script#;}${script:+;}s#(://[^:/@[:space:]]+):[^@/[:space:]]+@#\1:***@#g"
+  script="$script;s#eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*#***#g"
+  script="$script;s#sb_(secret|publishable)_[A-Za-z0-9_-]+#sb_\1_***#g"
+  script="$script;s#(Bearer)[[:space:]]+[A-Za-z0-9._~+/=-]+#\1 ***#g"
+  script="$script;s#([?&](token|apikey|key|sig|signature)=)[^&[:space:]\"']+#\1***#Ig"
+  script="$script;s#[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}#***@***#g"
   sed -E "$script"
 }
 
 # A container's state and its last lines of output, redacted, on stderr.
 private_ports_explain() { # container port
-  echo "Container $1: $(docker inspect -f 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}' "$1" 2>&1 | private_ports_redact)" >&2
+  echo "Container $1: $(docker inspect -f 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}' "$1" 2>&1 | private_ports_redact "$1")" >&2
   if [ -n "${2-}" ]; then
     echo "Sockets on port $2:" >&2
     private_ports_holders "$2" >&2 || echo "  none" >&2
   fi
   echo "Last 40 lines of $1's output (redacted):" >&2
-  docker logs --tail 40 "$1" 2>&1 | private_ports_redact >&2 || true
+  docker logs --tail 40 "$1" 2>&1 | private_ports_redact "$1" >&2 || true
 }
 
 # Waits until a container answers on its port (any HTTP reply), failing early
