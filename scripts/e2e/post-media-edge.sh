@@ -26,9 +26,14 @@ DRAIN_PORT="${DRAIN_PORT:-54398}"
 GUARD_PORT="${GUARD_PORT:-54399}"
 DRAIN_KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
 export DRAIN_KEY
+# shellcheck source=lib/private-ports.sh
+. scripts/e2e/lib/private-ports.sh
+export PRIVATE_PORTS_REDACT="$DRAIN_KEY $SERVICE_ROLE_KEY $ANON_KEY $PUBLISHABLE_KEY"
 cleanup() { docker rm -f crevant-media-drain crevant-media-guard >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 cleanup
+# Reserve (CI), pull and wait for both ports before binding them.
+private_ports_prepare "$EDGE_IMAGE" "$DRAIN_PORT" "$GUARD_PORT"
 FUNCS="-v $PWD/supabase/functions/post-media:/home/deno/functions/post-media:ro -v $PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro"
 # shellcheck disable=SC2086
 docker run -d --name crevant-media-drain --network host \
@@ -39,16 +44,16 @@ docker run -d --name crevant-media-drain --network host \
 docker run -d --name crevant-media-guard --network host \
   -e SUPABASE_URL=https://hmrliwoychnqrbbydorg.supabase.co -e SUPABASE_ANON_KEY=dummy -e SUPABASE_SERVICE_ROLE_KEY=dummy -e MEDIA_DRAIN_KEY="$DRAIN_KEY" \
   $FUNCS "$EDGE_IMAGE" start --main-service /home/deno/functions/post-media --ip 127.0.0.1 --port "$GUARD_PORT" >/dev/null
-for port in "$DRAIN_PORT" "$GUARD_PORT"; do
-  for _ in $(seq 1 60); do
-    curl -s -o /dev/null -X OPTIONS "http://127.0.0.1:$port/post-media/photo" && break
-    sleep 1
-  done
-done
+# Each copy must answer; if not, stop here with its state and output.
+private_ports_wait_http crevant-media-drain "$DRAIN_PORT" "http://127.0.0.1:$DRAIN_PORT/post-media/photo"
+private_ports_wait_http crevant-media-guard "$GUARD_PORT" "http://127.0.0.1:$GUARD_PORT/post-media/photo"
 # The gateway's copy (served by the local Supabase Edge runtime).
-for _ in $(seq 1 60); do
-  [ "$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: http://127.0.0.1:4176' "$API_URL/functions/v1/post-media/photo")" = 204 ] && break
-  sleep 1
-done
+private_ports_wait_gateway "$API_URL/functions/v1/post-media/photo"
 
-DRAIN_URL="http://127.0.0.1:$DRAIN_PORT/post-media" GUARD_URL="http://127.0.0.1:$GUARD_PORT/post-media" node e2e/post-media-edge.e2e.cjs
+if ! DRAIN_URL="http://127.0.0.1:$DRAIN_PORT/post-media" GUARD_URL="http://127.0.0.1:$GUARD_PORT/post-media" node e2e/post-media-edge.e2e.cjs; then
+  # Explain, then fail: the gateway's Edge runtime and both copies, redacted.
+  private_ports_explain supabase_edge_runtime_crevant-prototype
+  private_ports_explain crevant-media-drain "$DRAIN_PORT"
+  private_ports_explain crevant-media-guard "$GUARD_PORT"
+  exit 1
+fi

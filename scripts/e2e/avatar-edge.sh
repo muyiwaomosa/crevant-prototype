@@ -22,9 +22,14 @@ case "$API_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "Refusing: 
 
 EDGE_IMAGE="${EDGE_IMAGE:-supabase/edge-runtime:v1.78.1}"
 GUARD_PORT="${GUARD_PORT:-54397}"
+# shellcheck source=lib/private-ports.sh
+. scripts/e2e/lib/private-ports.sh
+export PRIVATE_PORTS_REDACT="$SERVICE_ROLE_KEY $ANON_KEY $PUBLISHABLE_KEY $JWT_SECRET"
 cleanup() { docker rm -f crevant-avatar-guard >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 cleanup
+# Reserve (CI), pull and wait for the port before binding it.
+private_ports_prepare "$EDGE_IMAGE" "$GUARD_PORT"
 # The guard copy is given the Production project's address and dummy keys: it
 # must refuse before any network call (so the dummy keys are never used).
 docker run -d --name crevant-avatar-guard --network host \
@@ -32,14 +37,13 @@ docker run -d --name crevant-avatar-guard --network host \
   -v "$PWD/supabase/functions/avatar:/home/deno/functions/avatar:ro" \
   -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
   "$EDGE_IMAGE" start --main-service /home/deno/functions/avatar --ip 127.0.0.1 --port "$GUARD_PORT" >/dev/null
-for _ in $(seq 1 60); do
-  curl -s -o /dev/null -X OPTIONS "http://127.0.0.1:$GUARD_PORT/avatar/upload" && break
-  sleep 1
-done
+# The copy must answer; if not, stop here with its state and output.
+private_ports_wait_http crevant-avatar-guard "$GUARD_PORT" "http://127.0.0.1:$GUARD_PORT/avatar/upload"
 # The gateway's copy (served by the local Supabase Edge runtime).
-for _ in $(seq 1 60); do
-  [ "$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: http://127.0.0.1:4176' "$API_URL/functions/v1/avatar/upload")" = 204 ] && break
-  sleep 1
-done
+private_ports_wait_gateway "$API_URL/functions/v1/avatar/upload"
 
-GUARD_URL="http://127.0.0.1:$GUARD_PORT/avatar" node e2e/avatar-edge.e2e.cjs
+if ! GUARD_URL="http://127.0.0.1:$GUARD_PORT/avatar" node e2e/avatar-edge.e2e.cjs; then
+  private_ports_explain supabase_edge_runtime_crevant-prototype
+  private_ports_explain crevant-avatar-guard "$GUARD_PORT"
+  exit 1
+fi

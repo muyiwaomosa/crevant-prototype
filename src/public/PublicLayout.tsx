@@ -101,9 +101,10 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
                   waitlistCta()
                 ) : (
                   <>
-                    {/* Under 390px the full closed label doesn't fit beside the logo. */}
-                    <span aria-hidden="true" className="min-[390px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
-                    <span aria-hidden="true" className="hidden min-[420px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
+                    {/* The full closed label needs about 443px beside the logo and Sign In, so the
+                        short one shows below 450px. Both switch at the same width: one always shows. */}
+                    <span aria-hidden="true" className="min-[450px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
+                    <span aria-hidden="true" className="hidden min-[450px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
                   </>
                 )}
               </Link>

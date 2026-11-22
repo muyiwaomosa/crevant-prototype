@@ -182,6 +182,30 @@ async function newContext(browser, options = {}) {
       await ctx.close()
     }
 
+    // 5a. The header's waitlist button always shows its label, on one line,
+    //     inside the screen with no sideways scrolling, either side of each
+    //     breakpoint (390px: larger text; 420px: Sign In as text; 450px: the
+    //     full label). It once showed an empty pill from 390 to 419px, and from
+    //     420 to about 442px the full label ran past the edge of the screen.
+    for (const width of [320, 375, 390, 400, 419, 420, 440, 449, 450, 768]) {
+      const label = `${width}px`
+      const ctx = await newContext(browser, { viewport: { width, height: 900 } })
+      const page = await ctx.newPage()
+      await page.goto(`${BASE}/`)
+      await page.evaluate(() => document.fonts.ready)
+      const cta = page.locator('header [data-testid="header-waitlist-cta"]')
+      const name = await cta.getAttribute('aria-label')
+      const text = (await cta.innerText()).trim()
+      const box = await cta.boundingBox()
+      const expected = name === 'Waitlist Opens Soon' ? (width < 450 ? 'Opens Soon' : 'Waitlist Opens Soon') : name
+      check(`${label}: the header waitlist button shows "${expected}"`, text === expected, JSON.stringify(text))
+      check(`${label}: the header waitlist button is one line, inside the screen`, !!box && box.height <= 40 && box.x >= 0 && box.x + box.width <= width,
+        box ? `${Math.round(box.x)}..${Math.round(box.x + box.width)} h${Math.round(box.height)}` : 'missing')
+      const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      check(`${label}: no sideways scrolling with the header`, extra <= 0, `${extra}px`)
+      await ctx.close()
+    }
+
     // 5b. The Splitpost homepage, from the smallest phone to a wide desktop:
     //     every section in order, no sideways scrolling, the problem points
     //     reflow (one per row, then two, then one beside the text), the limits
