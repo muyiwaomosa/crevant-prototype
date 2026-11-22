@@ -221,7 +221,7 @@ out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations
 all=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | tr '\n' ' ' | sed 's/ $//')
 if [ $code -eq 0 ] && [ "$out" = "$all" ]; then ok "a new project with no history: every migration pending"; else bad "pending on a new project (exit $code): $out"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-run-checks.sh 2>&1); code=$?
-if [ $code -eq 0 ] && grep -q 'PASS: one immutable identity marker' <<<"$out" && [ "$(grep -c '^Skipped' <<<"$out")" = 14 ]; then
+if [ $code -eq 0 ] && grep -q 'PASS: one immutable identity marker' <<<"$out" && [ "$(grep -c '^Skipped' <<<"$out")" = "$(grep -cvE '^\s*(#|$)' supabase/members-checks.txt)" ]; then
   ok "check mode on the new project: the marker passes, every shared check skipped and named"
 else bad "check mode on the new project (exit $code): $(tail -3 <<<"$out")"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-run-checks.sh --require-all 2>&1); code=$?
@@ -311,7 +311,12 @@ if [ $code -eq 0 ] && grep -q 'STATE: activated' <<<"$out"; then ok "the read-on
 activate "$M" "$FOUNDER" activate "ACTIVATE MEMBER PRODUCTION ACCESS"
 if [ $code -ne 0 ] && grep -q 'already recorded' <<<"$out"; then ok "a second activation is refused"; else bad "second activation (exit $code)"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>&1)
-if [ -z "$out" ]; then ok "after the activation, nothing is pending (20261122000000 to 20261129000000 recorded)"; else bad "pending after activation: $out"; fi
+later=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | awk '$0 > "20261129000000"' | tr '\n' ' ' | sed 's/ $//')
+if [ "$out" = "$later" ]; then ok "after the activation, only the later migrations are pending (${later:-none})"; else bad "pending after activation: $out (expected: $later)"; fi
+# The later set (20261130000000 on), as the database workflow's apply mode pushes it after the activation.
+[ -z "$later" ] || apply_range "$M" 20261129000001 99999999999999 || bad "could not apply the later migrations"
+out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>&1)
+if [ -z "$out" ]; then ok "after the later migrations, nothing is pending"; else bad "pending after the later migrations: $out"; fi
 want=$(ls supabase/migrations/*.sql | xargs -n1 basename | sed 's/\.sql$//' | tr '\n' ' ' | sed 's/ $//')
 got=$(psql "$M" -X -At -c "select string_agg(version || '_' || name, ' ' order by version) from supabase_migrations.schema_migrations")
 if [ "$got" = "$want" ]; then ok "the migration history records every migration once, in order, with its name (as db push would)"; else bad "migration history: $got"; fi
@@ -391,6 +396,18 @@ if [ $code -ne 0 ] && grep -q 'external member access is not approved' <<<"$out"
 # 4. The member check catches each forbidden state (each in a rolled-back transaction).
 member_check "$M" "photo posting on" "photo posting is on although photos are not approved" "update ops.media_settings set photos_enabled = true;"
 member_check "$M" "external access open" "external member access is open" "select ops.set_external_access('members-test', true, 'APPROVE EXTERNAL MEMBER ACCESS');"
+# Open registration (20261130000000): an open gate passes only with openRegistrationApproved (or invitations) true.
+out=$( { echo "begin; select ops.set_external_access('members-test', true, 'APPROVE EXTERNAL MEMBER ACCESS');"; echo '\ir supabase/tests-members/001_member_production.sql'; echo "rollback;"; } |
+  psql "$M" -X -q -v ON_ERROR_STOP=1 -v photos_approved=false -v invitations_approved=false -v open_registration_approved=true 2>&1); code=$?
+if [ $code -eq 0 ] && grep -q 'external member access is APPROVED' <<<"$out"; then ok "with open registration approved, an open gate passes the member check"; else bad "open registration approved, gate open (exit $code): $(grep -E 'ERROR|FAIL' <<<"$out" | head -2)"; fi
+out=$( { echo "begin; select ops.set_external_access('members-test', true, 'APPROVE EXTERNAL MEMBER ACCESS');"; echo '\ir supabase/tests-members/001_member_production.sql'; echo "rollback;"; } |
+  psql "$M" -X -q -v ON_ERROR_STOP=1 -v photos_approved=false -v invitations_approved=false -v open_registration_approved=false 2>&1); code=$?
+if [ $code -ne 0 ] && grep -q 'neither invitations nor open registration is approved' <<<"$out"; then ok "with open registration not approved, an open gate fails the member check"; else bad "open registration not approved, gate open (exit $code)"; fi
+out=$( { echo "begin; alter table ops.invitations disable trigger user; insert into ops.invitations (email, expires_at) values ('i@members.test', now() + interval '1 day');"; echo '\ir supabase/tests-members/001_member_production.sql'; echo "rollback;"; } |
+  psql "$M" -X -q -v ON_ERROR_STOP=1 -v photos_approved=false -v invitations_approved=false -v open_registration_approved=true 2>&1); code=$?
+if [ $code -ne 0 ] && grep -q 'ops.invitations holds rows' <<<"$out"; then ok "open registration never allows invitation rows"; else bad "open registration and an invitation row (exit $code)"; fi
+out=$( { echo '\ir supabase/tests-members/001_member_production.sql'; } | psql "$M" -X -q -v ON_ERROR_STOP=1 -v photos_approved=false -v invitations_approved=false -v open_registration_approved=maybe 2>&1); code=$?
+if [ $code -ne 0 ] && grep -q 'must be true or false' <<<"$out"; then ok "member check refuses an open registration approval that isn't true or false"; else bad "member check with a bad open registration approval (exit $code)"; fi
 member_check "$M" "an invitation" "ops.invitations holds rows" "alter table ops.invitations disable trigger user; insert into ops.invitations (email, expires_at) values ('i@members.test', now() + interval '1 day');"
 member_check "$M" "a waitlist row" "ops.waitlist holds" "alter table ops.waitlist disable trigger user; insert into ops.waitlist (email, age_confirmed, waitlist_consent_version, waitlist_consented_at) values ('w@members.test', true, 'v1', now());"
 member_check "$M" "a pilot creator" "ops.pilot_creators holds" "alter table ops.pilot_creators disable trigger user; insert into ops.pilot_creators (user_id) values ('$SECOND');"

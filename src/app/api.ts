@@ -158,7 +158,12 @@ export type AccessStatus = 'active' | 'none' | 'revoked' | 'expired'
  * 20261122000000 is applied), so every signed-in account is a member exactly
  * as before. Never set for any other reason.
  */
-export type AccessState = { status: AccessStatus; expiresAt: string | null; preGate?: true }
+/**
+ * registration (open beta, 20261130000000) explains a 'none' state after the
+ * automatic claim: 'closed' (registration isn't open), 'not_confirmed' (email
+ * not verified yet) or 'retry' (the claim failed; the next load tries again).
+ */
+export type AccessState = { status: AccessStatus; expiresAt: string | null; preGate?: true; registration?: 'closed' | 'not_confirmed' | 'retry' }
 
 /** The member's own profile row (Phase 1A own-row read), used to decide whether setup is needed. */
 export type OwnProfile = { id: string; createdAt: string; username: string | null; displayName: string | null }
@@ -668,7 +673,21 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       const r = Array.isArray(data) ? (data[0] as { status?: unknown; expires_at?: unknown } | undefined) : undefined
       const status = (['active', 'none', 'revoked', 'expired'] as const).find((s) => s === r?.status) ?? 'none'
       const expiresAt = status === 'active' && typeof r?.expires_at === 'string' ? r.expires_at : null
-      return { status, expiresAt }
+      if (status !== 'none') return { status, expiresAt }
+      // Open beta (20261130000000): an account with no membership at all claims
+      // it. The database gives it only with a verified email, only while
+      // registration is open, and never reopens a revoked or expired one.
+      // Idempotent: a failed claim is simply made again on the next load.
+      const claim = await client.rpc('app_claim_access')
+      if (claim.error) {
+        // Before that migration there is nothing to claim: as before.
+        if (isMissingFunction(claim.error, 'app_claim_access')) return { status, expiresAt }
+        return { status, expiresAt, registration: 'retry' }
+      }
+      if (claim.data === 'active') return { status: 'active', expiresAt: null }
+      if (claim.data === 'closed' || claim.data === 'not_confirmed') return { status, expiresAt, registration: claim.data }
+      // 'revoked', 'expired' or anything unexpected: never treated as access.
+      return { status: claim.data === 'revoked' || claim.data === 'expired' ? claim.data : status, expiresAt }
     },
     async ownProfile() {
       const { data, error } = await client.from('profiles').select('id, created_at, username, display_name').eq('id', userId).maybeSingle()

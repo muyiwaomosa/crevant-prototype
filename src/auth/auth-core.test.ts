@@ -62,16 +62,16 @@ describe('after sign-in, only pages on this site', () => {
   })
 })
 
-describe('browser code never registers users or holds secrets', () => {
+describe('browser code registers users only on the sign-up page, and holds no secrets', () => {
   const sources = import.meta.glob(['../**/*.{ts,tsx}', '!../**/*.test.{ts,tsx}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
   it('scans the app source', () => {
     expect(Object.keys(sources).length).toBeGreaterThan(20)
   })
 
-  it('never calls sign-up or one-time-code sign-in', () => {
+  it('registers only on the open beta sign-up page; never one-time-code sign-in', () => {
     for (const [file, code] of Object.entries(sources)) {
-      expect(code, file).not.toMatch(/\.signUp\s*\(/)
+      if (!file.endsWith('/public/auth/SignUpPage.tsx')) expect(code, file).not.toMatch(/\.signUp\s*\(/)
       expect(code, file).not.toMatch(/\.signInWithOtp\s*\(/)
       expect(code, file).not.toMatch(/\.signInAnonymously\s*\(/)
       expect(code, file).not.toMatch(/\.admin\./)

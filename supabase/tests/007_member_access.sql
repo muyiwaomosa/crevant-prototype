@@ -105,6 +105,9 @@ begin
   loop
     if r.proname = 'app_access_state' then
       if position('ops.member_access a on a.user_id = v_uid' in r.prosrc) = 0 then bad := bad || r.proname; end if;
+    elsif r.proname = 'app_claim_access' then
+      -- Open registration (20261130000000): claims only the caller's own membership (checked in 015).
+      if position('v_uid uuid := auth.uid()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
     elsif r.proname in ('app_me', 'app_set_profile') then
       if position('social.current_access()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
     elsif r.proname like 'app\_mod\_%' then

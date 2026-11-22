@@ -139,14 +139,37 @@ describe('pilot membership (20261122000000)', () => {
       { data: [{ status: 'revoked', expires_at: null }] },
       { data: [{ status: 'expired', expires_at: '2026-11-01T00:00:00Z' }] },
       { data: [{ status: 'something-new' }] },
+      { error: NO_CLAIM_FN },
       { data: [] },
+      { error: NO_CLAIM_FN },
     ])
     expect(await api.accessState()).toEqual({ status: 'active', expiresAt: '2026-12-31T00:00:00Z' })
     expect(await api.accessState()).toEqual({ status: 'revoked', expiresAt: null })
     expect(await api.accessState()).toEqual({ status: 'expired', expiresAt: null })
     expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null })
     expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null })
-    expect(calls.every((c) => c.fn === 'app_access_state')).toBe(true)
+    // Only 'none' claims (and, before the open beta migration, finds nothing to claim).
+    expect(calls.map((c) => c.fn)).toEqual(['app_access_state', 'app_access_state', 'app_access_state', 'app_access_state', 'app_claim_access', 'app_access_state', 'app_claim_access'])
+  })
+
+  it('open beta: an account without membership claims it; the database decides, and nothing else is access', async () => {
+    const none = { data: [{ status: 'none', expires_at: null }] }
+    const cases: Array<[unknown, unknown]> = [
+      [{ data: 'active' }, { status: 'active', expiresAt: null }],
+      [{ data: 'closed' }, { status: 'none', expiresAt: null, registration: 'closed' }],
+      [{ data: 'not_confirmed' }, { status: 'none', expiresAt: null, registration: 'not_confirmed' }],
+      [{ data: 'revoked' }, { status: 'revoked', expiresAt: null }],
+      [{ data: 'expired' }, { status: 'expired', expiresAt: null }],
+      [{ data: 'ACTIVE' }, { status: 'none', expiresAt: null }],
+      [{ data: null }, { status: 'none', expiresAt: null }],
+      [{ error: { code: 'PGRST000', message: 'Could not connect to the database' } }, { status: 'none', expiresAt: null, registration: 'retry' }],
+      [{ error: { code: 'P0001', message: 'not_signed_in' } }, { status: 'none', expiresAt: null, registration: 'retry' }],
+    ]
+    for (const [claim, expected] of cases) {
+      const { api, calls } = fakeClient([none, claim as never])
+      expect(await api.accessState(), JSON.stringify(claim)).toEqual(expected)
+      expect(calls.map((c) => c.fn)).toEqual(['app_access_state', 'app_claim_access'])
+    }
   })
 
   it('saves the profile through app_set_profile (never a direct table update), trimmed', async () => {
@@ -171,6 +194,8 @@ describe('pilot membership (20261122000000)', () => {
 // What PostgREST answers when the membership functions don't exist yet (a
 // database before 20261122000000): PGRST202, naming the exact function.
 const NO_ACCESS_FN = { code: 'PGRST202', message: 'Could not find the function public.app_access_state without parameters in the schema cache', details: '', hint: null }
+// Before the open beta migration (20261130000000).
+const NO_CLAIM_FN = { code: 'PGRST202', message: 'Could not find the function public.app_claim_access without parameters in the schema cache', details: '', hint: null }
 const NO_SET_PROFILE_FN = {
   code: 'PGRST202',
   message: 'Could not find the function public.app_set_profile(p_display_name, p_username) in the schema cache',
@@ -215,7 +240,7 @@ describe('before the membership migration (compatibility, never a bypass)', () =
 
   it('an unexpected reply is never access', async () => {
     for (const data of [null, {}, 'active', [{}], [{ status: 'ACTIVE' }], [{ status: true }], [{ status: 'admin' }]]) {
-      const { api } = fakeClient([{ data }])
+      const { api } = fakeClient([{ data }, { error: NO_CLAIM_FN }])
       expect((await api.accessState()).status, JSON.stringify(data)).toBe('none')
     }
     const { api } = fakeClient([{ data: [{ status: 'active', expires_at: 12345 }] }])

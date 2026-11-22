@@ -9,7 +9,7 @@
 #               gate last, all in ONE transaction by
 #               members-activate-member-access.yml, never by db push. So
 #               membership never exists without the founder-only gate.
-#   later       after 20261129000000 (none yet): applied by
+#   later       after 20261129000000 (20261130000000 open registration): applied by
 #               deploy-db-members-production.yml (apply), only once the
 #               activation set is recorded.
 #

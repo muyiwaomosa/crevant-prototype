@@ -115,7 +115,7 @@ describe('client-side navigation cannot show a public page', () => {
     await screen.findByRole('heading', { level: 1 })
     const links = [...document.querySelectorAll('a')].map((a) => a.getAttribute('href'))
     for (const href of links) {
-      expect(['/app', '/sign-in', '/forgot-password', '/privacy', 'https://www.splitpost.ca', '#main'], String(href)).toContain(href)
+      expect(['/app', '/sign-in', '/sign-up', '/forgot-password', '/privacy', 'https://www.splitpost.ca', '#main'], String(href)).toContain(href)
     }
     expect(links).not.toContain('/')
     expect(links).not.toContain('/join')

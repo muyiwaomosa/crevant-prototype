@@ -16,15 +16,15 @@ fail() { echo "::error::$1"; exit 1; }
 require_all=false
 [ "${1:-}" = --require-all ] && require_all=true
 
-read -r photos invites < <(python3 -c "
+read -r photos invites openreg < <(python3 -c "
 import json; c = json.load(open('config/member-production.json'))
-p, i = c.get('photosApproved'), c.get('invitationsApproved')
-assert isinstance(p, bool) and isinstance(i, bool), 'approvals must be true or false'
-print(str(p).lower(), str(i).lower())") || fail "config/member-production.json must set photosApproved and invitationsApproved to true or false."
+p, i, o = c.get('photosApproved'), c.get('invitationsApproved'), c.get('openRegistrationApproved')
+assert isinstance(p, bool) and isinstance(i, bool) and isinstance(o, bool), 'approvals must be true or false'
+print(str(p).lower(), str(i).lower(), str(o).lower())") || fail "config/member-production.json must set photosApproved, invitationsApproved and openRegistrationApproved to true or false."
 
-echo "Running supabase/tests-members/001_member_production.sql (photos approved: $photos; invitations approved: $invites)"
+echo "Running supabase/tests-members/001_member_production.sql (photos approved: $photos; invitations approved: $invites; open registration approved: $openreg)"
 PGOPTIONS='-c default_transaction_read_only=on' psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 \
-  -v photos_approved="$photos" -v invitations_approved="$invites" -f supabase/tests-members/001_member_production.sql
+  -v photos_approved="$photos" -v invitations_approved="$invites" -v open_registration_approved="$openreg" -f supabase/tests-members/001_member_production.sql
 
 # Versions recorded so far (none on a new project without a history table).
 recorded="$(PGOPTIONS='-c default_transaction_read_only=on' psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 \

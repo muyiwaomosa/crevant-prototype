@@ -141,19 +141,20 @@ async function shows(locator, timeout = 5000) {
     const emailA = `founder-${RUN}@example.test`
     let resetCode = ''
 
-    // 1. Signed-out visitors are sent to sign in; there is no sign-up.
+    // 1. Signed-out visitors are sent to sign in. The open beta's sign-up page
+    //    stays closed until its privacy notice and community rules are approved,
+    //    and this local project refuses sign-ups (supabase/config.toml).
     {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await page.goto(`${APP}/app`)
       await page.waitForURL(/\/sign-in\?next=%2Fapp$/)
       check('signed-out visitors to /app are sent to sign in, with a way back', true)
-      const text = await page.locator('main').innerText()
-      check('sign-in page has no sign-up option', !/sign up|create (an )?account|register/i.test(text) && text.includes("no public sign-up"))
-      for (const p of ['/sign-up', '/register']) {
-        await page.goto(`${APP}${p}`)
-        check(`${p} does not exist`, await shows(page.getByText('Page not found')))
-      }
+      check('sign-in page links to the sign-up page', (await page.getByRole('link', { name: 'Create an account' }).getAttribute('href')) === '/sign-up')
+      await page.goto(`${APP}/sign-up`)
+      check('/sign-up is closed until the beta documents are approved', await shows(page.getByRole('heading', { name: 'Sign-up opens soon' })))
+      await page.goto(`${APP}/register`)
+      check('/register does not exist', await shows(page.getByText('Page not found')))
       const r = await fetch(`${API}/auth/v1/signup`, { method: 'POST', headers: { apikey: PUB, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `walk-in-${RUN}@example.test`, password: PASSWORD }) }).then((x) => x.json())
       check('Supabase refuses direct sign-up', r.error_code === 'signup_disabled', r.error_code)
       await collectCsp(page)

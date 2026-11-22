@@ -7,7 +7,7 @@ Canada Central, `ca-central-1`, Micro compute). It is separate from staging
 (`hmrliwoychnqrbbydorg`), and nothing in this repository can point one at
 another.
 
-**State: the project is recorded, for a founder-only launch.**
+**State: the project is recorded, for a founder-only launch.** Open registration for the beta, after the founder has tested, is described in `docs/OPEN-BETA.md`.
 `memberProduction` in `config/supabase-projects.json` names it (and
 `supabase/functions/_shared/projects.ts` is generated from it), and
 `app.splitpost.ca` may reach only it. Both approvals in

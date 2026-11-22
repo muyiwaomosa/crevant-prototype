@@ -102,6 +102,10 @@ begin
   if to_regclass('social.post_media') is not null then
     expected := expected || photos;
   end if;
+  -- Open registration (20261130000000), once applied.
+  if pg_catalog.to_regprocedure('public.app_claim_access()') is not null then
+    expected := expected || array['public.app_claim_access()'];
+  end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
   from pg_catalog.pg_proc p
@@ -174,6 +178,15 @@ begin
     elsif r.proname = 'app_access_state' then
       if position('auth.uid()' in r.prosrc) = 0 or position('ops.member_access a on a.user_id = v_uid' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': does not read only the caller''s own membership');
+      end if;
+    elsif r.proname = 'app_claim_access' then
+      -- Open registration (20261130000000): only the caller's own row, only
+      -- while external access is open, never reopening an existing row.
+      if position('v_uid uuid := auth.uid()' in r.prosrc) = 0
+         or position('select * into a from ops.member_access where user_id = v_uid;' in r.prosrc) = 0
+         or position('select s.external_access_approved into v_open from ops.member_launch_settings s where s.id' in r.prosrc) = 0
+         or position('on conflict (user_id) do nothing' in r.prosrc) = 0 then
+        bad := bad || (r.proname || ': does not claim only for the caller, only while external access is open, without reopening a row');
       end if;
     elsif position('social.current_member()' in r.prosrc) = 0 then
       bad := bad || (r.proname || ': does not check social.current_member()');
