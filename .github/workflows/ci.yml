@@ -145,6 +145,10 @@ jobs:
       - name: Run the integration test
         run: scripts/db/integration.sh
       - run: npm ci
+      # The private test ports helper: a busy port, a stopped copy and a silent
+      # copy fail at once with an explanation, and secrets never reach it.
+      - name: Private test ports helper (reservation, start-up diagnostics, redaction)
+        run: scripts/e2e/lib/private-ports.test.sh
       - name: Run the waitlist function in the Edge runtime as the restricted login
         run: scripts/e2e/waitlist-edge.sh
       # Throwaway local CA and Postgres servers only: proves the database

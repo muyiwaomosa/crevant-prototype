@@ -33,6 +33,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# shellcheck source=lib/private-ports.sh
+. scripts/e2e/lib/private-ports.sh
+export PRIVATE_PORTS_REDACT="$WRITER_PW $OWNER_PW"
+# Reserve (CI), pull and wait for the throwaway databases' and probe's ports.
+private_ports_prepare "$PG_IMAGE" "$TLS_PORT" "$PLAIN_PORT"
+private_ports_prepare "$EDGE_IMAGE" "$PROBE_PORT"
+
 # 1. Certificates (valid for two days, never reused).
 ca() { # name subject
   openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=$2" -keyout "$tmp/$1.key" -out "$tmp/$1.crt" \
@@ -83,8 +90,8 @@ ready() { # port sslmode
          -X -At -c 'select 1' >/dev/null 2>&1; then return 0; fi
     sleep 1
   done
-  echo "Throwaway Postgres on port $1 did not start" >&2
-  docker logs crevant-tls-db 2>&1 | tail -5 >&2
+  echo "::error::Throwaway Postgres on port $1 did not start" >&2
+  if [ "$1" = "$TLS_PORT" ]; then private_ports_explain crevant-tls-db "$1"; else private_ports_explain crevant-plain-db "$1"; fi
   return 1
 }
 ready "$TLS_PORT" verify-full
@@ -104,6 +111,7 @@ docker run -d --name crevant-tls-probe --network host "${EXTRA[@]}" \
   -v "$PWD/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
   -v "$PWD/e2e/edge/tls-probe:/home/deno/functions/tls-probe:ro" \
   "$EDGE_IMAGE" start --main-service /home/deno/functions/tls-probe --ip 127.0.0.1 --port "$PROBE_PORT" >/dev/null
+private_ports_wait_http crevant-tls-probe "$PROBE_PORT" "http://127.0.0.1:${PROBE_PORT}/"
 
 PROBE_URL="http://127.0.0.1:${PROBE_PORT}" CERTS="$tmp" WRITER_PW="$WRITER_PW" TLS_PORT="$TLS_PORT" PLAIN_PORT="$PLAIN_PORT" \
   node e2e/waitlist-tls.e2e.cjs
