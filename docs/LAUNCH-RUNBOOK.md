@@ -29,9 +29,9 @@ The Production build guard (`scripts/guard-build-target.mjs`) only runs when Ver
 * **Before indexing approval:** every page on every address is `noindex`.
   * The production address's `/` and `/join` get it from the **initial HTML** the server sends (`<meta name="robots" content="noindex">`, written at build time).
   * Every other page gets it from the `X-Robots-Tag: noindex` **header**.
-* **After indexing approval** (`CREVANT_ALLOW_INDEXING=true` in Production): only `/` and `/join` on `crevant-prototype.vercel.app` may be indexed.
+* **After indexing approval** (`CREVANT_ALLOW_INDEXING=true` in the `splitpost` project's Production): only `/` and `/join` on `www.splitpost.ca` may be indexed (`config/public-site.json`, `productionHost`).
   * `vercel.json` sends the `noindex` header for every other path there: one rule, `/((?!join$).+)`, which covers `/tour`, `/privacy`, member paths, `/join/…`, `/index.html` and any unknown path.
-  * Every other address (all Previews) gets the header on every path.
+  * Every other address gets the header on every path: all Previews, the member app (`app.splitpost.ca`), the frozen demo's address and the bare `splitpost.ca` (which redirects to `www`).
 * `robots.txt` and the sitemap follow the same rule. The page script also sets `noindex` on other pages. **Neither is relied on**: the header and the initial HTML enforce the rule without JavaScript.
 
 ## Checking a Preview's headers (Chrome, no tools needed)

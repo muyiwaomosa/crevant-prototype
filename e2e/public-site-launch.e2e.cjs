@@ -1,5 +1,7 @@
-// Launch safeguards, checked in Chromium at the real production address
-// (crevant-prototype.vercel.app, mapped to this machine for the test).
+// Launch safeguards, checked in Chromium at the real addresses, mapped to this
+// machine for the test: the demo protection at the frozen demo's address
+// (crevant-prototype.vercel.app), and search indexing at the public site's
+// Production address (www.splitpost.ca, config/public-site.json).
 //
 // Usage (scripts/e2e/public-site.sh runs both):
 //   node e2e/public-site-launch.e2e.cjs <port> unapproved   a public site build
@@ -15,6 +17,8 @@ const PORT = process.argv[2] || '4177'
 const MODE = process.argv[3] || 'unapproved'
 const HOST = 'crevant-prototype.vercel.app'
 const BASE = `http://${HOST}:${PORT}`
+const SITE_HOST = 'www.splitpost.ca'
+const SITE = `http://${SITE_HOST}:${PORT}`
 
 let failures = 0
 const check = (name, ok, detail = '') => {
@@ -25,7 +29,7 @@ const robots = (page) => page.locator('meta[name="robots"]').getAttribute('conte
 const landing = (page) => page.getByRole('heading', { level: 1, name: /You Create The Post\. You Deserve a Split\./ })
 
 ;(async () => {
-  const browser = await chromium.launch({ args: [`--host-resolver-rules=MAP ${HOST} 127.0.0.1`] })
+  const browser = await chromium.launch({ args: [`--host-resolver-rules=MAP ${HOST} 127.0.0.1, MAP ${SITE_HOST} 127.0.0.1`] })
   try {
     const page = await (await browser.newContext()).newPage()
 
@@ -36,13 +40,15 @@ const landing = (page) => page.getByRole('heading', { level: 1, name: /You Creat
       check('the demo is noindex', (await robots(page)) === 'noindex')
     } else {
       check('at the production address, the approved build shows the public site', (await landing(page).count()) === 1)
-      check('the landing page may be indexed', (await robots(page)) === 'index, follow', await robots(page))
-      await page.goto(`${BASE}/join`)
+      await page.goto(`${SITE}/`)
+      await page.waitForTimeout(300)
+      check('at www.splitpost.ca, the landing page may be indexed', (await robots(page)) === 'index, follow', await robots(page))
+      await page.goto(`${SITE}/join`)
       await page.waitForTimeout(300)
       check('/join may be indexed', (await robots(page)) === 'index, follow', await robots(page))
       check('/join has no form (the form settings are off)', (await page.locator('form, input').count()) === 0)
       for (const p of ['/privacy', '/tour', '/sign-in', '/no-such-page']) {
-        await page.goto(`${BASE}${p}`)
+        await page.goto(`${SITE}${p}`)
         await page.waitForTimeout(300)
         check(`${p} is noindex`, (await robots(page)) === 'noindex', await robots(page))
       }
@@ -52,26 +58,28 @@ const landing = (page) => page.getByRole('heading', { level: 1, name: /You Creat
 
     // The rule without JavaScript: the robots tag in the INITIAL HTML the server
     // sends, combined with the X-Robots-Tag header vercel.json gives that path
-    // on the production address (modelled from vercel.json; vite preview
-    // doesn't apply Vercel headers). noindex from either wins.
+    // on the public site's address (modelled from vercel.json; vite preview
+    // doesn't apply Vercel headers). noindex from either wins. The member app
+    // address, the demo and Previews always get the header, so are never indexed.
     const { headerNoindex } = await import('../scripts/vercel-robots.mjs')
     for (const p of ['/', '/join', '/tour', '/tour/discover', '/privacy', '/sign-in', '/app', '/xyz', '/join/creator']) {
-      const html = await (await page.goto(`${BASE}${p}`)).text()
+      const html = await (await page.goto(`${SITE}${p}`)).text()
       const initialMeta = (html.match(/<meta name="robots" content="([^"]+)"/) || [])[1]
-      const effective = headerNoindex(HOST, p) || initialMeta !== 'index, follow' ? 'noindex' : 'index'
+      const effective = headerNoindex(SITE_HOST, p) || initialMeta !== 'index, follow' ? 'noindex' : 'index'
       const expected = MODE === 'approved' && (p === '/' || p === '/join') ? 'index' : 'noindex'
-      check(`${p}: without JavaScript, header + initial HTML give ${expected}`, effective === expected, `meta=${initialMeta}, header=${headerNoindex(HOST, p) ? 'noindex' : 'none'}`)
+      check(`${p}: without JavaScript, header + initial HTML give ${expected}`, effective === expected, `meta=${initialMeta}, header=${headerNoindex(SITE_HOST, p) ? 'noindex' : 'none'}`)
+      for (const other of [HOST, 'app.splitpost.ca', 'splitpost-app-git-x-crevant.vercel.app']) check(`${p} on ${other}: always noindex by header`, headerNoindex(other, p))
     }
 
     // Fetched through the browser, which resolves the mapped production address.
-    const robotsTxt = await (await page.goto(`${BASE}/robots.txt`)).text()
-    const sitemapText = await (await page.goto(`${BASE}/sitemap.xml`)).text()
+    const robotsTxt = await (await page.goto(`${SITE}/robots.txt`)).text()
+    const sitemapText = await (await page.goto(`${SITE}/sitemap.xml`)).text()
     if (MODE === 'unapproved') {
       check('robots.txt disallows everything', robotsTxt === 'User-agent: *\nDisallow: /\n', JSON.stringify(robotsTxt))
       check('there is no sitemap', !sitemapText.includes('<urlset'))
     } else {
       check('robots.txt allows only / and /join', /Allow: \/\$\nAllow: \/join\$\nDisallow: \//.test(robotsTxt), JSON.stringify(robotsTxt))
-      check('the sitemap lists only / and /join', (sitemapText.match(/<loc>/g) || []).length === 2 && sitemapText.includes(`https://${HOST}/join`))
+      check('the sitemap lists only / and /join', (sitemapText.match(/<loc>/g) || []).length === 2 && sitemapText.includes(`https://${SITE_HOST}/join`) && !sitemapText.includes(HOST))
     }
   } finally {
     await browser.close()

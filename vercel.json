@@ -109,7 +109,7 @@
       "missing": [
         {
           "type": "host",
-          "value": "crevant-prototype.vercel.app"
+          "value": "www.splitpost.ca"
         }
       ],
       "headers": [
@@ -124,7 +124,7 @@
       "has": [
         {
           "type": "host",
-          "value": "crevant-prototype.vercel.app"
+          "value": "www.splitpost.ca"
         }
       ],
       "headers": [
