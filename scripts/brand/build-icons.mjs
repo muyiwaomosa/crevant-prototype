@@ -65,9 +65,17 @@ pngs.forEach((png, i) => {
 writeFileSync(join(ROOT, 'public', 'favicon.ico'), Buffer.concat([header, ...pngs]))
 written.push('public/favicon.ico')
 
-// Sharing image: the logo, the wordmark and the approved headline, on cobalt.
+// Sharing image: the logo, the wordmark and the brand line (the approved
+// headline, Website Redesign Master Implementation Brief), on cobalt, with the
+// approved footer disclosure. Uses the self-hosted typefaces, so it renders
+// without the network.
+const font = (pkg, file) =>
+  `data:font/woff2;base64,${readFileSync(join(ROOT, 'node_modules', '@fontsource-variable', pkg, 'files', file)).toString('base64')}`
 save('og-image.png', await render(`
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Inter:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    @font-face{font-family:Archivo;src:url(${font('archivo', 'archivo-latin-wdth-normal.woff2')}) format('woff2');font-weight:100 900;font-stretch:62% 125%}
+    @font-face{font-family:Inter;src:url(${font('inter', 'inter-latin-wght-normal.woff2')}) format('woff2');font-weight:100 900}
+  </style>
   <div style="position:relative;width:1200px;height:630px;background:${COBALT};color:${IVORY};font-family:Archivo,Arial,sans-serif;overflow:hidden">
     <div style="position:absolute;inset:0;background:linear-gradient(118deg,transparent 0 64%,rgb(255 255 255/0.05) 64% 100%)"></div>
     <div style="position:absolute;left:84px;top:72px;display:flex;align-items:center;gap:22px">
@@ -75,9 +83,9 @@ save('og-image.png', await render(`
       <span style="font-weight:900;font-size:52px;letter-spacing:-0.02em;font-stretch:108%">splitpost</span>
     </div>
     <div style="position:absolute;left:84px;top:236px;font-weight:900;font-size:92px;line-height:0.98;letter-spacing:-0.02em;font-stretch:95%">
-      <div>You Create The Post.</div><div style="color:#f6b888">You Deserve a Split.</div>
+      <div>Don't just post.</div><div style="color:#f6b888">Get your split.</div>
     </div>
-    <div style="position:absolute;left:84px;bottom:66px;font-family:Inter,Arial,sans-serif;font-weight:600;font-size:26px;color:#d3def3">An invitation-only pilot for creators and the people who support them.</div>
+    <div style="position:absolute;left:84px;bottom:66px;font-family:Inter,Arial,sans-serif;font-weight:600;font-size:26px;color:#d3def3">An invitation-only pilot for adults 18 and older.</div>
   </div>`, 1200, 630))
 
 writeFileSync(join(OUT, 'site.webmanifest'), JSON.stringify({

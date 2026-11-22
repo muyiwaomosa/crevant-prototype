@@ -4,8 +4,7 @@ import { LogIn } from 'lucide-react'
 import { DISCOVER_PATH } from '../entry'
 import { useMemberLinks } from './member-links'
 import { useRobotsMeta } from './robots'
-import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
-import { HOMEPAGE_COPY } from './landing/copy'
+import { BRAND_LINE, PILOT_DISCLOSURES, PRODUCT_IMAGES_DISCLOSURE, SITE_NAV } from './landing/copy'
 import { WAITLIST_CLOSED_COPY, WAITLIST_OPEN, waitlistCta } from './waitlist/status'
 import { SplitpostWordmark } from './landing/ui/SplitpostWordmark'
 
@@ -80,10 +79,10 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             <SplitpostWordmark compactBelow360 />
           </Link>
           <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2">
-            {/* Phones: logo, Sign in and Join the Waitlist; Discover Splitpost stays in the hero. */}
+            {/* Phones: logo, Sign in and Join the Waitlist; How It Works stays in the footer. */}
             <span className="hidden sm:contents">
               <Link to={DISCOVER_PATH} className={`${HEADER_LINK} px-3.5`}>
-                {HOMEPAGE_COPY.hero.secondaryCta}
+                {SITE_NAV.discover}
               </Link>
             </span>
             {/* Sign In at every width: the full app's account link, or /pilot-access on the public site. */}
@@ -101,8 +100,8 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
                 ) : (
                   <>
                     {/* Under 390px the full closed label doesn't fit beside the logo. */}
-                    <span aria-hidden="true" className="min-[390px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
-                    <span aria-hidden="true" className="hidden min-[420px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
+                    <span aria-hidden="true" className="min-[480px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
+                    <span aria-hidden="true" className="hidden min-[480px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
                   </>
                 )}
               </Link>
@@ -119,16 +118,16 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-[1fr_auto] md:items-start">
           <div className="max-w-md">
             <SplitpostWordmark />
-            <p className="mt-4 font-sp-display text-xl font-extrabold text-sp-secondary">{HOMEPAGE_COPY.hero.tagline}</p>
-            <p className="mt-2 text-sm leading-relaxed text-sp-muted-on-dark">An invitation-only pilot for adults 18 and older.</p>
+            <p data-testid="footer-tagline" className="mt-4 font-sp-display text-xl font-extrabold text-sp-secondary">{BRAND_LINE}</p>
+            <p data-testid="footer-disclosure" className="mt-2 text-sm leading-relaxed text-sp-muted-on-dark">{PILOT_DISCLOSURES.footer}</p>
             <p data-testid="product-images-note" className="mt-1 text-sm leading-relaxed text-sp-muted-on-dark">{PRODUCT_IMAGES_DISCLOSURE}</p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-white/85">
             <Link to="/#problem" className="hover:text-sp-secondary-on-dark">
-              Why Splitpost
+              {SITE_NAV.why}
             </Link>
-            <Link to="/#building" className="hover:text-sp-secondary-on-dark">
-              How It Works
+            <Link to={DISCOVER_PATH} className="hover:text-sp-secondary-on-dark">
+              {SITE_NAV.how}
             </Link>
             <Link to="/join" className="hover:text-sp-secondary-on-dark">
               {waitlistCta()}

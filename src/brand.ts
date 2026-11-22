@@ -13,7 +13,8 @@ export const BRAND = {
   /** Lowercase wordmark shown next to the logo. */
   wordmark: 'splitpost',
   /** Short description used on the landing page and in metadata. */
-  description: 'Every Post. A Better Split. Creators make the content, fans help it grow, and both deserve to benefit from its success.',
+  description:
+    "Don't just post. Get your split. You create the content. You grow the audience. But are you getting your share of the value you create?",
 } as const
 
 export type Brand = typeof BRAND

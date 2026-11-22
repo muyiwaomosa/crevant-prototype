@@ -85,10 +85,35 @@ if env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY VERCEL_ENV=producti
   exit 1
 fi
 echo "PASS  an approved Production build in the demo project (crevant-prototype) is refused"
+# While any photo is pending the founder's approval, even an approved
+# Production build is refused (scripts/check-photo-approvals.mjs).
+APPROVALS=src/public/landing/photo-approvals.json
+if grep -q '"pending"' "$APPROVALS"; then
+  if env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY VERCEL_ENV=production CREVANT_PRODUCTION_SITE_APPROVED=true \
+    VERCEL_PROJECT_ID="$SITE_PROJECT" "${VERCEL_GIT[@]}" npm run build >/dev/null 2>&1; then
+    echo "FAIL  a Production build ran with photos pending approval" >&2
+    exit 1
+  fi
+  echo "PASS  a Production build with photos pending approval is refused"
+fi
+# The simulated approved build below stands in for the day every photo is
+# approved. It uses an isolated test fixture (never the real registry, which
+# is never edited by tests); the guard refuses fixtures on Vercel.
 env -u VITE_SUPABASE_URL -u VITE_SUPABASE_PUBLISHABLE_KEY \
   VERCEL_ENV=production CREVANT_PRODUCTION_SITE_APPROVED=true CREVANT_ALLOW_INDEXING=true \
+  CREVANT_PHOTO_APPROVALS_FIXTURE=scripts/e2e/fixtures/photo-approvals.all-approved.json \
   VERCEL_PROJECT_ID="$SITE_PROJECT" "${VERCEL_GIT[@]}" \
   npm run build >/dev/null
+if ! git diff --quiet -- "$APPROVALS"; then
+  echo "FAIL  the real photo approval registry was changed during the tests" >&2
+  exit 1
+fi
+echo "PASS  the real photo approval registry is untouched"
+if env VERCEL=1 VERCEL_ENV=production CREVANT_PHOTO_APPROVALS_FIXTURE=scripts/e2e/fixtures/photo-approvals.all-approved.json node scripts/check-photo-approvals.mjs >/dev/null 2>&1; then
+  echo "FAIL  a test fixture was accepted on Vercel" >&2
+  exit 1
+fi
+echo "PASS  the approval fixture is refused on Vercel"
 node_modules/.bin/vite preview --host 127.0.0.1 --port "$APP_PORT" --strictPort >/dev/null 2>&1 &
 preview_pid=$!
 for _ in $(seq 1 60); do

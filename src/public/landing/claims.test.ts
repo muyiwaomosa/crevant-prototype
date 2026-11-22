@@ -3,6 +3,7 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { EARN_RULES } from '../../lib/points'
 import {
+  APPROVED_MARKETING_SENTENCES,
   DISCLOSURES,
   findMisleadingClaims,
   mentionsProvisionalAllocation,
@@ -41,6 +42,46 @@ describe('misleading financial claims are caught', () => {
   }
 })
 
+describe('fans are never described as getting money or a share of revenue (founder decision, 2026-11-19)', () => {
+  const misleading = [
+    // The website's earlier wording, now retired.
+    'Yet they rarely share financially in the success they help create.',
+    'But when their contributions help create value, they rarely get to share financially in the success.',
+    'Our planned model gives creators a share of net eligible advertising revenue generated around their content, while setting aside a portion for qualifying fan contributions.',
+    // Other ways it could creep back in, including as a future vision.
+    "We're working toward a future where creators and fans can share in advertising revenue from the posts they create and support.",
+    'Our long-term goal is a model where creators and fans could share in advertising revenue.',
+    'Fans will get a share of the revenue.',
+    'A portion of the revenue goes to fans.',
+    'Supporters earn income when the creators they back grow.',
+    'Fans get a financial share of every post.',
+    'Part of the money goes to your supporters.',
+  ]
+  for (const text of misleading) {
+    it(`flags: ${text}`, () => {
+      expect(findMisleadingClaims(text).some((f) => f.rule === 'fans described as getting money or a share of revenue'), JSON.stringify(findMisleadingClaims(text))).toBe(true)
+    })
+  }
+
+  const allowed = [
+    "Don't just post. Get your split.",
+    "They're helping you grow. But where's their split?",
+    'Our planned model gives creators a share of net eligible advertising revenue generated around their content, while fans get their split through Connection Points earned for qualifying contributions.',
+    'Fans can earn and accumulate Connection Points for qualifying contributions.',
+    'Your fans help it grow.',
+    'And what about the fans who help you grow?',
+    'Yet the platforms rarely recognize or reward them for helping creators grow.',
+    'But when their contributions help create value, they rarely get recognized or rewarded for it.',
+    "We're building a social network where creators have a new opportunity to earn—and the people who help them grow can be recognized and rewarded.",
+    'Supporters who have a reason to help you grow.',
+  ]
+  for (const text of allowed) {
+    it(`allows: ${text}`, () => {
+      expect(findMisleadingClaims(text)).toEqual([])
+    })
+  }
+})
+
 describe('the provisional 40/20/40 allocation is caught in any form', () => {
   const forms = [
     '40/20/40',
@@ -69,8 +110,7 @@ describe('the provisional 40/20/40 allocation is caught in any form', () => {
 describe('accurate disclosures and the future vision are allowed', () => {
   const accurate = [
     ...Object.values(DISCLOSURES),
-    "We're working toward a future where creators and fans can share in advertising revenue from the posts they create and support.",
-    'Our long-term goal is a model where creators and fans could share in advertising revenue.',
+    "We're working toward a future where creators can share in advertising revenue from the posts they create.",
     'Revenue sharing is not part of the pilot.',
     'Fans receive no cash rewards during the pilot.',
     "Connection Points can't be converted to cash.",
@@ -141,4 +181,38 @@ describe('the provisional allocation appears in no published source', () => {
       expect(mentionsProvisionalAllocation(readFileSync(file, 'utf8'))).toBe(false)
     })
   }
+})
+
+describe('the approved marketing sentences (exact allow-list)', () => {
+  it('holds exactly the three founder-approved sentences about platforms making money', () => {
+    expect(APPROVED_MARKETING_SENTENCES).toEqual(['Your content makes platforms money.', 'More opportunities for them to make money.', 'The platforms make money.'])
+  })
+
+  it('lets them through only as those exact sentences, in context too', () => {
+    for (const s of APPROVED_MARKETING_SENTENCES) expect(findMisleadingClaims(s)).toEqual([])
+    expect(findMisleadingClaims('Your content makes platforms money. But what about you?')).toEqual([])
+    expect(findMisleadingClaims('Every interaction brings more attention to the platforms. More engagement. More opportunities for them to make money.')).toEqual([])
+    expect(findMisleadingClaims('You create the content. Your fans help it grow. The platforms make money.')).toEqual([])
+  })
+
+  it('no longer exempts the retired sentences', () => {
+    for (const old of [
+      'Your content helps platforms attract attention and generate revenue.',
+      'When eligible content generates advertising revenue, creators receive a share, and a portion is set aside to reward qualifying fan contributions.',
+    ])
+      expect(findMisleadingClaims(old).length, old).toBeGreaterThan(0)
+  })
+
+  it('still flags any change to their wording, and any promise of money to creators or fans', () => {
+    const variants = [
+      'Your content makes you money.',
+      'Your content makes creators money.',
+      'More opportunities for you to make money.',
+      'The platforms make money, and so will you.',
+      'Fans make money on Splitpost.',
+      'Fans get a share of the revenue from every post.',
+      'Creators receive 40% of ad revenue.',
+    ]
+    for (const v of variants) expect(findMisleadingClaims(v).length, v).toBeGreaterThan(0)
+  })
 })

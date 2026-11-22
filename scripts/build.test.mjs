@@ -13,6 +13,7 @@ test('Vercel Production always builds the public site, with every check', () => 
     'node scripts/guard-build-target.mjs',
     'node scripts/check-supabase-target.mjs',
     'node scripts/check-waitlist-launch.mjs',
+    'node scripts/check-photo-approvals.mjs',
     'npx tsc -b',
     'npx vite build --mode site',
     'node scripts/check-site-bundle.mjs dist',

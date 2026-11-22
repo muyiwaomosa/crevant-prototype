@@ -1,14 +1,12 @@
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
-import { Camera } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { SplitpostLogo } from '../../../logo/SplitpostLogo'
-import { HOMEPAGE_COPY } from '../copy'
 
 /**
  * Shared pieces that keep the seven sections reading as one story: the
- * eyebrow, the Splitpost logo on each "seam" where one section hands over to
- * the next, and the photo placeholder
- * used until the founder approves the photography shortlist.
+ * eyebrow, the Splitpost badge on each "seam" where one section hands over to
+ * the next, and the pilot disclosure note.
  */
 
 export function Eyebrow({ children, tone = 'light' }: { children: ReactNode; tone?: 'light' | 'dark' }) {
@@ -24,7 +22,7 @@ export function Eyebrow({ children, tone = 'light' }: { children: ReactNode; ton
   )
 }
 
-/** The Splitpost logo sitting on the boundary between two sections, so the seven sections read as one story. */
+/** The Splitpost badge on the boundary between two sections, so the seven sections read as one story. */
 export function Seam() {
   return (
     <div aria-hidden="true" data-testid="seam" className="pointer-events-none relative z-20 -my-7 flex justify-center">
@@ -33,23 +31,22 @@ export function Seam() {
   )
 }
 
-/** A reserved photo: shown until the founder approves the licensed shortlist. Says what will go here. */
-export function PhotoSlot({ shot, className }: { shot: string; className?: string }) {
+/**
+ * A pilot disclosure: the founder's approved wording, visually secondary but
+ * real text (readable by screen readers, AA contrast on its background).
+ */
+export function Disclosure({ children, tone = 'light', testId, className }: { children: ReactNode; tone?: 'light' | 'dark'; testId?: string; className?: string }) {
   return (
-    <figure
-      data-testid="photo-slot"
+    <p
+      data-testid={testId}
       className={clsx(
-        'relative m-0 grid place-items-center overflow-hidden rounded-[24px] border-2 border-dashed border-sp-ink/20 bg-[repeating-linear-gradient(135deg,rgb(18_48_45/0.03)_0_12px,transparent_12px_24px)] p-6 text-center',
+        'flex gap-2 text-[13px] leading-relaxed sm:text-sm',
+        tone === 'dark' ? 'text-sp-muted-on-dark' : 'text-sp-muted',
         className,
       )}
     >
-      <div className="max-w-[18rem]">
-        <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-white text-sp-muted ring-1 ring-sp-ink/10">
-          <Camera aria-hidden="true" className="h-5 w-5" />
-        </span>
-        <p className="mt-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-sp-muted">{HOMEPAGE_COPY.photoPending}</p>
-        <figcaption className="mt-1.5 text-sm leading-snug text-sp-muted">{shot}</figcaption>
-      </div>
-    </figure>
+      <Info aria-hidden="true" className={clsx('mt-[3px] h-3.5 w-3.5 shrink-0', tone === 'dark' ? 'text-sp-secondary-on-dark' : 'text-sp-primary')} />
+      <span>{children}</span>
+    </p>
   )
 }
