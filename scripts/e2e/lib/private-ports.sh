@@ -41,18 +41,24 @@ private_ports_holders() { # port
   awk -v h=":$hex" 'FNR > 1 && substr($2, length($2) - 4) == h && $4 != "06" { print "state=" $4 " local=" $2 " remote=" $3; found = 1 } END { exit !found }' "${tables[@]}"
 }
 
+# On CI runners only, reserve ports from temporary outgoing connections.
+# Takes a comma-separated list; ranges like 58461-58520 are allowed.
+private_ports_reserve() { # list
+  [ "${GITHUB_ACTIONS:-}" = true ] || return 0
+  local sudo_cmd="" current
+  [ "$(id -u)" -eq 0 ] || sudo_cmd=sudo
+  current=$(sysctl -n net.ipv4.ip_local_reserved_ports)
+  $sudo_cmd sysctl -q -w net.ipv4.ip_local_reserved_ports="${current:+$current,}$1"
+  echo "Reserved from temporary connections: $(sysctl -n net.ipv4.ip_local_reserved_ports)"
+}
+
 # Reserve (CI only), pull, then wait until every port is free.
 # Fails with the holding sockets if a port is still taken after 30 seconds.
 private_ports_prepare() { # image port...
   local image=$1; shift
-  local p busy sudo_cmd="" current
+  local p busy
   echo "Temporary connection range: $(private_ports_range). Private ports: $*"
-  if [ "${GITHUB_ACTIONS:-}" = true ]; then
-    [ "$(id -u)" -eq 0 ] || sudo_cmd=sudo
-    current=$(sysctl -n net.ipv4.ip_local_reserved_ports)
-    $sudo_cmd sysctl -q -w net.ipv4.ip_local_reserved_ports="${current:+$current,}$(IFS=,; echo "$*")"
-    echo "Reserved from temporary connections: $(sysctl -n net.ipv4.ip_local_reserved_ports)"
-  fi
+  private_ports_reserve "$(IFS=,; echo "$*")"
   docker image inspect "$image" >/dev/null 2>&1 || docker pull -q "$image" >/dev/null
   for _ in $(seq 1 "${PRIVATE_PORTS_WAIT:-30}"); do
     busy=""
