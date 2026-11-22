@@ -1,5 +1,7 @@
 // The post-media Edge Function against a real LOCAL Supabase (Storage, the
-// Edge runtime, the database), through the same gateway the app uses. Run
+// Edge runtime, the database). The suite runs on a copy started with ONLY the
+// new API keys (publishable and secret); the legacy fallback, the gateway's
+// copy, and copies without usable keys are checked in section 9d. Run
 // through scripts/e2e/post-media-edge.sh. Test photos are generated here
 // with the reviewed jpeg-js (nothing third-party is committed).
 // Every check prints PASS or FAIL; the process exits non zero on any failure.
@@ -18,11 +20,16 @@ const DB = env('DB_URL')
 const PUB = env('PUBLISHABLE_KEY')
 const ANON = env('ANON_KEY')
 const SERVICE = env('SERVICE_ROLE_KEY')
-const DRAIN = env('DRAIN_URL') // a copy with the test drain key
+const DRAIN = env('DRAIN_URL') // the copy with only the new keys, and the test drain key
+const LEGACY = env('LEGACY_URL') // a copy with only the legacy anon and service_role keys
+const NOKEYS = env('NOKEYS_URL') // a copy with no key at all
+const PARTIAL = env('PARTIAL_URL') // a copy with a publishable key and only malformed secret values
 const GUARD = env('GUARD_URL') // a copy started with the PRODUCTION project's address
 const DRAIN_KEY = env('DRAIN_KEY')
 if (!/^http:\/\/(127\.0\.0\.1|localhost):/.test(API)) throw new Error('Refusing: not a local Supabase')
-const FN = `${API}/functions/v1/post-media`
+// The suite's copy has only the new keys (FN_URL, the drain copy); the gateway's copy runs on what the local CLI provides.
+const GATEWAY = `${API}/functions/v1/post-media`
+const FN = env('FN_URL')
 const RUN = String(Date.now()).slice(-7)
 const PASSWORD = 'Media-Edge-42-pass'
 const avatarFixture = (n) => readFileSync(path.join(__dirname, 'fixtures', 'avatars', n))
@@ -280,7 +287,7 @@ function frame(b) {
   sql(`update storage.objects set created_at = now() - interval '2 days' where bucket_id = 'post-photos' and name = '${orphan}'`)
   const noKey = await call('drain', null, '{}', { url: DRAIN, contentType: 'application/json' })
   const wrongKey = await call('drain', null, '{}', { url: DRAIN, contentType: 'application/json', headers: { 'x-media-drain-key': 'x'.repeat(48) } })
-  const gatewayKey = await call('drain', null, '{}', { contentType: 'application/json', headers: { 'x-media-drain-key': DRAIN_KEY } })
+  const gatewayKey = await call('drain', null, '{}', { url: GATEWAY, contentType: 'application/json', headers: { 'x-media-drain-key': DRAIN_KEY } })
   check('the drain refuses without the key, with a wrong key, and where no key is configured', noKey.status === 401 && wrongKey.status === 401 && gatewayKey.status === 401,
     `${noKey.status} ${wrongKey.status} ${gatewayKey.status}`)
   const runsBefore = Number(sql("select count(*) from ops.media_drain_runs where source = 'scheduled'"))
@@ -347,6 +354,35 @@ function frame(b) {
     noJob === 't' && manualQueued === '2' && manual.status === 200 && manualLeft === '0'
       && (await stored(`${A.id}/${manualUp.json.uploadId}.jpg`)).status >= 400,
     `no job ${noJob}, queued ${manualQueued}, status ${manual.status}, left ${manualLeft}`)
+
+  // 9d. Keys: everything else runs on the copy with only the new keys. The
+  // legacy keys still work as a fallback; without a usable key of each kind
+  // the function refuses to run, even for the drain with its key.
+  {
+    const L = await account('pml')
+    const lup = await call('photo', L.token, makePhoto(800, 600, 41), { url: LEGACY, contentType: 'image/jpeg' })
+    const lid = requireUpload(lup, 'the photo through the legacy-key copy')
+    const lpost = (await rpc(L.token, 'app_create_post', { p_body: 'Legacy keys', p_request_id: crypto.randomUUID(), p_media: lid })).json
+    const llinks = await call('links', B.token, JSON.stringify({ ids: [lpost] }), { url: LEGACY, contentType: 'application/json' })
+    const lfeed = llinks.json?.photos?.[lpost]?.feed
+    check('with only the legacy keys (transition fallback), upload and links work', llinks.status === 200 && (await fetch(`${API}/storage/v1${lfeed}`)).status === 200, describe(llinks))
+    const gw = await call('links', B.token, JSON.stringify({ ids: [lpost] }), { url: GATEWAY, contentType: 'application/json' })
+    check('the copy behind the local gateway works too (on whatever keys the local CLI gives it)', gw.status === 200 && typeof gw.json?.photos?.[lpost]?.feed === 'string', describe(gw))
+    await rpc(L.token, 'app_delete_post', { p_post: lpost })
+    const lclean = await call('cleanup', L.token, '{}', { url: LEGACY, contentType: 'application/json' })
+    check('with only the legacy keys, the cleanup deletes the queued files (Storage and the svc_* steps)', lclean.status === 200
+      && (await stored(`${L.id}/${lid}.jpg`)).status >= 400 && (await stored(`${L.id}/${lid}-feed.jpg`)).status >= 400
+      && sql(`select count(*) from ops.media_deletions where deleted_at is null and path like '${L.id}/%'`) === '0', describe(lclean))
+    const filesBefore = photoFiles()
+    const uploadsBefore = sql(`select count(*) from social.media_uploads where user_id = '${L.id}'`)
+    for (const [what, url] of [['no key at all', NOKEYS], ['a publishable key but only malformed secret values', PARTIAL]]) {
+      const r = await call('photo', L.token, makePhoto(640, 480, 42), { url, contentType: 'image/jpeg' })
+      const d = await call('drain', null, '{}', { url, contentType: 'application/json', headers: { 'x-media-drain-key': DRAIN_KEY } })
+      check(`with ${what}, the function refuses to run (503 unavailable), even the drain with its key, and touches nothing`,
+        [r, d].every((x) => x.status === 503 && x.json?.error === 'unavailable') && photoFiles() === filesBefore
+        && sql(`select count(*) from social.media_uploads where user_id = '${L.id}'`) === uploadsBefore, `${r.status} ${d.status}`)
+    }
+  }
 
   // 10. The moderator's status panel numbers.
   const st = await rpc(M.token, 'app_mod_media_status', {})

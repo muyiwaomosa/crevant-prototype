@@ -199,7 +199,7 @@ status. `succeeded` means the drain answered HTTP 200 within 20 seconds.
 | Message | Meaning |
 |---|---|
 | `the drain answered HTTP 401` | The two copies of the drain key differ (Edge Function secret `MEDIA_DRAIN_KEY` and Vault `media_drain_key`). |
-| `the drain answered HTTP 503` | The function isn't configured (its secrets). |
+| `the drain answered HTTP 503` | The function isn't configured: its secrets, or no usable API key (`docs/FUNCTIONS-DEPLOYMENT.md`, API keys). |
 | `the drain answered HTTP 502` | The drain couldn't claim or record its pass; see the function's logs. |
 | `the drain timed out after 20 seconds` | The function didn't answer in time; the next run tries again. Queued files are not lost. |
 | `network error reaching the drain` | The function's address couldn't be reached. |

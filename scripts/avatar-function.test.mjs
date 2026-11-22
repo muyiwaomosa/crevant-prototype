@@ -3,8 +3,10 @@
 // 1. The vendored jpeg-js 0.4.4 is the reviewed upstream code, byte for byte,
 //    plus one export line per file.
 // 2. The entry point serves only the staging project (or local Supabase),
-//    reads only the keys Supabase provides, and verifies every caller with
-//    Supabase Auth itself (the gateway JWT check is off for ES256 sessions).
+//    reads only the keys Supabase provides (the new publishable and secret
+//    keys first, the legacy ones only as a fallback: ../_shared/keys.ts), and
+//    verifies every caller with Supabase Auth itself (the gateway JWT check is
+//    off for ES256 sessions).
 // 3. The handler never trusts a member id or storage path from the browser,
 //    asks the database as the caller before any privileged step, and keeps
 //    the approved limits.
@@ -35,8 +37,8 @@ test('the vendored jpeg-js is the reviewed 0.4.4 code plus one export line', () 
 test('no remote or npm import: nothing is downloaded at deploy or run time', () => {
   for (const f of ['index.ts', 'handler.ts', 'image.ts']) {
     const imports = [...code(read(`${dir}/${f}`)).matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1])
-    // Local files, plus the shared project and origin policy (Phase 1B-2), nothing else.
-    for (const i of imports) assert.ok(i.startsWith('./') || i === '../_shared/policy.ts', `${f} imports ${i}`)
+    // Local files, plus the shared project and origin policy (Phase 1B-2) and project keys, nothing else.
+    for (const i of imports) assert.ok(i.startsWith('./') || i === '../_shared/policy.ts' || i === '../_shared/keys.ts', `${f} imports ${i}`)
   }
 })
 
@@ -46,17 +48,32 @@ test('the entry point serves only the projects the shared policy allows, with th
   assert.ok(!/'[a-z0-9]{20}'/.test(index), 'no project reference in the entry point')
   assert.ok(!/vercel\.app|splitpost\.ca/.test(index), 'no origin in the entry point')
   assert.match(index, /const role = memberFunctionRole\(url\)/)
-  assert.match(index, /const configured = role !== null && anon !== '' && service !== ''/)
   assert.match(index, /corsHeaders\(role, req\.headers\.get\('origin'\)\)/)
   assert.match(index, /\[BUILD_HEADER\]: BUILD_ID/)
   assert.match(index, /if \(!configured\) \{\s*return respond\(new Response\(JSON\.stringify\(\{ error: 'unavailable' \}\), \{ status: 503/)
   const envs = [...index.matchAll(/env\('([A-Z_]+)'\)/g)].map((m) => m[1]).sort()
-  assert.deepEqual(envs, ['SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL'], 'only the keys Supabase provides to every function')
+  assert.deepEqual(envs, ['SUPABASE_URL'], 'the project address directly; keys only through ../_shared/keys.ts')
+  // Keys (../_shared/keys.ts): the new publishable and secret keys first, the legacy keys only as a fallback.
+  assert.match(index, /const keys = projectKeys\(env\)/)
+  assert.match(index, /const configured = role !== null && publishable !== '' && service !== ''/)
+  assert.match(index, /const asService = serviceHeaders\(service\)/, 'the secret key is sent as keys.ts says (apikey only for a new key)')
+  assert.match(index, /serviceRpc: \(fn, body\) => rpc\(asService, fn, body\)/)
+  assert.match(index, /headers: \{ \.\.\.\(init\.headers \?\? \{\}\), \.\.\.asService \}/, 'Storage gets the service headers last, so nothing overrides them')
+  assert.match(index, /userRpc: \(token, fn, body, key\) => rpc\(\{ apikey: key \?\? publishable, Authorization: `Bearer \$\{token\}` \}, fn, body\)/, 'caller calls use the publishable key, never the secret key')
+  assert.equal((index.match(/\bservice\b/g) ?? []).length, 3, 'the secret key is used only to decide configured and to build the service headers')
+  assert.match(index, /else log\('keys', \{ publishable: keys\.styles\.publishable \?\? 'none', secret: keys\.styles\.secret \?\? 'none' \}\)/, 'only which kind of key is logged')
+  for (const line of index.split('\n').filter((l) => /\blog\(/.test(l))) {
+    const args = line.replace(/keys\.styles\.(publishable|secret)/g, '').replace(/\b(publishable|secret): /g, '')
+    assert.ok(!/\b(service|publishable|asService|keys\.(secret|publishable)|key|token)\b/.test(args), `no key is ever logged: ${line.trim()}`)
+  }
+  const keys = code(read('supabase/functions/_shared/keys.ts'))
+  assert.deepEqual([...keys.matchAll(/'(SUPABASE_[A-Z_]+)'/g)].map((m) => m[1]).sort(),
+    ['SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_PUBLISHABLE_KEYS', 'SUPABASE_SECRET_KEY', 'SUPABASE_SECRET_KEYS', 'SUPABASE_SERVICE_ROLE_KEY'])
+  assert.ok(!/console\.|fetch\(/.test(keys), 'keys.ts neither logs nor sends anything')
   // The gateway check is off ON PURPOSE: the function verifies every caller with Supabase Auth.
   assert.match(read('supabase/config.toml'), /\[functions\.avatar\]\nverify_jwt = false/)
-  assert.match(index, /fetch\(`\$\{url\}\/auth\/v1\/user`, \{ headers: \{ apikey: key \?\? anon, Authorization: `Bearer \$\{token\}` \} \}\)/)
+  assert.match(index, /fetch\(`\$\{url\}\/auth\/v1\/user`, \{ headers: \{ apikey: key \?\? publishable, Authorization: `Bearer \$\{token\}` \} \}\)/)
   assert.match(index, /user\.aud === 'authenticated' && user\.role === 'authenticated'/)
-  assert.match(index, /userRpc: \(token, fn, body, key\) => rpc\(key \?\? anon, token, fn, body\)/, 'caller calls use the publishable key (or the anon fallback), never the service key')
 })
 
 test('every request is authenticated with Supabase Auth before anything else', () => {

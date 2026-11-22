@@ -52,6 +52,67 @@ Every response carries `X-Splitpost-Build`: `unstamped` in the repository,
   `photosApproved`, and stays off in the database.
 * **join-waitlist**: never. If it is ever found there, delete it (below).
 
+### API keys (new keys first, legacy keys only as a fallback)
+
+Supabase is retiring the legacy `anon` and `service_role` API keys (its
+documentation says by the end of 2026). The member functions now read the
+new **publishable** and **secret** keys, through
+`supabase/functions/_shared/keys.ts`. No secret is created for this: hosted
+Supabase provides these variables to every function.
+
+| Kind | Read from, in order | Used for | Sent as |
+| --- | --- | --- | --- |
+| publishable | `SUPABASE_PUBLISHABLE_KEYS` (JSON, the key named `default`), `SUPABASE_PUBLISHABLE_KEY`, then the legacy `SUPABASE_ANON_KEY` | the caller's own Auth and database calls, only when the request carries no publishable key (the app always sends one) | `apikey`, with the caller's own token as `Authorization: Bearer` |
+| secret | `SUPABASE_SECRET_KEYS` (JSON, `default`), `SUPABASE_SECRET_KEY`, then the legacy `SUPABASE_SERVICE_ROLE_KEY` | Storage and the service-only (`svc_*`) database steps, after the caller's checks pass | a new secret key on `apikey` **only** (it is not a JWT, and Supabase asks for it on `apikey`, not `Authorization`); the legacy JWT on both headers, as before |
+
+* Only the key named `default` in a dictionary is used, so renaming or
+  deleting the `default` secret key in the dashboard stops the function
+  (503) unless the legacy key is still there. Adding other named keys
+  changes nothing.
+* A value of the wrong shape counts as missing (`sb_publishable_...`,
+  `sb_secret_...`, or a JWT for the legacy keys). With no usable publishable
+  key, or no usable secret key, the function refuses to run: 503
+  `unavailable`, no network call. The verify workflow fails on any 503.
+* At start-up each copy logs one line saying which **kind** of key it holds,
+  for example `{"fn":"avatar","event":"keys","publishable":"new","secret":"new"}`
+  (Edge Functions > Logs). It never logs a key. `"legacy"` there means the
+  project is still on the fallback.
+* Users are still verified by Supabase Auth (`/auth/v1/user`), not by
+  checking JWTs locally. Project isolation, origins, `X-Splitpost-Build`,
+  database-enforced membership and coded errors are unchanged.
+* `keys.ts` is in `_shared/`, so it is part of every function's source digest
+  (join-waitlist's too, which doesn't use it). Only the member functions'
+  behaviour changes.
+
+#### Rollout order (founder-approved, separate from the code change)
+
+Merging the change deploys nothing. Each step below is a normal deploy with
+`scripts/functions/deploy.mjs` and the verify workflow (above and below).
+
+1. **Staging first.** Deploy `avatar`, then `post-media`, at the merged
+   commit. Run **Verify Edge Functions** for each. In the staging dashboard,
+   check each function's start-up log line says `"publishable":"new","secret":"new"`.
+   Then the founder phone test (`docs/AVATARS.md`): upload, view and remove a
+   profile picture; on staging, a photo post and its deletion (`docs/PHOTOS.md`).
+   Record the versions in the ledger by PR, as usual.
+2. **Then member Production** (`brfdqkondnnzsguailcc`), only once staging
+   passed: `avatar` only (post-media stays refused while
+   `postMediaFunctionApproved` is false). Verify, check the log line, record.
+3. **Only then disable the legacy keys**, staging first, and repeat the
+   checks on each project afterwards. Both projects still had their legacy
+   keys in November 2026, so steps 1 and 2 don't depend on them. Disabling
+   them is done in the dashboard (Settings > API Keys); check there that they
+   can be re-enabled before relying on that, since Supabase is removing
+   legacy keys altogether.
+4. **After both projects run without legacy keys**, remove the fallback from
+   `_shared/keys.ts` and its tests in a reviewed PR.
+
+Rollback: while the legacy keys are enabled, rolling back to a commit from
+before this change works as before. **Once a project's legacy keys are
+disabled, every earlier commit answers 503 there**: its ledger entries are
+no longer usable rollback targets, and a rollback must use a commit with
+this change or later.
+
 ## Deploying
 
 Prerequisites, on your own computer: `supabase login` (the token stays on your
@@ -189,6 +250,8 @@ approved deploy.
 * `scripts/functions-deploy.test.mjs`: the deploy script on a throwaway repository with fake `supabase` and `gh`: every refusal (null or inconsistent member identity, the waitlist project, phrases, `--prune` and unknown flags, join-waitlist, commits, identity evidence missing, stale or mismatched, project name or region, unexpected functions, CLI version), post-deploy failures (JWT on, extra function, unchanged version, differing source), rollback authorization (no ledger entry, a verification that failed or doesn't match, a malformed ledger), and deletion (phrases, reason, operator, evidence first, absence).
 * `scripts/e2e/functions-policy-edge.sh`: real Edge runtime copies as staging, a test member reference and refused projects; the verifier passes on correct deployments and catches an unstamped copy, another commit, changed source, a wildcard CORS copy and a refusing copy; join-waitlist answers exactly as main's version on the waitlist project and staging, and on member Production stays closed without reading a secret.
 * `scripts/e2e/functions-policy-local.sh`: through the local gateway, a non-member is refused and an unauthenticated call gets 401 from any Origin, and a member is served the same from allowed and disallowed origins.
+* `supabase/functions/_shared/keys.test.ts`: which key is chosen (new keys first, only `default`, the single-key variables, the legacy fallback, each kind on its own), malformed and missing values (no usable key), and how the secret key is sent (`apikey` only for a new key).
+* `scripts/e2e/avatar-edge.sh` and `scripts/e2e/post-media-edge.sh`: the whole suite runs on a copy started with **only** the new keys, as hosted Supabase provides them; a copy with only the legacy keys still works (fallback); copies with no key, or with only a publishable key and malformed others, refuse to run (503, even the drain with its key); each copy's start-up line names the kind of key it holds, and no copy logs a key or anything shaped like one.
 * `scripts/functions-workflows.test.mjs`: the verify workflow (owner only, no secrets or environment, its own queue, inputs through env only, no deploys), with deliberate breaks; references, approvals, the ledger and the cross-file agreements.
 
 ## Residual risks
@@ -198,6 +261,6 @@ approved deploy.
 * `X-Splitpost-Build` exposes the deployed commit and a source digest to any caller.
 * Emergency deletion skips the approval and database checks by design.
 * Rollback eligibility relies on GitHub run history (deleting old runs removes rollback targets) and on the ledger on main.
-* The new project may not have legacy API keys; the functions would then answer 503 until updated in a reviewed change.
+* API keys: the functions use the new publishable and secret keys, and fall back to the legacy keys only if no new key is present (see API keys above). That a secret key on `apikey` alone acts as `service_role` for Storage and PostgREST is proven on local Supabase (CLI 2.122.1) and follows Supabase's documentation, but on hosted Supabase it is proven only by the staging deploy and phone test (rollout step 1). If the `default` secret key is renamed, deleted or rotated without the legacy key, the functions answer 503 until it is back.
 * The `app.splitpost.ca` CSP must allow the member project when its reference is set (same PR).
 * No photo cleanup schedule on member Production while photos are off.

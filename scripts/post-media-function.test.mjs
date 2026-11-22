@@ -1,7 +1,8 @@
 // Guards for the post-media Edge Function (Build 5.3; node --test, run by npm test).
 //
 // 1. Its jpeg-js is the same reviewed 0.4.4 code as the avatar function's.
-// 2. The avatar function is unchanged by Build 5.3 (byte for byte).
+// 2. The avatar function is unchanged by Build 5.3 (byte for byte; its entry
+//    point since changed only for the project policy and the new API keys).
 // 3. The entry point serves only the staging project (or local Supabase),
 //    verifies every member with Supabase Auth itself, and only the drain
 //    key (compared in constant time) opens the scheduled drain.
@@ -26,13 +27,13 @@ test('the shared jpeg-js is byte for byte the avatar function\'s reviewed copy',
   }
 })
 
-test('the avatar function is unchanged by Build 5.3 (its entry point changed only for the Phase 1B-2 project policy)', () => {
+test('the avatar function is unchanged by Build 5.3 (its entry point changed only for the Phase 1B-2 project policy and the new API keys)', () => {
   assert.deepEqual(
     Object.fromEntries(['handler.ts', 'image.ts', 'index.ts'].map((f) => [f, sha(`supabase/functions/avatar/${f}`)])),
     {
       'handler.ts': '6653dfd6f602378139decabd2dfaddaff2db92a51f40f0e289833f815567d0f3',
       'image.ts': '436fc7c60f391df9baf4f93cbfbb75974d9f97a53e3a510864dde3050fb76a44',
-      'index.ts': '7281337a225f1b63dc2b0ca6750863957dd0f67c8910b375302a3ae8d83c9395',
+      'index.ts': '452efd0391b50a1711fbec8aa364c99d4222ecf6e456f94a1b5d2eda4a08406a',
     },
   )
 })
@@ -48,13 +49,29 @@ test('the entry point serves only the projects the shared policy allows, verifie
   const index = code(read(`${dir}/index.ts`))
   assert.ok(!/'[a-z0-9]{20}'/.test(index), 'no project reference in the entry point (Phase 1B-2: ../_shared/policy.ts)')
   assert.ok(!/vercel\.app|splitpost\.ca/.test(index), 'no origin in the entry point')
-  assert.match(index, /const configured = role !== null && anon !== '' && service !== ''/)
   assert.match(index, /corsHeaders\(role, req\.headers\.get\('origin'\)\)/)
   assert.match(index, /if \(!configured\) \{\s*return respond\(new Response\(JSON\.stringify\(\{ error: 'unavailable' \}\), \{ status: 503/)
   const envs = [...index.matchAll(/env\('([A-Z_]+)'\)/g)].map((m) => m[1]).sort()
-  assert.deepEqual(envs, ['MEDIA_DRAIN_KEY', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL'])
+  assert.deepEqual(envs, ['MEDIA_DRAIN_KEY', 'SUPABASE_URL'], 'the project address and drain key directly; keys only through ../_shared/keys.ts')
+  // Keys (../_shared/keys.ts): the new publishable and secret keys first, the legacy keys only as a fallback.
+  assert.match(index, /const keys = projectKeys\(env\)/)
+  assert.match(index, /const configured = role !== null && publishable !== '' && service !== ''/)
+  assert.match(index, /const asService = serviceHeaders\(service\)/, 'the secret key is sent as keys.ts says (apikey only for a new key)')
+  assert.match(index, /serviceRpc: \(fn, body\) => rpc\(asService, fn, body\)/)
+  assert.match(index, /headers: \{ \.\.\.\(init\.headers \?\? \{\}\), \.\.\.asService \}/, 'Storage gets the service headers last, so nothing overrides them')
+  assert.match(index, /userRpc: \(token, fn, body, key\) => rpc\(\{ apikey: key \?\? publishable, Authorization: `Bearer \$\{token\}` \}, fn, body\)/, 'caller calls use the publishable key, never the secret key')
+  assert.equal((index.match(/\bservice\b/g) ?? []).length, 3, 'the secret key is used only to decide configured and to build the service headers')
+  assert.match(index, /else log\('keys', \{ publishable: keys\.styles\.publishable \?\? 'none', secret: keys\.styles\.secret \?\? 'none' \}\)/, 'only which kind of key is logged')
+  for (const line of index.split('\n').filter((l) => /\blog\(/.test(l))) {
+    const args = line.replace(/keys\.styles\.(publishable|secret)/g, '').replace(/\b(publishable|secret): /g, '')
+    assert.ok(!/\b(service|publishable|asService|keys\.(secret|publishable)|key|token)\b/.test(args), `no key is ever logged: ${line.trim()}`)
+  }
+  const keys = code(read('supabase/functions/_shared/keys.ts'))
+  assert.deepEqual([...keys.matchAll(/'(SUPABASE_[A-Z_]+)'/g)].map((m) => m[1]).sort(),
+    ['SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_PUBLISHABLE_KEYS', 'SUPABASE_SECRET_KEY', 'SUPABASE_SECRET_KEYS', 'SUPABASE_SERVICE_ROLE_KEY'])
+  assert.ok(!/console\.|fetch\(/.test(keys), 'keys.ts neither logs nor sends anything')
   assert.match(read('supabase/config.toml'), /\[functions\.post-media\]\nverify_jwt = false/)
-  assert.match(index, /fetch\(`\$\{url\}\/auth\/v1\/user`, \{ headers: \{ apikey: key \?\? anon, Authorization: `Bearer \$\{token\}` \} \}\)/)
+  assert.match(index, /fetch\(`\$\{url\}\/auth\/v1\/user`, \{ headers: \{ apikey: key \?\? publishable, Authorization: `Bearer \$\{token\}` \} \}\)/)
   assert.match(index, /user\.aud === 'authenticated' && user\.role === 'authenticated'/)
   assert.match(index, /if \(drainKey\.length < 32 \|\| presented\.length !== drainKey\.length\) return false/)
   assert.match(index, /diff \|= drainKey\.charCodeAt\(i\) \^ presented\.charCodeAt\(i\)/, 'constant-time comparison')
