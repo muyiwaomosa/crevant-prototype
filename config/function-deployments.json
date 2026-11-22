@@ -1,4 +1,27 @@
 {
   "_comment": "The ledger of founder-approved Edge Function deployments (Phase 1B-2). An entry is added only by a reviewed PR, after the deployment's independent verification (.github/workflows/verify-functions.yml) has passed, and records the exact target, project reference, function, commit, deployed version, build stamp, the approving founder (a label, never an email), the approval date and the verification run. Rollback (scripts/functions/deploy.mjs rollback) accepts only a commit with an entry here on main AND a successful verification run matching it exactly. A passing verification alone never authorizes anything. docs/FUNCTIONS-DEPLOYMENT.md.",
-  "deployments": []
+  "deployments": [
+    {
+      "target": "staging",
+      "ref": "kpudeppgokpjhvaqrprn",
+      "function": "avatar",
+      "commit": "d2784151ef162e5967851f9d7a8849b7c8a617ef",
+      "version": 4,
+      "build": "d2784151ef162e5967851f9d7a8849b7c8a617ef.6ee3e5d51f2a89b457b54f713529b220baf0af43cfdcf6f14496ea09b8cc0bb1",
+      "approvedBy": "founder",
+      "approvedAt": "2026-11-22",
+      "verifyRunId": 45080766334
+    },
+    {
+      "target": "member-production",
+      "ref": "brfdqkondnnzsguailcc",
+      "function": "avatar",
+      "commit": "d2784151ef162e5967851f9d7a8849b7c8a617ef",
+      "version": 1,
+      "build": "d2784151ef162e5967851f9d7a8849b7c8a617ef.6ee3e5d51f2a89b457b54f713529b220baf0af43cfdcf6f14496ea09b8cc0bb1",
+      "approvedBy": "founder",
+      "approvedAt": "2026-11-22",
+      "verifyRunId": 45081975316
+    }
+  ]
 }
