@@ -4,4 +4,4 @@
 export const STAGING_REF: string = 'kpudeppgokpjhvaqrprn'
 export const WAITLIST_REF: string | null = 'hmrliwoychnqrbbydorg'
 // null until member Production is provisioned: then no function serves it.
-export const MEMBER_PRODUCTION_REF: string | null = 'brfdqkondnnzsguailcc'
+export const MEMBER_PRODUCTION_REF: string | null = 'zjyxtrrzwyvagfjqthin'
