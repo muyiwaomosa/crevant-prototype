@@ -47,10 +47,12 @@ copy() {
   local dir="$TMP/$1"
   mkdir -p "$dir/supabase"
   cp -r supabase/functions "$dir/supabase/functions"
-  if [ "${3:-}" = member ]; then
-    sed -i "s/^export const MEMBER_PRODUCTION_REF: string | null = null$/export const MEMBER_PRODUCTION_REF: string | null = '$MEMBER'/" "$dir/supabase/functions/_shared/projects.ts"
-    grep -q "'$MEMBER'" "$dir/supabase/functions/_shared/projects.ts" || { echo "could not write the test member reference" >&2; exit 1; }
-  fi
+  # Every copy names its own member reference, whatever config records: the
+  # test one, or none (null), so these cases never depend on the real project.
+  local ref=null
+  [ "${3:-}" = member ] && ref="'$MEMBER'"
+  sed -i "s/^export const MEMBER_PRODUCTION_REF: string | null = .*$/export const MEMBER_PRODUCTION_REF: string | null = $ref/" "$dir/supabase/functions/_shared/projects.ts"
+  grep -qx "export const MEMBER_PRODUCTION_REF: string | null = $ref" "$dir/supabase/functions/_shared/projects.ts" || { echo "could not write the member reference ($ref) into the copy" >&2; exit 1; }
   local digest; digest=$(node scripts/functions/source-digest.mjs "$dir" "$2")
   printf "export const BUILD = '%s.%s'\n" "$COMMIT" "$digest" > "$dir/supabase/functions/_shared/build-info.ts"
   echo "$dir"
