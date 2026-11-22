@@ -168,7 +168,7 @@ function fakeApi(
   const storage = { unused: 0, bytes: 0, plans: new Map<string, string>() }
   const shared = (id: string) => detailsOf(id).topics.filter((t) => detailsOf(meId).topics.includes(t)).length
   // Pilot membership (20261122000000): active unless a test says otherwise.
-  const access: { status: 'active' | 'none' | 'revoked' | 'expired'; expiresAt: string | null } = { status: 'active', expiresAt: null }
+  const access: { status: 'active' | 'none' | 'revoked' | 'expired'; expiresAt: string | null; registration?: 'closed' | 'not_confirmed' | 'retry' } = { status: 'active', expiresAt: null }
   const maybeFail = (name: keyof AppApi) => {
     if (failures[name]) throw failures[name]
   }
@@ -176,7 +176,7 @@ function fakeApi(
   const api: AppApi = {
     async accessState() {
       maybeFail('accessState')
-      return { status: access.status, expiresAt: access.expiresAt }
+      return { status: access.status, expiresAt: access.expiresAt, ...(access.registration ? { registration: access.registration } : {}) }
     },
     async ownProfile(): Promise<OwnProfile | null> {
       const u = users.get(meId)
@@ -747,6 +747,33 @@ describe('data layer helpers', () => {
     })
     expect(p).toMatchObject({ likeCount: 3, commentCount: 2, author: { username: 'aye', displayName: 'Aye' } })
   })
+})
+
+describe('open beta (20261130000000): after the automatic claim', () => {
+  for (const [registration, text, retry] of [
+    ['closed', "Splitpost isn't open for new members yet. Please check back soon.", true],
+    ['retry', "We couldn't set up your access just now. Please try again.", true],
+    ['not_confirmed', 'Confirm your email address first, using the link we sent you.', false],
+  ] as const) {
+    it(`${registration}: explains it${retry ? ', and Try again checks once more' : ''}, loading no member data`, async () => {
+      const { api, access } = fakeApi()
+      access.status = 'none'
+      access.registration = registration
+      const accessState = vi.spyOn(api, 'accessState')
+      const feed = vi.spyOn(api, 'feed')
+      renderApp('/app', api)
+      expect(await screen.findByText(text)).toBeTruthy()
+      expect(feed).not.toHaveBeenCalled()
+      const button = screen.queryByRole('button', { name: 'Try again' })
+      expect(Boolean(button)).toBe(retry)
+      if (button) {
+        access.status = 'active'
+        delete access.registration
+        fireEvent.click(button)
+        await waitFor(() => expect(accessState).toHaveBeenCalledTimes(2))
+      }
+    })
+  }
 })
 
 describe('pilot membership (20261122000000): signed in is not enough', () => {

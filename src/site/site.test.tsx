@@ -6,7 +6,7 @@ import { SiteRoutes } from './SiteApp'
 import { PublicRoutes } from '../public/PublicApp'
 
 // Pages that exist only in the full app, for invited members.
-const MEMBER_PATHS = ['/sign-in', '/forgot-password', '/auth/confirm', '/auth/set-password', '/app', '/app/account', '/app/anything']
+const MEMBER_PATHS = ['/sign-in', '/sign-up', '/beta-privacy', '/community-rules', '/forgot-password', '/auth/confirm', '/auth/set-password', '/app', '/app/account', '/app/anything']
 
 function Where() {
   return <span data-testid="where">{useLocation().pathname}</span>

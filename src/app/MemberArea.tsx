@@ -38,7 +38,7 @@ function Gate() {
       </Frame>
     )
   }
-  if (status.kind === 'no_access') return <NoPilotAccess status={status.access.status} />
+  if (status.kind === 'no_access') return <NoPilotAccess status={status.access.status} registration={status.access.registration} onRetry={reload} />
   if (status.kind === 'access_error') {
     return (
       <Frame>
@@ -116,12 +116,28 @@ function FirstTimeSetup({ children }: { children: ReactNode }) {
  * expired). The database refuses every member function for this account, so
  * nothing else is loaded; this only explains it.
  */
-export function NoPilotAccess({ status }: { status: 'none' | 'revoked' | 'expired' | 'active' }) {
+export function NoPilotAccess({ status, registration, onRetry }: { status: 'none' | 'revoked' | 'expired' | 'active'; registration?: 'closed' | 'not_confirmed' | 'retry'; onRetry?: () => Promise<void> }) {
   const { session, client } = useAuth()
   const navigate = useNavigate()
   const [signingOut, setSigningOut] = useState(false)
   // Revoked and expired read the same, so the screen never says why access ended.
-  const detail = status === 'none' ? "Your account hasn't been approved for the Splitpost pilot yet." : 'Your pilot access has ended.'
+  const detail =
+    status !== 'none'
+      ? 'Your pilot access has ended.'
+      : registration === 'closed'
+        ? "Splitpost isn't open for new members yet. Please check back soon."
+        : registration === 'not_confirmed'
+          ? 'Confirm your email address first, using the link we sent you.'
+          : registration === 'retry'
+            ? "We couldn't set up your access just now. Please try again."
+            : "Your account hasn't been approved for the Splitpost pilot yet."
+  const [retrying, setRetrying] = useState(false)
+  async function retry() {
+    if (!onRetry || retrying) return
+    setRetrying(true)
+    await onRetry()
+    setRetrying(false)
+  }
   async function signOut() {
     if (!client || signingOut) return
     setSigningOut(true)
@@ -140,6 +156,11 @@ export function NoPilotAccess({ status }: { status: 'none' | 'revoked' | 'expire
       >
         <div className="space-y-5" data-testid="no-pilot-access" data-status={status}>
           <Message tone="info">{detail}</Message>
+          {status === 'none' && registration && registration !== 'not_confirmed' && onRetry && (
+            <button type="button" onClick={retry} disabled={retrying} className={`${buttonClass('secondary')} w-full`}>
+              {retrying ? 'Checking…' : 'Try again'}
+            </button>
+          )}
           <button type="button" onClick={signOut} disabled={signingOut} className={`${buttonClass('primary')} w-full`}>
             {signingOut ? 'Signing out…' : 'Sign out'}
           </button>

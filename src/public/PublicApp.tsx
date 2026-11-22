@@ -12,6 +12,9 @@ import { PublicNotFound } from './PublicNotFound'
 import { PrivacyPage } from './PrivacyPage'
 import { PilotAccessPage } from './PilotAccessPage'
 import { SignInPage } from './auth/SignInPage'
+import { SignUpPage } from './auth/SignUpPage'
+import { BetaDocumentPage } from './beta/BetaDocumentPage'
+import { BETA_PRIVACY_NOTICE, COMMUNITY_RULES } from './beta/documents'
 import { ForgotPasswordPage } from './auth/ForgotPasswordPage'
 import { ConfirmPage } from './auth/ConfirmPage'
 import { SetPasswordPage } from './auth/SetPasswordPage'
@@ -84,6 +87,9 @@ function AllRoutes() {
         <Route path="join/creator" element={<Navigate to="/join" replace />} />
         <Route path="join/supporter" element={<Navigate to="/join" replace />} />
         <Route path="sign-in" element={<SignInPage />} />
+        <Route path="sign-up" element={<SignUpPage />} />
+        <Route path="beta-privacy" element={<BetaDocumentPage title="Beta Privacy Notice" doc={BETA_PRIVACY_NOTICE} backTo="/" />} />
+        <Route path="community-rules" element={<BetaDocumentPage title="Community Rules" doc={COMMUNITY_RULES} backTo="/" />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />
         <Route path="auth/set-password" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />
@@ -108,6 +114,9 @@ function MemberHostRoutes() {
     <Routes>
       <Route element={<MemberHostLayout account={<AccountNavLink />} />}>
         <Route path="sign-in" element={<SignInPage />} />
+        <Route path="sign-up" element={<SignUpPage />} />
+        <Route path="beta-privacy" element={<BetaDocumentPage title="Beta Privacy Notice" doc={BETA_PRIVACY_NOTICE} />} />
+        <Route path="community-rules" element={<BetaDocumentPage title="Community Rules" doc={COMMUNITY_RULES} />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />
         <Route path="auth/set-password" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />

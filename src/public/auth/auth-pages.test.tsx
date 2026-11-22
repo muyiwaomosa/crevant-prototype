@@ -7,6 +7,7 @@ import { AuthProvider } from '../../auth/AuthProvider'
 import { PublicRoutes } from '../PublicApp'
 import { RESET_SENT_MESSAGE } from './ForgotPasswordPage'
 import { readEmailLink } from './ConfirmPage'
+import { SIGN_UP_SENT_MESSAGE, SignUpPage } from './SignUpPage'
 import { passwordProblem } from './SetPasswordPage'
 
 const TOKEN = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c'
@@ -30,7 +31,8 @@ function makeClient({ session = null as unknown, profile = { id: 'user-1', creat
       signInWithPassword: vi.fn(async () => ({ data: { session: SESSION }, error: null })),
       resetPasswordForEmail: vi.fn(async () => ({ data: {}, error: null })),
       signOut: vi.fn(async () => ({ error: null })),
-      signUp: vi.fn(),
+      signUp: vi.fn(async () => ({ data: { user: null, session: null }, error: null })),
+      resend: vi.fn(async () => ({ data: {}, error: null })),
       signInWithOtp: vi.fn(),
     },
     from: vi.fn(() => ({ select })),
@@ -72,9 +74,10 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('email links (/auth/confirm)', () => {
-  it('reads only invite and recovery links with a plausible code', () => {
+  it('reads only invite, recovery and sign-up confirmation links with a plausible code', () => {
     expect(readEmailLink(`#token_hash=${TOKEN}&type=invite`)).toEqual({ tokenHash: TOKEN, type: 'invite' })
     expect(readEmailLink(`#token_hash=${TOKEN}&type=recovery`)?.type).toBe('recovery')
+    expect(readEmailLink(`#token_hash=${TOKEN}&type=email`)?.type).toBe('email')
     expect(readEmailLink(`#token_hash=${TOKEN}&type=signup`)).toBeNull()
     expect(readEmailLink(`#token_hash=${TOKEN}&type=magiclink`)).toBeNull()
     expect(readEmailLink('#token_hash=short&type=invite')).toBeNull()
@@ -163,18 +166,30 @@ describe('choosing a password', () => {
 })
 
 describe('sign in', () => {
-  it('has email and password fields and no sign-up option', async () => {
+  it('has email and password fields and a link to create an account (open beta)', async () => {
     renderAt('/sign-in', makeClient())
     expect(await screen.findByLabelText('Email address')).toBeTruthy()
     expect(screen.getByLabelText('Password')).toBeTruthy()
-    expect(document.body.textContent).not.toMatch(/sign up|create (an )?account|register/i)
-    expect(document.body.textContent).toContain("there's no public sign-up")
+    expect(screen.getByRole('link', { name: 'Create an account' }).getAttribute('href')).toBe('/sign-up')
+  })
+
+  it('an unconfirmed email (known only once the password matched) offers to send the link again', async () => {
+    const client = makeClient()
+    client.auth.signInWithPassword.mockResolvedValueOnce({ data: { session: null }, error: { code: 'email_not_confirmed', status: 400 } } as never)
+    renderAt('/sign-in', client)
+    fireEvent.change(await screen.findByLabelText('Email address'), { target: { value: 'new@example.test' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'whatever-123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Confirm your email address first/)
+    fireEvent.click(screen.getByRole('button', { name: 'Send the confirmation link again' }))
+    await waitFor(() => expect(client.auth.resend).toHaveBeenCalledWith({ type: 'signup', email: 'new@example.test', options: { emailRedirectTo: `${window.location.origin}/auth/confirm` } }))
+    expect(await screen.findByText(/a new confirmation link is on its way/)).toBeTruthy()
   })
 
   it('shows the same message for a wrong password and an unknown email', async () => {
     const client = makeClient()
     const messages: string[] = []
-    for (const code of ['invalid_credentials', 'email_not_confirmed']) {
+    for (const code of ['invalid_credentials', 'user_not_found']) {
       client.auth.signInWithPassword.mockResolvedValueOnce({ data: { session: null }, error: { code, status: 400 } } as never)
       renderAt('/sign-in', client)
       fireEvent.change(await screen.findByLabelText('Email address'), { target: { value: 'x@example.test' } })
@@ -289,13 +304,102 @@ describe('signed-in pages', () => {
   })
 })
 
-describe('there is no way to register', () => {
-  it('has no sign-up route', async () => {
-    for (const path of ['/sign-up', '/signup', '/register']) {
+describe('registration (open beta)', () => {
+  it('/sign-up stays closed until the beta privacy notice and community rules are approved; no other registration path', async () => {
+    const client = makeClient()
+    renderAt('/sign-up', client)
+    expect(await screen.findByRole('heading', { name: 'Sign-up opens soon' })).toBeTruthy()
+    expect(document.querySelector('form, input')).toBeNull()
+    cleanup()
+    for (const path of ['/signup', '/register']) {
       renderAt(path, makeClient())
       expect(await screen.findByText('Page not found')).toBeTruthy()
       cleanup()
     }
+    expect(client.auth.signUp).not.toHaveBeenCalled()
+  })
+
+  it('the beta documents say they will be published, never show draft text', async () => {
+    for (const [path, title] of [['/beta-privacy', 'Beta Privacy Notice'], ['/community-rules', 'Community Rules']] as const) {
+      renderAt(path, makeClient())
+      expect(await screen.findByRole('heading', { level: 1, name: title })).toBeTruthy()
+      expect(screen.getByTestId('beta-document-not-published')).toBeTruthy()
+      cleanup()
+    }
+  })
+
+  function renderSignUp(client: Fake) {
+    return render(
+      <AuthProvider client={client as unknown as SupabaseClient | null}>
+        <MemoryRouter initialEntries={['/sign-up']}>
+          <SignUpPage open />
+          <WhereAmI />
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+  }
+  async function fill({ email = 'new@example.test', password = 'a long password 42', confirm, adult = true, agreed = true }: { email?: string; password?: string; confirm?: string; adult?: boolean; agreed?: boolean } = {}) {
+    confirm ??= password
+    fireEvent.change(await screen.findByLabelText('Email address'), { target: { value: email } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } })
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: confirm } })
+    if (adult) fireEvent.click(screen.getByLabelText('I am 18 or older.'))
+    if (agreed) fireEvent.click(screen.getByRole('checkbox', { name: /community rules/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
+  }
+
+  it('once open: registers with the confirmation link pointing back to this site, then says to check email', async () => {
+    const client = makeClient()
+    renderSignUp(client)
+    await fill()
+    await waitFor(() =>
+      expect(client.auth.signUp).toHaveBeenCalledWith({ email: 'new@example.test', password: 'a long password 42', options: { emailRedirectTo: `${window.location.origin}/auth/confirm` } }),
+    )
+    expect(await screen.findByText(SIGN_UP_SENT_MESSAGE)).toBeTruthy()
+  })
+
+  it('requires 18 or older, the community rules, a valid email and matching passwords before sending anything', async () => {
+    for (const [input, message] of [
+      [{ adult: false }, /18 or older/],
+      [{ agreed: false }, /community rules/],
+      [{ email: 'not-an-email' }, /email address/],
+      [{ confirm: 'something else 42' }, /don't match/],
+      [{ password: 'short', confirm: 'short' }, /at least/],
+    ] as const) {
+      const client = makeClient()
+      renderSignUp(client)
+      await fill(input)
+      expect((await screen.findByRole('alert')).textContent).toMatch(message)
+      expect(client.auth.signUp).not.toHaveBeenCalled()
+      cleanup()
+    }
+  })
+
+  it('never reveals whether an address already has an account; says plainly when sign-up is off or rate limited', async () => {
+    for (const [error, expected] of [
+      [{ code: 'user_already_exists', status: 422 }, SIGN_UP_SENT_MESSAGE],
+      [{ code: 'unexpected_failure', status: 500 }, SIGN_UP_SENT_MESSAGE],
+      [{ code: 'signup_disabled', status: 422 }, "Sign-up isn't open yet. Please check back soon."],
+      [{ code: 'over_email_send_rate_limit', status: 429 }, 'Too many attempts. Please wait a few minutes and try again.'],
+    ] as const) {
+      const client = makeClient()
+      client.auth.signUp.mockResolvedValueOnce({ data: { user: null, session: null }, error } as never)
+      renderSignUp(client)
+      await fill()
+      expect(await screen.findByText(expected)).toBeTruthy()
+      cleanup()
+    }
+  })
+
+  it('the confirmation link (type email) is verified only on Continue, then goes to the members area', async () => {
+    const client = makeClient()
+    renderAt(`/auth/confirm#token_hash=${TOKEN}&type=email`, client)
+    expect(await screen.findByRole('heading', { name: 'Confirm your email' })).toBeTruthy()
+    expect(client.auth.verifyOtp).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(client.auth.verifyOtp).toHaveBeenCalledWith({ token_hash: TOKEN, type: 'email' }))
+    act(() => client.emit('SIGNED_IN', SESSION))
+    await waitFor(() => expect(where.split('?')[0]).toBe('/app'))
   })
   it('/join is the waitlist information page: no form, no password, no account creation', async () => {
     const client = makeClient()

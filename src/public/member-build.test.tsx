@@ -96,7 +96,7 @@ describe('a member app build on a Preview address', () => {
     renderAt('/sign-in')
     await screen.findByRole('heading', { level: 1 })
     for (const a of document.querySelectorAll('a')) {
-      expect(['/app', '/sign-in', '/forgot-password', '/privacy', 'https://www.splitpost.ca', '#main']).toContain(a.getAttribute('href'))
+      expect(['/app', '/sign-in', '/sign-up', '/forgot-password', '/privacy', 'https://www.splitpost.ca', '#main']).toContain(a.getAttribute('href'))
     }
     expect(screen.getByTestId('public-site-link').getAttribute('href')).toBe('https://www.splitpost.ca')
   })

@@ -10,8 +10,9 @@ import { MEMBER_APP_BUILD } from './build-flags'
  *    Production" on a preview, visitors get only the sample-data prototype at
  *    the root, exactly like the demo, and never the public site or sign in.
  *  - "member": the member app address (app.splitpost.ca). Only the member
- *    pages are served there: the members area, sign in, password reset, the
- *    invitation link and the privacy notice. Every other path (the landing
+ *    pages are served there: the members area, sign in, sign up (open beta),
+ *    password reset, the invitation link, the privacy notices and the
+ *    community rules. Every other path (the landing
  *    page, the waitlist, the sample tour) goes to /app, which asks for sign
  *    in. Never indexed.
  *  - "tour": the sample-data prototype under /tour.
@@ -29,7 +30,7 @@ export const MEMBER_APP_HOSTS = ['app.splitpost.ca']
  * (/auth/confirm#token_hash=...) is one of them, so its fragment is never
  * touched by a redirect.
  */
-const MEMBER_APP_PATHS = [/^\/app(\/.*)?$/, /^\/sign-in\/?$/, /^\/forgot-password\/?$/, /^\/auth\/confirm\/?$/, /^\/auth\/set-password\/?$/, /^\/privacy\/?$/]
+const MEMBER_APP_PATHS = [/^\/app(\/.*)?$/, /^\/sign-in\/?$/, /^\/sign-up\/?$/, /^\/beta-privacy\/?$/, /^\/community-rules\/?$/, /^\/forgot-password\/?$/, /^\/auth\/confirm\/?$/, /^\/auth\/set-password\/?$/, /^\/privacy\/?$/]
 
 /** Where everything else on the member app address goes. */
 export const MEMBER_APP_HOME = '/app'

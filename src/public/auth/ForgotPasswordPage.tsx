@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { buttonClass } from '../../components/ui'
 import { useAuth } from '../../auth/AuthProvider'
+import { CAPTCHA_NEEDED, CaptchaBox, useCaptcha } from '../../auth/captcha'
 import { AuthCard, Field, Message, Unavailable } from './AuthUi'
 
 export const RESET_SENT_MESSAGE =
@@ -17,6 +18,7 @@ export function ForgotPasswordPage() {
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const captcha = useCaptcha()
 
   if (!client) return <Unavailable />
 
@@ -27,13 +29,18 @@ export function ForgotPasswordPage() {
       setError('Enter the email address you use for Splitpost.')
       return
     }
+    if (captcha.enabled && !captcha.token) {
+      setError(CAPTCHA_NEEDED)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
-      await client.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/auth/confirm` })
+      await client.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/auth/confirm`, ...(captcha.token ? { captchaToken: captcha.token } : {}) })
     } catch {
       // Same message either way.
     }
+    captcha.reset()
     setBusy(false)
     setSent(true)
   }
@@ -51,6 +58,7 @@ export function ForgotPasswordPage() {
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
           {error && <Message tone="error">{error}</Message>}
           <Field id="email" label="Email address" type="email" autoComplete="username" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <CaptchaBox captcha={captcha} />
           <button type="submit" disabled={busy} className={`${buttonClass('primary', 'lg')} w-full`}>
             {busy ? 'Sending…' : 'Send reset link'}
           </button>
