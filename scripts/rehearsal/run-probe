@@ -1,0 +1,4 @@
+# Rehearsal only. Changing this file on rehearsal/members-disposable arms the
+# waitlist login denial probe once; it still waits for members-rehearsal approval.
+project_ref=zjyxtrrzwyvagfjqthin
+reviewed_commit=59995206c9b09ac0e97eebc4997a5d137c59b4b9
