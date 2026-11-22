@@ -228,9 +228,18 @@ test('unit: project identity, database identity evidence and verification runs',
   }
 })
 
-test('unit: the ledger is strict, and empty in this PR', () => {
-  assert.deepEqual(ledgerProblems(JSON.parse(readFileSync(join(SRC, 'config/function-deployments.json'), 'utf8'))), [])
-  assert.equal(JSON.parse(readFileSync(join(SRC, 'config/function-deployments.json'), 'utf8')).deployments.length, 0)
+test('unit: the ledger is strict, and holds exactly the approved deployments', () => {
+  const ledger = JSON.parse(readFileSync(join(SRC, 'config/function-deployments.json'), 'utf8'))
+  assert.deepEqual(ledgerProblems(ledger), [])
+  // avatar at d2784151 (PR #102's merge): staging v4 (verify run 45080766334)
+  // and member Production v1 (verify run 45081975316), both serving the same
+  // runner-observed build. Any change here needs a reviewed PR (the founder's approval).
+  const approved = 'd2784151ef162e5967851f9d7a8849b7c8a617ef'
+  assert.deepEqual(ledger.deployments.map((e) => [e.target, e.ref, e.function, e.commit, e.version, e.build, e.verifyRunId]), [
+    ['staging', 'kpudeppgokpjhvaqrprn', 'avatar', approved, 4, `${approved}.6ee3e5d51f2a89b457b54f713529b220baf0af43cfdcf6f14496ea09b8cc0bb1`, 45080766334],
+    ['member-production', 'brfdqkondnnzsguailcc', 'avatar', approved, 1, `${approved}.6ee3e5d51f2a89b457b54f713529b220baf0af43cfdcf6f14496ea09b8cc0bb1`, 45081975316],
+  ])
+  assert.ok(ledger.deployments.every((e) => e.function === 'avatar'), 'post-media is not approved anywhere')
   const c = 'c'.repeat(40)
   const good = { target: 'member-production', ref: MEMBER, function: 'avatar', commit: c, version: 2, build: `${c}.${'d'.repeat(64)}`, approvedBy: 'founder', approvedAt: '2026-12-01', verifyRunId: 9 }
   assert.deepEqual(ledgerProblems({ deployments: [good] }), [])
