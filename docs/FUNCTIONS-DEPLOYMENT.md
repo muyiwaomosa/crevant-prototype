@@ -10,8 +10,9 @@ both projects, serving build `d2784151….6ee3e5d5…` (the commit's bytes):
 staging v4 (verify run `45080766334`) and member Production v1 (verify run
 `45081975316`; an earlier run, `45081485385`, failed one check with a 504 and
 is recorded in the evidence log). Staging v3 (CRLF export) was replaced by v4.
-`postMediaFunctionApproved` is false; post-media is deployed nowhere by these
-tools. The ledger holds exactly these two entries.
+`postMediaFunctionApproved` is true (founder-only photos), but post-media is
+not yet deployed by these tools anywhere; that follows the steps in
+`docs/PHOTOS.md`. The ledger holds exactly these two entries.
 
 ## What protects what
 
@@ -46,12 +47,12 @@ Every response carries `X-Splitpost-Build`: `unstamped` in the repository,
 
 ### Scope on member Production
 
-* **avatar**: the default and only function deployable there.
-* **post-media**: Production compatible and fully tested, but refused by the
-  deploy script and the verifier while `postMediaFunctionApproved` is false in
-  `config/member-production.json`. Changing that needs a reviewed PR (separate
-  founder approval). It allows the deploy only: photo posting still needs
-  `photosApproved`, and stays off in the database.
+* **avatar**: deployable there.
+* **post-media**: deployable there, because `postMediaFunctionApproved` is
+  true in `config/member-production.json` (founder-only photos, reviewed PR).
+  It allows the deploy only: photo posting stays off in the database until
+  the founder-only steps in `docs/PHOTOS.md` pass. Set back to false, the
+  deploy script and the verifier refuse it again.
 * **join-waitlist**: never. If it is ever found there, delete it (below).
 
 ## Deploying

@@ -387,9 +387,9 @@ guard "member deploy: apply-foundation pushes only the foundation set, apply ref
 guard "member activation: only the activation workflow runs the member activation SQL" \
   "[ \"\$(grep -l 'members-activate-member-access.sql' .github/workflows/*.yml | paste -sd,)\" = '.github/workflows/members-activate-member-access.yml' ]"
 guard "member workflows: never name the staging or waitlist secrets, environments or target checks" \
-  "! grep -qE 'STAGING_DATABASE_URL|(^|[^A-Z_])PRODUCTION_DATABASE_URL|WAITLIST_ADMIN_DATABASE_URL|environment: (staging|production)\$|verify-(staging|production)-target' $mw .github/workflows/members-activate-member-access.yml"
+  "! grep -qE 'STAGING_DATABASE_URL|(^|[^A-Z_])PRODUCTION_DATABASE_URL|WAITLIST_ADMIN_DATABASE_URL|environment: (staging|production)\$|verify-(staging|production)-target' $mw .github/workflows/members-activate-member-access.yml .github/workflows/members-photo-cleanup.yml"
 guard "staging and waitlist workflows: never name a member Production secret, environment or script" \
-  "! grep -lE 'MEMBERS_|members-production|verify-members-|members-subset|members-lock' \$(ls .github/workflows/*.yml | grep -v -e deploy-db-members-production.yml -e members-activate-member-access.yml)"
+  "! grep -lE 'MEMBERS_|members-production|verify-members-|members-subset|members-lock' \$(ls .github/workflows/*.yml | grep -v -e deploy-db-members-production.yml -e members-activate-member-access.yml -e members-photo-cleanup.yml)"
 
 # The activation installs membership and the launch gate in one transaction:
 # the sets check refuses an activation without the gate, or with the gate

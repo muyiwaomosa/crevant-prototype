@@ -160,11 +160,13 @@ for (const [file, ruleName, breakIt] of BREAKS) {
   })
 }
 
-test('the approvals stay false, and the member Production project reference is recorded', () => {
+test('founder-only photos are approved, invitations stay off, and the member Production project reference is recorded', () => {
   const approvals = JSON.parse(read('config/member-production.json'))
-  assert.equal(approvals.photosApproved, false)
-  assert.equal(approvals.invitationsApproved, false)
-  assert.equal(approvals.postMediaFunctionApproved, false, 'post-media is not approved for member Production (Phase 1B-2)')
+  // Approving allows the recorded steps only: photo posting stays off in the
+  // database until the founder's gate, and limited to the founder (docs/PHOTOS.md).
+  assert.equal(approvals.photosApproved, true)
+  assert.equal(approvals.invitationsApproved, false, 'external members stay out')
+  assert.equal(approvals.postMediaFunctionApproved, true, 'post-media may be deployed to member Production (founder-only photos)')
   assert.deepEqual(Object.keys(approvals).filter((k) => !k.startsWith('_')).sort(), ['invitationsApproved', 'photosApproved', 'postMediaFunctionApproved'])
   assert.match(JSON.parse(read('config/supabase-projects.json')).memberProduction.ref, /^[a-z]{20}$/)
 })

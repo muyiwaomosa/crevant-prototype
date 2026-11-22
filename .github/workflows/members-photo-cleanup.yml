@@ -1,0 +1,138 @@
+name: Photo cleanup schedule on member Production
+run-name: member photo cleanup ${{ inputs.mode }} at ${{ inputs.expected_commit }}
+
+# The MEMBER Production photo cleanup job (splitpost-members-production only):
+# every 15 minutes pg_cron calls the post-media function's drain with the key
+# from Vault, so deleted photo files are removed by the server
+# (scripts/db/members-photo-cleanup.sh, scripts/db/members-schedule-media-drain.sql).
+#
+#   verify  (default) Read only. The cleanup job and its runs, each matched to
+#           the post-media function's own record of its drain pass.
+#   check   Everything in one transaction, rolled back; nothing may change.
+#   apply   Needs the phrase SCHEDULE THE MEMBER PRODUCTION PHOTO CLEANUP.
+#           Installs the job (and pg_cron and http, if needed), then waits for
+#           the first scheduled run (up to 18 minutes) and verifies it end to
+#           end. If that can't be verified, the run fails and reports the job
+#           as INSTALLED BUT UNVERIFIED: it is not rolled back.
+#   remove  Pause. Needs the phrase UNSCHEDULE THE MEMBER PRODUCTION PHOTO CLEANUP.
+#           Unschedules only the cleanup job; Run cleanup now keeps working.
+#
+# It never turns photo posting on or changes any photo setting, and never
+# installs pg_net (refused if present).
+#
+# Safety, none depending on the others:
+#   * Owner only (github.actor and github.triggering_actor), main only, and
+#     expected_commit must equal the commit being run.
+#   * The members-production environment (required reviewer) holds the only
+#     credentials. A first job with no environment refuses if they are visible
+#     at repository or organization level.
+#   * The target: memberProduction.ref, the MEMBERS_PROJECT_REF variable, the
+#     typed reference and the URL must agree (scripts/db/verify-members-target.sh).
+#   * The database identity marker, checked before anything else connects
+#     (scripts/db/verify-members-identity.sh).
+#   * Full TLS verification (verify-full, committed CA).
+#   * The scheduler script must match the checksum pinned in the wrapper.
+#   * Shares the member database queue, so it never overlaps a member deploy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "verify = read only. check = rolled back. apply = install and verify the first run (needs the phrase). remove = pause (needs the phrase)."
+        type: choice
+        options:
+          - verify
+          - check
+          - apply
+          - remove
+        default: verify
+        required: true
+      expected_commit:
+        description: "The full commit SHA you reviewed (must equal the commit this run uses)"
+        type: string
+        required: true
+      confirm_project_ref:
+        description: "Type the member Production project reference to confirm"
+        type: string
+        required: true
+      confirm_phrase:
+        description: "apply: SCHEDULE THE MEMBER PRODUCTION PHOTO CLEANUP. remove: UNSCHEDULE THE MEMBER PRODUCTION PHOTO CLEANUP. verify and check: leave empty."
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-members-production
+  cancel-in-progress: false
+
+jobs:
+  # No environment on purpose: this job sees only repository and organization
+  # secrets, never the members-production environment's.
+  secret-scope:
+    name: Refuse member Production secrets stored outside their environment
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - name: Refuse if a member Production secret exists at repository or organization level
+        env:
+          OUTSIDE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          OUTSIDE_MARKER: ${{ secrets.MEMBERS_DB_IDENTITY_MARKER }}
+        run: |
+          if [ -n "$OUTSIDE_URL$OUTSIDE_MARKER" ]; then
+            echo "::error::A member Production secret is set at repository or organization level. Only the members-production environment may hold it. Delete that secret. Nothing was done."
+            exit 1
+          fi
+
+      - name: The run is at the reviewed commit
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          RUN_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::expected_commit must be a full 40 character commit SHA. Nothing was done."; exit 1; }
+          [ "$EXPECTED_COMMIT" = "$RUN_COMMIT" ] || { echo "::error::This run uses $RUN_COMMIT, not the reviewed commit $EXPECTED_COMMIT. Nothing was done."; exit 1; }
+
+  schedule:
+    name: Photo cleanup schedule on member Production (${{ inputs.mode }})
+    needs: secret-scope
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: members-production
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved member Production project (connects to nothing)
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_PROJECT_REF: ${{ vars.MEMBERS_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: scripts/db/verify-members-target.sh
+
+      - name: Verify the database identity marker (the first connection; read only)
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_DB_IDENTITY_MARKER: ${{ secrets.MEMBERS_DB_IDENTITY_MARKER }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/verify-members-identity.sh
+
+      - name: Photo cleanup schedule (verify, check, apply or pause)
+        env:
+          MEMBERS_PRODUCTION_DATABASE_URL: ${{ secrets.MEMBERS_PRODUCTION_DATABASE_URL }}
+          MEMBERS_PROJECT_REF: ${{ vars.MEMBERS_PROJECT_REF }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+          MODE: ${{ inputs.mode }}
+          CONFIRM_PHRASE: ${{ inputs.confirm_phrase }}
+          PGCONNECT_TIMEOUT: '15'
+        run: scripts/db/members-photo-cleanup.sh

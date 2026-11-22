@@ -109,6 +109,8 @@ start() {
 CFG="$TMP/config-root"
 mkdir -p "$CFG/config"
 cp config/member-production.json "$CFG/config/"
+# This root keeps post-media unapproved (whatever main records), to show the verifier refuses it then.
+node -e "const fs = require('fs'); const p = '$CFG/config/member-production.json'; const m = JSON.parse(fs.readFileSync(p, 'utf8')); m.postMediaFunctionApproved = false; fs.writeFileSync(p, JSON.stringify(m))"
 node -e "
 const fs = require('fs'); const c = JSON.parse(fs.readFileSync('config/supabase-projects.json', 'utf8'))
 c.memberProduction = { ref: '$MEMBER', name: 'splitpost-members-production', region: 'ca-central-1' }

@@ -78,14 +78,14 @@ test('the committed references match config, and functions read references only 
   assert.equal(read('supabase/functions/_shared/build-info.ts').match(/export const BUILD = '([^']*)'/)[1], 'unstamped', 'the repository copy is never stamped')
 })
 
-test('member Production is recorded (one valid project, not staging or the waitlist), avatar only, with only avatar in the ledger', () => {
+test('member Production is recorded (one valid project, not staging or the waitlist), founder-only photos approved, only avatar in the ledger', () => {
   const p = JSON.parse(read('config/supabase-projects.json'))
   assert.match(p.memberProduction.ref, /^[a-z]{20}$/)
   assert.ok(![p.staging.ref, p.production.ref].includes(p.memberProduction.ref))
   assert.deepEqual({ name: p.memberProduction.name, region: p.memberProduction.region }, { name: 'splitpost-members-production', region: 'ca-central-1' })
   const a = JSON.parse(read('config/member-production.json'))
-  assert.equal(a.postMediaFunctionApproved, false)
-  assert.equal(a.photosApproved, false)
+  assert.equal(a.postMediaFunctionApproved, true, 'founder-only photos: post-media may be deployed')
+  assert.equal(a.photosApproved, true, 'founder-only photos: the switch may be turned on after its gate')
   assert.equal(a.invitationsApproved, false)
   const ledger = JSON.parse(read('config/function-deployments.json'))
   assert.deepEqual(ledgerProblems(ledger), [])
