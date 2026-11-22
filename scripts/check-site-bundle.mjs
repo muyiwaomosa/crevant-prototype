@@ -25,7 +25,8 @@ export const FORBIDDEN = [
   ['member page text', /Your profile is ready|Sign out of all devices|Set your password/],
   // The member app address's routes and layout (src/public/PublicApp.tsx,
   // MemberHostLayout.tsx): full app only, never the public site.
-  ['member app address code', /app\.splitpost\.ca|member-host-(header|footer)|data-testid="public-site-link"|public-site-link|content="member-app"/],
+  // The one exception is ALLOWED_MEMBER_LINK below, removed before this check.
+  ['member app address code', /app\.splitpost\.ca|member-host-(header|footer)|data-testid="public-site-link"|public-site-link|content="member-app"/i],
   // Project addresses and keys
   // The one Supabase address allowed is the waitlist function itself: the
   // form posts to it with no key. Anything else on a project is refused.
@@ -39,6 +40,22 @@ export const FORBIDDEN = [
   // Test-only code that must never ship (the isolated test harness)
   ['test-only code', /waitlist-e2e|e2e\/edge|TEST ONLY\. Never deployed/],
 ]
+
+/**
+ * The only member app address the public site may contain: its sign-in page,
+ * as a plain link (src/public/member-sign-in.ts). It is accepted only as a
+ * complete quoted string, with nothing before or after it inside the quotes,
+ * so no other address on that host, no path or query added to it, no other
+ * scheme and no differently written host gets through: the original text is
+ * still scanned for everything else.
+ */
+export const ALLOWED_MEMBER_LINK = 'https://app.splitpost.ca/sign-in'
+const ALLOWED_MEMBER_LINK_RE = /(["'`])https:\/\/app\.splitpost\.ca\/sign-in\1/g
+
+/** The text with each exact, quoted occurrence of the allowed link removed. */
+export function withoutAllowedLink(text) {
+  return text.replace(ALLOWED_MEMBER_LINK_RE, '$1$1')
+}
 
 /**
  * Project references a build must never contain, from
@@ -81,7 +98,7 @@ export function checkSiteBundle(dir, { forbiddenRefs = [] } = {}) {
   if (/\/src\//.test(index)) problems.push('index.html still points at source files')
   if (all.some((f) => f.endsWith('.map'))) problems.push('the build includes source maps')
   for (const f of all.filter((p) => TEXT.test(p))) {
-    const text = readFileSync(f, 'utf8')
+    const text = withoutAllowedLink(readFileSync(f, 'utf8'))
     for (const [label, re] of FORBIDDEN) {
       const m = text.match(re)
       if (m) problems.push(`${relative(dir, f)}: ${label} (${JSON.stringify(m[0].slice(0, 40))})`)

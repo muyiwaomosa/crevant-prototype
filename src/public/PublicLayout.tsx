@@ -8,6 +8,7 @@ import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 import { HOMEPAGE_COPY } from './landing/copy'
 import { WAITLIST_CLOSED_COPY, WAITLIST_OPEN, waitlistCta } from './waitlist/status'
 import { SplitpostWordmark } from './landing/ui/SplitpostWordmark'
+import { MEMBER_SIGN_IN_URL } from './member-sign-in'
 
 const HEADER_LINK =
   'inline-flex h-9 items-center rounded-full text-sm font-semibold text-white transition-[background-color,color,box-shadow,transform] hover:bg-white/10 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none'
@@ -29,17 +30,17 @@ function ScrollToTop() {
 
 /**
  * The header's Sign In link when the build has no member pages (the public
- * site): it goes to /pilot-access, which explains that member sign-in is
- * coming and is invitation only. Text from 420px, an icon below (same name).
+ * site): a plain link to the member app's sign-in page (app.splitpost.ca).
+ * Text from 420px, an icon below (same name).
  */
-function PilotAccessLink() {
+function MemberSignInLink() {
   return (
-    <Link to="/pilot-access" aria-label="Sign In" data-testid="header-sign-in" className={`${HEADER_LINK} h-11 w-11 justify-center min-[420px]:h-9 min-[420px]:w-auto min-[420px]:px-3.5 whitespace-nowrap`}>
+    <a href={MEMBER_SIGN_IN_URL} aria-label="Sign In" data-testid="header-sign-in" className={`${HEADER_LINK} h-11 w-11 justify-center min-[420px]:h-9 min-[420px]:w-auto min-[420px]:px-3.5 whitespace-nowrap`}>
       <LogIn className="h-5 w-5 min-[420px]:hidden" aria-hidden="true" />
       <span className="hidden min-[420px]:inline" aria-hidden="true">
         Sign In
       </span>
-    </Link>
+    </a>
   )
 }
 
@@ -47,7 +48,7 @@ function PilotAccessLink() {
  * The public site's header and footer. `account` is the header's account link
  * (Sign In or Your account, to the real sign-in page); the public site build
  * passes none, because it has no member pages, so the header's Sign In goes to
- * /pilot-access instead. Kept free of auth code so the site build doesn't
+ * the member app's sign-in page instead. Kept free of auth code so the site build doesn't
  * include it.
  */
 export function PublicLayout({ account }: { account?: ReactNode }) {
@@ -86,9 +87,9 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
                 {HOMEPAGE_COPY.hero.secondaryCta}
               </Link>
             </span>
-            {/* Sign In at every width: the full app's account link, or /pilot-access on the public site. */}
+            {/* Sign In at every width: the full app's account link, or the member app's sign-in page on the public site. */}
             {/* The account link is shared with the account pages, so it's restyled here rather than changed. */}
-            {account ? <span className="contents [&_a]:text-white [&_a:hover]:bg-white/10">{account}</span> : <PilotAccessLink />}
+            {account ? <span className="contents [&_a]:text-white [&_a:hover]:bg-white/10">{account}</span> : <MemberSignInLink />}
             {!headerCtaHidden && (
               <Link
                 to="/join"
@@ -140,9 +141,9 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
               </Link>
             )}
             {!memberLinks && (
-              <Link to="/pilot-access" className="hover:text-sp-secondary-on-dark">
+              <a href={MEMBER_SIGN_IN_URL} className="hover:text-sp-secondary-on-dark">
                 Sign In
-              </Link>
+              </a>
             )}
           </nav>
         </div>
