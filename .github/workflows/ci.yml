@@ -197,6 +197,13 @@ jobs:
       # unattributed runs), removal, and checks 001 to 013 afterwards.
       - name: Photo cleanup apply and pg_net removal workflows on local Supabase (gate, verification, pause)
         run: scripts/db/staging-photo-cleanup-test.sh
+      # The "Photo cleanup schedule on member Production" wrapper, on local
+      # Supabase set up like member Production (no pg_net, no pg_cron, no
+      # job): every refusal before connecting, the pg_net refusal, check mode
+      # rolling everything back, apply installing one http job and verifying
+      # its first real run, a 401 first run, pause, and photos staying off.
+      - name: Member Production photo cleanup workflow on local Supabase (install, verify, pause)
+        run: scripts/db/members-photo-cleanup-test.sh
       # Phase 1B-2: the Edge Functions' project and origin policy and the
       # independent verifier, on the real Edge runtime without a gateway
       # (staging, a test member Production reference, refused projects,

@@ -10,9 +10,11 @@ another.
 **State: the project is recorded, for a founder-only launch.**
 `memberProduction` in `config/supabase-projects.json` names it (and
 `supabase/functions/_shared/projects.ts` is generated from it), and
-`app.splitpost.ca` may reach only it. Both approvals in
-`config/member-production.json` stay `false`: photos off, and nobody but the
-launch founder can hold membership. Its database is set up only by the member
+`app.splitpost.ca` may reach only it. In `config/member-production.json`,
+`invitationsApproved` stays `false` (nobody but the launch founder can hold
+membership); `photosApproved` and `postMediaFunctionApproved` are `true` for
+founder-only photo posting, which stays off in the database until the steps
+in `docs/PHOTOS.md` ("Founder-only photos on member Production") pass. Its database is set up only by the member
 workflows below (`check`, `plan`, `apply-foundation`, then the activation),
 each approved in the `members-production` environment. It shares the
 Splitpost Production (Pro) organization with the waitlist project; a separate
@@ -24,7 +26,7 @@ alone): the waitlist login rehearsal on the real project (below), the avatar
 function deployment (`docs/FUNCTIONS-DEPLOYMENT.md`), and a full restore
 drill.
 
-Photo posting stays off. External members stay out: only the launch founder
+Photo posting stays off until the founder-only steps in `docs/PHOTOS.md` pass. External members stay out: only the launch founder
 can hold membership until external access is separately approved and
 recorded, and invitations stay blocked until the privacy notice is published.
 

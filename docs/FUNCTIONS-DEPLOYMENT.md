@@ -45,12 +45,12 @@ Every response carries `X-Splitpost-Build`: `unstamped` in the repository,
 
 ### Scope on member Production
 
-* **avatar**: the default and only function deployable there.
-* **post-media**: Production compatible and fully tested, but refused by the
-  deploy script and the verifier while `postMediaFunctionApproved` is false in
-  `config/member-production.json`. Changing that needs a reviewed PR (separate
-  founder approval). It allows the deploy only: photo posting still needs
-  `photosApproved`, and stays off in the database.
+* **avatar**: deployable there.
+* **post-media**: deployable there, because `postMediaFunctionApproved` is
+  true in `config/member-production.json` (founder-only photos, reviewed PR).
+  It allows the deploy only: photo posting stays off in the database until
+  the founder-only steps in `docs/PHOTOS.md` pass. Set back to false, the
+  deploy script and the verifier refuse it again.
 * **join-waitlist**: never. If it is ever found there, delete it (below).
 
 ## Deploying

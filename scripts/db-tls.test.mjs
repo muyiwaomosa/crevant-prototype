@@ -40,13 +40,14 @@ test('the committed CA is exactly Supabase Root 2021 CA: a public CA certificate
   assert.ok(new Date(cert.validTo).getTime() - Date.now() > 180 * 86400e3, `renew before ${cert.validTo}`)
 })
 
-test('the workflows that use a hosted database secret are the expected eleven', () => {
+test('the workflows that use a hosted database secret are the expected twelve', () => {
   const users = workflows.filter((f) => SECRET.test(read(f))).sort()
   assert.deepEqual(users, [
     '.github/workflows/deploy-db-members-production.yml',
     '.github/workflows/deploy-db-production.yml',
     '.github/workflows/deploy-db-staging.yml',
     '.github/workflows/members-activate-member-access.yml',
+    '.github/workflows/members-photo-cleanup.yml',
     '.github/workflows/staging-activate-member-access.yml',
     '.github/workflows/staging-photo-cleanup-check.yml',
     '.github/workflows/staging-photo-cleanup-schedule.yml',

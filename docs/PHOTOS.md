@@ -1,10 +1,11 @@
 # Photo posts (Build 5, Stage 5.3)
 
-Status: **in review; not applied, deployed or enabled.** Migration
-`20261127000000_post_photos` is staging only (not on
-`supabase/production-migrations.txt`). The `post-media` Edge Function is
-deployed by hand, to staging only. Photo posting is **off** until the founder
-turns it on after the gates below.
+Status: **founder-only photos approved for member Production** (`photosApproved`
+and `postMediaFunctionApproved` are true in `config/member-production.json`).
+That approval allows the steps in "Founder-only photos on member Production"
+below; it turns nothing on. Photo posting stays **off** in the database until
+the founder runs the final switch after every gate there passes, and only the
+founder may post photos (`photos_audience = founder`).
 
 ## What members get
 
@@ -408,6 +409,63 @@ database rollback (`scripts/db/staging-rollback-post-photos.sql`, phrase
 `REMOVE THE STAGING PHOTO POSTS`) restores the post functions exactly but
 refuses once any upload, photo post, queued deletion, processing check or
 file exists; after that, fix forward.
+
+## Founder-only photos on member Production
+
+Goal: the founder creates, views and deletes photo posts on
+`https://app.splitpost.ca`, and the files are removed by the server. Nobody
+else can post photos (`photos_audience` stays `founder`); members still can't
+be invited (`invitationsApproved` is false).
+
+Already in place: the photo migrations (`20261127000000`, `20261128000000`)
+and the launch gate are applied (checks 012 and 013 run in the member check);
+the private `post-photos` bucket; the app (Add photo appears only once the
+database says photos are on); the `app.splitpost.ca` security policy (images
+and calls to the member project only).
+
+Do these in order. Stop at the first failure and report it; nothing later
+depends on guessing.
+
+| # | Step | Who | Pass means |
+| --- | --- | --- | --- |
+| 1 | **Staging first.** Deploy post-media to staging at the current main commit with the pinned script (`--target staging --function post-media`, phrase `DEPLOY post-media TO kpudeppgokpjhvaqrprn`), then **Verify Edge Functions** (staging, post-media, deployed). Post and delete a photo on a Preview as the founder. | founder (deploy), Claude (verify run and report) | verify run passes; the photo appears, and Photo storage shows nothing waiting within 15 minutes of deleting it |
+| 2 | **Plan allowances.** In the member project: Settings > Billing (plan), Usage (storage and egress included and used), Storage settings (global upload limit, at least 600 KB). | founder | the initial limits below fit well inside them |
+| 3 | **Drain key.** On your computer: `openssl rand -hex 32`. Paste the same value into the member project twice: Edge Functions > Secrets as `MEDIA_DRAIN_KEY`, and Project Settings > Vault as `media_drain_key`. Never into chat, GitHub, Vercel or a file. | founder | both saved |
+| 4 | **Identity evidence.** **Deploy database to member Production**, mode `check`, at the deploy commit. | founder | success (needed by the deploy script, within 24 hours) |
+| 5 | **Deploy post-media** to member Production: `node scripts/functions/deploy.mjs deploy --target member-production --function post-media --commit <full sha> --db-check-run <run id> --operator <your label> --confirm "DEPLOY post-media TO brfdqkondnnzsguailcc"` | founder | deployed, served build matches, source exact match |
+| 6 | **Verify Edge Functions**: member-production, post-media, deployed, with the commit and version the script printed. Then the same for avatar (unchanged, still serving). | Claude starts and reports | both pass; join-waitlist absent |
+| 7 | **Cleanup schedule**: **Photo cleanup schedule on member Production**, mode `check`, then `apply` (phrase `SCHEDULE THE MEMBER PRODUCTION PHOTO CLEANUP`), then `verify` after about 30 minutes. | founder (runs and approves the environment) | check passes and changes nothing; apply says APPLIED AND VERIFIED; verify shows at least 2 verified runs |
+| 8 | **Processing checks**: signed in as the founder on app.splitpost.ca, Moderation > Photo storage > Run processing check, six times. | founder | all six pass, each under 1 second |
+| 9 | **Switch on (founder only)**, in the member project's SQL editor: `select ops.set_media_settings('founder', true, 1073741824, 5, 10);` then `select photos_enabled, photos_audience from ops.media_settings;` | founder, only after 1 to 8 pass | `t`, `founder` |
+| 10 | **End-to-end test** (below) on iPhone Safari and a desktop browser. | founder | every step passes |
+| 11 | **Record it**: ledger entry for post-media and the evidence rows, in a reviewed PR (as for avatar). | Claude prepares; founder merges | merged |
+
+**Initial limits** (founder only, provisional until step 2 confirms the
+plan's allowances): storage cap **1 GB** (`1073741824` bytes; at most 10 photo
+posts a day of at most about 800 KB each is about 8 MB a day), egress review
+**5 GB**, egress pause **10 GB**. Egress is not enforced by the database:
+compare Usage > Egress weekly against them.
+
+**End-to-end test** (step 10), each on app.splitpost.ca as the founder:
+
+1. Post a photo with a caption, and one without, from the camera and from the
+   gallery. Each appears on Home, correctly rotated, within a few seconds.
+2. Refresh: both still show. Open one: the full photo opens and closes with
+   Close, Escape or back.
+3. Text-only posting works exactly as before, and profile pictures still work.
+4. Delete one photo post. It disappears at once. Within 15 minutes Photo
+   storage shows nothing waiting, and "Last scheduled cleanup" has a recent time.
+5. Download a photo: it has no location or camera data.
+6. Turn photos off (`select ops.set_media_settings('founder', false, 1073741824, 5, 10);`):
+   Add photo disappears; existing photos still show. Turn them on again only
+   if you want to keep testing.
+
+**Stop and roll back** (in this order, each by the founder): photos off
+(above); pause the cleanup (the workflow's `remove` mode, phrase
+`UNSCHEDULE THE MEMBER PRODUCTION PHOTO CLEANUP`) only if the schedule itself
+misbehaves; delete the function only if it misbehaves
+(`node scripts/functions/deploy.mjs delete --target member-production --function post-media ...`).
+Text posts and profile pictures are unaffected by all three.
 
 ## Founder phone test
 
