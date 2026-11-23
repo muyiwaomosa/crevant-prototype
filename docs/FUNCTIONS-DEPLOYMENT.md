@@ -10,9 +10,11 @@ both projects, serving build `d2784151….6ee3e5d5…` (the commit's bytes):
 staging v4 (verify run `45080766334`) and member Production v1 (verify run
 `45081975316`; an earlier run, `45081485385`, failed one check with a 504 and
 is recorded in the evidence log). Staging v3 (CRLF export) was replaced by v4.
-`postMediaFunctionApproved` is true (founder-only photos), but post-media is
-not yet deployed by these tools anywhere; that follows the steps in
-`docs/PHOTOS.md`. The ledger holds exactly these two entries.
+`post-media` at commit `27b323a7` (PR #104's merge) is approved on staging
+only: v2, verify run `45086500986`. `postMediaFunctionApproved` is true
+(founder-only photos), but post-media is not yet deployed to member
+Production; that follows the steps in `docs/PHOTOS.md`. The ledger holds
+exactly these three entries.
 
 ## What protects what
 

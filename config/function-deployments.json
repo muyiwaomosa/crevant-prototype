@@ -22,6 +22,17 @@
       "approvedBy": "founder",
       "approvedAt": "2026-11-22",
       "verifyRunId": 45081975316
+    },
+    {
+      "target": "staging",
+      "ref": "kpudeppgokpjhvaqrprn",
+      "function": "post-media",
+      "commit": "27b323a7b80ef366ffb48b145589414d3ff4c72a",
+      "version": 2,
+      "build": "27b323a7b80ef366ffb48b145589414d3ff4c72a.2f0879c90095c778a8bc6a70d204c977ab10ed499db34a4da2cfa108cf3b96e3",
+      "approvedBy": "founder",
+      "approvedAt": "2026-11-23",
+      "verifyRunId": 45086500986
     }
   ]
 }

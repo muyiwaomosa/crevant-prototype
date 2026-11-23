@@ -238,8 +238,10 @@ test('unit: the ledger is strict, and holds exactly the approved deployments', (
   assert.deepEqual(ledger.deployments.map((e) => [e.target, e.ref, e.function, e.commit, e.version, e.build, e.verifyRunId]), [
     ['staging', 'kpudeppgokpjhvaqrprn', 'avatar', approved, 4, `${approved}.6ee3e5d51f2a89b457b54f713529b220baf0af43cfdcf6f14496ea09b8cc0bb1`, 45080766334],
     ['member-production', 'brfdqkondnnzsguailcc', 'avatar', approved, 1, `${approved}.6ee3e5d51f2a89b457b54f713529b220baf0af43cfdcf6f14496ea09b8cc0bb1`, 45081975316],
+    // post-media at 27b323a7 (PR #104's merge) on staging only: v2, verify run 45086500986.
+    ['staging', 'kpudeppgokpjhvaqrprn', 'post-media', '27b323a7b80ef366ffb48b145589414d3ff4c72a', 2, '27b323a7b80ef366ffb48b145589414d3ff4c72a.2f0879c90095c778a8bc6a70d204c977ab10ed499db34a4da2cfa108cf3b96e3', 45086500986],
   ])
-  assert.ok(ledger.deployments.every((e) => e.function === 'avatar'), 'post-media is not approved anywhere')
+  assert.ok(ledger.deployments.filter((e) => e.target === 'member-production').every((e) => e.function === 'avatar'), 'member Production: avatar only, until its own post-media deploy is verified and recorded')
   const c = 'c'.repeat(40)
   const good = { target: 'member-production', ref: MEMBER, function: 'avatar', commit: c, version: 2, build: `${c}.${'d'.repeat(64)}`, approvedBy: 'founder', approvedAt: '2026-12-01', verifyRunId: 9 }
   assert.deepEqual(ledgerProblems({ deployments: [good] }), [])
