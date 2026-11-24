@@ -1,0 +1,188 @@
+# SP-TA-001 coverage summary (generated)
+
+Generated from `matrix.psv` by `coverage.mjs`. 135 requirements. Do not edit by hand.
+
+## Status and classification by work package
+
+| WP | Reqs | VC | IU | PI | CF | MI | BL | NA | REUSE | REFACTOR | BUILD | RETIRE | DEFER | VERIFY | Release-blocking |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| WP-01 | 11 | 7 | 1 | 2 | 1 | 0 | 0 | 0 | 7 | 2 | 1 | 0 | 0 | 1 | 10 |
+| WP-02 | 13 | 4 | 0 | 7 | 0 | 2 | 0 | 0 | 4 | 7 | 2 | 0 | 0 | 0 | 10 |
+| WP-03 | 13 | 2 | 0 | 8 | 1 | 2 | 0 | 0 | 2 | 7 | 4 | 0 | 0 | 0 | 13 |
+| WP-04 | 15 | 4 | 0 | 4 | 0 | 6 | 1 | 0 | 5 | 4 | 6 | 0 | 0 | 0 | 15 |
+| WP-05 | 12 | 0 | 0 | 1 | 1 | 10 | 0 | 0 | 0 | 1 | 11 | 0 | 0 | 0 | 12 |
+| WP-06 | 15 | 0 | 0 | 1 | 0 | 14 | 0 | 0 | 0 | 1 | 14 | 0 | 0 | 0 | 15 |
+| WP-07 | 15 | 0 | 0 | 4 | 0 | 11 | 0 | 0 | 0 | 2 | 13 | 0 | 0 | 0 | 14 |
+| WP-08 | 18 | 1 | 0 | 12 | 0 | 5 | 0 | 0 | 2 | 10 | 6 | 0 | 0 | 0 | 17 |
+| WP-09 | 10 | 2 | 0 | 6 | 0 | 2 | 0 | 0 | 2 | 6 | 2 | 0 | 0 | 0 | 10 |
+| WP-10 | 13 | 4 | 1 | 7 | 0 | 1 | 0 | 0 | 7 | 4 | 2 | 0 | 0 | 0 | 13 |
+| **Total** | **135** | **24** | **2** | **52** | **3** | **53** | **1** | **0** | **29** | **44** | **61** | **0** | **0** | **1** | **129** |
+| Share | | 18% | 1% | 39% | 2% | 39% | 1% | 0% | 21% | 33% | 45% | 0% | 0% | 1% | 96% |
+
+## Verification depth (L local run, C CI on main, D deployment record, X direct test of a deployed environment)
+
+| Evidence | Requirements |
+|---|---|
+| Verified by local test run | 71 |
+| Verified by CI | 74 |
+| Present per deployment record | 29 |
+| Directly tested in a deployed environment | 3 |
+| No implementation evidence | 59 |
+
+## Effort by work package (hours)
+
+| WP | Optimistic | Most likely | Pessimistic |
+|---|---|---|---|
+| WP-01 | 27 | 36 | 54 |
+| WP-02 | 20 | 29 | 46 |
+| WP-03 | 25 | 36 | 54 |
+| WP-04 | 54 | 77 | 139 |
+| WP-05 | 41 | 58 | 93 |
+| WP-06 | 32 | 46 | 74 |
+| WP-07 | 36 | 52 | 83 |
+| WP-08 | 37 | 53 | 80 |
+| WP-09 | 23 | 31 | 50 |
+| WP-10 | 33 | 47 | 75 |
+| **Total** | **328** | **465** | **748** |
+
+## Full requirements matrix
+
+Status: VC verified complete (source, local and CI tests, deployment record), IU implemented but unverified, PI partial, CF conflicting, MI missing, BL blocked. Verified: L local, C CI, D deployment record, X direct deployed test.
+
+| ID | WP | Requirement | Status | Class | Verified | Evidence | Action | Engine refs | ML h | Blocking |
+|---|---|---|---|---|---|---|---|---|---|---|
+| FND-01 | WP-01 | Registration and verification | PI | REFACTOR | L,C | Invite-token sign-in (src/public/auth, auth-pages.test.tsx, e2e/auth-journey); public sign-up disabled in supabase/config.toml | Controlled link registration with server-enforced eligibility, configurable limits and pause (reuse draft PR #96 and ops.member_launch_settings); email verification | TA WP-01 | 12 | Y |
+| FND-02 | WP-01 | Sign in and sign out | VC | REUSE | L,C,D | Password sign-in, local and global sign-out (src/public/auth/AccountPage.tsx); member Production records one confirmed identity | Regression only | TA WP-01 | 0 | Y |
+| FND-03 | WP-01 | Account recovery | IU | VERIFY | L,C | resetPasswordForEmail in auth pages and tests | Custom SMTP sender; verify a real reset on staging, then Production | TA WP-01 | 3 | Y |
+| FND-04 | WP-01 | Unified identity | VC | REUSE | L,C,D | One account type since Release 2 (docs/RELEASE-2.md); no role gate in app functions | None | TA WP-01 | 0 | Y |
+| FND-05 | WP-01 | User profile and picture | VC | REUSE | L,C,D | app_set_profile; avatars migration; avatar function deployment recorded in config/function-deployments.json | None | DIS-03 | 0 | Y |
+| FND-06 | WP-01 | Creator profile and value proposition | VC | REUSE | L,C,D | social.profile_details bio and follow reason (migration 20261123000000) | Relabel follow reason as the value proposition | DIS-03 | 1 | N |
+| FND-07 | WP-01 | Adult eligibility | PI | BUILD | L,C | 18+ checkbox on waitlist only (migration 20261110000000) | Server-recorded 18+ attestation at registration; every member function refuses without it | GOV-18 | 5 | Y |
+| FND-08 | WP-01 | Navigation | CF | REFACTOR | L,C | Nav is Home, Discover, Create, Clique, Profile (src/app/MemberArea.tsx:267-271) | Five destinations with My Split; reusable multi-face view component (swipe, tap, keyboard, reduced motion, URL state) | CON-05 | 14 | Y |
+| FND-09 | WP-01 | Responsive experience | VC | REUSE | L,C | Width checks 320 to 1440 px in public-site and social journeys | Extend to new screens; performance budgets (section 8) | TA WP-01 | 0 | Y |
+| FND-10 | WP-01 | Access permissions | VC | REUSE | L,C,D | Member surface audit scripts/db/audit/member-surface-checks.sql with 19 caught violations | Extend allow-list deliberately for each new function | GOV-12 | 0 | Y |
+| FND-11 | WP-01 | Environment management | VC | REUSE | L,C,D | Staging, member Production and waitlist Production separated; scripts/check-supabase-target.mjs | Apply launch-gate migration to staging so staging mirrors Production | TA WP-01 | 1 | Y |
+| DSC-01 | WP-02 | Interest taxonomy | VC | REUSE | L,C,D | social.topics, 17 topics (migration 20261123000000) | Reconcile the 9-category list in ops.pilot_creators | DIS-01 | 1 | N |
+| DSC-02 | WP-02 | Interest onboarding | VC | REUSE | L,C,D | Optional, skippable topics in first-time setup | None | DIS-02 | 0 | Y |
+| DSC-03 | WP-02 | Interest management | VC | REUSE | L,C,D | app_set_profile_details | None | DIS-02 | 0 | N |
+| DSC-04 | WP-02 | Creator categorization | PI | REFACTOR | L,C | Creators share the consumer interest list | Creator primary topics (max 3), required for creator discovery eligibility | DIS-03,DIS-04 | 3 | Y |
+| DSC-05 | WP-02 | Content categorization | MI | BUILD | - | Posts have no topic | Post topic; uncategorized posts are delivered to followers but excluded from relevant discovery | DIS-04 | 4 | Y |
+| DSC-06 | WP-02 | Relevant discovery | PI | REFACTOR | L,C | app_discover_people and app_suggested_creators rank by shared topics | Content discovery of eligible categorized posts | DIS-05 | 6 | Y |
+| DSC-07 | WP-02 | Search | PI | REFACTOR | L,C | Username and display name search only | Post text and topic search with Postgres full text | DIS-06 | 3 | Y |
+| DSC-08 | WP-02 | Fair discovery | PI | REFACTOR | L,C | Ordering ignores follower count; no rotation | Deterministic rotation with an emerging-creator share | DIS-07 | 3 | Y |
+| DSC-09 | WP-02 | Recommendation transparency | PI | REFACTOR | L,C | Shared-topic count returned | Reason text on every recommendation | DIS-08 | 2 | Y |
+| DSC-10 | WP-02 | Discovery attribution | MI | BUILD | - | None | Follow source recorded on follow events | DIS-09,DIS-10 | 2 | Y |
+| DSC-11 | WP-02 | Safety and eligibility filtering (TA-added) | PI | REFACTOR | L,C | social.visible_members excludes non-members; hidden posts excluded | Exclude blocked, muted, restricted and uncategorized items from discovery | DIS-11 | 2 | Y |
+| DSC-12 | WP-02 | Separation of Home and Discover (TA-added) | VC | REUSE | L,C,D | app_feed reads only followed creators; discovery is separate | Keep; regression test that discovery never reorders Home | DIS-12 | 1 | Y |
+| DSC-13 | WP-02 | Discovery empty states (TA-added) | PI | REFACTOR | L,C | Empty states exist for feed; Discover partial | Meaningful empty states for each Discover face | DIS-13 | 2 | N |
+| CON-01 | WP-03 | Following | VC | REUSE | L,C,D | app_follow, app_unfollow, social.follow_events; tests 060; e2e social journey | None | CON-01 | 0 | Y |
+| CON-02 | WP-03 | Clique membership | CF | REFACTOR | L,C,D | Clique history works; cap of 25 in guard trigger (migration 20261120000000) | Remove cap (secondary: retire replace dialog); keep rate limit | CON-03 | 4 | Y |
+| CON-03 | WP-03 | Relationship stages: Following, Clique Connection, Active Supporter | PI | REFACTOR | L,C | Following and Clique distinct; Active Supporter not computed | Active Supporter derived from qualifying meaningful activity (dictionary); discovery recorded as a journey source, not a stage | CON-D01 | 4 | Y |
+| CON-04 | WP-03 | Unified Home feed | PI | REFACTOR | L,C | Home shows followed posts chronologically | Clique-first default face | CON-02 | 3 | Y |
+| CON-05 | WP-03 | Clique prioritization | PI | REFACTOR | L,C | author_in_my_clique flag; unseen strip orders Clique first | Clique group then chronological followed feed; each post once; no starvation | CON-04 | 6 | Y |
+| CON-06 | WP-03 | Chronological ordering | VC | REUSE | L,C,D | order by created_at desc, id desc | Keep within groups | CON-02 | 0 | Y |
+| CON-07 | WP-03 | Feed filters | MI | BUILD | - | None | My Clique and Following faces | CON-04 | 3 | Y |
+| CON-08 | WP-03 | Eligible distribution | PI | REFACTOR | L,C | All followed posts reachable except paging defect DEF-01 | Keyset paging fix; distribution coverage metric separate from reach | CON-02,CON-07 | 4 | Y |
+| CON-09 | WP-03 | Relationship attribution | MI | BUILD | - | None | creator_id on every contribution event | CON-08 | 1 | Y |
+| CON-10 | WP-03 | Relationship intelligence | PI | BUILD | L,C | Counts only | Creator and consumer relationship insights | CON-09,CON-10 | 4 | Y |
+| CON-11 | WP-03 | Creator audience counts (TA-added) | PI | REFACTOR | L,C | follower_count in discovery functions | Accurate follower, Clique and Active Supporter counts on Profile | CON-06 | 2 | Y |
+| CON-12 | WP-03 | Relationship controls including mute (TA-added) | PI | BUILD | L,C | Unfollow and leave Clique exist; no mute | Mute a creator without unfollowing; excluded from Home only by the member's choice | CON-11 | 3 | Y |
+| CON-13 | WP-03 | Relationship integrity (TA-added) | PI | REFACTOR | L,C | Idempotent follows, rate limits, append-only history | Tests proving counts cannot be inflated by duplicate or unauthorized requests | CON-13 | 2 | Y |
+| CNT-01 | WP-04 | Unified composer | PI | REFACTOR | L,C | PostComposer on Home and Create: text plus photo | Add topic and video in one composer | CNT-01 | 3 | Y |
+| CNT-02 | WP-04 | Text posts | VC | REUSE | L,C,D | 1 to 2,000 characters, idempotent, rate limited | None | CNT-01 | 0 | Y |
+| CNT-03 | WP-04 | Image posts | BL | REUSE | L,C,D | Pipeline in source and tests; post-media deployed; Production photo switch off; cleanup schedule apply failed | Store Vault key, apply schedule, run processing checks, enable after founder approval | CNT-02 | 3 | Y |
+| CNT-04 | WP-04 | Video posts | MI | BUILD | - | Plan only (docs/MEDIA_PLAN.md); feasibility in docs/video/VIDEO-FEASIBILITY.md | In-browser normalisation to 720p H.264, resumable signed upload, server header validation, 5-minute limit, quotas, pause switch | CNT-02 | 40 | Y |
+| CNT-05 | WP-04 | Reusable content card | VC | REUSE | L,C,D | PostItem (src/app/components.tsx) | Extend for repost, sponsored, save, share, video | CNT-04 | 0 | Y |
+| CNT-06 | WP-04 | Reactions | VC | REUSE | L,C,D | Likes, one per member per post | None | CNT-05 | 0 | Y |
+| CNT-07 | WP-04 | Comments | VC | REUSE | L,C,D | 1 to 1,000 characters, idempotent, rate limited | None | CNT-05 | 0 | Y |
+| CNT-08 | WP-04 | Saves | MI | BUILD | - | Client-only saves in /tour (simulated) | Saves table, Saved list | CNT-05 | 3 | Y |
+| CNT-09 | WP-04 | Reposts | MI | BUILD | - | None | Repost with original creator and distributor attribution | CNT-06,CNT-09 | 6 | Y |
+| CNT-10 | WP-04 | External sharing | MI | BUILD | - | None | Share links that separate share initiation, link visit and qualified referral | CNT-07,CNT-09 | 4 | Y |
+| CNT-11 | WP-04 | Public previews | MI | BUILD | - | Member routes require auth; anonymous visitors reach nothing | Public read-only function for eligible posts; preview page; audit allow-list change | CNT-08 | 6 | Y |
+| CNT-12 | WP-04 | Content management including editing | PI | REFACTOR | L,C,D | Own-post soft delete with photo cleanup; no editing | Edit text and topic of own live posts; edited label and edit history; media not replaceable; hidden posts not editable; attribution and ledger keyed to post id unaffected | CNT-03 | 6 | Y |
+| CNT-13 | WP-04 | Content events | PI | REFACTOR | L,C | social.post_views; likes and comments rows | Route through the unified event framework | CNT-10 | 2 | Y |
+| CNT-14 | WP-04 | Advertising integration | MI | BUILD | - | None | Content-associated ad slot links campaign to eligible post | CNT-11 | 2 | Y |
+| CNT-15 | WP-04 | Content integrity controls (TA-added) | PI | REFACTOR | L,C,D | Rate limits, idempotency, moderation hide | Integrity checks for edits, reposts and shares; edits of reported posts preserved as evidence | CNT-13 | 2 | Y |
+| RWD-01 | WP-05 | Connection Points | CF | BUILD | - | Only in /tour: creator-specific wallets, client-side (src/lib/points.ts) (secondary: retire) | Server ledger, one platform-wide balance | RWD-01 | 4 | Y |
+| RWD-02 | WP-05 | Contribution recognition | MI | BUILD | - | Prototype rules worth porting | Approved point table as versioned rules, awarded server-side | RWD-02,RWD-03 | 7 | Y |
+| RWD-03 | WP-05 | Referral links | PI | REFACTOR | L,C,D | Creator invite links and redemptions (migration 20261116000000) | Member referral links sharing the CNT-10 code | RWD-05 | 2 | Y |
+| RWD-04 | WP-05 | Qualified referral verification | MI | BUILD | - | None | New verified adult; intentional follow of the referred creator; first eligible referral wins; no self or duplicate | RWD-05 | 7 | Y |
+| RWD-05 | WP-05 | Rewards ledger | MI | BUILD | - | Append-only patterns to reuse | Append-only ledger with rule version and reversals | RWD-01 | 4 | Y |
+| RWD-06 | WP-05 | Issuance controls | MI | BUILD | - | social.rate_check pattern | Daily limits, monthly budget, pause switch | RWD-06 | 3 | Y |
+| RWD-07 | WP-05 | Fan pool | MI | BUILD | - | Empty locked sim schema | Simulated 40/20/40 allocation; 100% general feed to Splitpost | RWD-07 | 4 | Y |
+| RWD-08 | WP-05 | Dynamic valuation | MI | BUILD | - | None | Pool balance divided by eligible outstanding redeemable points | RWD-08 | 2 | Y |
+| RWD-09 | WP-05 | Monthly settlement | MI | BUILD | - | None | Simulated month close with reconciliation, tested before release | RWD-09 | 6 | Y |
+| RWD-10 | WP-05 | My Split | MI | BUILD | - | None | Three faces: overview, history, opportunities; recognized vs redeemable; disclosures | RWD-04,RWD-10,RWD-15 | 10 | Y |
+| RWD-11 | WP-05 | Creator earnings | MI | BUILD | - | None | Simulated earnings with attribution on the Money face | RWD-11,RWD-15 | 5 | Y |
+| RWD-12 | WP-05 | Reward integrity | MI | BUILD | - | None | Dedup keys, self-referral block, reversal, review queue | RWD-13 | 4 | Y |
+| ADV-01 | WP-06 | Commercial preferences | MI | BUILD | - | None | Optional commercial categories separate from content interests | ADV-01 | 3 | Y |
+| ADV-02 | WP-06 | Preference controls | MI | BUILD | - | None | Edit and withdraw | ADV-01 | 1 | Y |
+| ADV-03 | WP-06 | Managed campaigns | MI | BUILD | - | None | Advertisers and fixed-price campaigns entered in Control Center | ADV-02,ADV-D10 | 6 | Y |
+| ADV-04 | WP-06 | Image and video formats | MI | BUILD | - | Photo and video pipelines reusable | Image and video creatives | ADV-06 | 6 | Y |
+| ADV-05 | WP-06 | Relevant matching | MI | BUILD | - | None | Rules-based matching; sensitive topics never used | ADV-03,ADV-15 | 3 | Y |
+| ADV-06 | WP-06 | Content-associated placements | MI | BUILD | - | None | Ad shown with an eligible creator post | ADV-04 | 3 | Y |
+| ADV-07 | WP-06 | General feed placements | MI | BUILD | - | None | One slot per configured number of posts | ADV-05 | 3 | Y |
+| ADV-08 | WP-06 | Frequency controls | MI | BUILD | - | None | Per-member caps and spacing | ADV-07 | 2 | Y |
+| ADV-09 | WP-06 | Commercial disclosures | MI | BUILD | - | None | Sponsored label, why this ad, hide this ad | ADV-08 | 2 | Y |
+| ADV-10 | WP-06 | Campaign measurement | MI | BUILD | - | None | Impressions, clicks, completions, skips; deduplicated | ADV-09 | 3 | Y |
+| ADV-11 | WP-06 | Conversion attribution | MI | BUILD | - | None | Manual reconciliation marking measured, advertiser-reported and reconciled outcomes | ADV-10,ADV-11 | 2 | Y |
+| ADV-12 | WP-06 | Advertiser reporting | MI | BUILD | - | None | Reproducible aggregate report available from campaign start | ADV-13 | 4 | Y |
+| ADV-13 | WP-06 | Support Intent | MI | BUILD | - | Empty locked intent schema | Non-binding indication, never money | RWD-12 | 3 | Y |
+| ADV-14 | WP-06 | Campaign economics | PI | REFACTOR | L,C | CI rule forbids combining intent, sim and finance (migration 20261106000000) | Agreed price, earned, collected and simulated kept in separate fields | ADV-12,ADV-14 | 3 | Y |
+| ADV-15 | WP-06 | Advertising integrity controls (TA-added) | MI | BUILD | - | None | Prohibited categories, targeting limits, duplicate event filtering | ADV-15 | 2 | Y |
+| INT-C01 | WP-07 | Unified event framework | PI | BUILD | L,C | Empty analytics schema; separate acquisition_events and post_views | One events table written by the server, small client endpoint for views and impressions, data class on every row | INT-01 | 10 | Y |
+| INT-C02 | WP-07 | Metrics Dictionary | PI | BUILD | - | Core entries proposed in SP-TA-001 Appendix C | Dictionary plus SQL views named after it | INT-02,INT-03 | 3 | Y |
+| INT-C03 | WP-07 | Creator intelligence | MI | BUILD | - | None | Attention, Retention and Money faces on Profile, owner only | INT-04,CON-07 | 8 | Y |
+| INT-C04 | WP-07 | Consumer intelligence | MI | BUILD | - | None | Within My Split | INT-05,RWD-14 | 1 | Y |
+| INT-C05 | WP-07 | Advertiser intelligence | MI | BUILD | - | None | Same report as ADV-12 | INT-06 | 0 | Y |
+| INT-C06 | WP-07 | Founder intelligence | MI | BUILD | - | None | Control Center overview | INT-07,INT-10,GOV-19 | 6 | Y |
+| INT-C07 | WP-07 | North Star measurement | MI | BUILD | - | None | Weekly Active Creator-Consumer Connections with approved definition | INT-09 | 3 | Y |
+| INT-C08 | WP-07 | Activation reporting | MI | BUILD | - | None | Creator and consumer activation | INT-08 | 2 | Y |
+| INT-C09 | WP-07 | Cohort retention | MI | BUILD | - | None | Member and relationship cohort retention | INT-08,CON-12 | 3 | Y |
+| INT-C10 | WP-07 | Actionable insights | MI | BUILD | - | None | Six to eight objective rules | INT-11 | 4 | Y |
+| INT-C11 | WP-07 | Investor reporting | MI | BUILD | - | None | Reproducible export with actual and simulated separated | INT-12 | 3 | Y |
+| INT-C12 | WP-07 | Data classification | PI | REFACTOR | L,C | Cohorts include tester and founder; schema separation | Classes: actual, founder-actual, simulated, test, staging | INT-13 | 2 | Y |
+| INT-C13 | WP-07 | Data quality | MI | BUILD | - | Test conventions reusable | Daily reconciliation checks | INT-15 | 3 | Y |
+| INT-C14 | WP-07 | Intelligence privacy and access controls (TA-added) | PI | REFACTOR | L,C,D | Private schemas with no member access | Owner-only insights, aggregate thresholds for advertisers, role checks | INT-14 | 2 | Y |
+| INT-C15 | WP-07 | Sustainable creator income measurement (TA-added) | MI | BUILD | - | Prior definition in docs/PRODUCT-STRATEGY.md section 1 | Dictionary framework; reports actual income only (zero in pilot), never simulated | INT-D18 | 2 | N |
+| GOV-C01 | WP-08 | Control Center | PI | REFACTOR | L,C | Moderation and feedback inbox separate; most admin work by SQL or workflows | One role-checked Control Center | GOV-14 | 8 | Y |
+| GOV-C02 | WP-08 | User reporting | PI | REFACTOR | L,C,D | Posts and profiles (app_report) | Add comments and ads | GOV-07 | 2 | Y |
+| GOV-C03 | WP-08 | Blocking | MI | BUILD | - | None | Block and unblock everywhere | GOV-07,CON-11 | 5 | Y |
+| GOV-C04 | WP-08 | Moderation | VC | REUSE | L,C,D | Queue, hide, restore, dismiss; tests 009 and 085; moderation journey | None | GOV-08 | 0 | Y |
+| GOV-C05 | WP-08 | Enforcement | PI | REFACTOR | L,C | Hide content; membership revoke only in SQL | Enforcement ladder with reasons and author notice | GOV-08 | 4 | Y |
+| GOV-C06 | WP-08 | Complaints and appeals | PI | REFACTOR | L,C,D | Feedback inbox with three categories | Appeal linked to action; feedback kept separate from complaints | GOV-09,GOV-17 | 3 | Y |
+| GOV-C07 | WP-08 | Referral review | MI | BUILD | - | None | Review queue | GOV-05,RWD-13 | 3 | Y |
+| GOV-C08 | WP-08 | Economic oversight | MI | BUILD | - | None | Reconciliation view | GOV-04,RWD-13 | 2 | Y |
+| GOV-C09 | WP-08 | Campaign approval | MI | BUILD | - | None | Approval workflow | GOV-10 | 2 | Y |
+| GOV-C10 | WP-08 | Administrative auditing | PI | REUSE | L,C,D | Append-only audits for moderation, membership, feedback, media, launch | Same pattern for every new admin action | GOV-13 | 2 | Y |
+| GOV-C11 | WP-08 | Privacy controls | PI | REFACTOR | L,C,X | Waitlist notice live; member notice drafted (docs/policies) | Request procedure; publish after legal review | GOV-11 | 4 | Y |
+| GOV-C12 | WP-08 | Account deletion | PI | REFACTOR | L,C | Cascades in schema; no member procedure | Request form and audited founder deletion function | GOV-11 | 3 | Y |
+| GOV-C13 | WP-08 | Operational monitoring | PI | REFACTOR | L,C | Health workflows exist but disabled | Enable checks, alerts, incident runbook | GOV-15 | 4 | Y |
+| GOV-C14 | WP-08 | Policy governance | PI | BUILD | L,C | Checksummed migrations; versioned notices | Economic rule versions; policy version register; change classes | GOV-16 | 4 | Y |
+| GOV-C15 | WP-08 | Investor readiness | MI | BUILD | - | Engineering records exist | Evidence pack index | GOV-20 | 2 | N |
+| GOV-C16 | WP-08 | Constitution and stakeholder charter (TA-added) | PI | REFACTOR | - | Drafted in docs/policies/CONSTITUTION-DRAFT.md; not reviewed | Founder approval, publish in app | GOV-01,GOV-02 | 2 | Y |
+| GOV-C17 | WP-08 | Community standards (TA-added) | PI | REFACTOR | - | Drafted in docs/policies/COMMUNITY-STANDARDS-DRAFT.md; not reviewed | Legal review, publish in app | GOV-06 | 1 | Y |
+| GOV-C18 | WP-08 | Pilot policies and legal readiness (TA-added) | PI | REFACTOR | - | Eight drafts and 48 counsel questions in docs/policies | Counsel review; publish versions; gate external access | GOV-18 | 2 | Y |
+| BRD-01 | WP-09 | Brand identity | VC | REUSE | L,C,X | Logo, fonts, palette; live on the public site | Design system consolidation (secondary) | TA WP-09 | 0 | Y |
+| BRD-02 | WP-09 | Public landing page | VC | REUSE | L,C,X | Public site responds today with approved title; public-site tests | Evolve with real screenshots and paths (secondary) | TA WP-09 | 0 | Y |
+| BRD-03 | WP-09 | Creator acquisition | PI | REFACTOR | L,C | Waitlist plus creator links | Apply as a creator path | DIS-D09 | 2 | Y |
+| BRD-04 | WP-09 | Consumer acquisition | PI | REFACTOR | L,C | Waitlist | Referral landing via shared post | TA WP-09 | 1 | Y |
+| BRD-05 | WP-09 | Advertiser acquisition | MI | BUILD | - | None | Inquiry form using the waitlist function pattern | ADV-D09 | 3 | Y |
+| BRD-06 | WP-09 | Public content previews | MI | BUILD | - | Same as CNT-11 | Shared with CNT-11 | CNT-08 | 0 | Y |
+| BRD-07 | WP-09 | Pilot access | PI | REFACTOR | L,C,D | Membership grants and launch gate | Control Center grants; limits and pause; gate stays closed until release approval | GOV-18 | 4 | Y |
+| BRD-08 | WP-09 | Acquisition measurement | PI | REFACTOR | L,C | Hourly acquisition events with source labels | Visitor to registration to activation funnel | TA WP-09 | 2 | Y |
+| BRD-09 | WP-09 | Brand consistency | PI | REFACTOR | L,C | Site and app share brand; signature not used; OG image on old host | Design system tokens and components; signature; landing evolution with real screenshots | TA WP-09 | 16 | Y |
+| BRD-10 | WP-09 | Pilot transparency | PI | REFACTOR | L,C | Disclosures exist for no guaranteed earnings and no cash value | Simulated-economics disclosures; retire /tour economy | RWD-15 | 3 | Y |
+| REL-01 | WP-10 | Unit tests | VC | REUSE | L,C | 739 pass locally | Extend per task | TA WP-10 | 0 | Y |
+| REL-02 | WP-10 | Integration tests | VC | REUSE | C | CI integration job on local Supabase | Extend | TA WP-10 | 0 | Y |
+| REL-03 | WP-10 | Browser end-to-end tests | IU | REFACTOR | C | Playwright journeys green in CI | Four stakeholder journeys | TA WP-10 | 12 | Y |
+| REL-04 | WP-10 | Database and authorization tests | VC | REUSE | L,C | 53 suites pass locally | Extend | TA WP-10 | 0 | Y |
+| REL-05 | WP-10 | Mobile and desktop usability | PI | REFACTOR | L,C | Width checks | Device pass and moderated usability sessions | TA WP-10 | 6 | Y |
+| REL-06 | WP-10 | Accessibility | PI | REUSE | C | axe-core inside several journeys | Extend; keyboard and screen reader pass | TA WP-10 | 3 | Y |
+| REL-07 | WP-10 | Security verification | PI | BUILD | L,C | Member surface audit; bundle secret scan | Review of new functions, public previews, registration and referrals | TA WP-10 | 8 | Y |
+| REL-08 | WP-10 | Financial simulation reconciliation | MI | BUILD | - | None | Cent-exact reconciliation suite | TA WP-10 | 3 | Y |
+| REL-09 | WP-10 | Data integrity | PI | REUSE | L,C | Append-only triggers and checks | Extend to ledger and events | TA WP-10 | 2 | Y |
+| REL-10 | WP-10 | Production deployment | VC | REUSE | D | Member Production deploy workflows with recorded successful runs | Batched deploys | TA WP-10 | 4 | Y |
+| REL-11 | WP-10 | Monitoring and recovery | PI | REFACTOR | D | Pro backups; restore drill deferred | Restore drill on a disposable project | TA WP-10 | 3 | Y |
+| REL-12 | WP-10 | Rollback readiness | PI | REUSE | L,C | Staging rollbacks; Vercel instant rollback | Switches for registration, points, ads, sharing, video | TA WP-10 | 3 | Y |
+| REL-13 | WP-10 | Pilot onboarding readiness | PI | REFACTOR | - | Launch gate and runbooks | Cohort plan, holiday support rota, pause procedures | TA WP-10 | 3 | Y |
