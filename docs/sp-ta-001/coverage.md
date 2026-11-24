@@ -41,9 +41,9 @@ Generated from `matrix.psv` by `coverage.mjs`. 135 requirements. Do not edit by 
 | WP-06 | 32 | 46 | 74 |
 | WP-07 | 36 | 52 | 83 |
 | WP-08 | 37 | 53 | 80 |
-| WP-09 | 23 | 31 | 50 |
+| WP-09 | 32 | 43 | 69 |
 | WP-10 | 33 | 47 | 75 |
-| **Total** | **328** | **465** | **748** |
+| **Total** | **337** | **477** | **767** |
 
 ## Full requirements matrix
 
@@ -171,7 +171,7 @@ Status: VC verified complete (source, local and CI tests, deployment record), IU
 | BRD-06 | WP-09 | Public content previews | MI | BUILD | - | Same as CNT-11 | Shared with CNT-11 | CNT-08 | 0 | Y |
 | BRD-07 | WP-09 | Pilot access | PI | REFACTOR | L,C,D | Membership grants and launch gate | Control Center grants; limits and pause; gate stays closed until release approval | GOV-18 | 4 | Y |
 | BRD-08 | WP-09 | Acquisition measurement | PI | REFACTOR | L,C | Hourly acquisition events with source labels | Visitor to registration to activation funnel | TA WP-09 | 2 | Y |
-| BRD-09 | WP-09 | Brand consistency | PI | REFACTOR | L,C | Site and app share brand; signature not used; OG image on old host | Design system tokens and components; signature; landing evolution with real screenshots | TA WP-09 | 16 | Y |
+| BRD-09 | WP-09 | Brand consistency | PI | REFACTOR | L,C | Site and app share brand; signature not used; OG image on old host | Design system tokens and components; immersive cards and visual analytics (SP-DESIGN-002); signature; landing evolution with real screenshots | TA WP-09 | 28 | Y |
 | BRD-10 | WP-09 | Pilot transparency | PI | REFACTOR | L,C | Disclosures exist for no guaranteed earnings and no cash value | Simulated-economics disclosures; retire /tour economy | RWD-15 | 3 | Y |
 | REL-01 | WP-10 | Unit tests | VC | REUSE | L,C | 739 pass locally | Extend per task | TA WP-10 | 0 | Y |
 | REL-02 | WP-10 | Integration tests | VC | REUSE | C | CI integration job on local Supabase | Extend | TA WP-10 | 0 | Y |

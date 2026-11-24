@@ -1,6 +1,6 @@
 # SP-DESIGN-001: Product experience proposal
 
-Status: proposal for one consolidated founder review. November 24, 2026.
+Status: **functional design, approved in direction by the founder on November 24, 2026** (five destinations, multi-face architecture, stakeholder journeys, landing page evolution). Final visual design is proposed separately in `docs/design/SP-DESIGN-002.md`. The wireframes were corrected on November 24: no discovery panel on desktop Home, availability rather than viewing promises, controlled invitation and referral registration, and no unverified video capabilities.
 Visual previews: `docs/design/previews/*.png`, rendered from `docs/design/wireframes.html`. All names and numbers in the previews are sample data.
 
 Principle: **simplicity on the surface, intelligence underneath.** Members see five places to go. The seven business engines never appear as separate products.
@@ -13,7 +13,7 @@ Principle: **simplicity on the surface, intelligence underneath.** Members see f
 | **Discover** | Find new value | Relevant (default) · Creators · Content; search above the faces | Everyone |
 | **Create** | Publish | No faces: one composer for text, photo, video, with topic | Everyone |
 | **My Split** | Your contributions and simulated rewards | Overview · History · Opportunities | Owner only |
-| **Profile** | Identity, content and insights | Profile and content · Attention · Retention · Money | Visitors see only the first face; insights are owner-only, enforced on the server |
+| **Profile** | Identity, content and insights | Profile and content · Attention · Retention · Money (founder confirmed "Money") | Visitors see only the first face; insights are owner-only, enforced on the server |
 
 Outside the five: Settings and account (from Profile), Send feedback (header on phones, sidebar on desktop), Control Center (only for the founder and authorised operators, linked from Profile), public post previews and registration (signed-out).
 

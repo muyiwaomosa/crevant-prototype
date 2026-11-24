@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 2.0, November 24, 2026. Supersedes v1.0 (preserved privately; not in this repository) |
+| Version | 2.1, November 24, 2026 (2.1 adds the visual design effort from SP-DESIGN-002). Supersedes v1.0 (preserved privately; not in this repository) |
 | Approved scope | SP-SCOPE-001 v1.0 and the seven engine baselines |
 | Founder decisions | Founder response to SP-TA-001, November 24, 2026 (D1 to D7 and the product experience addendum) |
 | Commit assessed | `27b323a` on `main` |
@@ -36,9 +36,9 @@ Single sources of truth:
 
 **What conflicts?** The 25-member Clique cap, the Clique navigation slot, and the creator-specific points model shown in the public `/tour` prototype. Retiring these, and the superseded sections of `docs/PRODUCT-STRATEGY.md`, is recorded as a secondary action on the rows that replace them.
 
-**Remaining effort:** **465 hours most likely** (328 optimistic, 748 pessimistic) of implementation, including unit, database and component tests and the WP-10 release tasks. This is higher than v1 (368) because of the founder's additions (about 75 hours: five-minute video with in-browser conversion, editing, multi-face navigation, design system, website evolution) and the 13 TA-added requirements.
+**Remaining effort:** **477 hours most likely** (337 optimistic, 767 pessimistic) of implementation, including unit, database and component tests and the WP-10 release tasks. This is higher than v1 (368) because of the founder's additions (about 87 hours: five-minute video with in-browser conversion, editing, multi-face navigation, design system, immersive visual design, website evolution) and the 13 TA-added requirements.
 
-**Can we deliver the complete MVP by December 23?** **Yes at the observed delivery rate; at the planning rate there is no slack.** Planning capacity (three streams, section 7) gives about 420 plannable hours after protecting a 22% reserve. Most-likely demand is 465. The repository's actual throughput from November 16 to 22 (60 merged pull requests in seven days, including six database-backed features) is roughly 40% above the planning rate, which would cover the gap. I am not attaching a probability. Instead the plan has measurable checkpoints (November 29, December 7, December 14) with pre-agreed contingency actions.
+**Can we deliver the complete MVP by December 23?** **Yes at the observed delivery rate; at the planning rate there is no slack.** Planning capacity (three streams, section 7) gives about 420 plannable hours after protecting a 22% reserve. Most-likely demand is 477. The repository's actual throughput from November 16 to 22 (60 merged pull requests in seven days, including six database-backed features) is roughly 40% above the planning rate, which would cover the gap. I am not attaching a probability. Instead the plan has measurable checkpoints (November 29, December 7, December 14) with pre-agreed contingency actions.
 
 **Biggest blockers:**
 * External legal review of the policies. External participants stay closed until it's done.
@@ -121,7 +121,7 @@ Rules applied: one primary status and one primary classification per requirement
 | # | Decision | Recommendation | Needed by | Blocks |
 |---|---|---|---|---|
 | N1 | Approve IP-1 (section 10) | Approve | Nov 25 | All work |
-| N2 | Approve the design proposal (SP-DESIGN-001 section 8) | Approve as proposed | Nov 26 | Navigation work in IP-1 |
+| N2 | Functional design approved in direction (Nov 24). Final visual design: approve SP-DESIGN-002 | Approve | Dec 1 | Visual polish only; IP-1 navigation proceeds on the approved structure |
 | N3 | Registration limit defaults (section 6.3) | Approve the defaults | Nov 27 | FND-01 |
 | N4 | Make the repository private | Yes: planning, infrastructure and runbook documents are visible to anyone | Nov 25 | Nothing technical; risk reduction |
 | N5 | Confirm subscriptions after checking prices (section 8): Vercel Pro, Resend free tier | Approve | Nov 27 | Email, commercial hosting |
@@ -176,7 +176,7 @@ Rules applied: one primary status and one primary classification per requirement
 | Sun Nov 29 | **Platform foundation and operational readiness** (IP-1) | IP-1 acceptance criteria met on Staging; staging and Production schemas aligned; email delivers in under 2 minutes; health checks run; at least 60 task hours complete |
 | Tue Dec 1 | Video device test complete | Results recorded for the SP-VID-001 device matrix; N6 decided |
 | Thu Dec 3 | Economic and metric parameters approved | N7 and N8 decided |
-| Mon Dec 7 | **Internal integrated demonstration** | On Staging, the creator and consumer journeys work end to end: register, discover, follow, Clique, Clique-first Home, publish text, photo and video, engage, repost, share, public preview. Control Center shell, blocking and reporting work. At least 50% of task hours (about 235) complete |
+| Mon Dec 7 | **Internal integrated demonstration** | On Staging, the creator and consumer journeys work end to end: register, discover, follow, Clique, Clique-first Home, publish text, photo and video, engage, repost, share, public preview. Control Center shell, blocking and reporting work. At least 50% of task hours (about 240) complete |
 | Mon Dec 14 | **Feature complete** | Every Build and Refactor row implemented with its tests on Staging; at least 90% of task hours complete; feature freeze |
 | Wed Dec 16 | Production batch PB-2 approved and applied | All migrations and functions on Member Production, with founder approval; external access still closed |
 | Fri Dec 18 | **Integration and journey verification** | The four stakeholder journeys pass on Staging, and on Production with test-class accounts; financial reconciliation exact; security review complete; zero open critical defects |
@@ -286,9 +286,9 @@ All are database settings the founder can change from the Control Center without
 | WP-06 | 32 | 46 | 74 | 4 | Real advertisers |
 | WP-07 | 36 | 52 | 83 | 3 | Metric definitions |
 | WP-08 | 37 | 53 | 80 | 6 | Legal review |
-| WP-09 | 23 | 31 | 50 | 4 | Design approval |
+| WP-09 | 32 | 43 | 69 | 4 | Visual design approval |
 | WP-10 | 33 | 47 | 75 | 12 | Usability participants |
-| **Total** | **328** | **465** | **748** | **43** | |
+| **Total** | **337** | **477** | **767** | **43** | |
 
 Task hours include each feature's own unit, database and component tests. WP-10 holds the cross-journey end-to-end, security, usability and reconciliation tasks. Integration, defect resolution and contingency come out of the reserve below rather than being added to the tasks, so testing isn't counted twice.
 
@@ -302,7 +302,7 @@ Task hours include each feature's own unit, database and component tests. WP-10 
 | Overhead | 10% for CI waits (about 15 to 25 minutes a PR), rebases on the shared migration sequence and coordination: 538 hours net |
 | Reserve | 22% for integration, defects, usability fixes, security findings and contingency: 118 hours |
 | **Plannable** | **about 420 hours** |
-| Most-likely demand | 465 hours: a gap of about 45 hours, roughly 10% |
+| Most-likely demand | 477 hours: a gap of about 57 hours, roughly 13% |
 | Observed rate | Nov 16 to 22: 60 merged PRs, about 74,000 lines added including tests, and six database-backed features with functions and deploy tooling. The plan assumes about 70% of that rate |
 
 Founder time: about 43 hours over the period (approvals, device tests, acceptance), roughly 1.5 to 2 hours a day. Expect heavier days on Dec 1, Dec 16, Dec 21 and Dec 22.
@@ -312,8 +312,8 @@ Founder time: about 43 hours over the period (approvals, device tests, acceptanc
 | Checkpoint | Green | Amber action | Red action (founder decision) |
 |---|---|---|---|
 | Nov 29 | 60 or more task hours done; IP-1 accepted | Move Stream C hours onto Stream A tasks | Revisit the sequencing of WP-09 polish |
-| Dec 7 | 235 or more task hours done | Use up to half the reserve early | Choose one: add a fourth stream for isolated front-end work; move the external release to Mon Jan 4 (which also avoids the holidays); or release on Dec 23 to the founder-known cohort while non-blocking rows finish by Jan 4. No requirement is removed |
-| Dec 14 | 420 or more task hours done; no Build row unstarted | Freeze polish and protect the integration days | Same options as Dec 7 |
+| Dec 7 | 240 or more task hours done | Use up to half the reserve early | Choose one: add a fourth stream for isolated front-end work; move the external release to Mon Jan 4 (which also avoids the holidays); or release on Dec 23 to the founder-known cohort while non-blocking rows finish by Jan 4. No requirement is removed |
+| Dec 14 | 430 or more task hours done; no Build row unstarted | Freeze polish and protect the integration days | Same options as Dec 7 |
 
 ---
 
@@ -394,7 +394,7 @@ Production batch PB-1 is listed separately for explicit approval.
 | Video device test page on Staging (an experiment, not a feature; hours taken from CNT-04) | CNT-04 spike | 3 |
 | **Total** | | **64 (optimistic 48, pessimistic 96)** |
 
-The ten implementation packages in section 11 sum exactly to the 465-hour matrix total.
+The ten implementation packages in section 11 sum exactly to the 477-hour matrix total.
 
 ### 10.2 Migration
 
@@ -486,7 +486,7 @@ Hours are summed from the matrix rows assigned to each package.
 
 | Package | Scope | Rows | Hours (most likely) | Depends on | Exit evidence |
 |---|---|---|---|---|---|
-| IP-1 | Foundation and operations: WP-01, INT-C01, INT-C12, CON-08, RWD-03 (capture), GOV-C13, REL-11, video device page | 17 | 64 | N1, N2 | Section 10.3 |
+| IP-1 | Foundation and operations: WP-01, INT-C01, INT-C12, CON-08, RWD-03 (capture), GOV-C13, REL-11, video device page | 17 | 64 | N1 | Section 10.3 |
 | IP-2 | Relationships and Home: WP-03 except CON-08 | 12 | 32 | IP-1 | Clique-first Home and faces, mute, counts, Active Supporter tests |
 | IP-3 | Governance core: GOV-C01 to C06, C10, C14, C16 to C18 | 11 | 33 | IP-1 | Control Center, blocking, reporting, enforcement and appeals journeys |
 | IP-4 | Content and discovery: WP-02 and WP-04 except CNT-04 | 27 | 66 | IP-1, IP-2 | Save, repost, share pipeline, preview, edit, discovery with reasons |
@@ -494,11 +494,11 @@ Hours are summed from the matrix rows assigned to each package.
 | IP-6 | Contributions and rewards: WP-05 except RWD-03, plus GOV-C07, GOV-C08 | 13 | 61 | IP-4, N7 | Ledger equals balances; every referral rule tested; settlement reconciles |
 | IP-7 | Advertising: WP-06 including video creatives, plus GOV-C09 | 16 | 48 | IP-3, IP-4 | Campaign journey; report from day one; separation tests |
 | IP-8 | Intelligence: WP-07 except INT-C01 and C12 | 13 | 40 | IP-1, IP-6, IP-7, N8 | Dictionary views match fixtures; North Star; founder overview |
-| IP-9 | Brand and acquisition: WP-09 | 10 | 31 | N2, Dec 7 screenshots | Website paths, disclosures, `/tour` economy retired |
+| IP-9 | Brand, acquisition and visual design: WP-09 | 10 | 43 | Visual design approval (SP-DESIGN-002), Dec 7 screenshots | Website paths, disclosures, `/tour` economy retired |
 | IP-10 | Release: WP-10 except REL-11, plus GOV-C11, C12, C15 | 15 | 53 | All | Section 9 and the release checklist |
-| **Total** | | **135** | **465** | | |
+| **Total** | | **135** | **477** | | |
 
-**Critical path:** N1 and N2 → IP-1 → IP-4 (share links and previews) → IP-6 (referrals, ledger, pool) → IP-8 (metrics) → IP-10 → PB-2 → acceptance → go/no-go.
+**Critical path:** N1 → IP-1 → IP-4 (share links and previews) → IP-6 (referrals, ledger, pool) → IP-8 (metrics) → IP-10 → PB-2 → acceptance → go/no-go.
 
 **In parallel:** IP-5 (video) after N6; IP-7 after IP-3; legal review; founder recruitment.
 
