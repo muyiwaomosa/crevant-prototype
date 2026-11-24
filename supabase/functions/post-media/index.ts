@@ -15,8 +15,14 @@
 // secret the founder sets for the schedule (never in the repository, GitHub
 // or Vercel):
 //   SUPABASE_URL               the project (checked by ../_shared/policy.ts)
-//   SUPABASE_ANON_KEY          fallback project key for the caller's own calls
-//   SUPABASE_SERVICE_ROLE_KEY  used only for Storage and the svc_* steps
+//   SUPABASE_PUBLISHABLE_KEYS  ("default"; or SUPABASE_PUBLISHABLE_KEY) fallback
+//                              project key for the caller's own calls
+//   SUPABASE_SECRET_KEYS       ("default"; or SUPABASE_SECRET_KEY) used only for
+//                              Storage and the svc_* steps; apikey header only
+//   SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+//                              the LEGACY keys: a transition fallback only, used
+//                              if no new key is present (../_shared/keys.ts).
+//                              No usable key of either kind: 503 unavailable.
 //   MEDIA_DRAIN_KEY            optional: at least 32 characters; lets the
 //                              schedule run the drain. Without it the drain
 //                              action refuses, and everything else works.
@@ -25,6 +31,7 @@
 // /check (signed-in members; the database decides), /drain (the schedule).
 import { handle, type Deps, type RpcResult } from './handler.ts'
 import { BUILD_HEADER, BUILD_ID, corsHeaders, memberFunctionRole, refusalReason } from '../_shared/policy.ts'
+import { projectKeys, serviceHeaders } from '../_shared/keys.ts'
 
 // Which projects this function may serve, and which browser origins may call
 // it there, come only from ../_shared/policy.ts (references generated from
@@ -33,20 +40,25 @@ import { BUILD_HEADER, BUILD_ID, corsHeaders, memberFunctionRole, refusalReason 
 // https://app.splitpost.ca, and local Supabase. Anywhere else it refuses.
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
 const url = env('SUPABASE_URL').replace(/\/+$/, '')
-const anon = env('SUPABASE_ANON_KEY')
-const service = env('SUPABASE_SERVICE_ROLE_KEY')
+// The publishable and secret keys (the legacy anon and service_role keys only
+// as a fallback): ../_shared/keys.ts. Never logged.
+const keys = projectKeys(env)
+const publishable = keys.publishable
+const service = keys.secret
 const drainKey = env('MEDIA_DRAIN_KEY')
 const role = memberFunctionRole(url)
-const configured = role !== null && anon !== '' && service !== ''
+const configured = role !== null && publishable !== '' && service !== ''
 const log = (event: string, detail: Record<string, string | number | boolean> = {}) => console.log(JSON.stringify({ fn: 'post-media', event, ...detail }))
 if (!configured) log('refusing_to_run', { reason: role === null ? refusalReason(url) : 'missing keys' })
+// Which kind of key is in use (new or legacy), never the key itself: shows when a project still runs on the legacy fallback.
+else log('keys', { publishable: keys.styles.publishable ?? 'none', secret: keys.styles.secret ?? 'none' })
 
 // Supabase Auth checks the token: signature (current ES256 key or the previous
 // HS256 key), expiry, and that its session still exists. Only a signed-in
-// user passes; the anon or service key used as a token does not.
+// user passes; a project key (publishable, secret, anon or service) used as a token does not.
 async function verifyUser(token: string, key: string | null): Promise<boolean> {
   try {
-    const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: key ?? anon, Authorization: `Bearer ${token}` } })
+    const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: key ?? publishable, Authorization: `Bearer ${token}` } })
     if (!res.ok) {
       await res.body?.cancel()
       return false
@@ -58,11 +70,11 @@ async function verifyUser(token: string, key: string | null): Promise<boolean> {
   }
 }
 
-async function rpc(key: string, token: string, fn: string, body: Record<string, unknown>): Promise<RpcResult> {
+async function rpc(auth: Record<string, string>, fn: string, body: Record<string, unknown>): Promise<RpcResult> {
   try {
     const res = await fetch(`${url}/rest/v1/rpc/${fn}`, {
       method: 'POST',
-      headers: { apikey: key, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
     const text = await res.text()
@@ -81,13 +93,17 @@ async function rpc(key: string, token: string, fn: string, body: Record<string, 
   }
 }
 
+// The secret key, as Supabase expects it: on apikey only for a new key, on
+// apikey and Authorization for the legacy service_role JWT (../_shared/keys.ts).
+const asService = serviceHeaders(service)
 const storage = (path: string, init: RequestInit) =>
-  fetch(`${url}/storage/v1${path}`, { ...init, headers: { apikey: service, Authorization: `Bearer ${service}`, ...(init.headers ?? {}) } })
+  fetch(`${url}/storage/v1${path}`, { ...init, headers: { ...(init.headers ?? {}), ...asService } })
 
 const deps: Deps = {
   verifyUser,
-  userRpc: (token, fn, body, key) => rpc(key ?? anon, token, fn, body),
-  serviceRpc: (fn, body) => rpc(service, service, fn, body),
+  // As the caller: their token, with the publishable key the app sent (or the function's own).
+  userRpc: (token, fn, body, key) => rpc({ apikey: key ?? publishable, Authorization: `Bearer ${token}` }, fn, body),
+  serviceRpc: (fn, body) => rpc(asService, fn, body),
   async upload(path, bytes) {
     try {
       const res = await storage(`/object/post-photos/${path}`, {

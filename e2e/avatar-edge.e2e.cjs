@@ -1,6 +1,8 @@
 // The avatar Edge Function against a real LOCAL Supabase (Storage, the Edge
-// runtime with JWT verification, the database), through the same gateway
-// the app uses. Run through scripts/e2e/avatar-edge.sh.
+// runtime with JWT verification, the database). The suite runs on a copy
+// started with ONLY the new API keys (publishable and secret); the legacy
+// fallback, the gateway's copy, and copies without usable keys are checked
+// in section 1b. Run through scripts/e2e/avatar-edge.sh.
 // Every check prints PASS or FAIL; the process exits non zero on any failure.
 const { execFileSync } = require('node:child_process')
 const { readFileSync } = require('node:fs')
@@ -19,9 +21,15 @@ const ANON = env('ANON_KEY')
 const JWT_SECRET = env('JWT_SECRET') // the local project's PREVIOUS (HS256) signing secret, for an expired-token test
 const crypto = require('node:crypto')
 const SERVICE = env('SERVICE_ROLE_KEY')
+const SECRET = env('SECRET_KEY') // the new secret key (sb_secret_...)
 const GUARD = env('GUARD_URL') // the same function, started with the PRODUCTION project's address
+const LEGACY = env('LEGACY_URL') // a copy with only the legacy anon and service_role keys
+const NOKEYS = env('NOKEYS_URL') // a copy with no key at all
+const PARTIAL = env('PARTIAL_URL') // a copy with a publishable key and only malformed secret values
 if (!/^http:\/\/(127\.0\.0\.1|localhost):/.test(API)) throw new Error('Refusing: not a local Supabase')
-const FN = `${API}/functions/v1/avatar`
+// The copy with only the new keys (scripts/e2e/avatar-edge.sh); the gateway's copy runs on what the local CLI provides.
+const GATEWAY = `${API}/functions/v1/avatar`
+const FN = env('FN_URL')
 const RUN = String(Date.now()).slice(-7)
 const PASSWORD = 'Avatar-Edge-42-pass'
 const fixture = (n) => readFileSync(path.join(__dirname, 'fixtures', 'avatars', n))
@@ -115,6 +123,8 @@ function frame(b) {
       ['a signed-out (revoked) session', R.token],
       ['the anon key used as a token', ANON],
       ['the service role key used as a token', SERVICE],
+      ['the publishable key used as a token', PUB],
+      ['the secret key used as a token', SECRET],
     ]
     for (const [what, token] of cases) {
       const up = await upload(token, fixture('good.jpg'))
@@ -127,7 +137,7 @@ function frame(b) {
     check('nothing was stored or authorised by any refused request', filesOf(A.id) === 0 && filesOf(R.id) === 0
       && sql(`select count(*) from social.avatar_uploads where user_id in ('${A.id}', '${R.id}')`) === '0')
     const fallback = await fetch(`${FN}/urls`, { method: 'POST', headers: { Authorization: `Bearer ${B.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [A.id] }) })
-    check('a valid session works without the publishable key header too (the function falls back to its own project key)', fallback.status === 200, String(fallback.status))
+    check('a valid session works without the publishable key header too (the function falls back to its own publishable key)', fallback.status === 200, String(fallback.status))
   }
 
   // 1. Who can call it.
@@ -140,6 +150,30 @@ function frame(b) {
     check('a signed-in account without pilot membership is refused (no_pilot_access), nothing stored', n.status === 403 && n.json?.error === 'no_pilot_access' && filesOf(N.id) === 0, `${n.status} ${JSON.stringify(n.json)}`)
     const nu = await urls(N.token, [A.id])
     check('and can\'t get picture links', nu.status === 403, String(nu.status))
+  }
+
+  // 1b. Keys: everything above and below runs on the copy with only the new
+  //     keys. The legacy keys still work as a fallback; without a usable key
+  //     of each kind the function refuses to run.
+  {
+    const L = await account('picl')
+    const up = await call('upload', L.token, fixture('good.jpg'), { url: LEGACY, contentType: 'image/jpeg' })
+    const links = await call('urls', B.token, JSON.stringify({ ids: [L.id] }), { url: LEGACY, contentType: 'application/json' })
+    const noPub = await fetch(`${LEGACY}/urls`, { method: 'POST', headers: { Authorization: `Bearer ${B.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [L.id] }) })
+    check('with only the legacy keys (transition fallback), upload and links work', up.status === 200 && filesOf(L.id) === 1 && typeof links.json?.avatars?.[L.id]?.url === 'string',
+      `${up.status} ${links.status}`)
+    check('and a request without the publishable key header falls back to the legacy anon key', noPub.status === 200, String(noPub.status))
+    const gw = await call('urls', B.token, JSON.stringify({ ids: [L.id] }), { url: GATEWAY, contentType: 'application/json' })
+    check('the copy behind the local gateway works too (on whatever keys the local CLI gives it)', gw.status === 200 && typeof gw.json?.avatars?.[L.id]?.url === 'string', String(gw.status))
+    const rm = await call('remove', L.token, null, { url: LEGACY })
+    check('with only the legacy keys, remove deletes the file (Storage and the service-only step)', rm.status === 200 && filesOf(L.id) === 0 && current(L.id) === '', String(rm.status))
+    for (const [what, url] of [['no key at all', NOKEYS], ['a publishable key but only malformed secret values', PARTIAL]]) {
+      const r = await call('upload', L.token, fixture('good.jpg'), { url, contentType: 'image/jpeg' })
+      const l = await call('urls', B.token, JSON.stringify({ ids: [A.id] }), { url, contentType: 'application/json' })
+      check(`with ${what}, the function refuses to run (503 unavailable) and touches nothing`,
+        [r, l].every((x) => x.status === 503 && x.json?.error === 'unavailable') && filesOf(L.id) === 0
+        && sql(`select count(*) from social.avatar_uploads where user_id = '${L.id}'`) === '1', `${r.status} ${l.status}`)
+    }
   }
 
   // 2. Nothing the browser sends is trusted.

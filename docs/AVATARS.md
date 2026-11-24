@@ -26,8 +26,8 @@ Edge Function is deployed by hand to staging only.
 | Revocation | Committing re-checks membership at that moment. Revoked members can't upload, remove or get links; their picture isn't handed out to anyone; a moderator's Hide on a profile hides its picture too. |
 | Concurrency | One picture change at a time per member (a database lock). Overlapping uploads end with the newest picture and every replaced file deleted (tested with three at once). |
 | Production can't be targeted | The function refuses to run unless its project is `kpudeppgokpjhvaqrprn` (or local Supabase), so a deploy anywhere else serves nothing (tested). |
-| No privileged credentials exposed | The function reads only `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`, which Supabase provides to every hosted function. The service key stays inside the function, used only for Storage and the two service-only database steps. Nothing is stored in the repository, GitHub, Vercel or the browser. |
-| Legacy keys | These two environment keys are staging's **legacy** anon and service_role keys (enabled today). The anon key is only a fallback if a request has no publishable key. If the legacy keys are ever disabled, the function stops working safely (it refuses, everyone sees initials) and must be updated to the new secret key first. Changing the JWT signing keys needs no change here. |
+| No privileged credentials exposed | The function reads only `SUPABASE_URL` and the project's API keys, which Supabase provides to every hosted function: the new `SUPABASE_PUBLISHABLE_KEYS` and `SUPABASE_SECRET_KEYS` (the key named `default`), through `supabase/functions/_shared/keys.ts`. The secret key stays inside the function, used only for Storage and the two service-only database steps, and is sent on the `apikey` header only. It is never logged. Nothing is stored in the repository, GitHub, Vercel or the browser. |
+| API keys, and the legacy fallback | The new keys are always preferred. The **legacy** `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are used only if no new key is present, during the transition (staging and member Production both still had them in November 2026). The publishable key is only a fallback if a request has none (the app always sends one). With no usable key of either kind the function stops working safely: it refuses (503), everyone sees initials. So the legacy keys can be disabled once the updated function is deployed and checked, staging first (`docs/FUNCTIONS-DEPLOYMENT.md`, API keys). Changing the JWT signing keys needs no change here. |
 | Browsers | Only the member app's Previews may call it from a browser (and local development locally). Sign-in and the database checks are the real boundary. |
 
 ### jpeg-js security review
@@ -106,8 +106,11 @@ Profile > Moderation > Picture storage:
    `--no-verify-jwt`, which is required (it matches `supabase/config.toml`): the
    gateway's check doesn't handle staging's ES256 keys, and the function
    verifies every caller with Supabase Auth itself. No secret is created. In the dashboard (Edge
-   Functions > Secrets), confirm `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
-   `SUPABASE_SERVICE_ROLE_KEY` are listed (Supabase provides them).
+   Functions > Secrets), confirm `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS` and
+   `SUPABASE_SECRET_KEYS` are listed (Supabase provides them). In Edge
+   Functions > Logs, the function's start-up line should read
+   `"event":"keys","publishable":"new","secret":"new"`; `"legacy"` means it
+   found no new key and is on the fallback.
 5. Fast-forward the Preview branch to the merged commit (no force push, no
    Vercel change). The Preview's new security header allows images from the
    staging project.

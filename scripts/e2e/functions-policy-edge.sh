@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Phase 1B-2: the Edge Function project and origin policy, and the
 # independent verifier, on the real Edge runtime ("guard copies": each
-# function started on its own with a chosen SUPABASE_URL and dummy keys, so
-# nothing reaches a real project). Test only; needs Docker.
+# function started on its own with a chosen SUPABASE_URL and placeholder
+# keys, so nothing reaches a real project). Test only; needs Docker.
 #
 #   1. avatar and post-media as staging, and as member Production (a copy with
 #      a TEST member reference written into _shared/projects.ts): the verifier
@@ -71,6 +71,11 @@ copy() {
 EXTRA=()
 if [ -n "${HTTPS_PROXY:-}" ]; then EXTRA+=(-e HTTPS_PROXY -e HTTP_PROXY -e NO_PROXY=127.0.0.1,localhost); fi
 if [ -n "${EDGE_CA_FILE:-}" ]; then EXTRA+=(-v "${EDGE_CA_FILE}:/extra-ca.crt:ro" -e DENO_CERT=/extra-ca.crt); fi
+# Placeholder keys, well-formed so a member function copy runs (it refuses to
+# run without usable keys: supabase/functions/_shared/keys.ts), but not real
+# keys of any project. Only the new key style: the functions prefer it.
+DUMMY_PUB='{"default":"sb_publishable_placeholder_not_a_real_key"}'
+DUMMY_SECRET='{"default":"sb_secret_placeholder_not_a_real_key"}'
 # start <container> <functions root> <function> <SUPABASE_URL> [docker args...]: prints the port.
 # The copy must answer (any HTTP reply); if it never does, the script stops
 # here with its state and output (redacted), instead of a later "fetch failed".
@@ -90,7 +95,7 @@ start() {
     fi
     echo "$PORT" > "$TMP/port"
     docker rm -f "$name" >/dev/null 2>&1 || true
-    docker run -d --name "$name" --network host "${EXTRA[@]}" -e SUPABASE_URL="$url" -e SUPABASE_ANON_KEY=dummy -e SUPABASE_SERVICE_ROLE_KEY=dummy "$@" \
+    docker run -d --name "$name" --network host "${EXTRA[@]}" -e SUPABASE_URL="$url" -e SUPABASE_PUBLISHABLE_KEYS="$DUMMY_PUB" -e SUPABASE_SECRET_KEYS="$DUMMY_SECRET" "$@" \
       -v "$root/supabase/functions/$fn:/home/deno/functions/$fn:ro" -v "$root/supabase/functions/_shared:/home/deno/functions/_shared:ro" \
       "$EDGE_IMAGE" start --main-service "/home/deno/functions/$fn" --ip 127.0.0.1 --port "$PORT" >/dev/null
     if private_ports_wait_http "$name" "$PORT" "http://127.0.0.1:$PORT/$fn/x" 120 2>"$TMP/start.err"; then
