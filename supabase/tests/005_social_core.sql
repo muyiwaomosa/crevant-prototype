@@ -102,6 +102,8 @@ declare
   -- Previews and search measurement (20261204000000), once applied. app_public_post is
   -- the one function visitors may call (checked below and in 006).
   previews text[] := array['app_founder_search_metrics', 'app_note_search', 'app_note_search_selection', 'app_public_post', 'app_public_previews_allowed', 'app_set_public_previews'];
+  -- Rewards (20261205000000), once applied: points, simulated earnings, founder review, revenue and month close.
+  rewards text[] := array['app_founder_close_month', 'app_founder_record_sim_revenue', 'app_founder_referral_queue', 'app_founder_review_referral', 'app_founder_rewards_overview', 'app_founder_set_rewards', 'app_my_points', 'app_my_points_history', 'app_my_simulated_earnings'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -133,6 +135,9 @@ begin
   end if;
   if to_regclass('social.preview_consents') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || previews) x);
+  end if;
+  if to_regclass('sim.points_ledger') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || rewards) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -315,7 +320,7 @@ begin
                -- launch settings it reads. No waitlist, invitation or admin data.
                and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings)\M', '', 'g')
                   -- Relationships (20261201000000): the member's own non-binding Support Intent.
-                  ~* '\m(ops|waitlist_api|sim|analytics)\.|\mintent\.(?!support_intents\M)') then
+                  ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings)\M)') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (

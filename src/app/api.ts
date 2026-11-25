@@ -46,6 +46,46 @@ export interface Post {
   reason?: string
 }
 
+/** Connection Points (20261205000000). All values are SIMULATED during the pilot: never money. */
+export interface MyPoints {
+  /** Recognized contribution: counts toward recognition, never redeemable. */
+  recognized: number
+  /** Qualified referrals waiting for review (redeemable once approved). */
+  redeemablePending: number
+  /** Approved redeemable points not yet settled. */
+  redeemableApproved: number
+  /** Points already allocated in a simulated month close. */
+  settled: number
+  /** Simulated value of one approved redeemable point, in cents. */
+  simulatedPointValueCents: number
+  /** Simulated value of the member's approved redeemable points, in cents. */
+  simulatedValueCents: number
+}
+export type PointsEntry = {
+  id: number
+  action: string
+  points: number
+  redeemable: boolean
+  status: string
+  createdAt: string
+  creator: { username: string; displayName: string } | null
+  postId: string | null
+}
+export type ReferralReview = { awardId: number; referrer: string | null; referred: string | null; firstFollow: string | null; createdAt: string }
+export type RewardsOverview = {
+  recognized: number
+  redeemablePending: number
+  redeemableApproved: number
+  settled: number
+  revenueCents: number
+  creatorCents: number
+  poolCents: number
+  splitpostCents: number
+  openPoolCents: number
+  paused: boolean
+  ruleVersion: string
+}
+
 /** Card details (20261202000000), fetched for many posts at once. */
 export interface PostMeta {
   topic: string | null
@@ -438,6 +478,13 @@ export interface AppApi {
   /** Whether the member has opted in to public previews of their posts (off until they choose); null before 20261204000000. */
   publicPreviewsAllowed(): Promise<boolean | null>
   setPublicPreviews(allowed: boolean): Promise<void>
+  /** Rewards (20261205000000), all simulated; null before the migration. */
+  myPoints(): Promise<MyPoints | null>
+  myPointsHistory(before?: number): Promise<PointsEntry[]>
+  mySimulatedEarnings(): Promise<Array<{ month: string; creatorCents: number }> | null>
+  founderReferralQueue(): Promise<ReferralReview[]>
+  founderReviewReferral(awardId: number, approve: boolean): Promise<void>
+  founderRewardsOverview(): Promise<RewardsOverview | null>
   like(postId: string): Promise<void>
   unlike(postId: string): Promise<void>
   /** requestId: as for createPost. */
@@ -525,6 +572,9 @@ const MESSAGES: Record<string, string> = {
   not_in_clique: 'That creator is no longer in your Clique. Nothing was changed.',
   already_in_clique: 'That creator is already in your Clique. Nothing was changed.',
   cannot_repost_own: "You can't repost your own post.",
+  month_not_over: 'That month is not over yet.',
+  already_closed: 'That month is already closed.',
+  does_not_reconcile: "The month didn't add up, so nothing was closed. Please tell the team.",
   invalid_query: 'Type at least two letters to search.',
   rate_limited: "You're going a little fast. Please wait a moment and try again.",
   too_many: 'Something went wrong. Please try again.',
@@ -1388,6 +1438,77 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         throw toAppError(error)
       }
       return data === true
+    },
+    async myPoints() {
+      const { data, error } = await client.rpc('app_my_points')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_points')) return null
+        throw toAppError(error)
+      }
+      const r = (Array.isArray(data) ? data[0] : null) as Record<string, unknown> | null
+      if (!r) return null
+      return {
+        recognized: num(r.recognized as number),
+        redeemablePending: num(r.redeemable_pending as number),
+        redeemableApproved: num(r.redeemable_approved as number),
+        settled: num(r.settled as number),
+        simulatedPointValueCents: num(r.simulated_point_value_cents as number),
+        simulatedValueCents: num(r.simulated_value_cents as number),
+      }
+    },
+    async myPointsHistory(before) {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_my_points_history', { p_before: before ?? null, p_limit: 30 })
+      return rows.map((r) => ({
+        id: num(r.id as number),
+        action: String(r.action),
+        points: num(r.points as number),
+        redeemable: Boolean(r.redeemable),
+        status: String(r.status),
+        createdAt: String(r.created_at),
+        creator: r.creator_username ? { username: String(r.creator_username), displayName: String(r.creator_display_name) } : null,
+        postId: (r.post_id as string | null) ?? null,
+      }))
+    },
+    async mySimulatedEarnings() {
+      const { data, error } = await client.rpc('app_my_simulated_earnings')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_simulated_earnings')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({ month: String(r.month), creatorCents: num(r.creator_cents as number) }))
+    },
+    async founderReferralQueue() {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_founder_referral_queue')
+      return rows.map((r) => ({
+        awardId: num(r.award_id as number),
+        referrer: (r.referrer_username as string | null) ?? null,
+        referred: (r.referred_username as string | null) ?? null,
+        firstFollow: (r.first_follow_username as string | null) ?? null,
+        createdAt: String(r.created_at),
+      }))
+    },
+    founderReviewReferral: (awardId, approve) => rpc<void>('app_founder_review_referral', { p_award: awardId, p_approve: approve }),
+    async founderRewardsOverview() {
+      const { data, error } = await client.rpc('app_founder_rewards_overview')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_rewards_overview')) return null
+        throw toAppError(error)
+      }
+      const r = (Array.isArray(data) ? data[0] : null) as Record<string, unknown> | null
+      if (!r) return null
+      return {
+        recognized: num(r.recognized as number),
+        redeemablePending: num(r.redeemable_pending as number),
+        redeemableApproved: num(r.redeemable_approved as number),
+        settled: num(r.settled as number),
+        revenueCents: num(r.revenue_cents as number),
+        creatorCents: num(r.creator_cents as number),
+        poolCents: num(r.pool_cents as number),
+        splitpostCents: num(r.splitpost_cents as number),
+        openPoolCents: num(r.open_pool_cents as number),
+        paused: Boolean(r.paused),
+        ruleVersion: String(r.rule_version),
+      }
     },
     setPublicPreviews: (allowed) => rpc<void>('app_set_public_previews', { p_allowed: allowed, p_wording_version: allowed ? PREVIEW_WORDING_VERSION : null }),
     repost: (postId) => rpc<void>('app_repost', { p_post: postId }),

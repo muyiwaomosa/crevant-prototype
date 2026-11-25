@@ -42,7 +42,7 @@ vi.mock('./photoPrep', async (importOriginal) => {
 })
 import { clampOffset, coverScale, sourceRect } from './avatars'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage, SavedPage } from './pages'
-import { MySplitPage } from './split'
+import { MySplitPage, RewardsReviewPage } from './split'
 
 afterEach(cleanup)
 
@@ -94,6 +94,14 @@ function fakeApi(
   const shares: Array<{ id: string; channel: string }> = []
   const searchNotes: Array<Record<string, unknown>> = []
   const previews = { allowed: false }
+  const rewards = {
+    points: null as null | { recognized: number; redeemablePending: number; redeemableApproved: number; settled: number; simulatedPointValueCents: number; simulatedValueCents: number },
+    history: [] as Array<{ id: number; action: string; points: number; redeemable: boolean; status: string; createdAt: string; creator: { username: string; displayName: string } | null; postId: string | null }>,
+    earnings: null as null | Array<{ month: string; creatorCents: number }>,
+    queue: [] as Array<{ awardId: number; referrer: string | null; referred: string | null; firstFollow: string | null; createdAt: string }>,
+    reviewed: [] as Array<{ id: number; approve: boolean }>,
+    overview: null as null | { recognized: number; redeemablePending: number; redeemableApproved: number; settled: number; revenueCents: number; creatorCents: number; poolCents: number; splitpostCents: number; openPoolCents: number; paused: boolean; ruleVersion: string },
+  }
   const likes = new Set<string>()
   const comments: Array<{ id: string; post: string; author: string; body: string; at: number; deleted: boolean }> = []
   let clock = Date.parse('2026-11-17T12:00:00Z')
@@ -741,6 +749,25 @@ function fakeApi(
     async noteSearchSelection(surface, topic) {
       searchNotes.push({ surface, selected: true, topic: topic ?? null })
     },
+    async myPoints() {
+      return rewards.points
+    },
+    async myPointsHistory() {
+      return rewards.history
+    },
+    async mySimulatedEarnings() {
+      return rewards.earnings
+    },
+    async founderReferralQueue() {
+      return rewards.queue
+    },
+    async founderReviewReferral(id, approve) {
+      rewards.reviewed.push({ id, approve })
+      rewards.queue = rewards.queue.filter((q) => q.awardId !== id)
+    },
+    async founderRewardsOverview() {
+      return rewards.overview
+    },
     async publicPreviewsAllowed() {
       return previews.allowed
     },
@@ -870,7 +897,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, searchNotes, previews, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
+  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, searchNotes, previews, rewards, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -897,6 +924,7 @@ function renderApp(path: string, api: AppApi) {
             <Route path="clique" element={<CliquePage />} />
             <Route path="saved" element={<SavedPage />} />
             <Route path="split" element={<MySplitPage />} />
+            <Route path="split/review" element={<RewardsReviewPage />} />
             <Route path="catch-up/:username" element={<CatchUpPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="moderation" element={<ModerationQueuePage />} />
@@ -2954,5 +2982,59 @@ describe('previews and search measurement (20261204000000)', () => {
     expect(fake.follows.size).toBe(0)
     fireEvent.click(prompt.getByRole('button', { name: 'Not now' }))
     expect(window.localStorage.getItem('splitpost.join_for')).toBeNull()
+  })
+})
+
+describe('rewards (20261205000000): simulated Connection Points', () => {
+  it('My Split shows recognized and redeemable points separately, and their value marked as simulated', async () => {
+    const fake = fakeApi()
+    fake.rewards.points = { recognized: 14, redeemablePending: 100, redeemableApproved: 100, settled: 0, simulatedPointValueCents: 20, simulatedValueCents: 2000 }
+    renderApp('/app/split', fake.api)
+    const box = within(await screen.findByTestId('split-points'))
+    expect(box.getByText('Recognized').nextSibling?.textContent).toBe('14')
+    expect(box.getByText(/From qualified referrals\. 100 waiting for review\./)).toBeTruthy()
+    expect(box.getByText('$20.00')).toBeTruthy()
+    expect(box.getByText('Simulated')).toBeTruthy()
+    expect(screen.getByTestId('split-disclosure').textContent).toMatch(/simulated.*no cash value.*nothing is paid out/i)
+  })
+
+  it('the History face lists contributions newest first, with reversals shown', async () => {
+    const fake = fakeApi()
+    fake.rewards.points = { recognized: 3, redeemablePending: 0, redeemableApproved: 0, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 0 }
+    fake.rewards.history = [
+      { id: 3, action: 'meaningful_comment', points: -2, redeemable: false, status: 'reversal', createdAt: '2026-11-25T12:00:00Z', creator: { username: 'creator_1', displayName: 'Creator 1' }, postId: 'p1' },
+      { id: 2, action: 'repost', points: 5, redeemable: false, status: 'recognized', createdAt: '2026-11-25T11:00:00Z', creator: { username: 'creator_1', displayName: 'Creator 1' }, postId: 'p1' },
+    ]
+    renderApp('/app/split?face=history', fake.api)
+    const list = within(await screen.findByTestId('points-history'))
+    expect(list.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      expect.stringMatching(/Thoughtful comment.*Reversed.*Creator 1.*-2/),
+      expect.stringMatching(/Reposted.*Recognized.*Creator 1.*\+5/),
+    ])
+  })
+
+  it('the founder reviews qualified referrals and sees the simulated reconciliation', async () => {
+    const fake = fakeApi('me', { founder: true })
+    fake.rewards.points = { recognized: 0, redeemablePending: 0, redeemableApproved: 0, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 0 }
+    fake.rewards.queue = [{ awardId: 7, referrer: 'creator_1', referred: 'creator_2', firstFollow: 'creator_3', createdAt: '2026-11-25T12:00:00Z' }]
+    fake.rewards.overview = { recognized: 10, redeemablePending: 100, redeemableApproved: 0, settled: 0, revenueCents: 15001, creatorCents: 4000, poolCents: 2000, splitpostCents: 9001, openPoolCents: 2000, paused: false, ruleVersion: 'd6-v1' }
+    renderApp('/app/split', fake.api)
+    fireEvent.click(await screen.findByRole('link', { name: 'Founder: review referrals and rewards' }))
+    const overview = within(await screen.findByTestId('rewards-overview'))
+    expect(overview.getByText('$40.00')).toBeTruthy()
+    expect(overview.getAllByText('$20.00')).toHaveLength(2) // fan pool and open pool
+    fireEvent.click(within(screen.getByTestId('referral-queue')).getByRole('button', { name: 'Approve referral by creator_1' }))
+    await waitFor(() => expect(fake.rewards.reviewed).toEqual([{ id: 7, approve: true }]))
+    expect(await screen.findByText('Nothing waiting.')).toBeTruthy()
+  })
+
+  it('creators see their simulated 40% share, marked simulated', async () => {
+    const fake = fakeApi()
+    fake.rewards.earnings = [{ month: '2026-10-01', creatorCents: 4000 }]
+    renderApp('/app/profile', fake.api)
+    const money = within(await screen.findByTestId('simulated-earnings'))
+    expect(money.getByText('Simulated')).toBeTruthy()
+    expect(money.getByText(/\$40\.00/)).toBeTruthy()
+    expect(money.getByText(/Nothing is paid during the pilot/)).toBeTruthy()
   })
 })

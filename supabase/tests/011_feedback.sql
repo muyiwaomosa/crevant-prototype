@@ -48,7 +48,10 @@ begin
         -- Foundation v2 (20261130000000) adds the founder's registration functions; checked in 016.
         and p.proname not in ('app_founder_create_invitation_link', 'app_founder_registration', 'app_founder_set_registration',
                               -- 20261204000000 adds the founder's search counts; checked in 020.
-                              'app_founder_search_metrics'))
+                              'app_founder_search_metrics',
+                              -- 20261205000000 adds the founder's rewards functions; checked in 021.
+                              'app_founder_close_month', 'app_founder_record_sim_revenue', 'app_founder_referral_queue',
+                              'app_founder_review_referral', 'app_founder_rewards_overview', 'app_founder_set_rewards'))
      is distinct from array['app_founder_feedback', 'app_founder_feedback_add_note', 'app_founder_feedback_list', 'app_founder_feedback_set_status'] then
     bad := bad || 'the set of app_founder_* functions'::text;
   end if;
