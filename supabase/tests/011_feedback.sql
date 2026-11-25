@@ -55,7 +55,9 @@ begin
                               -- 20261208000000 adds the founder's advertising functions; checked in 024.
                               'app_founder_ad_demand', 'app_founder_ads', 'app_founder_attribute_campaign_revenue', 'app_founder_campaign_report',
                               'app_founder_record_advertiser_feedback', 'app_founder_record_conversions', 'app_founder_review_advertiser',
-                              'app_founder_save_advertiser', 'app_founder_save_campaign', 'app_founder_set_campaign_status'))
+                              'app_founder_save_advertiser', 'app_founder_save_campaign', 'app_founder_set_campaign_status',
+                              -- 20261210000000 adds the founder's overview; checked in 026.
+                              'app_founder_overview'))
      is distinct from array['app_founder_feedback', 'app_founder_feedback_add_note', 'app_founder_feedback_list', 'app_founder_feedback_set_status'] then
     bad := bad || 'the set of app_founder_* functions'::text;
   end if;

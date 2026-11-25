@@ -180,6 +180,13 @@ declare
     'public.app_remove_ad_exclusion(text,text)',
     'public.app_set_ad_preference(text,text)'
   ];
+  -- Intelligence (20261210000000), once applied.
+  intelligence text[] := array[
+    'public.app_creator_insights(integer)',
+    'public.app_founder_overview()',
+    'public.app_my_contribution_insights()',
+    'public.app_note_open(uuid)'
+  ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
   actual text[];
@@ -226,6 +233,10 @@ begin
   end if;
   if to_regclass('ads.campaigns') is not null then
     expected := expected || advertising;
+  end if;
+  if to_regclass('social.post_opens') is not null then
+    expected := array_replace(expected, 'public.app_founder_record_conversions(uuid,date,integer,text)', 'public.app_founder_record_conversions(uuid,date,integer,text,integer)')
+                || intelligence;
   end if;
   -- Governance refinements (20261207000000): app_mod_enforce gains p_immediate.
   if to_regprocedure('ops.other_moderator_available(uuid, uuid)') is not null then

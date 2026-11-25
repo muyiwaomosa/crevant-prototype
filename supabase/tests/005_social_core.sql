@@ -57,7 +57,9 @@ begin
                             -- previews and search measurement (20261204000000), once applied
                             'search_metrics_daily', 'preview_consents', 'preview_visits', 'preview_rate',
                             -- governance (20261206000000), once applied
-                            'blocks', 'block_events')
+                            'blocks', 'block_events',
+                            -- intelligence (20261210000000), once applied
+                            'post_opens')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -113,6 +115,8 @@ declare
                               'app_founder_attribute_campaign_revenue', 'app_founder_campaign_report', 'app_founder_record_advertiser_feedback',
                               'app_founder_record_conversions', 'app_founder_review_advertiser', 'app_founder_save_advertiser', 'app_founder_save_campaign',
                               'app_founder_set_campaign_status', 'app_my_ad_exclusions', 'app_remove_ad_exclusion', 'app_set_ad_preference'];
+  -- Intelligence (20261210000000), once applied.
+  intelligence text[] := array['app_creator_insights', 'app_founder_overview', 'app_my_contribution_insights', 'app_note_open'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -153,6 +157,9 @@ begin
   end if;
   if to_regclass('ads.campaigns') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || advertising) x);
+  end if;
+  if to_regclass('social.post_opens') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || intelligence) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -333,7 +340,7 @@ begin
                -- And foundation v2 (20261130000000): adult confirmations, controlled
                -- registration (settings, links, records, the shared check) and the
                -- launch settings it reads. No waitlist, invitation or admin data.
-               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators|other_moderator_available)\M', '', 'g')
+               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators|other_moderator_available|connections|week_start)\M', '', 'g')
                   -- Relationships (20261201000000): the member's own non-binding Support Intent.
                   ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings|reverse|restore_hidden)\M)') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';

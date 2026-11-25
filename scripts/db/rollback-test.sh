@@ -16,8 +16,9 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: ad creatives (20261209000000,
-# scripts/db/rollback-ad-creatives-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: intelligence (20261210000000,
+# scripts/db/rollback-intelligence-test.sh, the newest, so it goes first),
+# ad creatives (20261209000000, scripts/db/rollback-ad-creatives-test.sh),
 # advertising (20261208000000, scripts/db/rollback-advertising-test.sh),
 # governance refinements (20261207000000, scripts/db/rollback-governance-refinements-test.sh),
 # governance (20261206000000, scripts/db/rollback-governance-test.sh),
@@ -118,9 +119,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+INTELLIGENCE=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261210000000')")
+if [ "$INTELLIGENCE" = t ]; then
+  # The newest migration (intelligence) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-ad-creatives.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the ad creatives rollback refuses while intelligence is recorded" \
+    || bad "the ad creatives rollback did not refuse while intelligence is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-intelligence-test.sh; then
+    ok "intelligence: the rollback refuses while post opens, self-reported conversions or a later migration exist, and otherwise removes exactly its own objects"
+  else
+    bad "the intelligence rollback tests failed"
+  fi
+fi
 CREATIVES=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261209000000')")
 if [ "$CREATIVES" = t ]; then
-  # The newest migration (ad creatives) goes first.
+  # Then ad creatives.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-advertising.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the advertising rollback refuses while ad creatives are recorded" \
@@ -579,9 +593,19 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
                           && ok "after reapplying, the advertising rollback refuses while ad creatives are recorded" \
                           || bad "the advertising rollback did not refuse after reapply while ad creatives are recorded (exit $code)"
                         out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-ad-creatives.sql 2>&1); code=$?
-                        [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-                          && ok "after reapplying, the ad creatives rollback check passes again" \
-                          || bad "ad creatives rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                        if [ "$INTELLIGENCE" = t ]; then
+                          [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                            && ok "after reapplying, the ad creatives rollback refuses while intelligence is recorded" \
+                            || bad "the ad creatives rollback did not refuse after reapply while intelligence is recorded (exit $code)"
+                          out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-intelligence.sql 2>&1); code=$?
+                          [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                            && ok "after reapplying, the intelligence rollback check passes again" \
+                            || bad "intelligence rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                        else
+                          [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                            && ok "after reapplying, the ad creatives rollback check passes again" \
+                            || bad "ad creatives rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                        fi
                       else
                         [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                           && ok "after reapplying, the advertising rollback check passes again" \
