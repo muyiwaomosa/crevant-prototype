@@ -16,8 +16,9 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: governance refinements (20261207000000,
-# scripts/db/rollback-governance-refinements-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: advertising (20261208000000,
+# scripts/db/rollback-advertising-test.sh, the newest, so it goes first),
+# governance refinements (20261207000000, scripts/db/rollback-governance-refinements-test.sh),
 # governance (20261206000000, scripts/db/rollback-governance-test.sh),
 # rewards (20261205000000, scripts/db/rollback-rewards-test.sh),
 # previews and search (20261204000000, scripts/db/rollback-previews-test.sh),
@@ -116,9 +117,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+ADVERTISING=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261208000000')")
+if [ "$ADVERTISING" = t ]; then
+  # The newest migration (advertising) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-governance-refinements.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the governance refinements rollback refuses while advertising is recorded" \
+    || bad "the governance refinements rollback did not refuse while advertising is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-advertising-test.sh; then
+    ok "advertising: its rollback refuses while advertisers, preferences, exclusions, served ads, revenue or a later migration exist, and otherwise removes exactly its own objects"
+  else
+    bad "the advertising rollback tests failed"
+  fi
+fi
 REFINEMENTS=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261207000000')")
 if [ "$REFINEMENTS" = t ]; then
-  # The newest migration (governance refinements) goes first.
+  # Then the governance refinements.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-governance.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the governance rollback refuses while the refinements are recorded" \
@@ -541,9 +555,19 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
                       && ok "after reapplying, the governance rollback refuses while the refinements are recorded" \
                       || bad "the governance rollback did not refuse after reapply while the refinements are recorded (exit $code)"
                     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-governance-refinements.sql 2>&1); code=$?
-                    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-                      && ok "after reapplying, the governance refinements rollback check passes again" \
-                      || bad "governance refinements rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                    if [ "$ADVERTISING" = t ]; then
+                      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                        && ok "after reapplying, the governance refinements rollback refuses while advertising is recorded" \
+                        || bad "the governance refinements rollback did not refuse after reapply while advertising is recorded (exit $code)"
+                      out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-advertising.sql 2>&1); code=$?
+                      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                        && ok "after reapplying, the advertising rollback check passes again" \
+                        || bad "advertising rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                    else
+                      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                        && ok "after reapplying, the governance refinements rollback check passes again" \
+                        || bad "governance refinements rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                    fi
                   else
                     [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                       && ok "after reapplying, the governance rollback check passes again" \

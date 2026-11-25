@@ -108,6 +108,11 @@ declare
   rewards text[] := array['app_founder_close_month', 'app_founder_record_sim_revenue', 'app_founder_referral_queue', 'app_founder_review_referral', 'app_founder_rewards_overview', 'app_founder_set_rewards', 'app_my_points', 'app_my_points_history', 'app_my_simulated_earnings'];
   -- Governance (20261206000000), once applied: blocking, enforcement, notices and appeals.
   governance text[] := array['app_appeal', 'app_block', 'app_mark_notices_read', 'app_mod_appeals', 'app_mod_decide_appeal', 'app_mod_enforce', 'app_mod_lift', 'app_mod_member_record', 'app_my_blocks', 'app_my_notices', 'app_my_standing', 'app_unblock'];
+  -- Advertising (20261208000000), once applied: preferences, serving, measurement, founder management.
+  advertising text[] := array['app_ad_categories', 'app_ad_event', 'app_ad_for', 'app_clear_ad_preferences', 'app_founder_ad_demand', 'app_founder_ads',
+                              'app_founder_attribute_campaign_revenue', 'app_founder_campaign_report', 'app_founder_record_advertiser_feedback',
+                              'app_founder_record_conversions', 'app_founder_review_advertiser', 'app_founder_save_advertiser', 'app_founder_save_campaign',
+                              'app_founder_set_campaign_status', 'app_my_ad_exclusions', 'app_remove_ad_exclusion', 'app_set_ad_preference'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -145,6 +150,9 @@ begin
   end if;
   if to_regclass('social.blocks') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || governance) x);
+  end if;
+  if to_regclass('ads.campaigns') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || advertising) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
