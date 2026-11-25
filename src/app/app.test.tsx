@@ -4201,6 +4201,17 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
     expect(f.ads.events.at(-1)).toEqual({ id: 'imp1', kind: 'hidden' })
   })
 
+  it('the ad feedback buttons are at least 24px tall, so they stay apart when they wrap on a narrow phone (WCAG 2.5.8)', async () => {
+    const f = fakeApi()
+    const post = f.seedPost('c1', 'A post')
+    f.ads.next = ad()
+    renderApp(`/app/post/${post}`, f.api)
+    const card = await screen.findByTestId('ad')
+    for (const name of ['Relevant', 'Not relevant', 'Hide this ad', 'Report ad']) {
+      expect(within(card).getByRole('button', { name }).className.split(' ')).toEqual(expect.arrayContaining(['inline-flex', 'min-h-6']))
+    }
+  })
+
   it('a content ad says whose post it is shown with, and the advertiser can be hidden from Why this ad', async () => {
     const f = fakeApi()
     const post = f.seedPost('c1', 'A post')
