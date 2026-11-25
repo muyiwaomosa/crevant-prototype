@@ -237,7 +237,9 @@ J.run(async (browser) => {
   await earn.waitFor()
   const te = flat(await earn.innerText())
   const tm = flat(await money.innerText())
-  check('Money: her simulated share is $20.00, labelled Simulated', /Simulated/.test(te) && te.includes('$20.00') && te.includes('How $50.00 of simulated ad revenue splits'), te)
+  check('Money: her simulated share is $20.00, labelled Simulated', /Simulated/.test(te) && te.includes('$20.00') && te.includes('Your simulated share by month')
+    // The total revenue is never shown beside her share, so the allocation can't be worked out (legal safeguard).
+    && !te.includes('$50.00'), te)
   check('Money: a You, Fans and Splitpost bar, and "Nothing is paid during the pilot"', /You Fans Splitpost/.test(te) && te.includes('Nothing is paid during the pilot.'), te)
   check('Money: actual income stays $0.00, apart from the simulated figure', /Actual income Actual \$0\.00/.test(tm), tm.slice(-200))
   check('Money: no allocation percentages (no 40/20/40)', !/\d+\s*%/.test(tm) && !/40\s*\/\s*20/.test(tm))

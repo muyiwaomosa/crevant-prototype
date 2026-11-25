@@ -138,9 +138,11 @@ J.run(async (browser) => {
   await rep.locator('dl').waitFor()
   const t4 = flat(await rep.innerText())
   const dbImp = sql(`select count(*) from ads.impressions i join ads.campaigns c on c.id = i.campaign_id where c.name = '${campaign}' and i.viewed_at is not null`)
-  check('valid impressions match the database (1), with no clicks yet', dbImp === '1' && /Valid impressions Actual 1 /.test(t4) && /Clicks to your site Actual 0 /.test(t4), `${dbImp}: ${t4}`)
+  // Every member count under 10 is withheld from the advertiser (release hardening), including impressions and clicks.
+  check('the database has the one valid impression, and the advertiser sees it withheld as "fewer than 10"', dbImp === '1' && /Valid impressions Actual fewer than 10/.test(t4) && /Clicks to your site Actual fewer than 10/.test(t4), `${dbImp}: ${t4}`)
+  check('the report explains that figures stay hidden until 10 people have seen the ad', t4.includes('Figures stay hidden until at least 10 people have seen it'), t4)
   check('the audience and reach under 10 are withheld ("fewer than 10")', /Members who chose your category Actual fewer than 10/.test(t4) && /People reached Actual fewer than 10/.test(t4), t4)
-  check('the report separates delivery by preference', /Shown because members chose your category 1 /.test(t4), t4)
+  check('the report separates delivery by preference, withheld under 10', /Shown because members chose your category fewer than 10/.test(t4), t4)
   check('the report names no member', !t4.includes('Cy Consumer') && !t4.includes(userCy) && !t4.includes(cy))
   check('the report says totals only, with groups under 10 never shown', t4.includes('Totals only. Groups under 10 people are never shown, and nothing identifies a member.'))
   await screenChecks(ada.page, 'the advertiser\'s own report')

@@ -32,8 +32,8 @@ steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 | IP-10a Privacy requests (copy, correction, deletion) and audited account deletion keeping the anonymous ledger | Merged | PR #113 | Staging deploy run 45696762050 (waiting for founder) |
 | IP-10a Operational switches (ads, sharing, video posts; registration, rewards and photos shown together) | Merged | PR #113 | Staging deploy run 45696762050 (waiting for founder) |
 | IP-5 Video posts (everything except activation): conversion, resumable upload, server checks, player, limits, moderation and cleanup, device test page, separate upload and playback controls with an emergency stop, storage and delivery visibility | Tested (local) | Migration 20261213000000; database suite, rollback chain (113), 865 unit tests, 15 journeys in CI order; `docs/VIDEO.md` | Pull request CI and merge authorization; then the device test; Production needs separate authorization |
-| Four stakeholder journeys end to end (creator, consumer, advertiser, founder) | In development | 15 feature journeys pass; these are cross-engine | Next pull request |
-| Release hardening: security and authorization review of new functions, performance, mobile and accessibility pass, restore drill, monitoring, error handling, cent-exact reconciliation suite | In development | Parts exist inside current suites | Begins in parallel with the stakeholder journeys |
+| Four stakeholder journeys end to end (creator, consumer, advertiser, founder): `e2e/stakeholder-*.e2e.cjs`, each one continuous story through the real UI across engines, with WCAG 2.2 AA at 320 and 390 px | Tested (local) | All 19 journeys pass in CI order (creator 82, consumer 78, advertiser 48, founder 80 checks); two defects found and fixed (My Split education findable again; ad feedback buttons meet the 24 px target) | PR #114 |
+| Release hardening: security and authorization review (done; fixes in migration 20261214000000), cent-exact reconciliation inside the founder journey and test 260, restore drill, performance, monitoring, error handling | In development | Review findings H1, M1, M2, L1 to L5 fixed and tested; rollback chain 116 | PR #114; then performance, restore drill and monitoring |
 | "See Splitpost" screenshots on the landing page | Not started | Needs the Dec 7 build | Take from staging after acceptance starts |
 
 | Production batch | Planned | Status |
@@ -64,6 +64,15 @@ advertising and intelligence second) rather than shorten security or financial
 testing.
 
 ## Open founder decisions
+
+* Referral points for a creator's own audience: when someone joins through a
+  creator's link and follows that creator, the creator earns no referral
+  points (the existing "never for yourself" rule). Keep, or reward creators
+  for bringing their own audience (economic change, needs a migration).
+* Moderators can act against other moderators (the founder cannot be deleted
+  through a request, but enforcement on the founder is not blocked).
+* The "Money & business" topic can be used for contextual ads; tell Claude if
+  it should be treated as sensitive.
 
 * Landing page copy for Find your path and the pilot details band (drafted in
   the house style, marked approved in principle).
