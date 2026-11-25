@@ -22,7 +22,33 @@ export const WAITLIST_CLOSED_COPY = {
   collectsNothing: "Until then, this page doesn't collect anything.",
 } as const
 
-/** The waitlist button label for this build. */
-export function waitlistCta(open: boolean = WAITLIST_OPEN): string {
-  return open ? 'Join the Waitlist' : WAITLIST_CLOSED_COPY.cta
+/** Where every call to action on the public site goes: the one Splitpost sign up, for everyone. */
+export const JOIN_PATH = '/join'
+
+/** The call to action once registration is authorized. */
+export const REGISTRATION_CTA = 'Join Splitpost'
+
+/**
+ * True only when a build sets VITE_REGISTRATION_OPEN to exactly 'true', the
+ * one switch from the pre-launch phase ("Join the Waitlist") to open
+ * registration ("Join Splitpost"). Off by default, and set in no environment
+ * today, so every build stays pre-launch. It changes wording only: it opens
+ * nothing and changes no production gate.
+ */
+export function readRegistrationOpen(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() === 'true'
+}
+
+export const REGISTRATION_OPEN: boolean = readRegistrationOpen(import.meta.env.VITE_REGISTRATION_OPEN)
+
+/**
+ * The primary call to action for this build, used by every button on the
+ * public site: "Join the Waitlist" during pre-launch, "Join Splitpost" once
+ * registration is authorized. While /join can't take a signup at all, it says
+ * "Waitlist Opens Soon" in either phase, so no button promises a signup the
+ * page can't take.
+ */
+export function waitlistCta(open: boolean = WAITLIST_OPEN, registration: boolean = REGISTRATION_OPEN): string {
+  if (!open) return WAITLIST_CLOSED_COPY.cta
+  return registration ? REGISTRATION_CTA : 'Join the Waitlist'
 }

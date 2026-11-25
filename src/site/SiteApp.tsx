@@ -7,8 +7,8 @@ import { PrivacyPage } from '../public/PrivacyPage'
 import { PilotAccessPage } from '../public/PilotAccessPage'
 
 /**
- * The public site build: the landing page, /join, /privacy and /pilot-access only (the sample tour is
- * served separately under /tour). There are no member pages here at all:
+ * The public site build: the landing page, /join, /privacy and /pilot-access only (the retired
+ * sample tour, /tour, redirects to the homepage; see src/entry.ts). There are no member pages here at all:
  * sign in, password, confirmation and account paths fall through to the
  * public "not found" page, and no auth or Supabase client code is imported.
  * scripts/check-site-bundle.mjs fails the build if any of it slips in.

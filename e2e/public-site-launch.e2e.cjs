@@ -41,7 +41,11 @@ const landing = (page) => page.getByRole('heading', { level: 1, name: /You Creat
       await page.waitForTimeout(300)
       check('/join may be indexed', (await robots(page)) === 'index, follow', await robots(page))
       check('/join has no form (the form settings are off)', (await page.locator('form, input').count()) === 0)
-      for (const p of ['/privacy', '/tour', '/sign-in', '/no-such-page']) {
+      // The retired tour redirects to the homepage, so it is never a page of its own.
+      await page.goto(`${BASE}/tour`)
+      await page.waitForTimeout(300)
+      check('/tour redirects to the homepage', new URL(page.url()).pathname === '/', page.url())
+      for (const p of ['/privacy', '/sign-in', '/no-such-page']) {
         await page.goto(`${BASE}${p}`)
         await page.waitForTimeout(300)
         check(`${p} is noindex`, (await robots(page)) === 'noindex', await robots(page))

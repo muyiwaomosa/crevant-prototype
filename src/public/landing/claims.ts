@@ -17,6 +17,8 @@ export const DISCLOSURES = {
   noFanCash: 'Fans receive no cash rewards during the pilot.',
   cpNoCashValue: 'Connection Points have no cash value.',
   cpRules: "They can't be bought, sold, transferred or converted to cash.",
+  cpNotMoney: "Connection Points are not money. They have no cash value and can't be bought, sold, transferred or converted to cash.",
+  simulated: 'Rewards and earnings are simulated during the pilot. Nothing is paid to anyone.',
   cpCreatorSpecific: 'Connection Points belong to your relationship with one creator.',
   visionOnly: "It's not part of the pilot, and it will depend on eligibility, verification, and legal and financial requirements.",
   noGuarantee: 'No guaranteed reach, views or earnings.',
@@ -113,13 +115,15 @@ const RULES: Rule[] = [
   { name: 'the provisional revenue allocation', pattern: new RegExp(ALLOCATION.map((r) => r.source).join('|'), 'i') },
   {
     name: 'a promise of money, pay or income',
-    pattern: /\b(earn|earns|earning|make|makes|get|gets|receive|receives|win|wins)\b[^.]{0,30}\b(money|cash|paid|income|payouts?|dollars?)\b|\bget paid\b|\bpaid out\b|\bpayouts?\b/i,
+    pattern:
+      /\b(earn|earns|earning|make|makes|get|gets|receive|receives|win|wins)\b[^.]{0,30}\b(money|cash|paid|income|payouts?|dollars?)\b|\bget paid\b|\bpaid out\b|\bpayouts?\b/i,
     // Also allowed: a sentence about how platforms make money today ("Platforms earn money when…"), which promises nothing to anyone.
     allowed: (s, m) => denied(s, m) || /^Platforms\b/.test(s),
   },
   {
     name: 'a guarantee of earnings, reach or rewards',
-    pattern: /\bguarante\w*\b[^.]{0,40}\b(earn\w*|income|money|cash|pay\w*|rewards?|reach|views|growth|followers)\b|\b(earn\w*|income|money|cash|rewards?)\b[^.]{0,40}\bguarante\w*\b/i,
+    pattern:
+      /\bguarante\w*\b[^.]{0,40}\b(earn\w*|income|money|cash|pay\w*|rewards?|reach|views|growth|followers)\b|\b(earn\w*|income|money|cash|rewards?)\b[^.]{0,40}\bguarante\w*\b/i,
     allowed: denied,
   },
   {

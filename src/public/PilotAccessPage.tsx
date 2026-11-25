@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowLeft, KeyRound } from 'lucide-react'
 import { buttonClass } from '../components/ui'
-import { waitlistCta } from './waitlist/status'
+import { JOIN_PATH, waitlistCta } from './waitlist/status'
 import { MEMBER_SIGN_IN_URL } from './member-sign-in'
 
 /**
@@ -33,7 +33,7 @@ export function PilotAccessPage() {
           <a href={MEMBER_SIGN_IN_URL} className={`${buttonClass('primary', 'lg')} w-full min-[420px]:w-auto`}>
             Sign In
           </a>
-          <Link to="/join" className={`${buttonClass('secondary', 'lg')} w-full min-[420px]:w-auto`}>
+          <Link to={JOIN_PATH} className={`${buttonClass('secondary', 'lg')} w-full min-[420px]:w-auto`}>
             {waitlistCta()}
           </Link>
         </div>

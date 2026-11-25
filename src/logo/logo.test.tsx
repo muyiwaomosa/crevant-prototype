@@ -10,7 +10,7 @@ import { SPLITPOST_LOGO_SRC } from './SplitpostLogo'
 
 const ROOT = join(__dirname, '..', '..')
 const read = (...p: string[]) => readFileSync(join(ROOT, ...p))
-const MASTER = read('src', 'logo', 'splitpost-logo.svg', ).toString('utf8')
+const MASTER = read('src', 'logo', 'splitpost-logo.svg').toString('utf8')
 
 /** Width and height from a PNG's IHDR chunk. */
 function pngSize(buf: Buffer) {
@@ -55,13 +55,13 @@ describe('the official Splitpost logo', () => {
     const logos = [...container.querySelectorAll('img[data-testid="splitpost-logo"]')]
     expect(container.querySelector('header img[data-testid="splitpost-logo"]')).toBeTruthy()
     expect(container.querySelector('footer img[data-testid="splitpost-logo"]')).toBeTruthy()
-    expect(container.querySelectorAll('[data-testid="seam"] img[data-testid="splitpost-logo"]')).toHaveLength(6)
+    expect(container.querySelectorAll('[data-testid="seam"] img[data-testid="splitpost-logo"]')).toHaveLength(8)
     expect(new Set(logos.map((l) => l.getAttribute('src')))).toEqual(new Set([SPLITPOST_LOGO_SRC]))
     // Decorative beside the wordmark, so screen readers hear "Splitpost" once.
     for (const l of logos) expect(l.getAttribute('alt')).toBe('')
   })
 
-  it('renders the same file in the tour and account screens', () => {
+  it('renders the same file in the demo and account screens', () => {
     const { container } = render(<Wordmark />)
     expect(container.querySelector('img[data-testid="splitpost-logo"]')!.getAttribute('src')).toBe(SPLITPOST_LOGO_SRC)
   })

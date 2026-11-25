@@ -6,7 +6,7 @@ import { useMemberLinks } from './member-links'
 import { useRobotsMeta } from './robots'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 import { HOMEPAGE_COPY } from './landing/copy'
-import { WAITLIST_CLOSED_COPY, WAITLIST_OPEN, waitlistCta } from './waitlist/status'
+import { JOIN_PATH, WAITLIST_CLOSED_COPY, WAITLIST_OPEN, waitlistCta } from './waitlist/status'
 import { SplitpostWordmark } from './landing/ui/SplitpostWordmark'
 import { MEMBER_SIGN_IN_URL } from './member-sign-in'
 
@@ -35,7 +35,12 @@ function ScrollToTop() {
  */
 function MemberSignInLink() {
   return (
-    <a href={MEMBER_SIGN_IN_URL} aria-label="Sign In" data-testid="header-sign-in" className={`${HEADER_LINK} h-11 w-11 justify-center min-[420px]:h-9 min-[420px]:w-auto min-[420px]:px-3.5 whitespace-nowrap`}>
+    <a
+      href={MEMBER_SIGN_IN_URL}
+      aria-label="Sign In"
+      data-testid="header-sign-in"
+      className={`${HEADER_LINK} h-11 w-11 justify-center min-[420px]:h-9 min-[420px]:w-auto min-[420px]:px-3.5 whitespace-nowrap`}
+    >
       <LogIn className="h-5 w-5 min-[420px]:hidden" aria-hidden="true" />
       <span className="hidden min-[420px]:inline" aria-hidden="true">
         Sign In
@@ -82,6 +87,12 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
           </Link>
           <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2">
             {/* Phones: logo, Sign in and Join the Waitlist; Discover Splitpost stays in the hero. */}
+            {/* Wide screens also get Find your path, the homepage's creators, members and advertisers cards. */}
+            <span className="hidden lg:contents">
+              <Link to="/#paths" className={`${HEADER_LINK} px-3.5`}>
+                Find your path
+              </Link>
+            </span>
             <span className="hidden sm:contents">
               <Link to={DISCOVER_PATH} className={`${HEADER_LINK} px-3.5`}>
                 {HOMEPAGE_COPY.hero.secondaryCta}
@@ -92,7 +103,7 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             {account ? <span className="contents [&_a]:text-white [&_a:hover]:bg-white/10">{account}</span> : <MemberSignInLink />}
             {!headerCtaHidden && (
               <Link
-                to="/join"
+                to={JOIN_PATH}
                 data-testid="header-waitlist-cta"
                 aria-label={waitlistCta()}
                 className="inline-flex h-9 items-center whitespace-nowrap rounded-full bg-sp-secondary px-3 text-[13px] font-bold min-[390px]:px-4 min-[390px]:text-sm text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#bde3db] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
@@ -103,8 +114,12 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
                   <>
                     {/* The full closed label needs about 443px beside the logo and Sign In, so the
                         short one shows below 450px. Both switch at the same width: one always shows. */}
-                    <span aria-hidden="true" className="min-[450px]:hidden">{WAITLIST_CLOSED_COPY.ctaShort}</span>
-                    <span aria-hidden="true" className="hidden min-[450px]:inline">{WAITLIST_CLOSED_COPY.cta}</span>
+                    <span aria-hidden="true" className="min-[450px]:hidden">
+                      {WAITLIST_CLOSED_COPY.ctaShort}
+                    </span>
+                    <span aria-hidden="true" className="hidden min-[450px]:inline">
+                      {WAITLIST_CLOSED_COPY.cta}
+                    </span>
                   </>
                 )}
               </Link>
@@ -123,7 +138,9 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             <SplitpostWordmark />
             <p className="mt-4 font-sp-display text-xl font-extrabold text-sp-secondary">{HOMEPAGE_COPY.hero.tagline}</p>
             <p className="mt-2 text-sm leading-relaxed text-sp-muted-on-dark">An invitation-only pilot for adults 18 and older.</p>
-            <p data-testid="product-images-note" className="mt-1 text-sm leading-relaxed text-sp-muted-on-dark">{PRODUCT_IMAGES_DISCLOSURE}</p>
+            <p data-testid="product-images-note" className="mt-1 text-sm leading-relaxed text-sp-muted-on-dark">
+              {PRODUCT_IMAGES_DISCLOSURE}
+            </p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-white/85">
             <Link to="/#problem" className="hover:text-sp-secondary-on-dark">
@@ -132,7 +149,10 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             <Link to="/#building" className="hover:text-sp-secondary-on-dark">
               How It Works
             </Link>
-            <Link to="/join" className="hover:text-sp-secondary-on-dark">
+            <Link to="/#paths" className="hover:text-sp-secondary-on-dark">
+              Find Your Path
+            </Link>
+            <Link to={JOIN_PATH} className="hover:text-sp-secondary-on-dark">
               {waitlistCta()}
             </Link>
             {import.meta.env.MODE !== 'site' && memberLinks && (

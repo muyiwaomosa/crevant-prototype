@@ -6,7 +6,6 @@ import { useStore } from '../state/store'
 import { Wordmark } from './Wordmark'
 import { CreatorAvatar, SparkIcon } from './ui'
 import { Toasts } from './Toasts'
-import { TourBannerSlot } from './TourBanner'
 
 // One navigation for everyone. There is no Fan or Creator mode: anyone can
 // follow, engage, publish, and offer rewards from the same place.
@@ -77,7 +76,10 @@ export function Layout() {
             >
               {({ isActive }) => (
                 <>
-                  <item.icon className={clsx('h-[22px] w-[22px]', isActive && !item.primary && 'text-brand-600')} strokeWidth={isActive || item.primary ? 2.4 : 2} />
+                  <item.icon
+                    className={clsx('h-[22px] w-[22px]', isActive && !item.primary && 'text-brand-600')}
+                    strokeWidth={isActive || item.primary ? 2.4 : 2}
+                  />
                   <span className="hidden lg:inline">{item.primary ? 'Create post' : item.label}</span>
                 </>
               )}
@@ -112,7 +114,6 @@ export function Layout() {
       </aside>
 
       <div className="min-w-0 flex-1">
-        <TourBannerSlot />
         {/* Top bar for phones */}
         <header className="sticky top-0 z-40 border-b border-ink-100/80 bg-paper/90 pt-[env(safe-area-inset-top)] backdrop-blur-md md:hidden">
           <div className="flex h-14 items-center justify-between gap-3 px-4">
@@ -150,7 +151,12 @@ export function Layout() {
               {({ isActive }) =>
                 item.primary ? (
                   <>
-                    <span className={clsx('grid h-9 w-12 place-items-center rounded-2xl text-white shadow-sm transition', isActive ? 'bg-brand-700' : 'bg-brand-600')}>
+                    <span
+                      className={clsx(
+                        'grid h-9 w-12 place-items-center rounded-2xl text-white shadow-sm transition',
+                        isActive ? 'bg-brand-700' : 'bg-brand-600',
+                      )}
+                    >
                       <item.icon className="h-6 w-6" strokeWidth={2.6} />
                     </span>
                     {item.label}

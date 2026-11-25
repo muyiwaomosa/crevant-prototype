@@ -12,10 +12,13 @@ import { MEMBER_APP_BUILD } from './build-flags'
  *  - "member": the member app address (app.splitpost.ca). Only the member
  *    pages are served there: the members area, sign in, password reset, the
  *    invitation link, public post previews (/p/<id>) and the privacy notice. Every other path (the landing
- *    page, the waitlist, the sample tour) goes to /app, which asks for sign
+ *    page, the waitlist, the retired tour) goes to /app, which asks for sign
  *    in. Never indexed.
- *  - "tour": the sample-data prototype under /tour.
- *  - "public": the public site (landing page and its pages).
+ *  - "public": the public site (landing page and its pages). The retired
+ *    sample tour (/tour and everything under it) and the old prototype paths
+ *    it once took over redirect to the homepage: the tour showed an obsolete
+ *    creator-specific points model, so it is no longer served anywhere but
+ *    the frozen production demo.
  */
 
 /** Addresses that serve the frozen demo in production. */
@@ -29,22 +32,33 @@ export const MEMBER_APP_HOSTS = ['app.splitpost.ca']
  * (/auth/confirm#token_hash=...) is one of them, so its fragment is never
  * touched by a redirect.
  */
-const MEMBER_APP_PATHS = [/^\/app(\/.*)?$/, /^\/sign-in\/?$/, /^\/register(\/[0-9A-Za-z]{1,64})?\/?$/, /^\/p\/[0-9a-f-]{36}\/?$/, /^\/forgot-password\/?$/, /^\/auth\/confirm\/?$/, /^\/auth\/set-password\/?$/, /^\/privacy\/?$/]
+const MEMBER_APP_PATHS = [
+  /^\/app(\/.*)?$/,
+  /^\/sign-in\/?$/,
+  /^\/register(\/[0-9A-Za-z]{1,64})?\/?$/,
+  /^\/p\/[0-9a-f-]{36}\/?$/,
+  /^\/forgot-password\/?$/,
+  /^\/auth\/confirm\/?$/,
+  /^\/auth\/set-password\/?$/,
+  /^\/privacy\/?$/,
+]
 
 /** Where everything else on the member app address goes. */
 export const MEMBER_APP_HOME = '/app'
 
-export const TOUR_BASE = '/tour'
+/** The retired sample tour's address. Everything under it now redirects to the homepage. */
+export const RETIRED_TOUR_BASE = '/tour'
+
+/** Where the retired tour and the old prototype paths go. */
+export const RETIRED_TOUR_REDIRECT = '/'
 
 /**
  * Where "Discover Splitpost" goes on the public site: the homepage's "What
- * we're building" introduction, which leads on to Join the Waitlist. Not the
- * sample tour, which still shows the older prototype's rules (creator invite
- * links still open it directly).
+ * we're building" introduction, which leads on to Join the Waitlist.
  */
 export const DISCOVER_PATH = '/#building'
 
-/** Prototype paths that existed before the tour moved under /tour. */
+/** Prototype paths that existed before the tour moved under /tour, and then redirected into it. */
 const LEGACY_PROTOTYPE_PATHS = [
   /^\/welcome\/?$/,
   /^\/discover\/?$/,
@@ -57,11 +71,7 @@ const LEGACY_PROTOTYPE_PATHS = [
   /^\/studio(\/.*)?$/,
 ]
 
-export type Entry =
-  | { kind: 'demo-fallback' }
-  | { kind: 'member'; redirectTo?: string }
-  | { kind: 'tour'; redirectTo?: string }
-  | { kind: 'public' }
+export type Entry = { kind: 'demo-fallback' } | { kind: 'member'; redirectTo?: string } | { kind: 'public'; redirectTo?: string }
 
 export function isProductionDemoHost(hostname: string): boolean {
   return PRODUCTION_DEMO_HOSTS.includes(hostname.toLowerCase())
@@ -81,7 +91,7 @@ export function isMemberApp(hostname: string, memberAppBuild: boolean = MEMBER_A
 }
 
 export function isTourPath(pathname: string): boolean {
-  return pathname === TOUR_BASE || pathname.startsWith(`${TOUR_BASE}/`)
+  return pathname === RETIRED_TOUR_BASE || pathname.startsWith(`${RETIRED_TOUR_BASE}/`)
 }
 
 /**
@@ -96,14 +106,14 @@ export function resolveEntry(
 ): Entry {
   // The member app rule exists only in the full app build: the public site
   // build (--mode site) leaves it out entirely, so it carries no member route.
-  // It comes first, so a member app build never shows the demo or the tour.
+  // It comes first, so a member app build never shows the demo.
   if (import.meta.env.MODE !== 'site' && isMemberApp(loc.hostname)) {
     return MEMBER_APP_PATHS.some((re) => re.test(loc.pathname)) ? { kind: 'member' } : { kind: 'member', redirectTo: MEMBER_APP_HOME }
   }
   if (demoFallback && isProductionDemoHost(loc.hostname)) return { kind: 'demo-fallback' }
-  if (isTourPath(loc.pathname)) return { kind: 'tour' }
-  if (LEGACY_PROTOTYPE_PATHS.some((re) => re.test(loc.pathname))) {
-    return { kind: 'tour', redirectTo: `${TOUR_BASE}${loc.pathname}${loc.search}${loc.hash}` }
+  // The retired tour, and the old prototype links that used to open it.
+  if (isTourPath(loc.pathname) || LEGACY_PROTOTYPE_PATHS.some((re) => re.test(loc.pathname))) {
+    return { kind: 'public', redirectTo: RETIRED_TOUR_REDIRECT }
   }
   return { kind: 'public' }
 }

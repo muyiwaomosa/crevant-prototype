@@ -84,7 +84,8 @@ describe('search indexing in the browser', () => {
   it('allows only the landing page and /join, and only when indexing is allowed', () => {
     expect(INDEXABLE_PATHS).toEqual(['/', '/join'])
     for (const p of ['/', '/join', '/join/']) expect(robotsDirective(p, true), p).toBe('index, follow')
-    for (const p of ['/tour', '/tour/discover', '/privacy', '/sign-in', '/app', '/no-such-page', '/join/creator']) expect(robotsDirective(p, true), p).toBe('noindex')
+    for (const p of ['/tour', '/tour/discover', '/privacy', '/sign-in', '/app', '/no-such-page', '/join/creator'])
+      expect(robotsDirective(p, true), p).toBe('noindex')
     for (const p of ['/', '/join']) expect(robotsDirective(p, false), p).toBe('noindex')
   })
 
@@ -107,6 +108,6 @@ describe('the demo address', () => {
     expect(resolveEntry(at('crevant-prototype.vercel.app'))).toEqual({ kind: 'demo-fallback' })
     expect(resolveEntry(at('crevant-prototype.vercel.app'), { demoFallback: true })).toEqual({ kind: 'demo-fallback' })
     expect(resolveEntry(at('crevant-prototype.vercel.app'), { demoFallback: false })).toEqual({ kind: 'public' })
-    expect(resolveEntry(at('crevant-prototype.vercel.app', '/tour'), { demoFallback: false })).toEqual({ kind: 'tour' })
+    expect(resolveEntry(at('crevant-prototype.vercel.app', '/tour'), { demoFallback: false })).toEqual({ kind: 'public', redirectTo: '/' })
   })
 })

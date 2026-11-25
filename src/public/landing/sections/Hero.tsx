@@ -3,17 +3,18 @@ import { ArrowRight } from 'lucide-react'
 import { DISCOVER_PATH } from '../../../entry'
 import { useMemberLinks } from '../../member-links'
 import { HOMEPAGE_COPY } from '../copy'
-import { waitlistCta } from '../../waitlist/status'
+import { JOIN_PATH, waitlistCta } from '../../waitlist/status'
 import { SplitThePost } from '../ui/SplitThePost'
+import { SplitpostLogo } from '../../../logo/SplitpostLogo'
 
 const copy = HOMEPAGE_COPY.hero
-
 
 const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-white'
 
 /**
  * Section 1: the hero. A Cobalt band with the founder-approved headline
- * ("You Deserve a Split." in apricot), two plain sentences, both calls to
+ * ("You Deserve a Split." in apricot), the signature line with the logo mark
+ * right under it ("Don't just post. Get your split."), two plain sentences, both calls to
  * action, and the pilot small print, which says plainly that nothing is
  * guaranteed. The picture is one post split in two, with an apricot line in the gap: what the
  * creator made and what her community grew.
@@ -41,6 +42,19 @@ export function Hero() {
       </span>
     </h1>
   )
+  // The approved signature, with the logo mark. Below 430px each
+  // sentence takes its own line, so the pill never runs past the screen.
+  const signature = (
+    <p
+      data-testid="hero-signature"
+      className="mt-4 inline-flex max-w-full items-center gap-2.5 rounded-[22px] bg-white/10 py-1.5 pl-1.5 pr-4 font-sp-display text-[1.05rem] font-extrabold leading-tight text-white ring-1 ring-white/20 [font-stretch:104%] min-[430px]:rounded-full sm:mt-5 sm:text-xl"
+    >
+      <SplitpostLogo className="h-8 w-8 sm:h-9 sm:w-9" />
+      <span className="min-w-0">
+        <span className="block min-[430px]:inline">{copy.signatureLines[0]}</span> <span className="block min-[430px]:inline">{copy.signatureLines[1]}</span>
+      </span>
+    </p>
+  )
   const rest = (
     <>
       <div data-testid="hero-body" className="mt-6 max-w-[34rem] space-y-3 text-[1.1rem] leading-relaxed sm:text-lg">
@@ -50,7 +64,7 @@ export function Hero() {
 
       <div data-testid="hero-actions" className="mt-7 flex flex-col gap-3 min-[420px]:flex-row min-[420px]:flex-wrap">
         <Link
-          to="/join"
+          to={JOIN_PATH}
           className={`inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-sp-secondary px-7 text-base font-bold text-sp-ink transition-[background-color,color,box-shadow,transform] hover:bg-[#bde3db] active:scale-[0.98] motion-reduce:transition-none ${focusRing}`}
         >
           {waitlistCta()} <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -86,7 +100,10 @@ export function Hero() {
         className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(118deg,transparent_0_62%,rgb(255_255_255/0.035)_62%_100%)]"
       />
       <div className="mx-auto grid max-w-6xl px-4 pb-12 pt-5 [grid-template-areas:'title'_'scene'_'rest'] sm:px-6 sm:pb-20 sm:pt-10 lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[1fr_auto_auto_1fr] lg:gap-x-14 lg:pb-24 lg:pt-16 lg:[grid-template-areas:'top_scene'_'title_scene'_'rest_scene'_'end_scene']">
-        <div className="min-w-0 [grid-area:title]">{headline}</div>
+        <div className="min-w-0 [grid-area:title]">
+          {headline}
+          {signature}
+        </div>
         <div className="mt-5 min-w-0 [grid-area:scene] sm:mt-8 lg:mt-0 lg:self-center">
           <SplitThePost />
         </div>

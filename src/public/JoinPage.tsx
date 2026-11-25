@@ -5,17 +5,17 @@ import { ArrowLeft, Info } from 'lucide-react'
 import { buttonClass } from '../components/ui'
 import { DISCOVER_PATH } from '../entry'
 import { BUILD_WAITLIST_ENV, readWaitlistConfig } from './waitlist/config'
-import { WAITLIST_CLOSED_COPY } from './waitlist/status'
+import { WAITLIST_CLOSED_COPY, waitlistCta } from './waitlist/status'
 import { WaitlistForm } from './waitlist/WaitlistForm'
 import { JoinSuccess } from './waitlist/JoinSuccess'
 import type { MountTurnstile } from './waitlist/turnstile'
 import { InviteBanner } from './waitlist/InviteBanner'
-import { DISCLOSURES } from './landing/claims'
 import { HOMEPAGE_COPY } from './landing/copy'
 
 /**
- * /join: the one Splitpost waitlist. Everyone can create, discover, follow,
- * engage and support, so nobody picks a side when they join.
+ * /join: the one Splitpost sign up (JOIN_PATH), where every call to action
+ * on the site goes. Everyone can create, discover, follow, engage, support
+ * and, once approved, advertise, so nobody picks a side when they join.
  *
  * The form appears only when readWaitlistConfig() finds every required
  * setting, including the approved privacy notice (docs/WAITLIST.md). Until
@@ -61,7 +61,7 @@ export function JoinPage({
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Splitpost
         </Link>
         <h1 id="join-title" className="mt-6 font-display text-[2rem] font-extrabold leading-tight tracking-[-0.02em] text-ink-900 sm:text-[2.5rem]">
-          {waitlist ? 'Join the Waitlist' : WAITLIST_CLOSED_COPY.joinTitle}
+          {waitlist ? waitlistCta(true) : WAITLIST_CLOSED_COPY.joinTitle}
         </h1>
         {/* The founder-approved introduction, with its first line updated to the Splitpost message. */}
         <div data-testid="join-intro" className="mt-4 space-y-4 text-lg leading-relaxed text-ink-600">
@@ -86,10 +86,10 @@ export function JoinPage({
           </div>
         )}
 
-        {/* The same pilot disclosures as the homepage invitation, word for word. */}
-        <h2 className="mt-10 font-display text-xl font-bold text-ink-900">{HOMEPAGE_COPY.invitation.pilotDetailsTitle}</h2>
+        {/* The same pilot disclosures as the homepage's pilot details band, word for word. */}
+        <h2 className="mt-10 font-display text-xl font-bold text-ink-900">{HOMEPAGE_COPY.pilot.eyebrow}</h2>
         <ul data-testid="join-pilot-details" className="mt-3 space-y-1.5 leading-relaxed text-ink-600">
-          {[...HOMEPAGE_COPY.invitation.pilotDetails, DISCLOSURES.noGuarantee].map((d) => (
+          {HOMEPAGE_COPY.pilot.details.map((d) => (
             <li key={d}>{d}</li>
           ))}
         </ul>
@@ -97,7 +97,9 @@ export function JoinPage({
         <div className="mt-10 rounded-3xl bg-white p-6 ring-1 ring-ink-100">
           {/* Draft copy, pending founder approval. */}
           <h2 className="font-display text-xl font-bold text-ink-900">See how Splitpost works</h2>
-          <p className="mt-2 leading-relaxed text-ink-600">How your followers find your posts, how you understand the community you're building, and how your supporters can help you grow.</p>
+          <p className="mt-2 leading-relaxed text-ink-600">
+            How your followers find your posts, how you understand the community you're building, and how your supporters can help you grow.
+          </p>
           <div className="mt-5 flex flex-col gap-3 min-[420px]:flex-row">
             <Link to={DISCOVER_PATH} className={buttonClass('primary')}>
               Discover Splitpost

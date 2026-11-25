@@ -1,5 +1,5 @@
 // Entry point of the public site build (vite build --mode site): the landing
-// page, /join, /privacy and the sample tour, with no member pages (see
+// page, /join, /privacy and /pilot-access, with no member pages (see
 // SiteApp). The production demo address still gets the sample prototype,
 // exactly like the full app, unless this is an APPROVED Vercel Production
 // build (scripts/guard-build-target.mjs), which is what replaces the demo.

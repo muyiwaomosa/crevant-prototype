@@ -113,6 +113,7 @@ If the pooler refuses the custom login, the plan stops there and comes back for 
 | `WAITLIST_FUNCTION_ENABLED` | Edge Function secret | the function answers `closed` and touches nothing |
 | `ops.settings` `waitlist_submissions` | staging database | the database answers `closed` and stores nothing |
 | `ops.settings` `waitlist_notice_version` | staging database | empty: every submission is `closed` |
+| `VITE_REGISTRATION_OPEN` | Vercel env (build time) | pre-launch wording: every public call to action says "Join the Waitlist" (or "Waitlist Opens Soon" while the form is off). `true` switches the wording to "Join Splitpost" once registration is authorized. Wording only: it opens nothing, and every button still goes to `/join` (`src/public/waitlist/status.ts`) |
 
 The form also stays off unless the function address, Turnstile site key, privacy notice URL and notice version are all set. The function also stays closed without:
 * a valid `waitlist_writer` database URL for its own project

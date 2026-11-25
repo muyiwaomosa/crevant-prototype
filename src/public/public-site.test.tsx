@@ -37,14 +37,16 @@ afterEach(() => {
 const norm = (el: Element | null) => (el?.textContent || '').replace(/\s+/g, ' ')
 const landing = () => renderAt('/').container
 const section = (id: string) => landing().querySelector(`#${id}`)!
-const SECTION_ORDER = ['hero', 'problem', 'building', 'creators', 'split', 'vision', 'invitation']
+const SECTION_ORDER = ['hero', 'problem', 'building', 'paths', 'creators', 'split', 'vision', 'pilot', 'invitation']
 const HEADINGS = [
   'You Create The Post. You Deserve a Split.',
   'You Do the Work. Who Gets the Reward?',
   'A Better Split Starts With a Better Connection.',
+  'One Account. Every Way to Take Part.',
   'Different Creators. The Same Problem.',
   'More Connection. More Ways to Earn.',
   'What If Creating Content Could Be a Real Career?',
+  'What the Pilot Is, Plainly.',
   'Help Us Build a Better Split.',
 ]
 // The only allowed uses of "guarantee": these exact disclaimers.
@@ -67,7 +69,7 @@ const APPROVED_PROBLEM_SENTENCES = [
 const blocks = (el: Element) => [...el.querySelectorAll('h1, h2, h3, p, li, span, a, figcaption')].map((e) => norm(e).trim()).filter(Boolean)
 
 describe('one Splitpost story, top to bottom', () => {
-  it('has the six sections, in order', () => {
+  it('has the nine sections, in order', () => {
     expect([...landing().querySelectorAll('main section[id]')].map((s) => s.id)).toEqual(SECTION_ORDER)
   })
   it('uses the approved headlines, with exactly one main heading', () => {
@@ -85,8 +87,8 @@ describe('one Splitpost story, top to bottom', () => {
     expect(t).not.toMatch(/Goldman|Nielsen|Linktree|\bstudy\b|survey|respondents|\d+(\.\d+)?\s?%|billion/i)
     expect(landing().querySelectorAll('[data-research]')).toHaveLength(0)
   })
-  it('joins the seven sections with the split-post seam, so they read as one story', () => {
-    expect(landing().querySelectorAll('[data-testid="seam"]')).toHaveLength(6)
+  it('joins the nine sections with the split-post seam, so they read as one story', () => {
+    expect(landing().querySelectorAll('[data-testid="seam"]')).toHaveLength(8)
   })
   it('labels every sample post and screen as a sample', () => {
     const c = landing()
@@ -95,7 +97,8 @@ describe('one Splitpost story, top to bottom', () => {
   })
   it('leads with the creator: Connection Points appear only in A BETTER SPLIT and the pilot details', () => {
     const c = landing()
-    for (const id of ['hero', 'problem', 'building', 'creators', 'vision']) expect(norm(c.querySelector(`#${id}`)), id).not.toMatch(/Connection Points/)
+    for (const id of ['hero', 'problem', 'building', 'paths', 'creators', 'vision', 'invitation'])
+      expect(norm(c.querySelector(`#${id}`)), id).not.toMatch(/Connection Points/)
     expect(norm(section('split'))).toMatch(/Connection Points/)
   })
 })
@@ -110,6 +113,15 @@ describe('HERO', () => {
     // Each sentence is kept whole on one line on phones and tablets.
     for (const line of lines) expect(line.className).toMatch(/(^| )whitespace-nowrap( |$)/)
     expect(hero().querySelector('[data-testid="headline-emphasis"]')!.className).toContain('text-sp-accent')
+  })
+  it('shows the approved signature line right under the headline, with the logo mark', () => {
+    const h = hero()
+    const h1 = h.querySelector('h1')!
+    const sig = h.querySelector('[data-testid="hero-signature"]')!
+    expect(norm(sig).trim()).toBe("Don't just post. Get your split.")
+    expect(h1.nextElementSibling).toBe(sig)
+    const logo = sig.querySelector('img[data-testid="splitpost-logo"]')!
+    expect(logo.getAttribute('alt')).toBe('')
   })
   it('uses the approved supporting copy, and says beside it that nothing is guaranteed', () => {
     expect([...hero().querySelectorAll('[data-testid="hero-body"] p')].map((p) => norm(p))).toEqual([
@@ -155,12 +167,14 @@ describe('HERO', () => {
     expect(norm(creator)).not.toMatch(/calf drill|shin splints/i)
     const community = norm(scene.querySelector('[data-testid="split-community-piece"]'))
     for (const t of ['1.2K', '86', '214', 'Grown by her community']) expect(community).toContain(t)
-    expect(norm(scene.querySelector('[data-testid="hero-community-comment"]'))).toBe("Ana Oh wow, I was wondering why I hadn't been seeing your content. I thought you stopped posting!")
+    expect(norm(scene.querySelector('[data-testid="hero-community-comment"]'))).toBe(
+      "Ana Oh wow, I was wondering why I hadn't been seeing your content. I thought you stopped posting!",
+    )
   })
   it('puts the picture straight after the headline, before the copy and actions', () => {
-    const order = [...hero().querySelectorAll('h1, [data-testid="hero-scene"], [data-testid="hero-body"], [data-testid="hero-actions"], [data-testid="hero-small-print"]')].map(
-      (el) => el.getAttribute('data-testid') ?? el.tagName,
-    )
+    const order = [
+      ...hero().querySelectorAll('h1, [data-testid="hero-scene"], [data-testid="hero-body"], [data-testid="hero-actions"], [data-testid="hero-small-print"]'),
+    ].map((el) => el.getAttribute('data-testid') ?? el.tagName)
     expect(order).toEqual(['H1', 'hero-scene', 'hero-body', 'hero-actions', 'hero-small-print'])
   })
 })
@@ -220,6 +234,32 @@ describe("WHO WE'RE BUILDING FOR", () => {
   })
 })
 
+describe('FIND YOUR PATH', () => {
+  const sec = () => section('paths')
+  it('shows three short benefit cards: creators, members (fans) and advertisers', () => {
+    const cards = [...sec().querySelectorAll('[data-testid="paths-cards"] > li')]
+    expect(cards.map((c) => c.getAttribute('data-testid'))).toEqual(['path-creators', 'path-members', 'path-advertisers'])
+    expect(cards.map((c) => norm(c.querySelector('h3')))).toEqual(HOMEPAGE_COPY.paths.cards.map((c) => c.title))
+    expect(norm(sec())).toContain(HOMEPAGE_COPY.paths.note)
+  })
+  it('sends every card to the same one sign up, with the same call to action', () => {
+    const s = sec()
+    const links = [...s.querySelectorAll('a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
+    expect(links).toEqual([
+      ['Waitlist Opens Soon', '/join'],
+      ['Waitlist Opens Soon', '/join'],
+      ['Waitlist Opens Soon', '/join'],
+    ])
+    // Each button names its card for screen readers.
+    for (const a of s.querySelectorAll('a')) expect(s.querySelector(`#${a.getAttribute('aria-describedby')}`)?.tagName).toBe('H3')
+  })
+  it('has no separate creator application or advertiser form', () => {
+    const s = sec()
+    expect(norm(s)).not.toMatch(/apply as|application|talk to us|contact sales|advertiser form/i)
+    expect(norm(s.querySelector('[data-testid="path-advertisers"]'))).toContain('ask to advertise from your account')
+  })
+})
+
 describe('A BETTER SPLIT', () => {
   const sec = () => section('split')
   it('uses the approved copy and closing line', () => {
@@ -263,16 +303,33 @@ describe('OUR BIGGER VISION', () => {
   })
 })
 
+describe('PILOT DETAILS (the one disclosure band)', () => {
+  const sec = () => section('pilot')
+  it('lists every pilot limit in one place, always visible, just before the invitation', () => {
+    const band = sec()
+    const d = band.querySelector('[data-testid="pilot-details"]')!
+    expect(d.closest('details')).toBeNull()
+    expect([...d.querySelectorAll('li')].map((li) => norm(li).trim())).toEqual([...HOMEPAGE_COPY.pilot.details])
+    const t = norm(d)
+    expect(t).toContain('adults 18 and older')
+    expect(t).toContain('Connection Points are not money.')
+    expect(t).toContain('Rewards and earnings are simulated during the pilot. Nothing is paid to anyone.')
+    expect(t).toContain(DISCLOSURES.noGuarantee)
+    expect(band.nextElementSibling?.getAttribute('data-testid')).toBe('seam')
+    expect(band.nextElementSibling?.nextElementSibling?.id).toBe('invitation')
+  })
+  it('is the only place on the page with the full list', () => {
+    expect(landing().querySelectorAll('[data-testid="pilot-details"]')).toHaveLength(1)
+  })
+})
+
 describe('THE INVITATION', () => {
   const inv = () => section('invitation')
-  it('uses the approved copy, and keeps the one waitlist with every pilot disclosure beside it', () => {
+  it('uses the approved copy, and keeps the one sign up', () => {
     expect([...inv().querySelectorAll('[data-testid="invitation-body"] p')].map((p) => norm(p))).toEqual([...HOMEPAGE_COPY.invitation.body])
     expect(norm(inv().querySelector('[data-testid="invitation-close"]'))).toBe('The waitlist opens soon. Be part of a better split.')
     const links = [...inv().querySelectorAll('a')].map((a) => [norm(a).trim(), a.getAttribute('href')])
     expect(links).toEqual([['Waitlist Opens Soon', '/join']])
-    const d = inv().querySelector('[data-testid="pilot-details"]')!
-    expect(d.closest('details')).toBeNull()
-    expect([...d.querySelectorAll('li')].map((li) => norm(li).trim())).toEqual([...HOMEPAGE_COPY.invitation.pilotDetails])
   })
   it('is signed by the founder, with the founder photo', () => {
     const sign = inv().querySelector('[data-testid="founder-signoff"]')!
@@ -290,7 +347,12 @@ describe('THE INVITATION', () => {
 describe('photos', () => {
   it('shows the four licensed photos, lazy-loaded at responsive sizes, with no placeholders left', () => {
     const imgs = [...landing().querySelectorAll('img[data-photo]')]
-    expect(imgs.map((i) => i.getAttribute('data-photo')).filter((id) => id !== 'priya-avatar')).toEqual(['creator-editing', 'teacher-recording', 'metalworker', 'filmmaker'])
+    expect(imgs.map((i) => i.getAttribute('data-photo')).filter((id) => id !== 'priya-avatar')).toEqual([
+      'creator-editing',
+      'teacher-recording',
+      'metalworker',
+      'filmmaker',
+    ])
     for (const i of imgs.filter((i) => i.getAttribute('data-photo') !== 'priya-avatar')) {
       expect(i.getAttribute('srcset')).toMatch(/\.webp \d+w, .+\.webp \d+w/)
       expect(i.getAttribute('sizes')).toBeTruthy()
@@ -333,10 +395,18 @@ describe('header and footer', () => {
       const { container } = renderAt(path)
       const header = container.querySelector('header')!
       expect(header.querySelector('a[aria-label="Splitpost home"]'), path).toBeTruthy()
-      expect([...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Discover Splitpost' && a.getAttribute('href') === '/#building'), path).toBe(true)
+      expect(
+        [...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Discover Splitpost' && a.getAttribute('href') === '/#building'),
+        path,
+      ).toBe(true)
       const join = [...header.querySelectorAll('a')].find((a) => a.getAttribute('aria-label') === 'Waitlist Opens Soon')!
       expect(join.getAttribute('href'), path).toBe('/join')
       expect(join.closest('.hidden'), path).toBeNull()
+      // Wide screens also link to the homepage's Find your path cards.
+      expect(
+        [...header.querySelectorAll('a')].some((a) => norm(a).trim() === 'Find your path' && a.getAttribute('href') === '/#paths'),
+        path,
+      ).toBe(true)
       expect(norm(header), path).not.toMatch(/Crevant/)
       cleanup()
     }
@@ -356,6 +426,7 @@ describe('header and footer', () => {
     expect(links).toEqual([
       ['Why Splitpost', '/#problem'],
       ['How It Works', '/#building'],
+      ['Find Your Path', '/#paths'],
       ['Waitlist Opens Soon', '/join'],
       ['Sign In', '/sign-in'],
     ])
@@ -429,21 +500,24 @@ describe('the waitlist page', () => {
     "Whether you create content or support the people who do, there's a place for you on Splitpost.",
     "We're inviting people in small groups as we build and test the platform. Joining the waitlist doesn't guarantee an invitation to the pilot.",
   ]
-  it.each(['/join', '/join/creator', '/join/supporter'])('%s shows the one waitlist, says it is not open, and links back and to how Splitpost works', (path) => {
-    const { container } = renderAt(path)
-    expect(norm(container.querySelector('h1'))).toBe('The Waitlist Opens Soon')
-    expect([...container.querySelectorAll('[data-testid="join-intro"] p')].map((p) => norm(p))).toEqual(INTRO)
-    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain("You can't sign up just yet.")
-    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('as soon as our privacy notice is published')
-    expect(norm(container)).not.toMatch(/as a creator|as a supporter/i)
-    expect(container.querySelector('form, input, textarea, select')).toBeNull()
-    expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain("Until then, this page doesn't collect anything.")
-    const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
-    expect(hrefs).toContain('/#building')
-    expect(hrefs).not.toContain('/tour')
-    expect(hrefs).toContain('/#invitation')
-    expect(norm(container)).toContain('See how Splitpost works')
-  })
+  it.each(['/join', '/join/creator', '/join/supporter'])(
+    '%s shows the one waitlist, says it is not open, and links back and to how Splitpost works',
+    (path) => {
+      const { container } = renderAt(path)
+      expect(norm(container.querySelector('h1'))).toBe('The Waitlist Opens Soon')
+      expect([...container.querySelectorAll('[data-testid="join-intro"] p')].map((p) => norm(p))).toEqual(INTRO)
+      expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain("You can't sign up just yet.")
+      expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain('as soon as our privacy notice is published')
+      expect(norm(container)).not.toMatch(/as a creator|as a supporter/i)
+      expect(container.querySelector('form, input, textarea, select')).toBeNull()
+      expect(norm(container.querySelector('[data-testid="not-open"]'))).toContain("Until then, this page doesn't collect anything.")
+      const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+      expect(hrefs).toContain('/#building')
+      expect(hrefs).not.toContain('/tour')
+      expect(hrefs).toContain('/#invitation')
+      expect(norm(container)).toContain('See how Splitpost works')
+    },
+  )
 })
 
 describe('no personal data collection', () => {
