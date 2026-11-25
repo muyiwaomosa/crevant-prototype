@@ -1,4 +1,4 @@
-// The post-media Edge Function's actions (Build 5.3: photos), with every
+// The post-media Edge Function's actions (Build 5.3: photos; IP-5: videos), with every
 // outside call injected (database calls as the caller, database calls as the
 // service role, Storage), so the safeguards can be tested.
 //
@@ -16,6 +16,7 @@
 // never accepts a member id or a storage path from the browser. The service
 // role is used only afterwards, for Storage and the svc_* steps.
 import { checkHeader, ImageRejected, makeVariants, MAX_INPUT_BYTES, syntheticPhoto } from './image.ts'
+import { MAX_VIDEO_BYTES, readVideoHeader, VideoRejected } from './video.ts'
 
 export type RpcResult = { ok: true; data: unknown } | { ok: false; status: number; code: string }
 
@@ -23,21 +24,36 @@ export interface Deps {
   verifyUser(token: string, key: string | null): Promise<boolean>
   userRpc(token: string, fn: string, body: Record<string, unknown>, key: string | null): Promise<RpcResult>
   serviceRpc(fn: string, body: Record<string, unknown>): Promise<RpcResult>
-  upload(path: string, bytes: Uint8Array): Promise<boolean>
-  remove(paths: string[]): Promise<boolean>
-  /** path -> link relative to /storage/v1, or null on failure. */
-  sign(paths: string[], seconds: number): Promise<Record<string, string> | null>
+  /** Stores a file (never overwriting unless upsert). bucket defaults to post-photos, type to image/jpeg. */
+  upload(path: string, bytes: Uint8Array, bucket?: Bucket, type?: string, upsert?: boolean): Promise<boolean>
+  remove(paths: string[], bucket?: Bucket): Promise<boolean>
+  /** path -> link relative to /storage/v1, or null on failure. bucket defaults to post-photos. */
+  sign(paths: string[], seconds: number, bucket?: Bucket): Promise<Record<string, string> | null>
+  /** A signed upload token for exactly this path (Storage's own, valid 2 hours), or null. */
+  signUpload(bucket: Bucket, path: string): Promise<string | null>
+  /** Reads `length` bytes from `start` of a stored file, with the file's total size; null if it can't. */
+  readRange(bucket: Bucket, path: string, start: number, length: number): Promise<{ bytes: Uint8Array; size: number } | null>
   /** True only for the exact drain key (constant time); false if none is configured. */
   drainKeyMatches(presented: string): boolean
   log(event: string, detail?: Record<string, string | number | boolean>): void
 }
 
+export type Bucket = 'post-photos' | 'post-videos'
 const LINK_SECONDS = 3600
+// Videos: short-lived links, long enough to watch a five minute video with pauses (refetched on failure).
+export const VIDEO_LINK_SECONDS = 1800
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const PHOTO_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}(-feed)?\.jpg$/
+const VIDEO_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.mp4$/
+const POSTER_PATH = /^[0-9a-f-]{36}\/[0-9a-f-]{36}-poster\.jpg$/
+const VIDEO_FILE = /^[0-9a-f-]{36}\/[0-9a-f-]{36}(\.mp4|-poster\.jpg)$/
+/** The resumable upload's chunk size (Supabase Storage requires 6 MB chunks). */
+export const VIDEO_CHUNK_BYTES = 6 * 1024 * 1024
 const KNOWN = new Set([
   'not_signed_in', 'no_pilot_access', 'profile_incomplete', 'rate_limited', 'not_moderator', 'not_found',
   'photos_unavailable', 'photo_limit', 'storage_full', 'upload_expired', 'too_many', 'invalid_request',
+  'videos_unavailable', 'not_tester', 'video_too_large', 'video_too_long', 'video_limit', 'video_quota',
+  'video_codec', 'video_dimensions', 'video_size', 'video_missing', 'not_mp4', 'upload_not_ready',
 ])
 export const CHECK_PASS_MS = 1000
 
@@ -47,9 +63,9 @@ const refuse = (r: { status: number; code: string }) => {
   const code = KNOWN.has(r.code) ? r.code : 'unknown'
   const status =
     code === 'not_signed_in' ? 401
-    : code === 'no_pilot_access' || code === 'not_moderator' || code === 'photos_unavailable' ? 403
-    : code === 'rate_limited' || code === 'photo_limit' ? 429
-    : code === 'storage_full' ? 507
+    : code === 'no_pilot_access' || code === 'not_moderator' || code === 'photos_unavailable' || code === 'videos_unavailable' || code === 'not_tester' ? 403
+    : code === 'rate_limited' || code === 'photo_limit' || code === 'video_limit' ? 429
+    : code === 'storage_full' || code === 'video_quota' ? 507
     : r.status >= 500 ? 502 : 400
   return json(status, { error: code })
 }
@@ -107,13 +123,20 @@ export async function drain(deps: Deps, source: 'scheduled' | 'request' | 'moder
     return { ok: false, deleted: 0, failed: 0 }
   }
   const rows = (Array.isArray(claim.data) ? claim.data : []) as Array<{ id?: unknown; bucket?: unknown; path?: unknown }>
-  const valid = rows.filter((r) => typeof r.id === 'number' && r.bucket === 'post-photos' && typeof r.path === 'string' && PHOTO_PATH.test(r.path))
+  const valid = rows.filter(
+    (r) =>
+      typeof r.id === 'number' && typeof r.path === 'string' &&
+      ((r.bucket === 'post-photos' && PHOTO_PATH.test(r.path)) || (r.bucket === 'post-videos' && VIDEO_FILE.test(r.path))),
+  )
   const deleted: number[] = []
   const failed: number[] = []
-  for (let i = 0; i < valid.length; i += 100) {
-    const batch = valid.slice(i, i + 100)
-    const ok = await deps.remove(batch.map((r) => r.path as string))
-    for (const r of batch) (ok ? deleted : failed).push(r.id as number)
+  for (const bucket of ['post-photos', 'post-videos'] as const) {
+    const mine = valid.filter((r) => r.bucket === bucket)
+    for (let i = 0; i < mine.length; i += 100) {
+      const batch = mine.slice(i, i + 100)
+      const ok = await deps.remove(batch.map((r) => r.path as string), bucket)
+      for (const r of batch) (ok ? deleted : failed).push(r.id as number)
+    }
   }
   // Rows this code refused to act on (never expected) are recorded as failures, not lost.
   for (const r of rows) if (typeof r.id === 'number' && !valid.includes(r)) failed.push(r.id)
@@ -228,6 +251,13 @@ export async function handle(req: Request, action: string, deps: Deps): Promise<
     const r = await asCaller('app_mod_report_media', { p_report: report })
     if (!r.ok) return refuse(r)
     const row = (Array.isArray(r.data) ? r.data[0] : null) as { full_path?: unknown; feed_path?: unknown; description?: unknown } | null
+    // A reported video (20261213000000): a link to the video and its poster, while they are kept.
+    if (row && typeof row.full_path === 'string' && typeof row.feed_path === 'string' && VIDEO_PATH.test(row.full_path) && POSTER_PATH.test(row.feed_path)) {
+      const links = await deps.sign([row.full_path, row.feed_path], VIDEO_LINK_SECONDS, 'post-videos')
+      if (!links) return json(502, { error: 'storage_unavailable' })
+      const src = links[row.full_path]
+      return json(200, { photo: null, video: src ? { src, poster: links[row.feed_path] ?? null } : null })
+    }
     if (!row || typeof row.full_path !== 'string' || typeof row.feed_path !== 'string' || !PHOTO_PATH.test(row.full_path) || !PHOTO_PATH.test(row.feed_path)) {
       return json(200, { photo: null })
     }
@@ -271,6 +301,167 @@ export async function handle(req: Request, action: string, deps: Deps): Promise<
     if (!rec.ok) return json(502, { error: 'unknown' })
     deps.log('processing_check', { ms, ok })
     return json(200, { ms, ok, passBelowMs: CHECK_PASS_MS })
+  }
+
+  if (action.startsWith('video-')) return handleVideo(req, action, deps, asCaller)
+
+  return json(404, { error: 'not_found' })
+}
+
+type Caller = (fn: string, body: Record<string, unknown>) => Promise<RpcResult>
+type OwnUpload = { video_path: string; poster_path: string; status: unknown; purpose: unknown; has_poster: unknown }
+
+/** The member's own open video upload (the database checks the caller): a row, a refusal, or null. */
+async function ownUpload(asCaller: Caller, id: string): Promise<OwnUpload | Response | null> {
+  const r = await asCaller('app_video_upload_paths', { p_upload: id })
+  if (!r.ok) return refuse(r)
+  const row = (Array.isArray(r.data) ? r.data[0] : null) as Record<string, unknown> | null
+  if (!row || typeof row.video_path !== 'string' || typeof row.poster_path !== 'string' || !VIDEO_PATH.test(row.video_path)
+    || !POSTER_PATH.test(row.poster_path) || !row.video_path.endsWith(`${id}.mp4`)) return null
+  return row as OwnUpload
+}
+
+/**
+ * Videos (20261213000000). The browser has already checked and, where needed,
+ * converted the video to 720p H.264; nothing it says is trusted:
+ *   video-begin      the database authorises the upload (switch, purpose,
+ *                    limits, quota, cap) and chooses the path; this returns
+ *                    Storage's signed upload token for exactly that path, so
+ *                    the browser uploads with the resumable protocol and no
+ *                    storage policy.
+ *   video-verify     reads the stored file's header (codec, size, duration)
+ *                    and asks the database to mark it stored, or refuses it
+ *                    and queues the file for deletion.
+ *   video-poster     the poster frame, through the same checks as a photo.
+ *   video-links      short-lived links for posts the member can see.
+ *   video-test-link  a link to the member's own device-test upload.
+ */
+async function handleVideo(req: Request, action: string, deps: Deps, asCaller: Caller): Promise<Response> {
+  if (action === 'video-begin') {
+    const body = await readJson(req)
+    const bytes = body?.bytes
+    const ms = body?.durationMs
+    const purpose = body?.purpose === 'device_test' ? 'device_test' : body?.purpose === 'post' ? 'post' : null
+    if (!purpose || typeof bytes !== 'number' || !Number.isInteger(bytes) || typeof ms !== 'number' || !Number.isInteger(ms)) {
+      return json(400, { error: 'invalid_request' })
+    }
+    if (bytes < 1 || bytes > MAX_VIDEO_BYTES) return json(413, { error: 'video_too_large' })
+    const begin = await asCaller('app_video_upload_begin', { p_bytes: bytes, p_duration_ms: ms, p_purpose: purpose })
+    if (!begin.ok) return refuse(begin)
+    const row = (Array.isArray(begin.data) ? begin.data[0] : null) as { upload_id?: unknown; video_path?: unknown } | null
+    const id = typeof row?.upload_id === 'string' && UUID.test(row.upload_id) ? row.upload_id : null
+    const path = typeof row?.video_path === 'string' && VIDEO_PATH.test(row.video_path) ? row.video_path : null
+    if (!id || !path || !path.endsWith(`${id}.mp4`)) {
+      deps.log('unexpected_video_begin_reply')
+      return json(502, { error: 'unknown' })
+    }
+    const token = await deps.signUpload('post-videos', path)
+    if (!token) {
+      await deps.serviceRpc('svc_photo_upload_failed', { p_upload: id, p_reason: 'upload token failed' })
+      return json(502, { error: 'storage_unavailable' })
+    }
+    deps.log('video_upload_begun', { purpose, bytes })
+    return json(200, { uploadId: id, bucket: 'post-videos', path, token, chunkBytes: VIDEO_CHUNK_BYTES })
+  }
+
+  if (action === 'video-verify') {
+    const body = await readJson(req)
+    const id = typeof body?.uploadId === 'string' && UUID.test(body.uploadId) ? body.uploadId : null
+    if (!id) return json(400, { error: 'invalid_request' })
+    const own = await ownUpload(asCaller, id)
+    if (own instanceof Response) return own
+    if (!own) return json(404, { error: 'not_found' })
+    if (own.status === 'stored') return json(200, { uploadId: id, stored: true })
+    const path = own.video_path
+    let size = -1
+    const read = async (start: number, length: number) => {
+      const r = await deps.readRange('post-videos', path, start, length)
+      if (!r) return null
+      size = r.size
+      return r.bytes
+    }
+    // The first read tells the file's size (an upload that has not finished has no file yet).
+    if (!(await read(0, 16))) return json(409, { error: 'upload_missing' })
+    let info
+    try {
+      info = await readVideoHeader(read, size)
+    } catch (e) {
+      const code = e instanceof VideoRejected ? e.code : 'not_mp4'
+      await deps.serviceRpc('svc_photo_upload_failed', { p_upload: id, p_reason: `rejected: ${code}` })
+      deps.log('video_rejected', { code })
+      return json(422, { error: code })
+    }
+    const stored = await deps.serviceRpc('svc_video_upload_stored', {
+      p_upload: id, p_bytes: size, p_width: info.width, p_height: info.height, p_duration_ms: info.durationMs, p_codec: info.codec,
+    })
+    if (!stored.ok) {
+      await deps.serviceRpc('svc_photo_upload_failed', { p_upload: id, p_reason: `store refused: ${KNOWN.has(stored.code) ? stored.code : 'unknown'}` })
+      return refuse(stored)
+    }
+    deps.log('video_stored', { bytes: size, ms: info.durationMs, width: info.width, height: info.height })
+    return json(200, { uploadId: id, stored: true, width: info.width, height: info.height, durationMs: info.durationMs, bytes: size })
+  }
+
+  if (action === 'video-poster') {
+    const id = req.headers.get('x-upload-id') ?? ''
+    if (!UUID.test(id)) return json(400, { error: 'invalid_request' })
+    const bytes = await readBody(req, MAX_INPUT_BYTES)
+    if (!bytes) return json(413, { error: 'too_large' })
+    try {
+      checkHeader(bytes)
+    } catch (e) {
+      return json(422, { error: e instanceof ImageRejected ? e.code : 'not_jpeg' })
+    }
+    const own = await ownUpload(asCaller, id)
+    if (own instanceof Response) return own
+    if (!own) return json(404, { error: 'not_found' })
+    // The photo checks: a full decode under limits, then a fresh encode; only that copy (at most 800 px) is stored.
+    let v
+    try {
+      v = makeVariants(bytes)
+    } catch (e) {
+      return json(422, { error: e instanceof ImageRejected ? e.code : 'not_decodable' })
+    }
+    if (!(await deps.upload(own.poster_path, v.feed, 'post-videos', 'image/jpeg', true))) return json(502, { error: 'storage_unavailable' })
+    const done = await deps.serviceRpc('svc_video_poster_stored', { p_upload: id, p_bytes: v.feed.length })
+    if (!done.ok) return refuse(done)
+    return json(200, { ok: true })
+  }
+
+  if (action === 'video-links') {
+    const body = await readJson(req)
+    const ids = Array.isArray(body?.ids) ? (body!.ids as unknown[]) : null
+    if (!ids || ids.length > 100 || !ids.every((x) => typeof x === 'string' && UUID.test(x))) return json(400, { error: 'invalid_request' })
+    if (ids.length === 0) return json(200, { videos: {} })
+    // The database returns paths only for live posts by visible members, only to members, and none while video is paused.
+    const r = await asCaller('app_post_videos', { p_posts: [...new Set(ids)] })
+    if (!r.ok) return refuse(r)
+    const rows = (Array.isArray(r.data) ? r.data : []) as Array<{ post_id?: unknown; video_path?: unknown; poster_path?: unknown; has_poster?: unknown }>
+    const valid = rows.filter((x) => typeof x.post_id === 'string' && typeof x.video_path === 'string' && typeof x.poster_path === 'string'
+      && VIDEO_PATH.test(x.video_path) && POSTER_PATH.test(x.poster_path))
+    if (valid.length === 0) return json(200, { videos: {} })
+    const paths = valid.flatMap((x) => (x.has_poster === true ? [x.video_path as string, x.poster_path as string] : [x.video_path as string]))
+    const links = await deps.sign(paths, VIDEO_LINK_SECONDS, 'post-videos')
+    if (!links) return json(502, { error: 'storage_unavailable' })
+    const videos: Record<string, { src: string; poster: string | null }> = {}
+    for (const x of valid) {
+      const src = links[x.video_path as string]
+      if (src) videos[x.post_id as string] = { src, poster: x.has_poster === true ? (links[x.poster_path as string] ?? null) : null }
+    }
+    return json(200, { videos, expiresIn: VIDEO_LINK_SECONDS })
+  }
+
+  if (action === 'video-test-link') {
+    const body = await readJson(req)
+    const id = typeof body?.uploadId === 'string' && UUID.test(body.uploadId) ? body.uploadId : null
+    if (!id) return json(400, { error: 'invalid_request' })
+    const own = await ownUpload(asCaller, id)
+    if (own instanceof Response) return own
+    if (!own || own.purpose !== 'device_test' || own.status !== 'stored') return json(404, { error: 'not_found' })
+    const paths = own.has_poster === true ? [own.video_path, own.poster_path] : [own.video_path]
+    const links = await deps.sign(paths, VIDEO_LINK_SECONDS, 'post-videos')
+    if (!links || !links[own.video_path]) return json(502, { error: 'storage_unavailable' })
+    return json(200, { src: links[own.video_path], poster: links[own.poster_path] ?? null, expiresIn: VIDEO_LINK_SECONDS })
   }
 
   return json(404, { error: 'not_found' })

@@ -36,7 +36,7 @@ export interface Post {
   likedByMe: boolean
   authorInMyClique: boolean
   isMine: boolean
-  /** Photo posts (20261127000000): the photo's shape and description; null or absent for text posts. */
+  /** Photo and video posts (20261127000000, 20261213000000): the media's shape and description; null or absent for text posts. */
   media?: PostMedia | null
   /** Home with reposts (20261202000000): when this item reached the feed (the repost time for a repost). */
   activityAt?: string
@@ -97,7 +97,40 @@ export interface PostMeta {
 }
 export type PostEdit = { previousBody: string; previousTopic: string | null; editedAt: string }
 
-export type PostMedia = { kind: 'photo'; width: number; height: number; description: string | null }
+export type PhotoMedia = { kind: 'photo'; width: number; height: number; description: string | null }
+/** Video posts (20261213000000): checked by the server, at most 1280 x 720 and five minutes; poster: whether a poster image exists. */
+export type VideoMedia = { kind: 'video'; width: number; height: number; description: string | null; durationMs: number; poster: boolean }
+export type PostMedia = PhotoMedia | VideoMedia
+/** Short-lived signed links (30 minutes) to a video and its poster (null when it has none). */
+export type VideoLinks = { src: string; poster: string | null }
+/** Whether the member can post videos, may run device tests, and the limits with what they have used. */
+export type VideoStatus = {
+  enabled: boolean
+  canTest: boolean
+  maxSeconds: number
+  maxBytes: number
+  maxSourceBytes: number
+  dailyLimit: number
+  postedToday: number
+  memberCapBytes: number
+  memberUsedBytes: number
+}
+export type VideoPurpose = 'post' | 'device_test'
+/** The Edge Function's answer to beginning an upload: the database's path and Storage's signed upload token for it. */
+export type VideoUploadTicket = { uploadId: string; bucket: string; path: string; token: string; chunkBytes: number }
+export type VideoVerified = { width: number; height: number; durationMs: number; bytes: number }
+export type DeviceKind = 'iphone_safari' | 'android_chrome' | 'desktop'
+export type DeviceTestResult = { device: DeviceKind; passed: boolean; notes: string | null; at: string }
+export type FounderVideoStatus = {
+  enabled: boolean
+  ready: boolean
+  capBytes: number | null
+  usedBytes: number
+  videoPosts: number
+  testUploads24h: number
+  latest: Partial<Record<DeviceKind, DeviceTestResult>>
+  recent: DeviceTestResult[]
+}
 /** Signed links (valid for an hour) to a post's photo: the 800 px feed copy and the full 1600 px one. */
 export type PhotoLinks = { feed: string; full: string }
 /** Photo storage at a glance (moderators). */
@@ -713,6 +746,31 @@ export interface AppApi {
   modMediaDrain(): Promise<{ deleted: number; failed: number }>
   /** The founder's hosted processing check (one of six). */
   runPhotoCheck(seed: number): Promise<{ ms: number; ok: boolean }>
+  /**
+   * Video posts (20261213000000 and the post-media Edge Function). The browser
+   * checks and, where needed, converts the video to 720p H.264 first; the
+   * server checks the stored file again before it can be published. Null (or
+   * off) on a database without them.
+   */
+  videoStatus(): Promise<VideoStatus | null>
+  /** Authorises one upload of this size and duration; returns the path and a signed upload token. */
+  beginVideoUpload(bytes: number, durationMs: number, purpose: VideoPurpose): Promise<VideoUploadTicket>
+  /** Uploads the file with the resumable protocol (6 MB chunks), resuming after a lost connection. */
+  uploadVideoFile(ticket: VideoUploadTicket, file: Blob, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<void>
+  /** Asks the server to check the stored file (codec, size, duration); it is refused and removed if it doesn't pass. */
+  verifyVideo(uploadId: string): Promise<VideoVerified>
+  /** The poster frame (a JPEG), through the same checks as a photo. */
+  uploadVideoPoster(uploadId: string, jpeg: Blob): Promise<void>
+  /** Publishes a post with a checked video (caption optional). requestId as for createPost. */
+  createVideoPost(body: string, requestId: string, uploadId: string): Promise<string>
+  videoLinks(postIds: string[]): Promise<Record<string, VideoLinks>>
+  /** A link to the member's own device-test upload. */
+  videoTestLink(uploadId: string): Promise<VideoLinks>
+  /** Moderators: the reported video, while the report keeps it. */
+  modReportVideo(reportId: string): Promise<VideoLinks | null>
+  founderVideoStatus(): Promise<FounderVideoStatus | null>
+  founderRecordDeviceTest(device: DeviceKind, passed: boolean, notes: string): Promise<void>
+  founderSetVideoCap(gigabytes: number): Promise<void>
   following(): Promise<FollowedCreator[]>
   /** requestId: the browser's id for this post, reused on retry, so it's stored once (issue #48). */
   createPost(body: string, requestId?: string): Promise<string>
@@ -1022,7 +1080,25 @@ const MESSAGES: Record<string, string> = {
   request_open: 'You already have a request like this open.',
   sharing_paused: 'Sharing is paused for a moment. Please try again later.',
   reason_required: 'Write a short reason first.',
-  video_not_ready: 'Video posts stay off until the device test has passed.',
+  video_not_ready: 'Video posts stay off until the iPhone and Android device tests have passed and the video storage cap is set.',
+  videos_unavailable: "Video posts aren't available right now. You can still post text.",
+  not_tester: 'Only the founder and testers can run the video device test.',
+  video_too_large: 'That video is too large. Videos can be up to 110 MB once prepared.',
+  video_too_long: 'That video is longer than five minutes. Please trim it and try again.',
+  video_limit: 'You can post 5 videos a day. Please try again tomorrow.',
+  video_quota: "You've used your 1 GB of video. Delete an older video post to add a new one.",
+  video_codec: "That video couldn't be used. Please choose another one.",
+  video_dimensions: "That video couldn't be used. Please choose another one.",
+  video_size: 'Something went wrong with that video. Please add it again.',
+  video_missing: "That file has no picture we can use. Please choose a video.",
+  not_mp4: "That video couldn't be used. Please choose another one.",
+  upload_missing: "The upload didn't finish. Please add the video again.",
+  video_upload_failed: "We couldn't upload your video right now. Please try again.",
+  video_source_too_large: 'That video is too large to prepare here. Please choose one under 2 GB.',
+  video_not_supported: "This browser can't prepare videos. Please update it, or try Chrome or Safari.",
+  video_hevc: "This phone saved the video in a format (HEVC) this browser can't convert. In your camera settings choose Most Compatible (iPhone) or turn off HEVC (Android), record again, and try once more.",
+  video_not_readable: "We couldn't read that video. Please choose another one.",
+  video_canceled: 'Stopped. Your video was not uploaded.',
   use_delete_account: 'Complete a deletion request by deleting the account.',
   cannot_delete_founder: "A founder account can't be deleted here.",
   network: "We couldn't reach Splitpost. Check your connection and try again.",
@@ -1201,8 +1277,124 @@ async function photoFunctionError(error: unknown): Promise<AppApiError> {
 function toMedia(v: unknown): PostMedia | null {
   if (!v || typeof v !== 'object') return null
   const m = v as Record<string, unknown>
-  if (m.kind !== 'photo' || typeof m.width !== 'number' || typeof m.height !== 'number' || m.width < 1 || m.height < 1) return null
-  return { kind: 'photo', width: m.width, height: m.height, description: typeof m.description === 'string' ? m.description : null }
+  if ((m.kind !== 'photo' && m.kind !== 'video') || typeof m.width !== 'number' || typeof m.height !== 'number' || m.width < 1 || m.height < 1) return null
+  const description = typeof m.description === 'string' ? m.description : null
+  if (m.kind === 'video') {
+    return { kind: 'video', width: m.width, height: m.height, description, durationMs: typeof m.duration_ms === 'number' ? m.duration_ms : 0, poster: m.poster === true }
+  }
+  return { kind: 'photo', width: m.width, height: m.height, description }
+}
+
+/** The post-media function's video refusals, in the app's words. */
+async function videoFunctionError(error: unknown): Promise<AppApiError> {
+  const ctx = (error as { context?: unknown })?.context
+  if (ctx instanceof Response) {
+    if (ctx.status === 404) return new AppApiError('videos_unavailable')
+    try {
+      const body = (await ctx.json()) as { error?: unknown }
+      if (typeof body.error === 'string') {
+        if (body.error === 'unavailable') return new AppApiError('videos_unavailable')
+        if (body.error === 'storage_unavailable') return new AppApiError('video_upload_failed')
+        if (['not_jpeg', 'wrong_size', 'not_decodable', 'too_large'].includes(body.error)) return new AppApiError('photo_not_usable')
+        if (Object.prototype.hasOwnProperty.call(MESSAGES, body.error)) return new AppApiError(body.error)
+      }
+    } catch {
+      /* not JSON */
+    }
+    return new AppApiError(ctx.status >= 500 ? 'video_upload_failed' : 'unknown')
+  }
+  return new AppApiError('network')
+}
+
+const tusMetadata = (m: Record<string, string>) =>
+  Object.entries(m)
+    .map(([k, v]) => `${k} ${btoa(unescape(encodeURIComponent(v)))}`)
+    .join(',')
+const wait = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => (clearTimeout(t), reject(new AppApiError('video_canceled'))), { once: true })
+  })
+
+/**
+ * Uploads a file to Supabase Storage with the resumable (TUS 1.0) protocol and
+ * a signed upload token: no member storage policy. 6 MB chunks; after a lost
+ * connection it asks Storage how much arrived and carries on, up to 8 times
+ * with growing waits. Exported for tests.
+ */
+export async function tusUpload(opts: {
+  endpoint: string
+  token: string
+  bucket: string
+  path: string
+  file: Blob
+  chunkBytes: number
+  onProgress: (fraction: number) => void
+  signal?: AbortSignal
+  fetchImpl?: typeof fetch
+}): Promise<void> {
+  const f = opts.fetchImpl ?? fetch
+  const base = { 'x-signature': opts.token, 'Tus-Resumable': '1.0.0' }
+  const size = opts.file.size
+  const chunk = Math.max(1, opts.chunkBytes)
+  const aborted = () => {
+    if (opts.signal?.aborted) throw new AppApiError('video_canceled')
+  }
+  const create = await f(opts.endpoint, {
+    method: 'POST',
+    signal: opts.signal,
+    headers: {
+      ...base,
+      'Upload-Length': String(size),
+      'Upload-Metadata': tusMetadata({ bucketName: opts.bucket, objectName: opts.path, contentType: 'video/mp4', cacheControl: '3600' }),
+    },
+  }).catch((e) => {
+    aborted()
+    throw e instanceof AppApiError ? e : new AppApiError('network')
+  })
+  if (create.status === 413) throw new AppApiError('video_too_large')
+  if (create.status !== 201) throw new AppApiError('video_upload_failed')
+  const location = create.headers.get('Location')
+  if (!location) throw new AppApiError('video_upload_failed')
+  let offset = 0
+  let failures = 0
+  opts.onProgress(0)
+  while (offset < size) {
+    aborted()
+    try {
+      const res = await f(location, {
+        method: 'PATCH',
+        signal: opts.signal,
+        headers: { ...base, 'Upload-Offset': String(offset), 'Content-Type': 'application/offset+octet-stream' },
+        body: opts.file.slice(offset, Math.min(size, offset + chunk)),
+      })
+      if (res.status === 204 || res.status === 200) {
+        const next = Number(res.headers.get('Upload-Offset'))
+        if (!Number.isFinite(next) || next <= offset) throw new AppApiError('video_upload_failed')
+        offset = next
+        failures = 0
+        opts.onProgress(offset / size)
+        continue
+      }
+      if (res.status === 413) throw new AppApiError('video_too_large')
+      if (res.status !== 409 && res.status < 500) throw new AppApiError('video_upload_failed')
+      throw new Error('retry')
+    } catch (e) {
+      aborted()
+      if (e instanceof AppApiError) throw e
+      // A lost connection or a server hiccup: wait, ask how much arrived, and carry on.
+      if (++failures > 8) throw new AppApiError('video_upload_failed')
+      await wait(Math.min(30_000, 1000 * 2 ** (failures - 1)), opts.signal)
+      try {
+        const head = await f(location, { method: 'HEAD', signal: opts.signal, headers: base })
+        const at = Number(head.headers.get('Upload-Offset'))
+        if (head.ok && Number.isFinite(at) && at >= 0) offset = at
+      } catch {
+        /* still offline: try again after the next wait */
+      }
+    }
+  }
+  opts.onProgress(1)
 }
 
 function toFeedbackItem(r: Record<string, unknown>): FeedbackItem {
@@ -1763,6 +1955,108 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       const d = (data ?? {}) as { ms?: unknown; ok?: unknown }
       return { ms: Number(d.ms ?? 0), ok: d.ok === true }
     },
+    async videoStatus() {
+      const { data, error } = await client.rpc('app_video_status')
+      if (error) {
+        if (isMissingFunction(error, 'app_video_status')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      return {
+        enabled: r.enabled === true,
+        canTest: r.can_test === true,
+        maxSeconds: Number(r.max_seconds ?? 300),
+        maxBytes: Number(r.max_bytes ?? 115343360),
+        maxSourceBytes: Number(r.max_source_bytes ?? 2147483648),
+        dailyLimit: Number(r.daily_limit ?? 5),
+        postedToday: Number(r.posted_today ?? 0),
+        memberCapBytes: Number(r.member_cap_bytes ?? 1073741824),
+        memberUsedBytes: Number(r.member_used_bytes ?? 0),
+      }
+    },
+    async beginVideoUpload(bytes, durationMs, purpose) {
+      const { data, error } = await client.functions.invoke('post-media/video-begin', { body: { bytes, durationMs, purpose } })
+      if (error) throw await videoFunctionError(error)
+      const d = (data ?? {}) as Record<string, unknown>
+      if (typeof d.uploadId !== 'string' || typeof d.path !== 'string' || typeof d.token !== 'string' || d.bucket !== 'post-videos')
+        throw new AppApiError('video_upload_failed')
+      return { uploadId: d.uploadId, bucket: d.bucket, path: d.path, token: d.token, chunkBytes: Number(d.chunkBytes ?? 6 * 1024 * 1024) }
+    },
+    async uploadVideoFile(ticket, file, onProgress, signal) {
+      const base = client.storage.from('post-videos').getPublicUrl('x').data.publicUrl.split('/object/')[0]
+      await tusUpload({ endpoint: `${base}/upload/resumable/sign`, token: ticket.token, bucket: ticket.bucket, path: ticket.path, file, chunkBytes: ticket.chunkBytes, onProgress, signal })
+    },
+    async verifyVideo(uploadId) {
+      const { data, error } = await client.functions.invoke('post-media/video-verify', { body: { uploadId } })
+      if (error) throw await videoFunctionError(error)
+      const d = (data ?? {}) as Record<string, unknown>
+      if (d.stored !== true) throw new AppApiError('video_upload_failed')
+      return { width: Number(d.width ?? 0), height: Number(d.height ?? 0), durationMs: Number(d.durationMs ?? 0), bytes: Number(d.bytes ?? 0) }
+    },
+    async uploadVideoPoster(uploadId, jpeg) {
+      const { error } = await client.functions.invoke('post-media/video-poster', { body: jpeg, headers: { 'Content-Type': 'image/jpeg', 'x-upload-id': uploadId } })
+      if (error) throw await videoFunctionError(error)
+    },
+    createVideoPost: (body, requestId, uploadId) => rpc<string>('app_create_post', { p_body: body, p_request_id: requestId, p_media: uploadId, p_media_description: null }),
+    async videoLinks(postIds) {
+      const ids = [...new Set(postIds)].slice(0, 100)
+      if (ids.length === 0) return {}
+      const { data, error } = await client.functions.invoke('post-media/video-links', { body: { ids } })
+      if (error || !data || typeof data !== 'object') return {}
+      const videos = (data as { videos?: Record<string, { src?: unknown; poster?: unknown }> }).videos ?? {}
+      const base = client.storage.from('post-videos').getPublicUrl('x').data.publicUrl.split('/object/')[0]
+      const ok = (v: unknown): v is string => typeof v === 'string' && v.startsWith('/object/sign/post-videos/')
+      const out: Record<string, VideoLinks> = {}
+      for (const [id, v] of Object.entries(videos)) {
+        if (ok(v?.src)) out[id] = { src: `${base}${v.src}`, poster: ok(v.poster) ? `${base}${v.poster}` : null }
+      }
+      return out
+    },
+    async videoTestLink(uploadId) {
+      const { data, error } = await client.functions.invoke('post-media/video-test-link', { body: { uploadId } })
+      if (error) throw await videoFunctionError(error)
+      const d = (data ?? {}) as { src?: unknown; poster?: unknown }
+      const base = client.storage.from('post-videos').getPublicUrl('x').data.publicUrl.split('/object/')[0]
+      if (typeof d.src !== 'string' || !d.src.startsWith('/object/sign/post-videos/')) throw new AppApiError('video_upload_failed')
+      return { src: `${base}${d.src}`, poster: typeof d.poster === 'string' && d.poster.startsWith('/object/sign/post-videos/') ? `${base}${d.poster}` : null }
+    },
+    async modReportVideo(reportId) {
+      const { data, error } = await client.functions.invoke('post-media/mod-photo', { body: { report: reportId } })
+      if (error) throw await photoFunctionError(error)
+      const v = (data as { video?: { src?: unknown; poster?: unknown } | null })?.video
+      const base = client.storage.from('post-videos').getPublicUrl('x').data.publicUrl.split('/object/')[0]
+      if (!v || typeof v.src !== 'string' || !v.src.startsWith('/object/sign/post-videos/')) return null
+      return { src: `${base}${v.src}`, poster: typeof v.poster === 'string' && v.poster.startsWith('/object/sign/post-videos/') ? `${base}${v.poster}` : null }
+    },
+    async founderVideoStatus() {
+      const { data, error } = await client.rpc('app_founder_video_status')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_video_status')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      const result = (x: Record<string, unknown>, device?: string): DeviceTestResult => ({
+        device: (device ?? x.device) as DeviceKind,
+        passed: x.passed === true,
+        notes: typeof x.notes === 'string' ? x.notes : null,
+        at: String(x.at),
+      })
+      const latest: FounderVideoStatus['latest'] = {}
+      for (const [k, v] of Object.entries((r.latest ?? {}) as Record<string, Record<string, unknown>>)) latest[k as DeviceKind] = result(v, k)
+      return {
+        enabled: r.enabled === true,
+        ready: r.ready === true,
+        capBytes: r.cap_bytes === null || r.cap_bytes === undefined ? null : Number(r.cap_bytes),
+        usedBytes: Number(r.used_bytes ?? 0),
+        videoPosts: Number(r.video_posts ?? 0),
+        testUploads24h: Number(r.test_uploads_24h ?? 0),
+        latest,
+        recent: ((r.recent as Array<Record<string, unknown>>) ?? []).map((x) => result(x)),
+      }
+    },
+    founderRecordDeviceTest: (device, passed, notes) =>
+      rpc<void>('app_founder_record_device_test', { p_device: device, p_passed: passed, p_notes: notes.trim() || null }),
+    founderSetVideoCap: (gigabytes) => rpc<void>('app_founder_set_video_cap', { p_cap_gb: gigabytes }),
     async follow(id, source) {
       // The source is recorded since 20261201000000; an older database follows without it.
       const { error } = await client.rpc('app_follow', { p_creator: id, p_source: source ?? null })

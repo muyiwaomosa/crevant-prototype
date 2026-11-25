@@ -14,6 +14,7 @@ import { DetailsSetup, SETUP_STEPS, SetupProgress } from './profileDetails'
 import { ModerationProvider } from './moderation'
 import { FeedbackProvider, SendFeedbackLink } from './feedback'
 import { MediaProvider } from './media'
+import { VideoProvider } from './video'
 import { AvatarProvider } from './avatars'
 import { PostMetaProvider } from './content'
 
@@ -75,9 +76,11 @@ function Gate() {
           <ModerationProvider>
             <FeedbackProvider>
               <MediaProvider>
-                <ViewTrackerProvider userId={status.profile.id}>
-                  <MemberLayout username={status.profile.username} />
-                </ViewTrackerProvider>
+                <VideoProvider>
+                  <ViewTrackerProvider userId={status.profile.id}>
+                    <MemberLayout username={status.profile.username} />
+                  </ViewTrackerProvider>
+                </VideoProvider>
               </MediaProvider>
             </FeedbackProvider>
           </ModerationProvider>

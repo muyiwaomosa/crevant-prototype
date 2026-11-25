@@ -28,6 +28,7 @@ import { ControlCenterPage } from '../app/insights'
 import { AdvertisePage, PrivacyPage as MemberPrivacyPage } from '../app/account'
 import { ModerationQueuePage, ModerationAppealsPage, ModerationReportPage } from '../app/moderation'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from '../app/feedback'
+import { VideoTestPage } from '../app/video'
 
 /**
  * The public site, invited members' account pages and the members area
@@ -85,6 +86,7 @@ function memberAreaRoute() {
       <Route path="control" element={<ControlCenterPage />} />
       <Route path="advertise" element={<AdvertisePage />} />
       <Route path="privacy" element={<MemberPrivacyPage />} />
+      <Route path="video-test" element={<VideoTestPage />} />
       <Route path="feedback" element={<FeedbackPage />} />
       <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
       <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />

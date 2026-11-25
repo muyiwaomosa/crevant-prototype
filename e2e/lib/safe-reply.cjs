@@ -21,6 +21,9 @@ const SAFE_CODES = new Set([
   'not_jpeg', 'wrong_size', 'not_decodable',
   'WORKER_LIMIT', 'WORKER_ERROR', 'BOOT_ERROR', 'EARLY_DROP',
   'upload_not_ready',
+  // Video posts (20261213000000).
+  'videos_unavailable', 'not_tester', 'video_too_large', 'video_too_long', 'video_limit', 'video_quota',
+  'video_codec', 'video_dimensions', 'video_size', 'video_missing', 'not_mp4', 'upload_missing',
 ])
 
 function describe(r) {

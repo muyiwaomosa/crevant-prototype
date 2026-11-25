@@ -11,6 +11,9 @@ import { Message, Spinner } from '../public/auth/AuthUi'
 import { messageFor, type FounderMemberRequest, type FounderSwitches, type InvitationLink, type RegistrationSettings, type SwitchFeature } from './api'
 import { useAppApi } from './AppApiContext'
 
+/** Sent by the video readiness panel (video.tsx) when a device test or the cap is saved. */
+export const VIDEO_READINESS_EVENT = 'splitpost:video-readiness'
+
 const input = 'mt-1 block min-h-11 w-full rounded-xl border border-ink-200 bg-white px-3 text-base text-ink-900'
 
 function Panel({ title, children, testId }: { title: string; children: React.ReactNode; testId: string }) {
@@ -216,7 +219,7 @@ export function InvitationLinksPanel() {
 const SWITCH_TEXT: Record<SwitchFeature, { title: string; body: string }> = {
   ads: { title: 'Advertising', body: 'Sponsored posts in Home and under posts.' },
   sharing: { title: 'Sharing', body: 'Copy link and the share sheet on posts.' },
-  video_posts: { title: 'Video posts', body: 'Stays off until the real-device test has passed.' },
+  video_posts: { title: 'Video posts', body: 'Turns on only once the iPhone and Android device tests have passed and the video storage cap is set (see Video posts below).' },
 }
 
 export function SwitchesPanel() {
@@ -224,13 +227,24 @@ export function SwitchesPanel() {
   const [s, setS] = useState<FounderSwitches | null | undefined>(undefined)
   const [reason, setReason] = useState('')
   const [error, setError] = useState<unknown>(null)
-  const load = () =>
-    api.founderSwitches().then(
+  // Video posts (20261213000000): offered only once both phone device tests passed and the cap is set (the server checks again).
+  const [videoReady, setVideoReady] = useState(false)
+  const load = () => {
+    api.founderVideoStatus().then(
+      (v) => setVideoReady(v?.ready === true),
+      () => setVideoReady(false),
+    )
+    return api.founderSwitches().then(
       (x) => setS(x),
       (e) => (setError(e), setS(null)),
     )
+  }
   useEffect(() => {
     void load()
+    // The video readiness panel records device tests and the cap: look again when it does.
+    const again = () => void load()
+    window.addEventListener(VIDEO_READINESS_EVENT, again)
+    return () => window.removeEventListener(VIDEO_READINESS_EVENT, again)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api])
   if (s === undefined) return <Spinner label="Loading switches…" />
@@ -270,7 +284,7 @@ export function SwitchesPanel() {
             <button
               type="button"
               onClick={() => void flip(x.feature, !x.enabled)}
-              disabled={x.feature === 'video_posts' && !x.enabled}
+              disabled={x.feature === 'video_posts' && !x.enabled && !videoReady}
               className={buttonClass(x.enabled ? 'secondary' : 'primary', 'sm')}
             >
               {x.enabled

@@ -59,6 +59,11 @@ test('the entry point serves only the projects the shared policy allows, verifie
   assert.match(index, /if \(drainKey\.length < 32 \|\| presented\.length !== drainKey\.length\) return false/)
   assert.match(index, /diff \|= drainKey\.charCodeAt\(i\) \^ presented\.charCodeAt\(i\)/, 'constant-time comparison')
   for (const p of ["'/object/post-photos'", '`/object/post-photos/${path}`', "'/object/sign/post-photos'"]) assert.ok(index.includes(p), p)
+  // Video posts (20261213000000): the private post-videos bucket only, spelled out (signed upload tokens and header reads included).
+  for (const p of ["'/object/post-videos'", '`/object/post-videos/${path}`', "'/object/sign/post-videos'", '`/object/upload/sign/post-videos/${path}`', '`/object/authenticated/post-videos/${path}`']) {
+    assert.ok(index.includes(p), p)
+  }
+  assert.ok(!/`\/object\/[a-z/]*\$\{bucket\}/.test(index), 'no bucket name is put together from a variable')
   assert.ok(!/\/object\/(sign\/)?avatars/.test(index), 'never touches the avatars bucket')
 })
 
@@ -75,8 +80,24 @@ test('every member action is authenticated first; only the drain uses the drain 
 })
 
 test('the database is asked as the caller before every privileged step; no id or path from the browser', () => {
-  const h = code(read(`${dir}/handler.ts`))
+  const all = code(read(`${dir}/handler.ts`))
+  // Videos (20261213000000) are uploaded straight to Storage, so their later steps name the upload: the
+  // database then answers only for the caller's own upload (app_video_upload_paths), before anything else.
+  const videoAt = all.indexOf('async function handleVideo(')
+  const h = all.slice(0, videoAt)
+  const video = all.slice(videoAt)
+  assert.ok(videoAt > 0, 'the video actions are in their own function')
   assert.ok(!/body\??\.(path|paths|user|userId|user_id|member|memberId|owner|upload|uploadId)\b/.test(h), 'no member id, upload id or path is read from the request')
+  assert.ok(!/body\??\.(path|paths|user|userId|user_id|member|memberId|owner|upload)\b/.test(video), 'videos: no member id or path is read from the request')
+  for (const route of ["action === 'video-verify'", "action === 'video-poster'", "action === 'video-test-link'"]) {
+    const part = video.slice(video.indexOf(route))
+    const own = part.indexOf('ownUpload(asCaller, id)')
+    const firstStep = Math.min(...['deps.readRange', 'deps.upload', 'deps.sign', 'deps.serviceRpc'].map((s) => part.indexOf(s)).filter((i) => i >= 0))
+    assert.ok(own > 0 && own < firstStep, `${route}: the caller's own upload is checked before any Storage or service step`)
+  }
+  assert.match(all, /asCaller\('app_video_upload_paths', \{ p_upload: id \}\)/)
+  const begin = video.slice(video.indexOf("action === 'video-begin'"))
+  assert.ok(begin.indexOf("asCaller('app_video_upload_begin'") < begin.indexOf('deps.signUpload'), 'the upload is authorised by the database before a token is issued')
   const photo = h.slice(h.indexOf("action === 'photo'"))
   const order = ['checkHeader(bytes)', "asCaller('app_photo_upload_begin'", 'makeVariants(bytes)', 'deps.upload(fullPath', "deps.serviceRpc('svc_photo_upload_stored'"]
   const at = order.map((s) => photo.indexOf(s))

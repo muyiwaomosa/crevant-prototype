@@ -1,7 +1,8 @@
 // Supabase Edge Function: post-media (Build 5.3). Photo posts: upload (two
 // server-made copies), signed links, the reported photo for moderators, the
 // deletion queue (scheduled, on request and by moderators), and the founder's
-// hosted processing check.
+// hosted processing check. Video posts (IP-5, 20261213000000): a signed
+// resumable upload token, the server's header check, the poster, and links.
 //
 // Staging, and member Production ONLY once separately approved
 // (postMediaFunctionApproved in config/member-production.json; photos stay off
@@ -22,8 +23,9 @@
 //                              action refuses, and everything else works.
 //
 // Routes (POST): /post-media/photo, /links, /cleanup, /mod-photo, /mod-drain,
-// /check (signed-in members; the database decides), /drain (the schedule).
-import { handle, type Deps, type RpcResult } from './handler.ts'
+// /check, /video-begin, /video-verify, /video-poster, /video-links,
+// /video-test-link (signed-in members; the database decides), /drain (the schedule).
+import { handle, type Bucket, type Deps, type RpcResult } from './handler.ts'
 import { BUILD_HEADER, BUILD_ID, corsHeaders, memberFunctionRole, refusalReason } from '../_shared/policy.ts'
 
 // Which projects this function may serve, and which browser origins may call
@@ -88,12 +90,13 @@ const deps: Deps = {
   verifyUser,
   userRpc: (token, fn, body, key) => rpc(key ?? anon, token, fn, body),
   serviceRpc: (fn, body) => rpc(service, service, fn, body),
-  async upload(path, bytes) {
+  async upload(path, bytes, bucket: Bucket = 'post-photos', type = 'image/jpeg', upsert = false) {
     try {
-      const res = await storage(`/object/post-photos/${path}`, {
+      // Only the two media buckets, spelled out.
+      const res = await storage(bucket === 'post-videos' ? `/object/post-videos/${path}` : `/object/post-photos/${path}`, {
         method: 'POST',
-        // Never overwrite: every upload has a new path.
-        headers: { 'Content-Type': 'image/jpeg', 'x-upsert': 'false', 'cache-control': 'max-age=3600' },
+        // Never overwrite a photo: every upload has a new path. A video's poster may be sent again.
+        headers: { 'Content-Type': type, 'x-upsert': upsert ? 'true' : 'false', 'cache-control': 'max-age=3600' },
         body: bytes as unknown as BodyInit,
       })
       await res.body?.cancel()
@@ -102,18 +105,18 @@ const deps: Deps = {
       return false
     }
   },
-  async remove(paths) {
+  async remove(paths, bucket: Bucket = 'post-photos') {
     try {
-      const res = await storage('/object/post-photos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: paths }) })
+      const res = await storage(bucket === 'post-videos' ? '/object/post-videos' : '/object/post-photos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: paths }) })
       await res.body?.cancel()
       return res.ok
     } catch {
       return false
     }
   },
-  async sign(paths, seconds) {
+  async sign(paths, seconds, bucket: Bucket = 'post-photos') {
     try {
-      const res = await storage('/object/sign/post-photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn: seconds, paths }) })
+      const res = await storage(bucket === 'post-videos' ? '/object/sign/post-videos' : '/object/sign/post-photos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn: seconds, paths }) })
       if (!res.ok) {
         await res.body?.cancel()
         return null
@@ -123,6 +126,52 @@ const deps: Deps = {
       // Links are relative to /storage/v1, so the app adds its own project address.
       for (const r of rows) if (r.path && r.signedURL && !r.error) out[r.path] = r.signedURL
       return out
+    } catch {
+      return null
+    }
+  },
+  async signUpload(bucket, path) {
+    try {
+      // Storage's own signed upload token for exactly this path (never overwriting), valid 2 hours.
+      if (bucket !== 'post-videos') return null
+      const res = await storage(`/object/upload/sign/post-videos/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-upsert': 'false' }, body: '{}' })
+      if (!res.ok) {
+        await res.body?.cancel()
+        return null
+      }
+      const d = (await res.json()) as { token?: unknown; url?: unknown }
+      if (typeof d.token === 'string' && /^[A-Za-z0-9_.-]{20,4096}$/.test(d.token)) return d.token
+      const m = typeof d.url === 'string' ? /[?&]token=([A-Za-z0-9_.-]{20,4096})/.exec(d.url) : null
+      return m ? m[1] : null
+    } catch {
+      return null
+    }
+  },
+  async readRange(bucket, path, start, length) {
+    try {
+      if (bucket !== 'post-videos') return null
+      const res = await storage(`/object/authenticated/post-videos/${path}`, { method: 'GET', headers: { Range: `bytes=${start}-${start + length - 1}` } })
+      if (res.status !== 206 && res.status !== 200) {
+        await res.body?.cancel()
+        return null
+      }
+      const range = /\/(\d+)$/.exec(res.headers.get('content-range') ?? '')
+      const size = range ? Number(range[1]) : Number(res.headers.get('content-length') ?? '-1')
+      // Never read more than asked, even if Storage ignored the range.
+      const reader = res.body?.getReader()
+      if (!reader) return null
+      const out = new Uint8Array(length)
+      let at = 0
+      while (at < length) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const take = Math.min(value.length, length - at)
+        out.set(value.subarray(0, take), at)
+        at += take
+      }
+      await reader.cancel().catch(() => {})
+      if (res.status === 200 && start > 0) return null
+      return { bytes: out.subarray(0, at), size }
     } catch {
       return null
     }

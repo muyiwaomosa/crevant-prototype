@@ -185,8 +185,12 @@ function HomeFeed({
           <PostComposer
             label="Write a post"
             placeholder="Share something with the people who follow you…"
-            onPost={async ({ text, requestId, photo, topic }) => {
-              const id = await (photo ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description) : api.createPost(text, requestId))
+            onPost={async ({ text, requestId, photo, video, topic }) => {
+              const id = await (video
+                ? api.createVideoPost(text, requestId, video.uploadId)
+                : photo
+                  ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description)
+                  : api.createPost(text, requestId))
               await categorize(api, id, topic)
               await feed.reload()
             }}
@@ -518,8 +522,12 @@ export function ComposePage() {
           label="Write a post"
           placeholder="What do you want to share?"
           rows={6}
-          onPost={async ({ text, requestId, photo, topic }) => {
-            const id = await (photo ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description) : api.createPost(text, requestId))
+          onPost={async ({ text, requestId, photo, video, topic }) => {
+            const id = await (video
+              ? api.createVideoPost(text, requestId, video.uploadId)
+              : photo
+                ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description)
+                : api.createPost(text, requestId))
             await categorize(api, id, topic)
             navigate(`/app/post/${id}`)
           }}
