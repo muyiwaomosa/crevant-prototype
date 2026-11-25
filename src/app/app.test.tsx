@@ -92,6 +92,8 @@ function fakeApi(
   const saves = new Map<string, number>()
   const reposts = new Set<string>()
   const shares: Array<{ id: string; channel: string }> = []
+  const searchNotes: Array<Record<string, unknown>> = []
+  const previews = { allowed: true }
   const likes = new Set<string>()
   const comments: Array<{ id: string; post: string; author: string; body: string; at: number; deleted: boolean }> = []
   let clock = Date.parse('2026-11-17T12:00:00Z')
@@ -733,6 +735,18 @@ function fakeApi(
     async recordShare(id, channel) {
       shares.push({ id, channel })
     },
+    async noteSearch(surface, hadResults, topic) {
+      searchNotes.push({ surface, hadResults, topic: topic ?? null })
+    },
+    async noteSearchSelection(surface, topic) {
+      searchNotes.push({ surface, selected: true, topic: topic ?? null })
+    },
+    async publicPreviewsAllowed() {
+      return previews.allowed
+    },
+    async setPublicPreviews(allowed) {
+      previews.allowed = allowed
+    },
     async repost(id) {
       const p = posts.find((x) => x.id === id && !x.deleted)
       if (!p) throw new AppApiError('not_found')
@@ -856,7 +870,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
+  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, searchNotes, previews, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -2871,7 +2885,61 @@ describe('discovery (20261203000000): value and intent based, search, share', ()
     renderApp(`/app/post/${id}`, fake.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
     expect(await screen.findByRole('button', { name: 'Link copied' })).toBeTruthy()
-    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/app/post/${id}`)
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/p/${id}?r=0123456789abcdef`))
     await waitFor(() => expect(fake.shares).toEqual([{ id, channel: 'copy_link' }]))
+  })
+})
+
+describe('previews and search measurement (20261204000000)', () => {
+  it('a search is counted once (with results, matched topic) and opening a result is counted; nothing else is sent', async () => {
+    const fake = fakeApi()
+    fake.postTopics.set(fake.seedPost('c2', 'Weekend travel on a budget'), 'travel')
+    renderApp('/app/discover', fake.api)
+    fireEvent.change(await screen.findByLabelText('Search people, posts and topics'), { target: { value: 'travel' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await screen.findByRole('region', { name: 'Posts' })
+    await waitFor(() => expect(fake.searchNotes).toEqual([{ surface: 'search', hadResults: true, topic: 'travel' }]))
+    fireEvent.click(within(screen.getByRole('region', { name: 'Posts' })).getAllByRole('link')[0])
+    await waitFor(() => expect(fake.searchNotes[1]).toEqual({ surface: 'search', selected: true, topic: 'travel' }))
+    expect(JSON.stringify(fake.searchNotes)).not.toMatch(/Weekend|me\b/)
+  })
+
+  it('a follow from search results records "search" as its source', async () => {
+    const fake = fakeApi()
+    renderApp('/app/discover', fake.api)
+    fireEvent.change(await screen.findByLabelText('Search people, posts and topics'), { target: { value: 'Creator 4' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    fireEvent.click(await within(await screen.findByRole('region', { name: 'People' })).findByRole('button', { name: 'Follow Creator 4' }))
+    await waitFor(() => expect(fake.followSources.get(fake.key('me', 'c4'))).toBe('search'))
+  })
+
+  it('a shared link is the public preview with the sharer\'s referral link', async () => {
+    const fake = fakeApi()
+    const id = fake.seedPost('c1', 'Pass this on')
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    renderApp(`/app/post/${id}`, fake.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/p/${id}?r=0123456789abcdef`))
+  })
+
+  it('members can turn public previews of their posts off and on from their profile', async () => {
+    const fake = fakeApi()
+    renderApp('/app/profile', fake.api)
+    const box = within(await screen.findByTestId('public-previews-setting')).getByRole('checkbox') as HTMLInputElement
+    expect(box.checked).toBe(true)
+    fireEvent.click(box)
+    await waitFor(() => expect(fake.previews.allowed).toBe(false))
+  })
+
+  it('after joining from a preview, Home offers to see the creator they came for (never an automatic follow)', async () => {
+    const fake = fakeApi()
+    window.localStorage.setItem('splitpost.join_for', JSON.stringify({ username: 'creator_2', displayName: 'Creator 2', at: Date.now() }))
+    renderApp('/app', fake.api)
+    const prompt = within(await screen.findByTestId('joined-for'))
+    expect(prompt.getByRole('link', { name: 'See Creator 2' }).getAttribute('href')).toBe('/app/u/creator_2')
+    expect(fake.follows.size).toBe(0)
+    fireEvent.click(prompt.getByRole('button', { name: 'Not now' }))
+    expect(window.localStorage.getItem('splitpost.join_for')).toBeNull()
   })
 })

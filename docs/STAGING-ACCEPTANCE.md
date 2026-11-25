@@ -1,4 +1,4 @@
-# Staging acceptance: IP-1 and IP-2
+# Staging acceptance: IP-1, IP-2 and IP-4
 
 One guide for everything the founder does to test IP-1 (Foundation) and IP-2
 (Relationships and Home) on staging, plus the Production batch PB-1, which
@@ -94,6 +94,8 @@ end $$;
 select ops.set_external_access('founder', true, 'APPROVE EXTERNAL MEMBER ACCESS');
 select ops.set_registration_settings('founder', 'staging acceptance', false);
 select ops.create_invitation_link('founder', 'creator', 10, interval '14 days') as invitation_code;
+-- Public previews of shared posts, staging only (Production needs its own approval).
+select ops.set_public_previews('founder', true, 'staging acceptance');
 ```
 
 Your invitation link is `https://splitpost-app-git-staging-crevant.vercel.app/register/<invitation_code>`.
@@ -134,6 +136,19 @@ Use your two new accounts: one posts as a creator, one follows.
 | 15 | As the follower, comment something thoughtful (20+ characters) on a post | The creator's profile shows 1 Active Supporter |
 | 16 | Profile, Your Clique (via My Clique, Manage Clique): Mute the creator | "Muted on Home"; their posts leave Home; still followed. Unmute brings them back |
 | 17 | As the creator, open Profile | "Your audience": What happened, What it means, What to do next; Support Intent marked Non-binding |
+
+### IP-4 Content and discovery
+
+| # | Do | Expect |
+|---|---|---|
+| 18 | Create a post and choose a topic | The card shows the topic |
+| 19 | Edit your post (pencil) | New text, "Edited" on the card |
+| 20 | On someone else's post: Save, then Profile, Saved | It's in your Saved list, only for you |
+| 21 | Repost it; sign in as someone who follows you but not its creator | Home shows it once, "Reposted by" you |
+| 22 | Discover | Opens on For you: posts in your interests from people you don't follow, each with its reason; try "What are you here for today?" |
+| 23 | Search "budget" (or a word from a post) | People, Posts and Topics results |
+| 24 | Share a post (copy link), open the link in a private window | The public preview: text, topic, creator, "Join with this invitation" |
+| 25 | Profile, Sharing outside Splitpost: turn previews off; reopen the link | "This post isn't available" |
 
 Report anything that doesn't match to Claude with the row number. Defects are
 fixed without reopening approved decisions.

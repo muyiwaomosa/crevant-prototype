@@ -12,6 +12,7 @@ import { PublicNotFound } from './PublicNotFound'
 import { PrivacyPage } from './PrivacyPage'
 import { PilotAccessPage } from './PilotAccessPage'
 import { SignInPage } from './auth/SignInPage'
+import { PublicPostPage } from './PublicPostPage'
 import { RegisterPage } from './auth/RegisterPage'
 import { ForgotPasswordPage } from './auth/ForgotPasswordPage'
 import { ConfirmPage } from './auth/ConfirmPage'
@@ -89,6 +90,7 @@ function AllRoutes() {
         <Route path="join/supporter" element={<Navigate to="/join" replace />} />
         <Route path="sign-in" element={<SignInPage />} />
         <Route path="register/:code?" element={<RegisterPage />} />
+        <Route path="p/:id" element={<PublicPostPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />
         <Route path="auth/set-password" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />
@@ -114,6 +116,7 @@ function MemberHostRoutes() {
       <Route element={<MemberHostLayout account={<AccountNavLink />} />}>
         <Route path="sign-in" element={<SignInPage />} />
         <Route path="register/:code?" element={<RegisterPage />} />
+        <Route path="p/:id" element={<PublicPostPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />
         <Route path="auth/set-password" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />

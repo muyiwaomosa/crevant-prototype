@@ -14,7 +14,7 @@ import { ReportButton, useModeration } from './moderation'
 import { PostComposer, usePhotosEnabled } from './media'
 import { ProfilePictureField } from './avatars'
 import { AudienceInsight, SupportButton } from './relationships'
-import { categorize } from './content'
+import { JoinedForPrompt, PublicPreviewsSetting, categorize } from './content'
 
 /** Loads data for a page, with loading and error states and a reload function. */
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
@@ -124,6 +124,7 @@ export function FeedPage() {
   return (
     <>
       <PageHeader title="Home" subtitle="Posts from creators you follow, newest first, with new posts from your Clique at the top. Only you decide what is hidden." />
+      <JoinedForPrompt />
       <FaceView
         label="Home views"
         faces={[
@@ -803,6 +804,7 @@ export function ProfilePage() {
       <Card className="mt-4 p-5">
         <DetailsEditor />
       </Card>
+      <PublicPreviewsSetting />
     </>
   )
 }

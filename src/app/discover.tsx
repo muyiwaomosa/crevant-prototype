@@ -88,10 +88,10 @@ function useAsync<T>(load: () => Promise<T>, deps: unknown[]) {
   return { data, error, setData, reload: () => load().then(setData, setError) }
 }
 
-function PostResults({ posts, empty }: { posts: Post[]; empty: React.ReactNode }) {
+function PostResults({ posts, empty, onOpen }: { posts: Post[]; empty: React.ReactNode; onOpen?: () => void }) {
   if (posts.length === 0) return <>{empty}</>
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-3" onClickCapture={(e) => onOpen && (e.target as HTMLElement).closest('a') && onOpen()}>
       {posts.map((p) => (
         <li key={p.id}>
           {p.reason && (
@@ -111,6 +111,10 @@ function ForYou({ topics }: { topics: Topic[] | null }) {
   const api = useAppApi()
   const [focus, setFocus] = useState('')
   const posts = useAsync(() => api.discoverPosts(focus || undefined), [api, focus])
+  // Measurement (20261204000000): one count per focus chosen, with whether it found anything. No member, no words.
+  useEffect(() => {
+    if (focus && posts.data) void api.noteSearch('focus', posts.data.length > 0, focus).catch(() => undefined)
+  }, [api, focus, posts.data])
   return (
     <div>
       {topics && topics.length > 0 && (
@@ -134,6 +138,7 @@ function ForYou({ topics }: { topics: Topic[] | null }) {
       {posts.data === null && <Message tone="info">Suggested posts aren't available yet. Try Creators to find people.</Message>}
       {posts.data && (
         <PostResults
+          onOpen={focus ? () => void api.noteSearchSelection('focus', focus).catch(() => undefined) : undefined}
           posts={posts.data}
           empty={
             <EmptyState
@@ -213,12 +218,26 @@ function Creators({ topics }: { topics: Topic[] | null }) {
   )
 }
 
-function People({ people, topics, myTopics, onChange }: { people: DiscoverMember[]; topics: Topic[] | null; myTopics?: string[]; onChange: () => void }) {
+function People({
+  people,
+  topics,
+  myTopics,
+  onChange,
+  fromSearch = false,
+  onOpen,
+}: {
+  people: DiscoverMember[]
+  topics: Topic[] | null
+  myTopics?: string[]
+  onChange: () => void
+  fromSearch?: boolean
+  onOpen?: () => void
+}) {
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-3" onClickCapture={(e) => onOpen && (e.target as HTMLElement).closest('a') && onOpen()}>
       {people.map((m) => (
         <li key={m.id}>
-          <PersonSummary member={m} topics={topics} myTopics={myTopics} onChange={onChange} />
+          <PersonSummary member={m} topics={topics} myTopics={myTopics} onChange={onChange} source={fromSearch ? 'search' : 'discover'} />
         </li>
       ))}
     </ul>
@@ -259,6 +278,15 @@ function SearchResults({ query, topics, onClear, api }: { query: string; topics:
   const mine = useAsync(async () => (await api.myDetails().catch(() => null))?.topics ?? [], [api])
   const matchingTopics = (topics ?? []).filter((t) => t.label.toLowerCase().includes(query.toLowerCase()))
   const done = people.data !== undefined && posts.data !== undefined
+  // Measurement (20261204000000): one count per search, whether it found anything, and the approved topic it matched.
+  const topicSlug = matchingTopics.length === 1 ? matchingTopics[0].slug : undefined
+  const found = (people.data?.length ?? 0) + (posts.data?.length ?? 0) + matchingTopics.length > 0
+  useEffect(() => {
+    if (done) void api.noteSearch('search', found, topicSlug).catch(() => undefined)
+    // Once per search, when its results are in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done, query])
+  const opened = () => void api.noteSearchSelection('search', topicSlug).catch(() => undefined)
   const nothing = done && (people.data?.length ?? 0) === 0 && (posts.data?.length ?? 0) === 0 && matchingTopics.length === 0
   return (
     <div className="space-y-6">
@@ -302,7 +330,7 @@ function SearchResults({ query, topics, onClear, api }: { query: string; topics:
           <h2 id="results-people" className="mb-2 font-display text-[15px] font-bold text-ink-900">
             People
           </h2>
-          <People people={people.data} topics={topics} myTopics={mine.data} onChange={people.reload} />
+          <People people={people.data} topics={topics} myTopics={mine.data} onChange={people.reload} fromSearch onOpen={opened} />
         </section>
       )}
       {posts.error !== null && <ErrorNote error={posts.error} />}
@@ -311,7 +339,7 @@ function SearchResults({ query, topics, onClear, api }: { query: string; topics:
           <h2 id="results-posts" className="mb-2 font-display text-[15px] font-bold text-ink-900">
             Posts
           </h2>
-          <PostResults posts={posts.data} empty={null} />
+          <PostResults posts={posts.data} empty={null} onOpen={opened} />
         </section>
       )}
     </div>

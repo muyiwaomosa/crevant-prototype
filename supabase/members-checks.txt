@@ -23,3 +23,4 @@
 017_relationships.sql 20261201000000
 018_content.sql 20261202000000
 019_discovery.sql 20261203000000
+020_previews_and_search.sql 20261204000000
