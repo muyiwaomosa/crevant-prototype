@@ -26,6 +26,8 @@ const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
 // Newest first.
 const LATER = [
+  { version: '20261214000000', name: 'release_hardening', file: 'supabase/migrations/20261214000000_release_hardening.sql', rollback: 'scripts/db/staging-rollback-release-hardening.sql', phrase: 'REMOVE THE STAGING RELEASE HARDENING' },
+  { version: '20261213000000', name: 'video_posts', file: 'supabase/migrations/20261213000000_video_posts.sql', rollback: 'scripts/db/staging-rollback-video-posts.sql', phrase: 'REMOVE THE STAGING VIDEO POSTS' },
   { version: '20261212000000', name: 'privacy_and_switches', file: 'supabase/migrations/20261212000000_privacy_and_switches.sql', rollback: 'scripts/db/staging-rollback-privacy-switches.sql', phrase: 'REMOVE THE STAGING PRIVACY AND SWITCHES' },
   { version: '20261211000000', name: 'unified_onboarding', file: 'supabase/migrations/20261211000000_unified_onboarding.sql', rollback: 'scripts/db/staging-rollback-unified-onboarding.sql', phrase: 'REMOVE THE STAGING UNIFIED ONBOARDING' },
   { version: '20261210000000', name: 'intelligence', file: 'supabase/migrations/20261210000000_intelligence.sql', rollback: 'scripts/db/staging-rollback-intelligence.sql', phrase: 'REMOVE THE STAGING INTELLIGENCE' },

@@ -21,6 +21,7 @@
     "@supabase/supabase-js": "2.119.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.68.0",
+    "mediabunny": "1.65.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5"

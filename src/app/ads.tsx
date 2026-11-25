@@ -152,16 +152,16 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
           </p>
         ) : (
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[13px] font-semibold text-ink-600">
-            <button type="button" onClick={() => void send('relevant')} className="underline-offset-2 hover:underline">
+            <button type="button" onClick={() => void send('relevant')} className="inline-flex min-h-6 items-center underline-offset-2 hover:underline">
               Relevant
             </button>
-            <button type="button" onClick={() => void send('not_relevant')} className="underline-offset-2 hover:underline">
+            <button type="button" onClick={() => void send('not_relevant')} className="inline-flex min-h-6 items-center underline-offset-2 hover:underline">
               Not relevant
             </button>
-            <button type="button" onClick={() => void send('hidden')} className="underline-offset-2 hover:underline">
+            <button type="button" onClick={() => void send('hidden')} className="inline-flex min-h-6 items-center underline-offset-2 hover:underline">
               Hide this ad
             </button>
-            <button type="button" onClick={() => void send('reported')} className="underline-offset-2 hover:underline">
+            <button type="button" onClick={() => void send('reported')} className="inline-flex min-h-6 items-center underline-offset-2 hover:underline">
               Report ad
             </button>
           </div>

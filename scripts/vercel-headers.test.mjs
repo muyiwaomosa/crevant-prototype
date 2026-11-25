@@ -125,7 +125,7 @@ test('www.splitpost.ca may talk only to the Production (waitlist) project and Pr
   assert.equal(appValue.includes(STAGING) || appValue.includes(PRODUCTION), false, 'app.splitpost.ca never reaches staging or the waitlist project')
 })
 
-test('the three rules are otherwise identical: the same policy apart from connect-src and img-src, the same other headers', () => {
+test('the three rules are otherwise identical: the same policy apart from connect-src, img-src and media-src, the same other headers', () => {
   const [elsewhere, site, app] = securityRules
   // Profile pictures and photos (Builds 5.2b, 5.3): the member app loads
   // images from its own project. Previews: staging; app.splitpost.ca: the
@@ -133,7 +133,12 @@ test('the three rules are otherwise identical: the same policy apart from connec
   assert.deepEqual(cspOf(elsewhere)['img-src'], ["'self'", 'data:', 'blob:', STAGING])
   assert.deepEqual(cspOf(site)['img-src'], ["'self'", 'data:', 'blob:'])
   assert.deepEqual(cspOf(app)['img-src'], ["'self'", 'data:', 'blob:', ...MEMBER])
-  const without = (rule) => ({ ...cspOf(rule), 'connect-src': null, 'img-src': null })
+  // Video posts (20261213000000) stream from signed Storage links: Previews (staging) only. www.splitpost.ca and
+  // app.splitpost.ca keep media from the site and blob links until video is approved for member Production.
+  assert.deepEqual(cspOf(elsewhere)['media-src'], ["'self'", 'blob:', STAGING])
+  assert.deepEqual(cspOf(site)['media-src'], ["'self'", 'blob:'])
+  assert.deepEqual(cspOf(app)['media-src'], ["'self'", 'blob:'])
+  const without = (rule) => ({ ...cspOf(rule), 'connect-src': null, 'img-src': null, 'media-src': null })
   assert.deepEqual(without(site), without(elsewhere))
   assert.deepEqual(without(app), without(elsewhere))
   const others = (rule) => rule.headers.filter((x) => x.key !== 'Content-Security-Policy')

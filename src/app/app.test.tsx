@@ -27,6 +27,9 @@ import {
   type FeedbackEntry,
   type PhotoLinks,
   type PostMedia,
+  type DeviceKind,
+  type VideoLinks,
+  type VideoPurpose,
   type FeedbackItem,
   type Comment,
   type MyDetails,
@@ -54,6 +57,7 @@ import { AdsManagePage, campaignStory } from './ads'
 import { ControlCenterPage, attentionStory, contributionStory, founderStory, moneyStory, overviewCsv, retentionStory } from './insights'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage, featureFor } from './feedback'
 import { fitWithin } from './photoPrep'
+import { VideoTestPage } from './video'
 
 // The browser's photo preparation (canvas) doesn't exist in jsdom: stand in for it.
 vi.mock('./photoPrep', async (importOriginal) => {
@@ -64,6 +68,31 @@ vi.mock('./photoPrep', async (importOriginal) => {
       if (file.name.endsWith('.txt')) throw new (await import('./api')).AppApiError('photo_type')
       return { blob: new Blob(['jpeg'], { type: 'image/jpeg' }), preview: 'blob:preview', width: 1600, height: 1067 }
     }),
+  }
+})
+// Video preparation needs WebCodecs and mediabunny, which jsdom lacks: the
+// check and conversion stand in (a file named *.hevc can't be converted), the
+// rest of the pipeline (upload, the server check, the poster) runs as written.
+vi.mock('./videoPrep', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./videoPrep')>()
+  const { AppApiError } = await import('./api')
+  return {
+    ...actual,
+    prepareAndUpload: (api: AppApi, file: File, purpose: VideoPurpose, on: Parameters<typeof actual.prepareAndUpload>[3], signal?: AbortSignal) =>
+      actual.prepareAndUpload(api, file, purpose, on, signal, {
+        check: async (f: Blob) => {
+          if ((f as File).name?.endsWith('.long.mp4')) throw new AppApiError('video_too_long')
+          const hevc = (f as File).name?.endsWith('.hevc')
+          return { container: 'mp4', codec: hevc ? 'hevc' : 'avc', audioCodec: 'aac', width: 1920, height: 1080, seconds: 20, bytes: f.size, bitsPerSecond: 2e6, canDecode: !hevc }
+        },
+        convert: async (f: Blob, c: import('./videoPrep').VideoCheck, onProgress: (p: number) => void) => {
+          if (!c.canDecode) throw new AppApiError('video_hevc')
+          onProgress(0.5)
+          onProgress(1)
+          return { file: f, check: c, converted: true, output: { width: 1280, height: 720, bytes: f.size }, dropped: [] }
+        },
+        poster: async () => new Blob(['jpeg'], { type: 'image/jpeg' }),
+      }),
   }
 })
 import { clampOffset, coverScale, sourceRect } from './avatars'
@@ -92,6 +121,9 @@ function fakeApi(
     founder?: boolean
     /** Photo posts (20261127000000): on only when a test says so. */
     photos?: boolean
+    /** Video posts (20261213000000): on only when a test says so; tester: may run the device test. */
+    video?: boolean
+    tester?: boolean
   } = {},
 ) {
   const users = new Map<string, Row>()
@@ -267,7 +299,7 @@ function fakeApi(
     advertising: { requests: [], campaigns: [] } as MyAdvertising,
     adRequests: [] as AdvertisingRequest[],
     report: null as CampaignReport | null,
-    features: { ads: true, sharing: true, videoPosts: false, photos: false, rewards: true } as Features,
+    features: { ads: true, sharing: true, videoPosts: false, videoPlayback: true, photos: false, rewards: true } as Features,
     switches: [
       { feature: 'ads', enabled: true, updatedAt: '2026-12-01T00:00:00Z' },
       { feature: 'sharing', enabled: true, updatedAt: '2026-12-01T00:00:00Z' },
@@ -314,6 +346,18 @@ function fakeApi(
     linkCalls: [] as string[][],
     links: (id: string): PhotoLinks | null => ({ feed: `https://pics.test/${id}-feed.jpg`, full: `https://pics.test/${id}.jpg` }),
     checks: [] as number[],
+  }
+  // Video posts (20261213000000), with the database's and the server's rules.
+  const video = {
+    on: opts.video ?? false,
+    playback: true,
+    tester: opts.tester ?? false,
+    uploads: new Map<string, { purpose: string; bytes: number; stored: boolean; used: boolean; poster: boolean }>(),
+    calls: [] as string[],
+    /** What the server check finds (a test can make it refuse). */
+    verify: null as null | AppApiError,
+    tests: [] as Array<{ device: DeviceKind; passed: boolean; notes: string | null; at: string }>,
+    capBytes: null as number | null,
   }
   // Feedback, with the database's rules.
   const feedbackPresent = opts.feedback !== 'absent'
@@ -555,6 +599,127 @@ function fakeApi(
       if (!isFounder.value) throw new AppApiError('not_founder')
       photo.checks.push(seed)
       return { ms: 600 + seed, ok: true }
+    },
+    async videoStatus() {
+      complete()
+      return {
+        enabled: video.on,
+        canTest: video.tester || isFounder.value,
+        maxSeconds: 300,
+        maxBytes: 115343360,
+        maxSourceBytes: 2147483648,
+        dailyLimit: 5,
+        postedToday: posts.filter((x) => x.author === meId && x.media?.kind === 'video').length,
+        memberCapBytes: 1073741824,
+        memberUsedBytes: 0,
+      }
+    },
+    async beginVideoUpload(bytes, durationMs, purpose) {
+      video.calls.push(`begin:${purpose}`)
+      maybeFail('beginVideoUpload')
+      if (purpose === 'post' && !video.on) throw new AppApiError('videos_unavailable')
+      if (purpose === 'device_test' && !(video.tester || isFounder.value)) throw new AppApiError('not_tester')
+      if (bytes > 115343360) throw new AppApiError('video_too_large')
+      if (durationMs > 300000) throw new AppApiError('video_too_long')
+      const id = `v${++n}`
+      video.uploads.set(id, { purpose, bytes, stored: false, used: false, poster: false })
+      return { uploadId: id, bucket: 'post-videos', path: `${meId}/${id}.mp4`, token: 'signed-token', chunkBytes: 6 * 1024 * 1024 }
+    },
+    async uploadVideoFile(ticket, _file, onProgress) {
+      video.calls.push(`upload:${ticket.uploadId}`)
+      maybeFail('uploadVideoFile')
+      onProgress(0.5)
+      onProgress(1)
+    },
+    async verifyVideo(uploadId) {
+      video.calls.push(`verify:${uploadId}`)
+      const u = video.uploads.get(uploadId)
+      if (!u) throw new AppApiError('not_found')
+      if (video.verify) throw video.verify
+      u.stored = true
+      return { width: 1280, height: 720, durationMs: 20000, bytes: u.bytes }
+    },
+    async uploadVideoPoster(uploadId) {
+      video.calls.push(`poster:${uploadId}`)
+      const u = video.uploads.get(uploadId)
+      if (u) u.poster = true
+    },
+    async createVideoPost(body, requestId, uploadId) {
+      video.calls.push(`publish:${uploadId}:${requestId}`)
+      maybeFail('createVideoPost')
+      complete()
+      const prior = requests.get(requestId)
+      if (prior) return prior.id
+      if (!video.on) throw new AppApiError('videos_unavailable')
+      const u = video.uploads.get(uploadId)
+      if (!u || !u.stored || u.used || u.purpose !== 'post') throw new AppApiError('upload_not_ready')
+      u.used = true
+      const id = `p${String(++n).padStart(3, '0')}`
+      posts.push({
+        id,
+        author: meId,
+        body: body.trim(),
+        at: (clock += 1000),
+        deleted: false,
+        media: { kind: 'video', width: 1280, height: 720, description: null, durationMs: 20000, poster: u.poster },
+      })
+      requests.set(requestId, { id, body: body.trim() })
+      return id
+    },
+    async videoLinks(ids) {
+      video.calls.push(`links:${ids.join(',')}`)
+      const out: Record<string, VideoLinks> = {}
+      // Playback has its own switch: pausing uploads never hides published videos.
+      if (!video.playback) return out
+      for (const id of ids) {
+        const p = posts.find((x) => x.id === id && !x.deleted && x.media?.kind === 'video')
+        if (p) out[id] = { src: `https://videos.test/${id}.mp4`, poster: `https://videos.test/${id}-poster.jpg` }
+      }
+      return out
+    },
+    async videoTestLink(uploadId) {
+      const u = video.uploads.get(uploadId)
+      if (!u || u.purpose !== 'device_test' || !u.stored) throw new AppApiError('not_found')
+      return { src: `https://videos.test/${uploadId}.mp4`, poster: null }
+    },
+    async modReportVideo(reportId) {
+      requireModerator()
+      const r = reports.find((x) => x.id === reportId)
+      return r?.snapshot.media_kind === 'video' ? { src: 'https://videos.test/reported.mp4', poster: null } : null
+    },
+    async founderVideoStatus() {
+      requireFounder()
+      const latest: Partial<Record<DeviceKind, { device: DeviceKind; passed: boolean; notes: string | null; at: string }>> = {}
+      for (const t of video.tests) latest[t.device] = t
+      const ready = latest.iphone_safari?.passed === true && latest.android_chrome?.passed === true && video.capBytes !== null
+      return {
+        enabled: video.on,
+        playbackEnabled: video.playback,
+        delivery7d: { links: 3, videoBytes: 30000000 },
+        delivery30d: { links: 9, videoBytes: 90000000 },
+        ready,
+        capBytes: video.capBytes,
+        usedBytes: 0,
+        videoPosts: 0,
+        testUploads24h: 0,
+        latest,
+        recent: [...video.tests].reverse(),
+      }
+    },
+    async founderVideoEmergencyStop(reason) {
+      requireFounder()
+      if (reason.trim().length < 3) throw new AppApiError('reason_required')
+      video.on = false
+      video.playback = false
+    },
+    async founderRecordDeviceTest(device, passed, notes) {
+      requireFounder()
+      video.tests.push({ device, passed, notes: notes.trim() || null, at: new Date((clock += 1000)).toISOString() })
+    },
+    async founderSetVideoCap(gb) {
+      requireFounder()
+      if (!Number.isInteger(gb) || gb < 1 || gb > 1000) throw new AppApiError('invalid_request')
+      video.capBytes = gb * 1073741824
     },
     async feedbackAccess() {
       if (!feedbackPresent) return { available: false, founder: false }
@@ -1114,7 +1279,12 @@ function fakeApi(
     async founderSetSwitch(feature, enabled, reason) {
       requireFounder()
       if (reason.trim().length < 3) throw new AppApiError('reason_required')
-      if (feature === 'video_posts' && enabled) throw new AppApiError('video_not_ready')
+      if (feature === 'video_posts' && enabled) {
+        const last = (d: DeviceKind) => [...video.tests].reverse().find((t) => t.device === d)?.passed === true
+        if (!last('iphone_safari') || !last('android_chrome') || video.capBytes === null) throw new AppApiError('video_not_ready')
+        video.on = true
+      }
+      if (feature === 'video_posts' && !enabled) video.on = false
       onb.switchCalls.push({ feature, enabled, reason })
       onb.switches = onb.switches.map((x) => (x.feature === feature ? { ...x, enabled } : x))
     },
@@ -1424,6 +1594,7 @@ function fakeApi(
   return {
     api,
     photo,
+    video,
     posts,
     feedback,
     feedbackCalls,
@@ -1501,6 +1672,7 @@ function renderApp(path: string, api: AppApi) {
             <Route path="control" element={<ControlCenterPage />} />
             <Route path="advertise" element={<AdvertisePage />} />
             <Route path="privacy" element={<MemberPrivacyPage />} />
+            <Route path="video-test" element={<VideoTestPage />} />
             <Route path="feedback" element={<FeedbackPage />} />
             <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
             <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />
@@ -3666,6 +3838,17 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
     expect(screen.getByTestId('split-disclosure').textContent).toMatch(/simulated.*no cash value.*nothing is paid out/i)
   })
 
+  it('My Split keeps "How My Split works" to come back to after setup, with no percentages', async () => {
+    const fake = fakeApi()
+    renderApp('/app/split', fake.api)
+    expect(await screen.findByRole('heading', { name: 'How My Split works' })).toBeTruthy()
+    const intro = screen.getByTestId('my-split-intro')
+    expect(intro.textContent).toMatch(/Connection Points/)
+    expect(intro.textContent).toMatch(/redeemable after a quick review/)
+    expect(intro.textContent).toMatch(/Points are not money and nothing is paid/)
+    expect(intro.textContent).not.toMatch(/\d+\s*%/)
+  })
+
   it('the History face lists contributions newest first, with reversals shown', async () => {
     const fake = fakeApi()
     fake.rewards.points = { recognized: 3, redeemablePending: 0, redeemableApproved: 0, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 0 }
@@ -4018,6 +4201,17 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
     expect(f.ads.events.at(-1)).toEqual({ id: 'imp1', kind: 'hidden' })
   })
 
+  it('the ad feedback buttons are at least 24px tall, so they stay apart when they wrap on a narrow phone (WCAG 2.5.8)', async () => {
+    const f = fakeApi()
+    const post = f.seedPost('c1', 'A post')
+    f.ads.next = ad()
+    renderApp(`/app/post/${post}`, f.api)
+    const card = await screen.findByTestId('ad')
+    for (const name of ['Relevant', 'Not relevant', 'Hide this ad', 'Report ad']) {
+      expect(within(card).getByRole('button', { name }).className.split(' ')).toEqual(expect.arrayContaining(['inline-flex', 'min-h-6']))
+    }
+  })
+
   it('a content ad says whose post it is shown with, and the advertiser can be hidden from Why this ad', async () => {
     const f = fakeApi()
     const post = f.seedPost('c1', 'A post')
@@ -4184,7 +4378,7 @@ function creatorInsightsFixture(over: Partial<CreatorInsights> = {}): CreatorIns
     retention: { followers: 10, active_supporters: 3, clique: 2, returning: 4, connections_this_week: 5, connections_last_week: 3 },
     money: {
       actual_income_cents: 0,
-      simulated_by_month: [{ month: '2026-10-01', creator_cents: 4000, revenue_cents: 10000 }],
+      simulated_by_month: [{ month: '2026-10-01', creator_cents: 4000 }],
       ads_with_your_posts: [{ advertiser: 'Budgetly', campaign: 'Spring', impressions: 120, clicks: 6, posts: 2 }],
     },
     ...over,
@@ -4462,7 +4656,7 @@ describe('unified account and progressive onboarding (20261211000000, 2026121200
     expect(f.onb.registrationCalls.at(-1)?.paused).toBe(false)
 
     const sw = await screen.findByTestId('switches-panel')
-    expect((within(sw).getByRole('button', { name: 'Turn video posts on' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((within(sw).getByRole('button', { name: 'Turn new video uploads on' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(within(sw).getByLabelText('Reason'), { target: { value: 'Review a complaint' } })
     fireEvent.click(within(sw).getByRole('button', { name: 'Turn advertising off' }))
     expect(await within(sw).findByText('Advertising: Off')).toBeTruthy()
@@ -4475,5 +4669,134 @@ describe('unified account and progressive onboarding (20261211000000, 2026121200
     fireEvent.change(within(pr).getByLabelText('Type the username to confirm'), { target: { value: 'dee' } })
     fireEvent.click(within(pr).getByRole('button', { name: 'Delete this account' }))
     await waitFor(() => expect(f.onb.deleted).toEqual([{ id: 7, username: 'dee' }]))
+  })
+})
+
+describe('video posts (20261213000000)', () => {
+  const chooseVideo = (name = 'IMG_0001.MOV', type = 'video/quicktime') =>
+    fireEvent.change(screen.getByTestId('video-input'), { target: { files: [new File([new Uint8Array(2000)], name, { type })] } })
+
+  it('while video posts are off, the composer offers no video', async () => {
+    const f = fakeApi('me')
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'Home' })
+    await act(async () => {})
+    expect(screen.queryByRole('button', { name: 'Add video' })).toBeNull()
+    expect(screen.queryByTestId('video-input')).toBeNull()
+  })
+
+  it('a member adds a video: it is checked, prepared, uploaded and checked by the server, then posted once with a player that never autoplays', async () => {
+    const f = fakeApi('me', { video: true })
+    renderApp('/app', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add video' }))
+    chooseVideo()
+    expect(await screen.findByText(/Ready to post: 0:20, 1280 x 720/)).toBeTruthy()
+    expect(f.video.calls.slice(0, 4)).toEqual(['begin:post', 'upload:v1', 'verify:v1', 'poster:v1'])
+    // One video per post: no photo or second video while it is attached.
+    expect(screen.queryByRole('button', { name: 'Add video' })).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'Write a post' }).getAttribute('placeholder')).toBe('Add a caption (optional)')
+    const post = screen.getByRole('button', { name: 'Post' })
+    expect(post.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(post)
+    fireEvent.click(post)
+    const player = (await screen.findByTestId('post-video-player')) as HTMLVideoElement
+    expect(f.video.calls.filter((c) => c.startsWith('publish'))).toHaveLength(1)
+    expect(player.getAttribute('src')).toMatch(/^https:\/\/videos\.test\/p\d+\.mp4$/)
+    expect(player.getAttribute('poster')).toMatch(/-poster\.jpg$/)
+    expect(player.hasAttribute('autoplay')).toBe(false)
+    expect(player.getAttribute('preload')).toBe('none')
+    expect(player.hasAttribute('controls')).toBe(true)
+    expect(player.getAttribute('aria-label')).toBe('Video by Mia')
+    // Swipes over the player never reach the screen.
+    expect(screen.getByTestId('post-video').hasAttribute('data-no-swipe')).toBe(true)
+    expect(screen.getByText('Video, 0:20')).toBeTruthy()
+    expect(screen.queryByTestId('video-attachment')).toBeNull()
+  })
+
+  it('a video that cannot be used shows a clear message and can be removed; nothing is posted', async () => {
+    const f = fakeApi('me', { video: true })
+    renderApp('/app', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add video' }))
+    chooseVideo('clip.hevc', 'video/mp4')
+    expect(await screen.findByText(/Most Compatible/)).toBeTruthy()
+    expect(f.video.calls).toEqual([])
+    expect(screen.getByRole('button', { name: 'Post' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove video' }))
+    expect(screen.queryByTestId('video-attachment')).toBeNull()
+    // The server's check refuses too.
+    f.video.verify = new AppApiError('video_codec')
+    fireEvent.click(screen.getByRole('button', { name: 'Add video' }))
+    chooseVideo()
+    expect(await screen.findByText("That video couldn't be used. Please choose another one.")).toBeTruthy()
+    expect(f.video.calls.some((c) => c.startsWith('publish'))).toBe(false)
+    // Over five minutes: refused before any upload.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove video' }))
+    const before = f.video.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Add video' }))
+    chooseVideo('talk.long.mp4', 'video/mp4')
+    expect(await screen.findByText(/longer than five minutes/)).toBeTruthy()
+    expect(f.video.calls.length).toBe(before)
+  })
+
+  it('the device test page: testers check, convert and upload privately, see the times, play the clip and copy the results', async () => {
+    const f = fakeApi('me', { tester: true })
+    renderApp('/app/video-test', f.api)
+    expect(await screen.findByRole('heading', { name: 'Video device test' })).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose a video' }))
+    fireEvent.change(screen.getByTestId('video-test-input'), { target: { files: [new File([new Uint8Array(3000)], 'IMG_0002.MOV', { type: 'video/quicktime' })] } })
+    const runs = await screen.findByRole('list', { name: 'Test runs' })
+    expect(await within(runs).findByText('IMG_0002.MOV: Pass')).toBeTruthy()
+    expect(within(runs).getByText(/Check \d+\.\d s; Convert \d+\.\d s; Upload \d+\.\d s; Server check/)).toBeTruthy()
+    expect(f.video.calls[0]).toBe('begin:device_test')
+    fireEvent.click(screen.getByRole('button', { name: 'Play the uploaded clip' }))
+    const player = (await screen.findByTestId('video-test-player')) as HTMLVideoElement
+    expect(player.hasAttribute('autoplay')).toBe(false)
+    expect(player.getAttribute('preload')).toBe('none')
+    const summary = screen.getByLabelText('Summary to send to the Splitpost team') as HTMLTextAreaElement
+    expect(summary.value).toMatch(/Run 1: IMG_0002\.MOV \(video\/quicktime, 0\.0 MB\): Pass/)
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Copy results' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(summary.value))
+    expect(await screen.findByText(/Copied\./)).toBeTruthy()
+  })
+
+  it('the device test page is for the founder and testers only', async () => {
+    const f = fakeApi('me')
+    renderApp('/app/video-test', f.api)
+    expect(await screen.findByText('The video device test is for the founder and testers.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Choose a video' })).toBeNull()
+  })
+
+  it('the founder records both phone tests and the cap; only then can video posts be switched on', async () => {
+    const f = fakeApi('me', { founder: true })
+    renderApp('/app/control', f.api)
+    const panel = await screen.findByTestId('video-readiness-panel')
+    const sw = await screen.findByTestId('switches-panel')
+    const turnOn = () => within(sw).getByRole('button', { name: 'Turn new video uploads on' }) as HTMLButtonElement
+    expect(turnOn().disabled).toBe(true)
+    expect(within(panel).getAllByText('Not tested yet')).toHaveLength(3)
+    fireEvent.change(within(panel).getByLabelText('Device'), { target: { value: 'iphone_safari' } })
+    fireEvent.change(within(panel).getByLabelText(/Notes/), { target: { value: 'iPhone 15: all passed' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Record result' }))
+    expect(await within(panel).findByText('Device test recorded.')).toBeTruthy()
+    fireEvent.change(within(panel).getByLabelText('Device'), { target: { value: 'android_chrome' } })
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Did not pass' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Record result' }))
+    await waitFor(() => expect(f.video.tests).toHaveLength(2))
+    expect(f.video.tests[1]).toMatchObject({ device: 'android_chrome', passed: false })
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Passed' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Record result' }))
+    await waitFor(() => expect(f.video.tests).toHaveLength(3))
+    expect(turnOn().disabled).toBe(true)
+    fireEvent.change(within(panel).getByLabelText('Video storage cap (GB)'), { target: { value: '50' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save cap' }))
+    expect(await within(panel).findByText('Video storage cap saved.')).toBeTruthy()
+    expect(f.video.capBytes).toBe(50 * 1073741824)
+    await waitFor(() => expect(turnOn().disabled).toBe(false))
+    fireEvent.change(within(sw).getByLabelText('Reason'), { target: { value: 'Both phones passed' } })
+    fireEvent.click(turnOn())
+    expect(await within(sw).findByText('New video uploads: On')).toBeTruthy()
+    expect(f.video.on).toBe(true)
   })
 })

@@ -190,7 +190,7 @@ async function confirmAndSetUp(page, email, username, displayName) {
 
       // 3. My Split: the personal referral link.
       await nav.getByTitle('My Split').click()
-      await page.getByRole('heading', { name: 'My Split' }).waitFor()
+      await page.getByRole('heading', { name: 'My Split', exact: true }).waitFor()
       check('My Split always shows the simulated disclosure', /simulated/i.test(await page.getByTestId('split-disclosure').innerText()))
       await page.getByRole('tab', { name: 'Opportunities' }).click()
       const link = await page.getByTestId('referral-link').innerText()

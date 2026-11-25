@@ -6,6 +6,7 @@ import { Message, Spinner } from '../public/auth/AuthUi'
 import { messageFor, type Audience, type ContributionInsights, type CreatorInsights, type FounderOverview } from './api'
 import { useAppApi } from './AppApiContext'
 import { InvitationLinksPanel, PrivacyRequestsPanel, RegistrationPanel, SwitchesPanel } from './control'
+import { VideoReadinessPanel } from './video'
 import { useFeedbackAccess } from './feedback'
 import { simulatedDollars } from './split'
 
@@ -454,18 +455,17 @@ export function MoneyFace() {
                       <div data-testid="simulated-earnings">
                         <Card className="p-4">
                           <h3 className="font-semibold text-ink-900">
-                            How {simulatedDollars(latest.revenue_cents)} of simulated ad revenue splits <Tag kind="Simulated" />
+                            Your simulated share by month <Tag kind="Simulated" />
                           </h3>
-                          <div
-                            className="mt-2 flex h-9 overflow-hidden rounded-xl text-[13px] font-semibold"
-                            aria-label="Your share, the fan rewards pool and Splitpost"
-                          >
-                            <span className="grid flex-[2] place-items-center bg-brand-700 text-white">You</span>
-                            <span className="grid flex-1 place-items-center bg-[#a8d9cf] text-ink-900">Fans</span>
-                            <span className="grid flex-[2] place-items-center bg-ink-100 text-ink-800">Splitpost</span>
+                          {/* Equal segments on purpose: the shares themselves aren't shown until the Rewards Rules are legally reviewed. */}
+                          <div className="mt-2 grid h-9 grid-cols-3 overflow-hidden rounded-xl text-[13px] font-semibold" aria-label="Shared between you, the fan rewards pool and Splitpost">
+                            <span className="grid place-items-center bg-brand-700 text-white">You</span>
+                            <span className="grid place-items-center bg-[#a8d9cf] text-ink-900">Fans</span>
+                            <span className="grid place-items-center bg-ink-100 text-ink-800">Splitpost</span>
                           </div>
                           <p className="mt-2 text-[13px] text-ink-600">
-                            From ads placed with your posts. Ads elsewhere in the app aren't part of creator splits.
+                            Ads placed with your posts are shared between you, the fan rewards pool and Splitpost. Ads elsewhere in the app aren't part of creator
+                            shares.
                           </p>
                           <ul className="mt-3 space-y-1 text-[14px]">
                             {m.simulated_by_month.map((e) => (
@@ -784,6 +784,7 @@ export function ControlCenterPage() {
         <RegistrationPanel />
         <InvitationLinksPanel />
         <SwitchesPanel />
+        <VideoReadinessPanel />
         <PrivacyRequestsPanel />
       </section>
     </div>

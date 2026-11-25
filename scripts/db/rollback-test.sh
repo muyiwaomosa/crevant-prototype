@@ -16,8 +16,10 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: privacy requests and switches (20261212000000,
-# scripts/db/rollback-privacy-switches-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: release hardening (20261214000000,
+# scripts/db/rollback-release-hardening-test.sh, the newest, so it goes first),
+# video posts (20261213000000, scripts/db/rollback-video-posts-test.sh),
+# privacy requests and switches (20261212000000, scripts/db/rollback-privacy-switches-test.sh),
 # unified onboarding (20261211000000, scripts/db/rollback-unified-onboarding-test.sh),
 # intelligence (20261210000000, scripts/db/rollback-intelligence-test.sh),
 # ad creatives (20261209000000, scripts/db/rollback-ad-creatives-test.sh),
@@ -121,9 +123,35 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+HARDENING=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261214000000')")
+if [ "$HARDENING" = t ]; then
+  # The newest migration (release hardening) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-video-posts.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the video posts rollback refuses while release hardening is recorded" \
+    || bad "the video posts rollback did not refuse while release hardening is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-release-hardening-test.sh; then
+    ok "release hardening: the rollback refuses while deleted accounts' simulated rows or a later migration exist, and otherwise restores exactly the earlier state"
+  else
+    bad "the release hardening rollback tests failed"
+  fi
+fi
+VIDEO=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261213000000')")
+if [ "$VIDEO" = t ]; then
+  # Then video posts.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-privacy-switches.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the privacy and switches rollback refuses while video posts are recorded" \
+    || bad "the privacy and switches rollback did not refuse while video posts are recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-video-posts-test.sh; then
+    ok "video posts: the rollback refuses while video uploads, device tests, queued files, a cap, the switch or a later migration exist, and otherwise removes exactly its own objects"
+  else
+    bad "the video posts rollback tests failed"
+  fi
+fi
 PRIVACY=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261212000000')")
 if [ "$PRIVACY" = t ]; then
-  # The newest migration (privacy requests and switches) goes first.
+  # Then privacy requests and switches.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-unified-onboarding.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the unified onboarding rollback refuses while privacy and switches are recorded" \
@@ -636,9 +664,29 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
                                 && ok "after reapplying, the unified onboarding rollback refuses while privacy and switches are recorded" \
                                 || bad "the unified onboarding rollback did not refuse after reapply while privacy and switches are recorded (exit $code)"
                               out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-privacy-switches.sql 2>&1); code=$?
-                              [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-                                && ok "after reapplying, the privacy and switches rollback check passes again" \
-                                || bad "privacy and switches rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                              if [ "$VIDEO" = t ]; then
+                                [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                                  && ok "after reapplying, the privacy and switches rollback refuses while video posts are recorded" \
+                                  || bad "the privacy and switches rollback did not refuse after reapply while video posts are recorded (exit $code)"
+                                out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-video-posts.sql 2>&1); code=$?
+                                if [ "$HARDENING" = t ]; then
+                                  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                                    && ok "after reapplying, the video posts rollback refuses while release hardening is recorded" \
+                                    || bad "the video posts rollback did not refuse after reapply while release hardening is recorded (exit $code)"
+                                  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-release-hardening.sql 2>&1); code=$?
+                                  [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                    && ok "after reapplying, the release hardening rollback check passes again" \
+                                    || bad "release hardening rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                else
+                                  [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                    && ok "after reapplying, the video posts rollback check passes again" \
+                                    || bad "video posts rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                fi
+                              else
+                                [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                  && ok "after reapplying, the privacy and switches rollback check passes again" \
+                                  || bad "privacy and switches rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                              fi
                             else
                               [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                                 && ok "after reapplying, the unified onboarding rollback check passes again" \

@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom'
 import { useFeedbackAccess } from './feedback'
 import { useAppApi } from './AppApiContext'
 import { ContributionInsight } from './insights'
+import { MySplitIntro } from './onboarding'
 
 /**
  * My Split (SP-DESIGN-002). IP-1 delivers the destination, its three faces and
@@ -110,6 +111,10 @@ function Overview() {
             </Link>
           )}
         </div>
+      </Card>
+      {/* The setup's last step, always here to come back to: how points are recognized, reviewed and simulated. */}
+      <Card className="p-5">
+        <MySplitIntro />
       </Card>
     </div>
   )

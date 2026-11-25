@@ -11,6 +11,7 @@ import { useTrackView } from './ViewTracker'
 import { ReportButton } from './moderation'
 import { PictureAvatar } from './avatars'
 import { PostPhoto } from './media'
+import { PostVideo } from './video'
 import { EditPost, PostMetaLine, SaveRepostButtons, ShareButton } from './content'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
@@ -111,7 +112,8 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
             </span>
           )}
         </header>
-        {post.media && <PostPhoto post={post} />}
+        {post.media?.kind === 'photo' && <PostPhoto post={post} />}
+        {post.media?.kind === 'video' && <PostVideo post={post} />}
         {body !== '' && <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-800">{body}</p>}
         <footer className="mt-3 flex flex-wrap items-center gap-1">
           <button

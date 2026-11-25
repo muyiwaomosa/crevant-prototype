@@ -32,3 +32,5 @@
 026_intelligence.sql 20261210000000
 027_unified_onboarding.sql 20261211000000
 028_privacy_and_switches.sql 20261212000000
+029_video_posts.sql 20261213000000
+030_release_hardening.sql 20261214000000

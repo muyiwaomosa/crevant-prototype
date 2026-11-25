@@ -10,7 +10,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { ImagePlus, ImageOff, RefreshCw, X } from "lucide-react";
+import { Clapperboard, ImagePlus, ImageOff, RefreshCw, X } from "lucide-react";
 import { Card, Modal, buttonClass } from "../components/ui";
 import { Message, Spinner } from "../public/auth/AuthUi";
 import {
@@ -25,6 +25,13 @@ import { useAppApi } from "./AppApiContext";
 import { ErrorNote, When } from "./components";
 import { preparePhoto } from "./photoPrep";
 import { TopicSelect, useTopicList } from "./content";
+import {
+  VIDEO_ACCEPT,
+  VideoProgress,
+  busyStage,
+  useVideoJob,
+  useVideoStatus,
+} from "./video";
 
 /**
  * Photo posts (Build 5.3).
@@ -297,6 +304,8 @@ export type NewPost = {
   text: string;
   requestId: string;
   photo?: { uploadId: string; description: string };
+  /** Video posts (20261213000000): a video the server has checked. */
+  video?: { uploadId: string };
   /** Content (20261202000000): an optional topic from the approved list. */
   topic?: string;
 };
@@ -317,6 +326,7 @@ export function PostComposer({
   // loads is never lost; Add photo appears only while photos are on. Without a
   // photo it posts exactly as the text composer does (same rules, same request ids).
   const enabled = usePhotosEnabled();
+  const videoEnabled = useVideoStatus()?.enabled === true;
   return (
     <PhotoComposer
       label={label}
@@ -324,6 +334,7 @@ export function PostComposer({
       rows={rows}
       onPost={onPost}
       photosEnabled={enabled}
+      videoEnabled={videoEnabled}
     />
   );
 }
@@ -334,16 +345,23 @@ function PhotoComposer({
   rows,
   onPost,
   photosEnabled,
+  videoEnabled,
 }: {
   label: string;
   placeholder: string;
   rows: number;
   onPost: (post: NewPost) => Promise<void>;
   photosEnabled: boolean;
+  videoEnabled: boolean;
 }) {
   const api = useAppApi();
   const textId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
+  // Video posts (20261213000000): one video, prepared and uploaded as soon as it is chosen.
+  const videoRef = useRef<HTMLInputElement>(null);
+  const video = useVideoJob("post");
+  const withVideo = video.job.stage !== "idle";
+  const videoReady = video.job.stage === "done" && video.job.result !== null;
   const [text, setText] = useState("");
   const topics = useTopicList();
   const [topic, setTopic] = useState("");
@@ -365,6 +383,13 @@ function PhotoComposer({
   const length = [...text.trim()].length;
   const over = length > LIMITS.post;
   const busy = stage !== "idle";
+  const videoBusy = busyStage(video.job.stage);
+  const cannotPost =
+    busy ||
+    over ||
+    videoBusy ||
+    (withVideo && !videoReady) ||
+    (length === 0 && !photo && !videoReady);
 
   useEffect(
     () => () => {
@@ -397,7 +422,7 @@ function PhotoComposer({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (sending.current || over || (length === 0 && !photo)) return;
+    if (sending.current || cannotPost) return;
     sending.current = true;
     setError(null);
     try {
@@ -410,7 +435,11 @@ function PhotoComposer({
         // No description is asked for: the photo's alt text falls back to "Photo by <name>".
         photoPart = { uploadId: uploaded.current, description: "" };
       }
-      const key = `${text}\u0000${photoPart?.uploadId ?? ""}\u0000${photoPart?.description ?? ""}`;
+      const videoPart: NewPost["video"] =
+        videoReady && video.job.result
+          ? { uploadId: video.job.result.uploadId }
+          : undefined;
+      const key = `${text}\u0000${photoPart?.uploadId ?? ""}\u0000${photoPart?.description ?? ""}\u0000${videoPart?.uploadId ?? ""}`;
       if (!request.current || request.current.key !== key)
         request.current = { key, id: newRequestId() };
       setStage("posting");
@@ -418,6 +447,7 @@ function PhotoComposer({
         text,
         requestId: request.current.id,
         photo: photoPart,
+        video: videoPart,
         topic: topic || undefined,
       });
       request.current = null;
@@ -425,13 +455,17 @@ function PhotoComposer({
       setText("");
       setTopic("");
       setPhoto(null);
+      video.reset();
     } catch (err) {
       // An expired or unusable upload can't be retried: the photo is sent again next time.
       if (
         err instanceof AppApiError &&
         ["upload_expired", "upload_not_ready"].includes(err.code)
-      )
+      ) {
         uploaded.current = null;
+        // A video can't be reused either: it is added again.
+        if (videoReady) video.reset();
+      }
       setError(err);
     } finally {
       sending.current = false;
@@ -451,6 +485,29 @@ function PhotoComposer({
           aria-hidden="true"
           onChange={(e) => void choose(e.target.files?.[0])}
           data-testid="photo-input"
+        />
+      )}
+      {videoEnabled && (
+        <input
+          ref={videoRef}
+          type="file"
+          accept={VIDEO_ACCEPT}
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void video.start(f);
+            e.target.value = "";
+          }}
+          data-testid="video-input"
+        />
+      )}
+      {withVideo && (
+        <VideoProgress
+          job={video.job}
+          onCancel={video.cancel}
+          onRemove={video.reset}
         />
       )}
       {/* With a photo: the preview first, then its controls, then the one
@@ -493,12 +550,14 @@ function PhotoComposer({
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={rows}
-        placeholder={photo ? "Add a caption (optional)" : placeholder}
+        placeholder={
+          photo || withVideo ? "Add a caption (optional)" : placeholder
+        }
         className="block w-full resize-y rounded-2xl border border-ink-200 bg-white px-4 py-3 text-[15px] leading-relaxed text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          {photosEnabled && !photo && (
+          {photosEnabled && !photo && !withVideo && (
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -506,6 +565,16 @@ function PhotoComposer({
               className={buttonClass("secondary", "sm")}
             >
               <ImagePlus className="h-4 w-4" aria-hidden="true" /> Add photo
+            </button>
+          )}
+          {videoEnabled && !photo && !withVideo && (
+            <button
+              type="button"
+              onClick={() => videoRef.current?.click()}
+              disabled={busy}
+              className={buttonClass("secondary", "sm")}
+            >
+              <Clapperboard className="h-4 w-4" aria-hidden="true" /> Add video
             </button>
           )}
           {topics && topics.length > 0 && (
@@ -523,7 +592,7 @@ function PhotoComposer({
         </div>
         <button
           type="submit"
-          disabled={busy || over || (length === 0 && !photo)}
+          disabled={cannotPost}
           className={buttonClass("primary", "sm")}
         >
           {stage === "uploading"

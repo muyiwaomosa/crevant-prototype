@@ -24,6 +24,7 @@ import { useAppApi } from './AppApiContext'
 import { When } from './components'
 import { StorageCleanupPanel } from './avatars'
 import { PhotoStoragePanel, ReportPhoto } from './media'
+import { ReportVideo } from './video'
 import { useFeedbackAccess } from './feedback'
 
 /**
@@ -411,7 +412,7 @@ export function ModerationReportPage() {
                 By {snap.author_display_name} (@{snap.author_username})
               </p>
               {snap.body && <p className="mt-1 whitespace-pre-wrap break-words text-[15px] text-ink-900">{snap.body}</p>}
-              {snap.media_full_path && <ReportPhoto reportId={r.id} />}
+              {snap.media_full_path && (snap.media_kind === 'video' ? <ReportVideo reportId={r.id} /> : <ReportPhoto reportId={r.id} />)}
             </>
           ) : (
             <dl className="mt-1 grid gap-1 text-[15px] text-ink-900">

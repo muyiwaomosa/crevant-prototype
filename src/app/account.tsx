@@ -241,18 +241,30 @@ function MyReport({ campaignId }: { campaignId: string }) {
   if (error !== null) return <Message tone="error">{messageFor(error)}</Message>
   if (!r) return <Spinner label="Loading the report…" />
   const w = r.feedbackWithheld
+  const hidden = new Set(r.withheld ?? [])
+  const n = (key: string, value: number) => (hidden.has(key) ? 'fewer than 10' : value)
   return (
     <div className="mt-3 space-y-3" data-testid="my-campaign-report">
-      <Steps story={campaignStory(r)} />
+      <Steps
+        story={
+          hidden.has('impressions')
+            ? {
+                happened: 'Your ad has started showing, to fewer than 10 people so far.',
+                means: 'Figures stay hidden until at least 10 people have seen it, to protect their privacy.',
+                next: 'Check back once more members have seen it.',
+              }
+            : campaignStory(r)
+        }
+      />
       <dl>
         <Row label="Members who chose your category" value={few(r.eligibleAudience)} kind="Actual" />
         <Row label="People reached" value={few(r.reach)} kind="Actual" />
-        <Row label="Valid impressions" value={r.impressions} kind="Actual" />
-        <Row label="Clicks to your site" value={r.clicks} kind="Actual" />
-        <Row label="Click-through" value={r.ctr === null ? 'not yet' : `${(r.ctr * 100).toFixed(1)}%`} kind="Actual" />
-        <Row label="Shown because members chose your category" value={r.byMatch.preference.impressions} />
-        <Row label="Shown next to related posts" value={r.byMatch.context.impressions} />
-        <Row label="Not personalized" value={r.byMatch.general.impressions} />
+        <Row label="Valid impressions" value={n('impressions', r.impressions)} kind="Actual" />
+        <Row label="Clicks to your site" value={n('clicks', r.clicks)} kind="Actual" />
+        <Row label="Click-through" value={r.ctr === null ? 'not yet (needs 10 impressions)' : `${(r.ctr * 100).toFixed(1)}%`} kind="Actual" />
+        <Row label="Shown because members chose your category" value={n('by_match.preference.impressions', r.byMatch.preference.impressions)} />
+        <Row label="Shown next to related posts" value={n('by_match.context.impressions', r.byMatch.context.impressions)} />
+        <Row label="Not personalized" value={n('by_match.general.impressions', r.byMatch.general.impressions)} />
         <Row label="Found it relevant" value={w && r.relevant === 0 ? 'fewer than 10' : r.relevant} />
         <Row
           label="Not relevant, hidden or reported"
