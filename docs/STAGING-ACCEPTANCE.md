@@ -10,7 +10,7 @@ Production batch PB-1, which needs its own approval, is at the end.
 |---|---|---|
 | **Database deploy waiting for you** | [Run 45652930512](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45652930512) applies 20261204000000 (previews and search), 20261205000000 (rewards) and 20261206000000 (governance), then runs every staging security and separation check | **Review deployments, staging, Approve** |
 | Database already applied | Every migration up to 20261203000000 (IP-1, IP-2, IP-4a and IP-4b), checked Nov 25 at 14:00 and 14:59 | Nothing |
-| Next database deploy | 20261207000000 (governance refinements), after its pull request merges | Approve that run when it appears |
+| Next database deploys | 20261207000000 (governance refinements), then 20261208000000 (advertising), after their pull requests merge | Approve each run when it appears |
 | Staging app (Vercel) | Not building yet: `splitpost-app` builds only an older branch | Step A |
 | Email | Supabase's default sender: team addresses only, about two an hour | Step B |
 | Auth (sign up through links, the account hook, Splitpost emails) | Not configured | Step C, after the deploy above |
@@ -39,6 +39,7 @@ once the deploy above is approved and steps A to D are done.
 | 20261205000000 | Contributions and rewards (simulated) | In run 45652930512 |
 | 20261206000000 | Governance | In run 45652930512 |
 | 20261207000000 | Governance refinements | After its merge |
+| 20261208000000 | Advertising | After its merge |
 
 ---
 
@@ -199,6 +200,18 @@ Allocation percentages are not shown to members until the Rewards Rules are lega
 | 30 | Write a reason and Reverse | The comment is back; the fan's notice says the same moderator reviewed it; their comment points are back (after 20261207000000) |
 | 31 | Give the fan a restriction; as the fan, try to post | Home says the account is restricted and until when; posting is refused |
 | 32 | On a report, choose Suspension and "Serious violation: act now" without a note, then with one | Asks for the reason, then records an immediate suspension (after 20261207000000) |
+
+### Journey 6. Advertising: from advertiser to creator earnings (after 20261208000000)
+
+| # | Do | Expect |
+|---|---|---|
+| 33 | As you, Profile, Advertising: onboard an advertiser (what they sell, the problem, the outcome, customer needs, objective, conversion action, a category); Approve | The advertiser shows as approved |
+| 34 | Create a campaign (both placements, the same category, Money & business as a content topic); Activate | Faith and Health aren't offered as topics; the campaign is active |
+| 35 | As the fan, Profile, Ads and your preferences: set the category to Interested; open one of the creator's Money posts | A Sponsored ad under the post; Why this ad: "You chose …" |
+| 36 | As the referred member (no preferences), open the same post; then a Faith post | Why this ad: "Shown with Money & business posts. Not based on anything about you."; no ad on the Faith post |
+| 37 | Click the ad's button; then Not relevant on another; then Hide this ad | The site opens in a new tab; "Thanks…"; the hidden ad goes and is listed under Ads you hid, with Show again |
+| 38 | As you, Advertising, Report | Aggregate counts only; audience and reach under 10 show "fewer than 10"; no names |
+| 39 | Record verified conversions; at the start of next month, Attribute simulated revenue for this month | Content share to creators, feed share to Splitpost; the creator's simulated share rises; a second attribution is refused |
 
 ---
 

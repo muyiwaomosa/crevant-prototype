@@ -197,6 +197,7 @@ export function AdPreferences() {
               <label className="flex items-center justify-between gap-2 rounded-2xl bg-paper px-3 py-2 text-[14px] text-ink-900">
                 {c.label}
                 <select
+                  aria-label={c.label}
                   value={c.chosen ? 'chosen' : c.excluded ? 'excluded' : 'none'}
                   onChange={(e) => void set(c.slug, e.target.value as 'chosen' | 'excluded' | 'none')}
                   className="h-9 rounded-xl border border-ink-200 bg-white px-2 text-[14px]"
@@ -319,7 +320,7 @@ function AdvertiserForm({ admin, onSaved }: { admin: AdsAdmin; onSaved: () => Pr
         <Text label="Customer needs it meets" value={a.customer_needs} onChange={up('customer_needs')} area />
         <label className="block text-sm font-semibold text-ink-800">
           Campaign objective
-          <select value={a.objective} onChange={(e) => up('objective')(e.target.value)} className={field}>
+          <select aria-label="Campaign objective" value={a.objective} onChange={(e) => up('objective')(e.target.value)} className={field}>
             {OBJECTIVES.map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
@@ -369,7 +370,7 @@ function CampaignForm({ admin, onSaved }: { admin: AdsAdmin; onSaved: () => Prom
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm font-semibold text-ink-800">
           Advertiser (approved)
-          <select value={c.advertiser_id} onChange={(e) => up('advertiser_id')(e.target.value)} className={field}>
+          <select aria-label="Advertiser (approved)" value={c.advertiser_id} onChange={(e) => up('advertiser_id')(e.target.value)} className={field}>
             {approved.map((x) => (
               <option key={x.id} value={x.id}>
                 {x.name}
@@ -380,7 +381,7 @@ function CampaignForm({ admin, onSaved }: { admin: AdsAdmin; onSaved: () => Prom
         <Text label="Campaign name" value={c.name} onChange={up('name')} />
         <label className="block text-sm font-semibold text-ink-800">
           Placement
-          <select value={c.placement} onChange={(e) => up('placement')(e.target.value)} className={field}>
+          <select aria-label="Placement" value={c.placement} onChange={(e) => up('placement')(e.target.value)} className={field}>
             <option value="both">With creators' posts and in the feed</option>
             <option value="content">With creators' posts (shared revenue)</option>
             <option value="feed">In the feed (Splitpost revenue)</option>

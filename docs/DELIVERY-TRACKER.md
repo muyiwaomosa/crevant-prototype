@@ -18,10 +18,10 @@ Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 | IP-4a Content (topics, editing, saves, reposts) | Yes | Yes, CI 6 of 6 | Yes, PR #108, Nov 25 | Database applied and checked Nov 25 14:59 | No | Review guide `docs/CONTENT.md` |
 | IP-4b Discovery and sharing | Yes | Yes, CI 6 of 6 | Yes, PR #108, Nov 25 | Database applied and checked Nov 25 14:59 | No | Review guide `docs/DISCOVERY.md` |
 | IP-4c Fair rotation, search measurement, public previews | Yes | Yes, CI 6 of 6 | Yes, PR #109, Nov 25 | Database apply waiting for your approval (run 45652930512) | No | Previews opt-in and off by default; Production activation needs its own approval. Review guide `docs/PREVIEWS.md` |
-| IP-3/IP-6 refinements (restored rewards, sole-moderator exception, immediate enforcement, rewards journey, founder month tools) | Yes | Local: database suite, rollback chain (95), 806 unit tests, all 12 browser journeys in CI order; CI pending | No | No | No | Migration 20261207000000 |
+| IP-3/IP-6 refinements (restored rewards, sole-moderator exception, immediate enforcement, rewards journey, founder month tools) | Yes | Yes, CI 6 of 6 (PR #111) | No, awaiting merge authorization | No | No | Migration 20261207000000 |
 | IP-5 Video posts | Not started | | | | | Depends on the device test |
 | IP-6 Contributions and rewards (simulated) | Yes | Yes, CI 6 of 6; dedicated browser journey added in the refinements PR | Yes, PR #110, Nov 25 | Database apply waiting for your approval (run 45652930512) | No | All simulated; review guide `docs/REWARDS.md` |
-| IP-7 Advertising with commercial matching | In progress | | | | | Critical path; authorized Nov 25 |
+| IP-7 Advertising with commercial matching | Yes (local) | Local: database suite, rollback chain (98), 812 unit tests, all 13 browser journeys in CI order | No: waits for the refinements PR to merge (one branch) | No | No | Migration 20261208000000; review guide `docs/ADVERTISING.md` |
 | IP-8 Intelligence | Not started | | | | | Depends on IP-6, IP-7 |
 | IP-9 Brand and acquisition | Not started | | | | | |
 | IP-10 Release | Not started | | | | | |

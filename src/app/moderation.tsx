@@ -618,6 +618,7 @@ export function MemberActionsPanel({ memberId, reportId, defaultReason }: { memb
         <label className="block text-sm font-semibold text-ink-800">
           Reason
           <select
+            aria-label="Reason"
             value={reason}
             onChange={(e) => setReason(e.target.value as ReportReason)}
             className="mt-1.5 block h-11 w-full rounded-2xl border border-ink-200 bg-white px-3 text-base text-ink-900"

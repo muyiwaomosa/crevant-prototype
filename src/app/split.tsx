@@ -330,7 +330,7 @@ function SimulatedMonthTools({ onChange }: { onChange: () => Promise<void> }) {
         </label>
         <label className="block text-sm font-semibold text-ink-800">
           Kind
-          <select value={kind} onChange={(e) => setKind(e.target.value as 'content_ad' | 'feed_ad')} className={field}>
+          <select aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value as 'content_ad' | 'feed_ad')} className={field}>
             <option value="content_ad">Content advertising (shared)</option>
             <option value="feed_ad">Feed advertising (Splitpost)</option>
           </select>
