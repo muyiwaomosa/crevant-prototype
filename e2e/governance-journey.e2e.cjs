@@ -6,7 +6,8 @@
 //  2. a moderator hides the comment from the report and gives a warning from
 //     the account panel (the ladder's first step);
 //  3. the author sees both notices (never who reported), and appeals;
-//  4. the moderator reverses the appeal, and the comment is visible again;
+//  4. the moderator who hid it can't decide the appeal; a second moderator
+//     reverses it, and the comment is visible again;
 //  5. a restriction stops posting, and Home says so.
 // WCAG 2.2 AA, 320 and 390 px, no CSP violations. Run by scripts/e2e/auth-journey.sh.
 const { chromium } = require('playwright')
@@ -136,7 +137,9 @@ async function signIn(page, email) {
     const rex = await createMember(email('r'), `gvr${RUN}`, 'Rex Rules')
     const bo = await createMember(email('b'), `gvb${RUN}`, 'Bo Blocked')
     const mo = await createMember(email('m'), `gvm${RUN}`, 'Mo Moderator')
+    const eve = await createMember(email('e'), `gve${RUN}`, 'Eve Reviewer')
     sql(`select ops.grant_moderator('${mo}', 'governance-journey', 'journey')`)
+    sql(`select ops.grant_moderator('${eve}', 'governance-journey', 'journey')`)
     const tA = await tokenFor(email('a'))
     const tR = await tokenFor(email('r'))
     const tB = await tokenFor(email('b'))
@@ -219,7 +222,7 @@ async function signIn(page, email) {
       await ctx.close()
     }
 
-    // 4. Mo reverses the appeal (the only moderator, so they may decide it).
+    // 4. Mo took the original action, so Mo can't decide the appeal; Eve reverses it.
     {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
@@ -230,7 +233,22 @@ async function signIn(page, email) {
       check('the moderator is told they took the original action', (await list.innerText()).includes('You took the original action'))
       await screenChecks(page, 'the appeals page')
       await list.getByRole('button', { name: 'Reverse' }).click()
-      await page.getByText('No open appeals').waitFor()
+      await page.getByText('Another moderator decides appeals on your own actions.').waitFor()
+      check('the moderator who acted cannot decide the appeal', sql(`select status from ops.appeals where member_id = '${rex}'`) === 'open')
+      await ctx.close()
+    }
+    {
+      const ctx = await newContext(browser)
+      const page = await ctx.newPage()
+      await signIn(page, email('e'))
+      await page.goto(`${APP}/app/moderation/appeals`)
+      const list = page.getByRole('list', { name: 'Open appeals' })
+      await list.waitFor()
+      const item = list.getByRole('listitem').filter({ hasText: `@gvr${RUN}` })
+      check('another moderator is not warned', !(await item.innerText()).includes('You took the original action'))
+      await item.getByRole('button', { name: 'Reverse' }).click()
+      await page.waitForFunction((u) => !document.body.innerText.includes(u) || document.body.innerText.includes('No open appeals'), `@gvr${RUN}`)
+      check('a different moderator reverses the appeal', sql(`select status from ops.appeals where member_id = '${rex}'`) === 'reversed')
       await ctx.close()
     }
     check('reversing restores the comment', sql(`select hidden_at is null and deleted_at is null from social.comments where id = '${comment}'`) === 't')

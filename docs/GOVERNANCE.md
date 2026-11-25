@@ -25,4 +25,4 @@ Migration: `supabase/migrations/20261206000000_governance.sql` (checksum recorde
 * Staging-safe check `022_governance.sql` and behaviour tests `180_governance.sql` (blocking both ways, follows and Clique ended and recorded, the blocked member not told, reporting still allowed; comment reports; points reversed on hidden content; the ladder and its exceptions; restriction and suspension; notices; appeals once, in time, decided independently, reversing restores).
 * Rollback `scripts/db/staging-rollback-governance.sql`, tested by `rollback-governance-test.sh` (15 checks) within the full chain (92).
 * Unit tests for blocking, the blocked list, comment reports, the Home banner, notices and appeals, the account panel and the appeals page.
-* Browser journey `e2e/governance-journey.e2e.cjs` (30 checks, WCAG 2.2 AA at 320 and 390 px).
+* Browser journey `e2e/governance-journey.e2e.cjs` (33 checks, WCAG 2.2 AA at 320 and 390 px).
