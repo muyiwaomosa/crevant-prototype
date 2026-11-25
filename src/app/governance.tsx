@@ -387,6 +387,11 @@ export function NoticesPage() {
                       <When iso={n.createdAt} />
                     </p>
                     {n.appealStatus && <p className="mt-2 text-sm font-semibold text-ink-800">{APPEAL_TEXT[n.appealStatus]}</p>}
+                  {n.sameModerator && (
+                    <p className="mt-2 text-sm text-ink-700" data-testid="same-moderator">
+                      No other moderator was available, so the moderator who made the original decision reviewed your appeal. Their reasons are on record.
+                    </p>
+                  )}
                     {n.canAppeal && <AppealForm notice={n} onDone={load} />}
                   </Card>
                 </div>

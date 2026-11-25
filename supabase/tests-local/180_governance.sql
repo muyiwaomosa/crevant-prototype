@@ -386,9 +386,11 @@ end $$;
 commit;
 do $$
 begin
-  -- A restored comment does not get its points back.
-  if (select sum(points) from sim.points_ledger where member_id = pg_temp.g('7106') and action = 'meaningful_comment') <> 0 then
-    raise exception 'FAIL: a restore re-awarded points';
+  -- Before 20261207000000 a restored comment did not get its points back; from
+  -- it, an appeal that reverses the hide restores them (checked in 190).
+  if (select sum(points) from sim.points_ledger where member_id = pg_temp.g('7106') and action = 'meaningful_comment')
+     <> (case when to_regprocedure('sim.restore_hidden(text, uuid)') is null then 0 else 2 end) then
+    raise exception 'FAIL: the comment''s points after the reversed appeal are wrong';
   end if;
   perform pg_temp.expect_error($q$update ops.member_notices set kind = 'warning'$q$, 'only read_at', 'rewriting a notice');
   perform pg_temp.expect_error($q$update ops.appeals set status = 'open'$q$, 'decided once', 'reopening an appeal');

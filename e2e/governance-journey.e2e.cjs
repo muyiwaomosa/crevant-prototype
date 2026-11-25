@@ -230,11 +230,12 @@ async function signIn(page, email) {
       await page.goto(`${APP}/app/moderation/appeals`)
       const list = page.getByRole('list', { name: 'Open appeals' })
       await list.waitFor()
-      check('the moderator is told they took the original action', (await list.innerText()).includes('You took the original action'))
+      const mine = list.getByRole('listitem').filter({ hasText: `@gvr${RUN}` })
+      check('the moderator is told another moderator should decide', (await mine.innerText()).includes('Another moderator should decide this one'))
       await screenChecks(page, 'the appeals page')
-      await list.getByRole('button', { name: 'Reverse' }).click()
-      await page.getByText('Another moderator decides appeals on your own actions.').waitFor()
-      check('the moderator who acted cannot decide the appeal', sql(`select status from ops.appeals where member_id = '${rex}'`) === 'open')
+      check('the moderator who acted cannot decide the appeal', await mine.getByRole('button', { name: 'Reverse' }).isDisabled())
+      const direct = await rpc(tM, 'app_mod_decide_appeal', { p_appeal: sql(`select id from ops.appeals where member_id = '${rex}'`), p_reverse: true, p_note: 'trying anyway' })
+      check('the database refuses it too', direct.status >= 400 && /needs_another_moderator/.test(JSON.stringify(direct.body)), JSON.stringify(direct.body))
       await ctx.close()
     }
     {

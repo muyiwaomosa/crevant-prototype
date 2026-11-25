@@ -1,6 +1,6 @@
 # Governance (IP-3): review guide
 
-Migration: `supabase/migrations/20261206000000_governance.sql` (checksum recorded; merging approves it, D7). It builds on moderation (20261124000000) and rewards (20261205000000).
+Migrations: `supabase/migrations/20261206000000_governance.sql` (merged) and `20261207000000_governance_refinements.sql` (checksum recorded; merging approves it, D7). It builds on moderation (20261124000000) and rewards (20261205000000).
 
 | Capability | How | Requirements |
 |---|---|---|
@@ -14,15 +14,24 @@ Migration: `supabase/migrations/20261206000000_governance.sql` (checksum recorde
 | Audit | Every block, enforcement, lift and appeal decision is recorded; histories are append-only (notices may only be marked read; appeals are decided once) | GOV-06 |
 | Rewards | Points earned on a hidden post or comment are reversed (new rows). A restore after appeal does not re-award. Restricted and suspended members earn nothing while it lasts because they cannot act | RWD-12 |
 
-## Decisions taken within the authorization
+## Founder decisions (November 25) and how they are built
 
-* **Suspension is not removal.** A suspended member can still sign in to read notices and appeal. Removing an account from the pilot stays the founder's `ops.revoke_member_access`.
-* **The ladder is enforced, not advisory.** Threats, self-harm and hate may go straight to any step, because waiting would be unsafe.
-* **Appeals on a sole moderator's actions.** During the pilot there may be one moderator. They may then decide appeals on their own actions, and the screen says so. Once a second moderator exists, the database refuses.
+* **Suspension is not removal** (accepted). A suspended member can still sign in to read notices and appeal. Removing an account from the pilot stays the founder's `ops.revoke_member_access`.
+* **Proportionate immediate enforcement** (refinements, 20261207000000). Threats, self-harm and hate skip the ladder. Beyond those, a moderator may mark any restriction or suspension **immediate** for a serious violation; the database then requires a justification, records `immediate` on the enforcement and "(immediate)" in the audit trail.
+* **The sole-moderator appeal exception** (accepted with conditions, 20261207000000). A moderator may decide an appeal on their own action only while no other **eligible** moderator exists (an active pilot member who is not the appellant). Then:
+  * the moderator must record a reason, or the database refuses;
+  * the appeal is marked `same_moderator`, the audit trail says "Sole moderator, conflict of interest disclosed", and the member's notice says the same moderator reviewed it;
+  * the exception ends by itself: the moment another eligible moderator exists, the database refuses and the screen disables the buttons.
+* **Restoring legitimate rewards** (20261207000000). When a moderator restores hidden content, or an appeal reverses the hide, the Connection Points the hide took back come back as **compensating ledger entries** (one per reversal, keyed `restored:<reversal key>`, so never twice). Nothing historical is edited. Only reversals caused by the hide are restored: points reversed for any other reason (for example, the author deleting the comment) stay reversed, and only content that is live again qualifies. Hiding it again takes them back again.
+
+### Accounting constraints (for review)
+
+* Moderation only ever reverses **recognized** (non-redeemable) points. Qualified referrals, the only redeemable points, are never reversed by moderation, so no redeemable balance and no closed settlement is affected by a hide or a restore. A restore is dated now, in the open period. If moderation ever needs to touch redeemable points, the adjustment would go into the open month the same way, with closed months left unchanged.
+* A restored entry counts like any award made that day for that day's caps (a member restored at the cap could earn slightly less for the rest of that day). Proportionate for the MVP; noted for the metric review.
 
 ## Evidence (local)
 
-* Staging-safe check `022_governance.sql` and behaviour tests `180_governance.sql` (blocking both ways, follows and Clique ended and recorded, the blocked member not told, reporting still allowed; comment reports; points reversed on hidden content; the ladder and its exceptions; restriction and suspension; notices; appeals once, in time, decided independently, reversing restores).
-* Rollback `scripts/db/staging-rollback-governance.sql`, tested by `rollback-governance-test.sh` (15 checks) within the full chain (92).
+* Staging-safe checks `022_governance.sql` and `023_governance_refinements.sql`; behaviour tests `180_governance.sql` and `190_governance_refinements.sql` (restores once, never for author-deleted content, re-hide takes back again; the sole-moderator exception with an inactive second moderator; immediate enforcement) (blocking both ways, follows and Clique ended and recorded, the blocked member not told, reporting still allowed; comment reports; points reversed on hidden content; the ladder and its exceptions; restriction and suspension; notices; appeals once, in time, decided independently, reversing restores).
+* Rollbacks `staging-rollback-governance.sql` (15 checks) and `staging-rollback-governance-refinements.sql` (12 checks) within the full chain (95).
 * Unit tests for blocking, the blocked list, comment reports, the Home banner, notices and appeals, the account panel and the appeals page.
 * Browser journey `e2e/governance-journey.e2e.cjs` (33 checks, WCAG 2.2 AA at 320 and 390 px).

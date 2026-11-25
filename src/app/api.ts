@@ -341,6 +341,8 @@ export interface MemberNotice {
   read: boolean
   appealStatus: 'open' | 'upheld' | 'reversed' | null
   canAppeal: boolean
+  /** The appeal was reviewed by the moderator who made the original decision (no other was available). */
+  sameModerator: boolean
 }
 export interface BlockedMember {
   id: string
@@ -371,6 +373,10 @@ export interface ModAppeal {
   decisionNote: string | null
   /** The caller took the original action (another moderator decides when one exists). */
   decidedOriginal: boolean
+  /** Another eligible moderator exists, so the caller may not decide an appeal on their own action. */
+  anotherModeratorAvailable: boolean
+  /** Decided under the sole-moderator exception (conflict of interest disclosed). */
+  sameModerator: boolean
 }
 
 /** A member's current picture: a signed link (valid for an hour) and when it changed. */
@@ -535,6 +541,10 @@ export interface AppApi {
   founderReferralQueue(): Promise<ReferralReview[]>
   founderReviewReferral(awardId: number, approve: boolean): Promise<void>
   founderRewardsOverview(): Promise<RewardsOverview | null>
+  /** Founder: records SIMULATED net ad revenue for a month (content ads need the creator). Until IP-7 records it from campaigns. */
+  founderRecordSimRevenue(month: string, kind: 'content_ad' | 'feed_ad', creatorId: string | null, netCents: number, note: string): Promise<void>
+  /** Founder: the SIMULATED close of a finished month; refuses unless it reconciles to the cent. */
+  founderCloseMonth(month: string): Promise<{ poolCents: number; points: number; members: number; allocatedCents: number }>
   /** Governance (20261206000000). Blocks: two way, never shown to the blocked member. */
   block(memberId: string): Promise<void>
   unblock(memberId: string): Promise<void>
@@ -546,7 +556,8 @@ export interface AppApi {
   myNotices(): Promise<MemberNotice[] | null>
   markNoticesRead(): Promise<void>
   appeal(noticeId: number, body: string): Promise<void>
-  modEnforce(memberId: string, level: EnforcementLevel, reason: ReportReason, reportId?: string | null, days?: number | null, note?: string): Promise<void>
+  /** immediate: a serious violation acted on at once (skipping the ladder), with the justification in note. */
+  modEnforce(memberId: string, level: EnforcementLevel, reason: ReportReason, reportId?: string | null, days?: number | null, note?: string, immediate?: boolean): Promise<void>
   modLift(enforcementId: number, note?: string): Promise<void>
   modMemberRecord(memberId: string): Promise<MemberRecord | null>
   modAppeals(status: 'open' | 'decided'): Promise<ModAppeal[] | null>
@@ -1588,6 +1599,14 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         ruleVersion: String(r.rule_version),
       }
     },
+    founderRecordSimRevenue: async (month, kind, creatorId, netCents, note) => {
+      await rpc<number>('app_founder_record_sim_revenue', { p_month: month, p_kind: kind, p_creator: creatorId, p_post: null, p_net_cents: netCents, p_note: note.trim() })
+    },
+    async founderCloseMonth(month) {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_founder_close_month', { p_month: month })
+      const r = rows[0] ?? {}
+      return { poolCents: num(r.pool_cents as number), points: num(r.points as number), members: num(r.members as number), allocatedCents: num(r.allocated_cents as number) }
+    },
     block: (id) => rpc<void>('app_block', { p_member: id }),
     unblock: (id) => rpc<void>('app_unblock', { p_member: id }),
     async myBlocks() {
@@ -1631,13 +1650,14 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         read: Boolean(r.read),
         appealStatus: (r.appeal_status as MemberNotice['appealStatus']) ?? null,
         canAppeal: Boolean(r.can_appeal),
+        sameModerator: Boolean(r.same_moderator),
       }))
     },
     markNoticesRead: () => rpc<void>('app_mark_notices_read'),
     appeal: async (noticeId, body) => {
       await rpc<string>('app_appeal', { p_notice: noticeId, p_body: body.trim() })
     },
-    modEnforce: async (memberId, level, reason, reportId, days, note) => {
+    modEnforce: async (memberId, level, reason, reportId, days, note, immediate) => {
       await rpc<number>('app_mod_enforce', {
         p_member: memberId,
         p_level: level,
@@ -1645,6 +1665,8 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         p_report: reportId ?? null,
         p_days: days ?? null,
         p_note: note?.trim() || null,
+        // Sent only when set, so a database before 20261207000000 still accepts the call.
+        ...(immediate ? { p_immediate: true } : {}),
       })
     },
     modLift: (enforcementId, note) => rpc<void>('app_mod_lift', { p_enforcement: enforcementId, p_note: note?.trim() || null }),
@@ -1690,6 +1712,9 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         decidedAt: (r.decided_at as string | null) ?? null,
         decisionNote: (r.decision_note as string | null) ?? null,
         decidedOriginal: Boolean(r.decided_original),
+        // Before 20261207000000 the database refused only when another moderator existed at all.
+        anotherModeratorAvailable: r.another_moderator_available === undefined ? Boolean(r.decided_original) : Boolean(r.another_moderator_available),
+        sameModerator: Boolean(r.same_moderator),
       }))
     },
     modDecideAppeal: (appealId, reverse, note) => rpc<void>('app_mod_decide_appeal', { p_appeal: appealId, p_reverse: reverse, p_note: note?.trim() || null }),

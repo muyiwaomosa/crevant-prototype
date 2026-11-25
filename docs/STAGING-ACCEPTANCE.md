@@ -1,49 +1,61 @@
-# Staging acceptance: IP-1, IP-2 and IP-4
+# Staging setup and acceptance
 
-One sequential guide for everything the founder does to test IP-1
-(Foundation), IP-2 (Relationships and Home) and IP-4 (Content and discovery)
-on staging, plus the Production batch PB-1, which needs its own approval.
+The one current guide for setting up staging and accepting what is built on it,
+organised by stakeholder journey. It reflects everything merged to `main`.
+Production batch PB-1, which needs its own approval, is at the end.
 
-## Where staging stands
+## 1. Where staging stands
 
-| Layer | Status | What makes it fully functional |
+| Layer | Status | What you do |
 |---|---|---|
-| Staging database | **Done** for IP-1, IP-2 and IP-4 (applied and checked Nov 25, 14:00 and 14:59). IP-4c is merged and its apply waits for your approval (run 45645109544). IP-6 and IP-3 follow their merge | Approve each apply run |
-| Staging app (Vercel) | Not building yet: `splitpost-app` still builds only an older branch | A1 |
-| Email (registration, confirmation, password reset) | Supabase's default sender: team addresses only, about two an hour | A2 |
-| Auth (sign up through links, the account creation hook, Splitpost emails) | Not configured | A3 |
-| Testers can register; previews for shared links | Closed | A4 |
+| **Database deploy waiting for you** | [Run 45652930512](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45652930512) applies 20261204000000 (previews and search), 20261205000000 (rewards) and 20261206000000 (governance), then runs every staging security and separation check | **Review deployments, staging, Approve** |
+| Database already applied | Every migration up to 20261203000000 (IP-1, IP-2, IP-4a and IP-4b), checked Nov 25 at 14:00 and 14:59 | Nothing |
+| Next database deploy | 20261207000000 (governance refinements), after its pull request merges | Approve that run when it appears |
+| Staging app (Vercel) | Not building yet: `splitpost-app` builds only an older branch | Step A |
+| Email | Supabase's default sender: team addresses only, about two an hour | Step B |
+| Auth (sign up through links, the account hook, Splitpost emails) | Not configured | Step C, after the deploy above |
+| Testers can register; previews; a moderator | Closed / off / none | Step D |
 
-The database being deployed is not the same as a working staging app: it is
-fully functional once A1 to A4 are done.
+A deployed database is not a working staging app. Staging is fully functional
+once the deploy above is approved and steps A to D are done.
 
-* **Staging app:** https://splitpost-app-git-staging-crevant.vercel.app
-  (behind your Vercel login; built only from the `staging` branch, which Claude
-  fast-forwards to reviewed, merged `main` commits and nothing else).
-* **Staging database:** project `kpudeppgokpjhvaqrprn`.
+* **Staging app:** https://splitpost-app-git-staging-crevant.vercel.app (behind
+  your Vercel login; built only from the `staging` branch, which Claude
+  fast-forwards to reviewed, merged `main` commits and nothing else; it is at
+  `main` now).
+* **Staging database:** Supabase project `kpudeppgokpjhvaqrprn`.
 * **Never touched by anything here:** member Production. Its registration stays
-  paused, its launch gate closed, and the registration page on app.splitpost.ca
-  stays closed until the reviewed policies are published.
+  paused, its launch gate closed, public previews off, and nothing financial is
+  real.
+
+### Exact migration state
+
+| Migration | What | Staging |
+|---|---|---|
+| 20261106000000 to 20261130000000 | Foundations through foundation v2 and the launch gate | Applied |
+| 20261201000000 | Relationships and Home | Applied |
+| 20261202000000, 20261203000000 | Content, discovery and sharing | Applied |
+| 20261204000000 | Fair rotation, search measurement, public previews | In run 45652930512 |
+| 20261205000000 | Contributions and rewards (simulated) | In run 45652930512 |
+| 20261206000000 | Governance | In run 45652930512 |
+| 20261207000000 | Governance refinements | After its merge |
 
 ---
 
-## Part A. Set up staging (about 30 minutes, once)
+## 2. Set up staging (about 30 minutes, once)
 
-Do these in order. **A3 only after Claude confirms the database deploy is applied and checked.**
+Do these in order. **C only after Claude confirms the database deploy is applied and checked.**
 
-### A1. Staging app address (5 minutes)
+### A. Vercel: build the staging app (5 minutes)
 
-1. Vercel, `splitpost-app`, **Settings, Git, Ignored Build Step**: set the command to
+1. Vercel, project `splitpost-app`, **Settings, Git, Ignored Build Step**: set the command to
    `[ "$VERCEL_GIT_COMMIT_REF" != "staging" ]`
 2. **Settings, Environment Variables:** make sure `VITE_SUPABASE_URL` and
-   `VITE_SUPABASE_PUBLISHABLE_KEY` (the staging values) apply to **Preview**,
-   including the `staging` branch. Leave Production variables alone.
-3. Tell Claude when it's saved. Claude pushes `staging` again so Vercel builds it,
-   and confirms the address loads.
+   `VITE_SUPABASE_PUBLISHABLE_KEY` hold the **staging** values and apply to
+   **Preview** (which includes the `staging` branch). Leave Production variables alone.
+3. Tell Claude. Claude pushes `staging` again so Vercel builds it and confirms the address loads.
 
-### A2. Resend for staging email (15 minutes)
-
-Without this, Supabase's default sender only reaches team addresses, about two emails an hour.
+### B. Resend: staging email (15 minutes)
 
 1. Sign up at resend.com (free tier).
 2. **Domains, Add domain:** `mail.splitpost.ca`.
@@ -51,10 +63,10 @@ Without this, Supabase's default sender only reaches team addresses, about two e
    `send.mail.splitpost.ca`, DKIM TXT on `resend._domainkey.mail.splitpost.ca`).
    If `splitpost.ca` has no DMARC record yet, add TXT `_dmarc.splitpost.ca`:
    `v=DMARC1; p=none; rua=mailto:<an inbox you read>`.
-4. **Verify DNS records**; wait until all are Verified.
+4. **Verify DNS records** and wait until all are Verified.
 5. **API Keys, Create API key:** `supabase-staging`, Sending access, domain
    `mail.splitpost.ca`. Paste it only into the Supabase field below.
-6. Supabase, staging project, **Authentication, Emails, SMTP Settings**, Enable custom SMTP:
+6. Supabase, staging project, **Authentication, Emails, SMTP Settings**, enable custom SMTP:
 
    | Field | Value |
    |---|---|
@@ -67,9 +79,9 @@ Without this, Supabase's default sender only reaches team addresses, about two e
 
 7. **Authentication, Rate Limits:** emails per hour `30`.
 
-**Check:** a password reset from the staging app arrives from "Splitpost"; Resend shows Delivered.
+**Check:** a password reset from the staging app arrives from "Splitpost", and Resend shows Delivered.
 
-### A3. Staging Auth settings (10 minutes; after Claude's go-ahead)
+### C. Supabase Auth (10 minutes; after Claude's go-ahead)
 
 Staging project, Supabase dashboard:
 
@@ -90,12 +102,11 @@ Staging project, Supabase dashboard:
 
 If anything goes wrong, turn the hook **off** first, then tell Claude.
 
-### A4. Open staging for testers (2 minutes)
+### D. Activate staging (2 minutes)
 
-Applying the launch gate to staging left staging's external access **closed**
-(existing testers keep their access). Registration also starts paused. Open both
-**on staging only**, and make yourself an invitation link: Supabase, staging
-project, **SQL Editor**, run:
+Supabase, staging project, **SQL Editor**. Run the first block; register your
+own account through the invitation link it creates (section 3, journey 1); then
+run the second block with your account's id (Authentication, Users).
 
 ```sql
 do $$
@@ -107,94 +118,97 @@ end $$;
 select ops.set_external_access('founder', true, 'APPROVE EXTERNAL MEMBER ACCESS');
 select ops.set_registration_settings('founder', 'staging acceptance', false);
 select ops.create_invitation_link('founder', 'creator', 10, interval '14 days') as invitation_code;
--- Public previews of shared posts, staging only (Production needs its own approval).
+-- Public previews of shared posts: staging only (Production needs its own approval).
 select ops.set_public_previews('founder', true, 'staging acceptance');
 ```
 
+```sql
+-- After registering: you as the launch founder and a moderator (staging only).
+select ops.set_launch_founder('founder', '<your user id>', 'SET THE LAUNCH FOUNDER');
+select ops.grant_member_access('<your user id>', 'founder', 'staging acceptance');
+select ops.grant_moderator('<your user id>', 'founder', 'staging acceptance');
+```
+
 Your invitation link is `https://splitpost-app-git-staging-crevant.vercel.app/register/<invitation_code>`.
-Every change is recorded (`ops.member_launch_events`, `ops.registration_setting_events`).
-To close staging again: `select ops.set_registration_settings('founder', 'staging closed', true);`
+Every change is recorded. To close staging again:
+`select ops.set_registration_settings('founder', 'staging closed', true);`
 
 ---
 
-## Part B. Acceptance tests
+## 3. Acceptance tests, by stakeholder journey
 
-Use a fresh email address for each new account. Desktop and phone both.
+Use a fresh email address for each new account, on desktop and phone. You need
+four accounts: **you** (founder and moderator), a **creator**, a **fan**, and a
+**referred** member. Report anything that doesn't match with its number.
 
-### IP-1 Foundation
-
-| # | Do | Expect |
-|---|---|---|
-| 1 | Open the staging app's `/register` with no code | "You need an invitation link" |
-| 2 | Open your invitation link; register with an email and password, ticking 18+ | "Check your email"; the email arrives from Splitpost |
-| 3 | Click the email link, then Continue | You're signed in; name setup appears |
-| 4 | Finish setup | Home with five destinations: Home, Discover, Create, My Split (brand symbol), Profile |
-| 5 | Swipe or use the tabs on Home | Three faces: Clique first, My Clique, Following |
-| 6 | My Split, then Opportunities | Your personal referral link; the simulated rewards disclosure |
-| 7 | Open the referral link in a private window and register a second account | It joins as a fan, attributed to you; it follows nobody automatically |
-| 8 | Sign in with an existing staging tester | A one-time 18+ confirmation, then the app |
-| 9 | In SQL: `select ops.set_registration_settings('founder', 'test pause', true);` then try to register | "Registration is paused right now…"; reopen with `false` |
-
-### IP-2 Relationships and Home
-
-Use your two new accounts: one posts as a creator, one follows.
+### Journey 1. A new member joins
 
 | # | Do | Expect |
 |---|---|---|
-| 10 | As the follower, open the creator's profile | Followers, Clique, Active Supporters; buttons Follow, then Join Clique and Support |
-| 11 | Follow, then Join Clique | Both confirmed; Clique count goes up |
-| 12 | Support, choose $5 a month, Record my support intent | "Non-binding. Nothing is charged, now or later." and a confirmation; Withdraw is offered |
-| 13 | As the creator, post twice; as the follower, open Home | "New from your Clique" shows the new posts first, then everything else newest first; nothing twice |
-| 14 | Tap the creator's avatar in the Catch up strip | Unseen posts oldest first, ending "All caught up"; nothing expires |
-| 15 | As the follower, comment something thoughtful (20+ characters) on a post | The creator's profile shows 1 Active Supporter |
-| 16 | Profile, Your Clique (via My Clique, Manage Clique): Mute the creator | "Muted on Home"; their posts leave Home; still followed. Unmute brings them back |
-| 17 | As the creator, open Profile | "Your audience": What happened, What it means, What to do next; Support Intent marked Non-binding |
+| 1 | Open `/register` with no code | "You need an invitation link" |
+| 2 | Open your invitation link; register with an email and password, ticking 18+ | "Check your email"; it arrives from Splitpost |
+| 3 | Click the email link, then Continue, and finish setup | Home with five destinations: Home, Discover, Create, My Split (brand symbol), Profile |
+| 4 | Sign in with an existing staging tester | A one-time 18+ confirmation, then the app |
+| 5 | In SQL `select ops.set_registration_settings('founder', 'test pause', true);`, then try to register | "Registration is paused right now…"; reopen with `false` |
 
-### IP-4 Content and discovery
+### Journey 2. A fan finds and follows creators
 
 | # | Do | Expect |
 |---|---|---|
-| 18 | Create a post and choose a topic | The card shows the topic |
-| 19 | Edit your post (pencil) | New text, "Edited" on the card |
-| 20 | On someone else's post: Save, then Profile, Saved | It's in your Saved list, only for you |
-| 21 | Repost it; sign in as someone who follows you but not its creator | Home shows it once, "Reposted by" you |
-| 22 | Discover | Opens on For you: posts in your interests from people you don't follow, each with its reason; try "What are you here for today?" |
-| 23 | Search "budget" (or a word from a post) | People, Posts and Topics results |
-| 24 | Share one of your posts (copy link) | A note says only members can open it until you allow public previews |
-| 25 | Before opting in, open the link in a private window; then Profile, Sharing outside Splitpost: read the explanation and tick "Allow public previews of my posts"; reopen; then untick and reopen | Unavailable, then the preview, then unavailable again |
+| 6 | Discover | Opens on For you: posts in your interests from people you don't follow, each with its reason; "What are you here for today?" narrows it |
+| 7 | Search "budget" (or a word from a post) | People, Posts and Topics results |
+| 8 | Open the creator's profile; Follow, then Join Clique | Both confirmed; Followers and Clique counts go up; nothing is followed automatically |
+| 9 | Support, $5 a month, Record my support intent | "Non-binding. Nothing is charged, now or later."; Withdraw is offered |
+| 10 | As the creator, post twice; as the fan, open Home | "New from your Clique" first, then everything newest first, nothing twice |
+| 11 | Tap the creator in the Catch up strip | Unseen posts oldest first, ending "All caught up"; nothing expires |
+| 12 | Save a post, then Profile, Saved; Repost another | Saved only for you; Home shows the repost once to your followers, "Reposted by" you |
+| 13 | Mute the creator (Your Clique, Manage) | Their posts leave Home; still followed. Unmute brings them back |
 
-### IP-6 Contributions and rewards (simulated)
-
-| # | Do | Expect |
-|---|---|---|
-| 26 | As a tester, write a thoughtful comment on someone else's post, save one and repost one; then My Split | Recognized points for each, marked Simulated; History lists them newest first |
-| 27 | Register a second tester through the first tester's referral link, confirm the email, and follow someone | As founder, My Split, "Founder: review referrals and rewards": the qualified referral waits for you; approve it |
-
-### IP-3 Governance
-
-First make yourself a moderator in the SQL Editor: `select ops.grant_moderator('<your user id>', 'founder', 'staging acceptance');`
+### Journey 3. A creator publishes and shares
 
 | # | Do | Expect |
 |---|---|---|
-| 28 | As tester A, open tester B's profile and choose Block; read the explanation; confirm | "You blocked …" with Unblock; as B, A's profile and posts are gone and nothing says why |
-| 29 | As A, report one of C's comments (the flag beside it) | "Thanks for letting us know" |
-| 30 | As you (moderator), Profile, Moderation, open the comment report: Hide, then Give a warning | Hidden; "Warning recorded"; the account panel shows the history |
-| 31 | As C, open Home | A banner about new notices; Notices says what was hidden and why, never who reported |
-| 32 | As C, Appeal the hidden comment; as you, Moderation, Appeals, Reverse | The comment is back; C sees "Your appeal was successful" |
-| 33 | As you, give C a restriction from the account panel; as C, try to post | Home says the account is restricted and until when; posting is refused |
+| 14 | Create a post with a topic; then edit it | The topic shows; "Edited" on the card |
+| 15 | Share your post (copy link) before opting in | A note says only members can open it until you allow public previews |
+| 16 | Open the link in a private window; then Profile, Sharing outside Splitpost: tick "Allow public previews of my posts"; reopen; untick; reopen | Unavailable, then the preview (text, topic, you, join and sign-in links), then unavailable |
+| 17 | Profile, after a fan's thoughtful comment | "Your audience": What happened, What it means, What to do next; 1 Active Supporter |
 
-Report anything that doesn't match to Claude with the row number. Defects are
-fixed without reopening approved decisions.
+### Journey 4. Contributions and rewards (all simulated)
+
+| # | Do | Expect |
+|---|---|---|
+| 18 | As the fan: a thoughtful comment, a save and a repost on the creator's posts; then My Split | Recognized 9, marked as not redeemable; the simulated disclosure |
+| 19 | My Split, History; then delete the comment and look again | Each contribution with the creator; then a Reversed entry of -2 |
+| 20 | As the fan, My Split, Opportunities: open your referral link privately and register the **referred** account; confirm it and follow someone | The referred account joins as a fan, attributed to you; your My Split shows 100 waiting for review |
+| 21 | As you: My Split, "Founder: review referrals and rewards"; Approve | The queue empties; the fan now has 100 redeemable points |
+| 22 | On the same page: last month, Content advertising, the creator's username, $100, a note, Record; then Feed advertising, $50 | Reconciliation: revenue $150, creators $40, fan pool $20, Splitpost $90 (always adding up) |
+| 23 | As the fan, My Split; as the creator, Profile | The fan's redeemable points valued at $20.00, Simulated; the creator's simulated share $40.00, "Nothing is paid during the pilot" |
+| 24 | As you, Close the month (simulated), then again | "It reconciles to the cent"; then "That month is already closed"; the fan sees the points allocated |
+
+Allocation percentages are not shown to members until the Rewards Rules are legally reviewed; the database enforces them.
+
+### Journey 5. Safety and governance
+
+| # | Do | Expect |
+|---|---|---|
+| 25 | As the fan, open the referred member's profile, Block, read the explanation, confirm | "You blocked …" with Unblock; as the referred member, the fan's profile and posts are gone and nothing says why |
+| 26 | As the creator, report one of the fan's comments (the flag beside it) | "Thanks for letting us know" |
+| 27 | As you, Profile, Moderation: open the report; Hide; then Give a warning | Hidden; "Warning recorded"; the account panel shows the history |
+| 28 | As the fan, open Home, then Notices | A banner about new notices; Notices says what was hidden and why, never who reported |
+| 29 | As the fan, Appeal; as you, Moderation, Appeals | You took the original action and are the only moderator: the page says so and asks for a reason (after 20261207000000) |
+| 30 | Write a reason and Reverse | The comment is back; the fan's notice says the same moderator reviewed it; their comment points are back (after 20261207000000) |
+| 31 | Give the fan a restriction; as the fan, try to post | Home says the account is restricted and until when; posting is refused |
+| 32 | On a report, choose Suspension and "Serious violation: act now" without a note, then with one | Asks for the reason, then records an immediate suspension (after 20261207000000) |
 
 ---
 
-## Part C. PB-1, member Production operations (needs your approval)
+## 4. PB-1, member Production operations (needs your approval)
 
 Nothing here changes a schema or opens access. Approve as a batch, then do in order.
 
 | # | Action | Where | Verify |
 |---|---|---|---|
-| B1 | Resend key `supabase-members-production`; custom SMTP on member Production with the A2 settings | Resend; Supabase Auth | A password reset to your own account on app.splitpost.ca arrives from Splitpost |
+| B1 | Resend key `supabase-members-production`; custom SMTP on member Production with the step B settings | Resend; Supabase Auth | A password reset to your own account on app.splitpost.ca arrives from Splitpost |
 | B2 | Drain key: `openssl rand -hex 32` on your computer; save the **same** value as Edge Function secret `MEDIA_DRAIN_KEY` and Vault `media_drain_key` on member Production (`docs/PHOTOS.md`). Never into chat, GitHub, Vercel or a file | Supabase dashboard | B3 passes |
 | B3 | Rerun the member Production photo cleanup schedule workflow, mode apply | GitHub Actions | Schedule checks pass |
 | B4 | Repository variables `WAITLIST_HEALTH_ENABLED=true` and `PRODUCTION_WAITLIST_HEALTH_ENABLED=true` | GitHub settings | Next health runs pass |

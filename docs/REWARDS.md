@@ -1,6 +1,6 @@
 # Contributions and rewards (IP-6): review guide
 
-Migration: `supabase/migrations/20261205000000_rewards.sql` (checksum recorded; merging approves it, D7). Everything is **simulated**: no money is collected, held or paid, Connection Points have no cash value, and all of it lives in the `sim` schema, apart from `intent` and any future `finance`.
+Migration: `supabase/migrations/20261205000000_rewards.sql` (merged, PR #110). Everything is **simulated**: no money is collected, held or paid, Connection Points have no cash value, and all of it lives in the `sim` schema, apart from `intent` and any future `finance`.
 
 | Capability | How | Requirements |
 |---|---|---|
@@ -15,10 +15,17 @@ Migration: `supabase/migrations/20261205000000_rewards.sql` (checksum recorded; 
 | Simulated month close | Allocates the open pool to approved redeemable points in whole cents and refuses unless the lines equal the pool exactly; one close per month, only after the month ends | RWD-09, GOV-C08 |
 | My Split | Overview: recognized, redeemable (approved and waiting), estimated value marked Simulated, the disclosure. History: newest first, with reversals. Opportunities: the referral link | RWD-10 |
 | Creator earnings | The creator's simulated share by month on their profile (Money, marked Simulated) | RWD-11 |
-| Founder | My Split, "Founder: review referrals and rewards": approve or reject qualified referrals, and the simulated reconciliation | GOV-C07, GOV-C08 |
+| Founder | My Split, "Founder: review referrals and rewards": approve or reject qualified referrals, the simulated reconciliation, record simulated revenue for a month (content advertising names the creator; feed advertising is Splitpost's), and close a finished month | GOV-C07, GOV-C08 |
+| Moderation and rewards | Points earned on hidden content are reversed; when the content is restored (by a moderator or a successful appeal) the legitimate points come back as compensating entries, once (`docs/GOVERNANCE.md`) | RWD-12 |
 
 The allocation percentages are kept out of member-facing text by the existing claims guard (`src/public/landing/claims.test.ts`) until the Rewards Rules are legally reviewed; screens say "creator share" and "fan rewards pool".
 
 ## Evidence (local)
 
+* Browser journey `e2e/rewards-journey.e2e.cjs` (29 checks): points from real contributions, likes and own content earn nothing, no double award, My Split and History, a reversal, a referral through a real referral link with email confirmation and the referred member's own first follow, founder review, simulated content and feed revenue with the 40/20/40 reconciliation, the referrer's simulated valuation, the creator's simulated share without percentages, the month close reconciling to the cent and only once.
+
 Database suite with `021_rewards.sql` and `170_rewards.sql` (awards once each, own content and likes earn nothing, reversal, append-only, daily caps, pause, ads earn nothing, qualified referral and review, 40/20/40 split adds up, month close reconciles and runs once, My Split and creator earnings), the rollback test `rollback-rewards-test.sh`, unit tests for My Split, History, the founder review and creator earnings.
+
+## Economic transparency
+
+Members are told everything is simulated and how points become eligible. The allocation rules (40% creator, 20% fan rewards pool, 40% Splitpost for content advertising; feed advertising to Splitpost) are enforced and reconciled by the database but stay off member screens until the Rewards Rules are legally reviewed. Once approved, they are shown in My Split; the claims guard (`src/public/landing/claims.test.ts`) is the switch to change.

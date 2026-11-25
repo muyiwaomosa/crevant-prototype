@@ -104,6 +104,8 @@ function fakeApi(
     earnings: null as null | Array<{ month: string; creatorCents: number }>,
     queue: [] as Array<{ awardId: number; referrer: string | null; referred: string | null; firstFollow: string | null; createdAt: string }>,
     reviewed: [] as Array<{ id: number; approve: boolean }>,
+    revenue: [] as Array<{ month: string; kind: string; creatorId: string | null; netCents: number; note: string }>,
+    closed: [] as string[],
     overview: null as null | { recognized: number; redeemablePending: number; redeemableApproved: number; settled: number; revenueCents: number; creatorCents: number; poolCents: number; splitpostCents: number; openPoolCents: number; paused: boolean; ruleVersion: string },
   }
   const likes = new Set<string>()
@@ -167,7 +169,7 @@ function fakeApi(
     standing: null as null | { standing: 'restricted' | 'suspended'; endsAt: string | null },
     notices: [] as MemberNotice[],
     appealed: [] as Array<{ noticeId: number; body: string }>,
-    enforced: [] as Array<{ memberId: string; level: string; reason: string; reportId: string | null; days: number | null }>,
+    enforced: [] as Array<{ memberId: string; level: string; reason: string; reportId: string | null; days: number | null; immediate?: boolean; note?: string }>,
     lifted: [] as number[],
     record: null as MemberRecord | null,
     appeals: [] as ModAppeal[],
@@ -796,9 +798,9 @@ function fakeApi(
       governance.appealed.push({ noticeId, body })
       governance.notices = governance.notices.map((n) => (n.id === noticeId ? { ...n, appealStatus: 'open', canAppeal: false } : n))
     },
-    async modEnforce(memberId, level, reason, reportId, days) {
+    async modEnforce(memberId, level, reason, reportId, days, note, immediate) {
       requireModerator()
-      governance.enforced.push({ memberId, level, reason, reportId: reportId ?? null, days: days ?? null })
+      governance.enforced.push({ memberId, level, reason, reportId: reportId ?? null, days: days ?? null, ...(immediate ? { immediate, note } : {}) })
     },
     async modLift(id) {
       requireModerator()
@@ -835,6 +837,13 @@ function fakeApi(
     },
     async founderRewardsOverview() {
       return rewards.overview
+    },
+    async founderRecordSimRevenue(month, kind, creatorId, netCents, note) {
+      rewards.revenue.push({ month, kind, creatorId, netCents, note })
+    },
+    async founderCloseMonth(month) {
+      rewards.closed.push(month)
+      return { poolCents: 2000, points: 100, members: 1, allocatedCents: 2000 }
     },
     async publicPreviewsAllowed() {
       return previews.allowed
@@ -3107,13 +3116,28 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
     expect(money.getByText(/\$40\.00/)).toBeTruthy()
     expect(money.getByText(/Nothing is paid during the pilot/)).toBeTruthy()
   })
+
+  it('the founder records simulated revenue (content ads need the creator) and closes a month', async () => {
+    const f = fakeApi('me', { founder: true })
+    f.rewards.overview = { recognized: 0, redeemablePending: 0, redeemableApproved: 100, settled: 0, revenueCents: 0, creatorCents: 0, poolCents: 0, splitpostCents: 0, openPoolCents: 0, paused: false, ruleVersion: 'd6-v1' }
+    renderApp('/app/split/review', f.api)
+    fireEvent.change(await screen.findByLabelText('Creator username'), { target: { value: '@creator_1' } })
+    fireEvent.change(screen.getByLabelText('Net amount ($)'), { target: { value: '100' } })
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Test campaign' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Record simulated revenue' }))
+    await waitFor(() => expect(f.rewards.revenue[0]).toMatchObject({ kind: 'content_ad', creatorId: 'c1', netCents: 10000, note: 'Test campaign' }))
+    expect(f.rewards.revenue[0].month).toMatch(/^\d{4}-\d{2}-01$/)
+    fireEvent.click(screen.getByRole('button', { name: 'Close the month (simulated)' }))
+    expect(await screen.findByText(/It reconciles to the cent\./)).toBeTruthy()
+    expect(f.rewards.closed).toHaveLength(1)
+  })
 })
 
 // ---------------------------------------------------------------------------
 describe('governance (20261206000000): blocking, notices, appeals and the enforcement ladder', () => {
   const notice = (over: Partial<MemberNotice>): MemberNotice => ({
     id: 1, kind: 'content_hidden', targetType: 'comment', targetId: 'x', reason: 'harassment', excerpt: 'You are all terrible',
-    endsAt: null, createdAt: new Date().toISOString(), read: false, appealStatus: null, canAppeal: true, ...over,
+    endsAt: null, createdAt: new Date().toISOString(), read: false, appealStatus: null, canAppeal: true, sameModerator: false, ...over,
   })
 
   it('blocks from a profile after explaining what a block does, then shows the block with Unblock', async () => {
@@ -3209,13 +3233,53 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
     f.governance.appeals = [{
       id: 'a1', memberId: 'c1', memberUsername: 'creator_1', kind: 'content_hidden', targetType: 'post', targetId: 'p', reason: 'spam',
       excerpt: 'Buy now', body: 'This was a real recommendation.', status: 'open', createdAt: new Date().toISOString(), decidedAt: null, decisionNote: null, decidedOriginal: true,
+      anotherModeratorAvailable: true, sameModerator: false,
     }]
     renderApp('/app/moderation/appeals', f.api)
     const list = await screen.findByRole('list', { name: 'Open appeals' })
     expect(list.textContent).toMatch(/Hidden content.*Spam or scam.*@creator_1.*Buy now.*This was a real recommendation\./)
-    expect(list.textContent).toMatch(/You took the original action/)
+    expect(list.textContent).toMatch(/Another moderator should decide this one/)
+    expect((within(list).getByRole('button', { name: 'Reverse' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('the sole-moderator exception: allowed only without another moderator, needs a reason, and is disclosed', async () => {
+    const f = fakeApi('me', { moderator: true })
+    f.governance.appeals = [{
+      id: 'a1', memberId: 'c1', memberUsername: 'creator_1', kind: 'content_hidden', targetType: 'post', targetId: 'p', reason: 'spam',
+      excerpt: 'Buy now', body: 'This was a real recommendation.', status: 'open', createdAt: new Date().toISOString(), decidedAt: null, decisionNote: null, decidedOriginal: true,
+      anotherModeratorAvailable: false, sameModerator: false,
+    }]
+    renderApp('/app/moderation/appeals', f.api)
+    const list = await screen.findByRole('list', { name: 'Open appeals' })
+    expect(within(list).getByTestId('sole-moderator').textContent).toMatch(/no other moderator is available.*conflict of interest.*the member is told/)
+    fireEvent.click(within(list).getByRole('button', { name: 'Reverse' }))
+    expect(await screen.findByText('Write a note first.')).toBeTruthy()
+    expect(f.governance.decided).toEqual([])
+    fireEvent.change(within(list).getByLabelText('Decision note (optional, never shown to the member)'), { target: { value: 'On review it was fine.' } })
     fireEvent.click(within(list).getByRole('button', { name: 'Reverse' }))
     await waitFor(() => expect(f.governance.decided).toEqual([{ id: 'a1', reverse: true }]))
-    expect(await screen.findByText('No open appeals')).toBeTruthy()
+  })
+
+  it('a notice says when the same moderator reviewed your appeal', async () => {
+    const f = fakeApi()
+    f.governance.notices = [notice({ id: 9, kind: 'appeal_reversed', canAppeal: false, read: true, sameModerator: true })]
+    renderApp('/app/notices', f.api)
+    expect((await screen.findByTestId('same-moderator')).textContent).toMatch(/moderator who made the original decision reviewed your appeal/)
+  })
+
+  it('a serious violation can be acted on at once, with a required reason', async () => {
+    const f = fakeApi('me', { moderator: true })
+    const p1 = f.seedPost('c1', 'Threatening post')
+    const r = f.seedReport({ reporter: 'c3', targetType: 'post', targetId: p1, owner: 'c1', reason: 'sexual', details: null, snapshot: { body: 'x', author_username: 'creator_1', author_display_name: 'Creator 1' } })
+    f.governance.record = { username: 'creator_1', displayName: 'Creator 1', standing: null, hiddenContent: 0, enforcements: [] }
+    renderApp(`/app/moderation/${r}`, f.api)
+    await screen.findByTestId('member-record')
+    fireEvent.click(screen.getByRole('button', { name: 'Suspension' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Serious violation: act now/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Give a suspension' }))
+    expect(await screen.findByText('Write a note first.')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/Note for the record \(optional, never shown to the member\)/), { target: { value: 'Explicit images sent to a minor.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Give a suspension' }))
+    await waitFor(() => expect(f.governance.enforced[0]).toMatchObject({ level: 'suspension', immediate: true, note: 'Explicit images sent to a minor.' }))
   })
 })

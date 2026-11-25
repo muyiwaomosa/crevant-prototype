@@ -204,6 +204,10 @@ begin
   if to_regclass('social.blocks') is not null then
     expected := expected || governance;
   end if;
+  -- Governance refinements (20261207000000): app_mod_enforce gains p_immediate.
+  if to_regprocedure('ops.other_moderator_available(uuid, uuid)') is not null then
+    expected := array_replace(expected, 'public.app_mod_enforce(uuid,text,text,uuid,integer,text)', 'public.app_mod_enforce(uuid,text,text,uuid,integer,text,boolean)');
+  end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
   from pg_catalog.pg_proc p

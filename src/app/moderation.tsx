@@ -500,6 +500,7 @@ export function MemberActionsPanel({ memberId, reportId, defaultReason }: { memb
   const [reason, setReason] = useState<ReportReason>(defaultReason)
   const [days, setDays] = useState('7')
   const [note, setNote] = useState('')
+  const [immediate, setImmediate] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [done, setDone] = useState<string | null>(null)
@@ -523,9 +524,14 @@ export function MemberActionsPanel({ memberId, reportId, defaultReason }: { memb
     setError(null)
     setDone(null)
     try {
-      await api.modEnforce(memberId, level, reason, reportId, level === 'warning' ? null : dayCount, note)
+      if (immediate && !note.trim()) {
+        setError(new AppApiError('note_required'))
+        return
+      }
+      await api.modEnforce(memberId, level, reason, reportId, level === 'warning' ? null : dayCount, note, immediate && level !== 'warning')
       setDone(`${LEVEL_TEXT[level]} recorded. @${record!.username} has been notified.`)
       setNote('')
+      setImmediate(false)
       await load()
     } catch (e) {
       setError(e)
@@ -599,6 +605,14 @@ export function MemberActionsPanel({ memberId, reportId, defaultReason }: { memb
         <p className="mt-2 text-[13px] text-ink-500">
           One step at a time: a warning before a restriction, a restriction before a suspension. Threats, self-harm and hate can go straight to any step.
         </p>
+        {level !== 'warning' && (
+          <label className="mt-3 flex items-start gap-3 text-sm text-ink-800">
+            <input type="checkbox" checked={immediate} onChange={(e) => setImmediate(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-600" />
+            <span>
+              <span className="font-semibold">Serious violation: act now.</span> Skips the earlier steps. Say why in the note; it's recorded.
+            </span>
+          </label>
+        )}
       </fieldset>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm font-semibold text-ink-800">
@@ -677,6 +691,10 @@ export function ModerationAppealsPage() {
   if (!moderator) return <NotModerator />
 
   async function decide(a: ModAppeal, reverse: boolean) {
+    if (a.decidedOriginal && !(notes[a.id] ?? '').trim()) {
+      setError(new AppApiError('note_required'))
+      return
+    }
     setBusy(a.id)
     setError(null)
     try {
@@ -731,7 +749,15 @@ export function ModerationAppealsPage() {
                 <p className="whitespace-pre-wrap text-[15px] text-ink-900">{a.body}</p>
                 {a.status === 'open' ? (
                   <>
-                    {a.decidedOriginal && <p className="text-sm font-semibold text-[#6b4300]">You took the original action. Another moderator should decide this one.</p>}
+                    {a.decidedOriginal && a.anotherModeratorAvailable && (
+                      <p className="text-sm font-semibold text-[#6b4300]">You took the original action. Another moderator should decide this one.</p>
+                    )}
+                    {a.decidedOriginal && !a.anotherModeratorAvailable && (
+                      <p className="text-sm font-semibold text-[#6b4300]" data-testid="sole-moderator">
+                        You took the original action and no other moderator is available, so you may decide it. This is recorded as a conflict of interest: write
+                        your reason, and the member is told the same moderator reviewed it.
+                      </p>
+                    )}
                     <textarea
                       aria-label="Decision note (optional, never shown to the member)"
                       placeholder="Decision note (optional, never shown to the member)"
@@ -741,16 +767,19 @@ export function ModerationAppealsPage() {
                       className="block w-full resize-none rounded-2xl border border-ink-200 bg-white px-4 py-3 text-base text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
                     />
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" disabled={busy === a.id} onClick={() => decide(a, true)} className={buttonClass('primary', 'sm')}>
+                      <button type="button" disabled={busy === a.id || (a.decidedOriginal && a.anotherModeratorAvailable)} onClick={() => decide(a, true)} className={buttonClass('primary', 'sm')}>
                         Reverse
                       </button>
-                      <button type="button" disabled={busy === a.id} onClick={() => decide(a, false)} className={buttonClass('secondary', 'sm')}>
+                      <button type="button" disabled={busy === a.id || (a.decidedOriginal && a.anotherModeratorAvailable)} onClick={() => decide(a, false)} className={buttonClass('secondary', 'sm')}>
                         Keep the decision
                       </button>
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm font-semibold text-ink-800">{a.status === 'reversed' ? 'Reversed' : 'Decision kept'}</p>
+                  <p className="text-sm font-semibold text-ink-800">
+                    {a.status === 'reversed' ? 'Reversed' : 'Decision kept'}
+                    {a.sameModerator ? ' · decided by the original moderator (no other available)' : ''}
+                  </p>
                 )}
               </Card>
             </li>
