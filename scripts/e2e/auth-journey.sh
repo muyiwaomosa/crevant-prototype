@@ -68,3 +68,9 @@ APP_URL="http://127.0.0.1:$APP_PORT" node e2e/rewards-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/advertising-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/intelligence-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/video-journey.e2e.cjs
+# The four stakeholder journeys (creator, consumer, advertiser, founder): each one continuous story
+# through the real UI across every business engine, after the feature journeys above.
+APP_URL="http://127.0.0.1:$APP_PORT" node e2e/stakeholder-creator.e2e.cjs
+APP_URL="http://127.0.0.1:$APP_PORT" node e2e/stakeholder-consumer.e2e.cjs
+APP_URL="http://127.0.0.1:$APP_PORT" node e2e/stakeholder-advertiser.e2e.cjs
+APP_URL="http://127.0.0.1:$APP_PORT" node e2e/stakeholder-founder.e2e.cjs
