@@ -1,4 +1,6 @@
-// Loads Cloudflare Turnstile only when the waitlist form is switched on.
+// Loads Cloudflare Turnstile only when the waitlist form is switched on, or on
+// the member app's sign-up, sign-in and reset pages when a site key is set
+// (src/auth/captcha.tsx, action 'auth').
 // vercel.json's Content Security Policy allows https://challenges.cloudflare.com
 // in script-src and frame-src for this. Nothing here runs while the form is off.
 
@@ -20,6 +22,7 @@ export type MountTurnstile = (
   el: HTMLElement,
   siteKey: string,
   onToken: (token: string | null) => void,
+  action?: string,
 ) => Promise<TurnstileWidget>
 
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
@@ -46,11 +49,11 @@ function loadScript(): Promise<TurnstileApi> {
   return loading
 }
 
-export const mountTurnstile: MountTurnstile = async (el, siteKey, onToken) => {
+export const mountTurnstile: MountTurnstile = async (el, siteKey, onToken, action = TURNSTILE_ACTION) => {
   const api = await loadScript()
   const id = api.render(el, {
     sitekey: siteKey,
-    action: TURNSTILE_ACTION,
+    action,
     callback: (token: string) => onToken(token),
     'expired-callback': () => onToken(null),
     'error-callback': () => onToken(null),

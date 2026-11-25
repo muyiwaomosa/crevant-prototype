@@ -444,7 +444,7 @@ test('a failed deploy command is recorded with the remote state: unchanged, or c
 })
 
 test('unit: config.toml file references (Auth templates only; Windows separators; never outside supabase/)', () => {
-  assert.deepEqual(configFileRefs(readFileSync(join(SRC, 'supabase/config.toml'), 'utf8')), ['supabase/templates/invite.html', 'supabase/templates/recovery.html'])
+  assert.deepEqual(configFileRefs(readFileSync(join(SRC, 'supabase/config.toml'), 'utf8')), ['supabase/templates/confirmation.html', 'supabase/templates/invite.html', 'supabase/templates/recovery.html'])
   assert.deepEqual(configFileRefs('# content_path = "./supabase/templates/c.html"\n[auth.email.template.invite]\ncontent_path = "./supabase/templates/a.html" # note'), ['supabase/templates/a.html'])
   assert.deepEqual(configFileRefs('content_path = "supabase\\\\templates\\\\w.html"\r\ncontent_path = "supabase\\templates\\w.html"'), ['supabase/templates/w.html'])
   assert.deepEqual(configFileRefs('authorization_url_path = "/oauth/consent"\nsql_paths = ["./seed.sql"]'), [], 'URL paths and seed globs are not deploy files')

@@ -82,6 +82,17 @@ declare
     'public.app_photo_upload_begin()',
     'public.app_post_photos(uuid[])'
   ];
+  -- Foundation v2 (20261130000000), once applied.
+  foundation text[] := array[
+    'public.app_attest_adult(text)',
+    'public.app_claim_access(text,boolean,text)',
+    'public.app_feed_page(timestamp with time zone,uuid,integer,text)',
+    'public.app_founder_create_invitation_link(text,integer,integer)',
+    'public.app_founder_registration()',
+    'public.app_founder_set_registration(boolean,integer,integer,integer,text)',
+    'public.app_member_posts_page(uuid,timestamp with time zone,uuid,integer)',
+    'public.app_my_referral_link()'
+  ];
   actual text[];
   extra text[];
   missing text[];
@@ -101,6 +112,9 @@ begin
   end if;
   if to_regclass('social.post_media') is not null then
     expected := expected || photos;
+  end if;
+  if to_regclass('ops.registrations') is not null then
+    expected := expected || foundation;
   end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
@@ -160,6 +174,17 @@ begin
     if r.proname in ('app_me', 'app_set_profile') then
       if position('social.current_access()' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': does not check social.current_access()');
+      end if;
+    elsif r.proname = 'app_attest_adult' then
+      -- Foundation v2 (20261130000000): the caller's own adult confirmation, active membership required.
+      if position('auth.uid()' in r.prosrc) = 0 or position('ops.member_access_active(v_uid)' in r.prosrc) = 0 then
+        bad := bad || (r.proname || ': does not require the caller''s active membership');
+      end if;
+    elsif r.proname = 'app_claim_access' then
+      -- Foundation v2: membership only through a verified email, the adult confirmation and the registration check.
+      if position('auth.uid()' in r.prosrc) = 0 or position('ops.registration_check(v_code)' in r.prosrc) = 0
+         or position('email_confirmed_at is null' in r.prosrc) = 0 or position('p_adult_attested is not true' in r.prosrc) = 0 then
+        bad := bad || (r.proname || ': does not claim only through the registration check');
       end if;
     elsif r.proname like 'app\_mod\_%' then
       -- Moderators only: membership AND an active moderator row.

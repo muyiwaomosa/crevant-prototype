@@ -82,8 +82,11 @@ const signIn = (email, password) => call('/auth/v1/token?grant_type=password', {
 {
   const now = (await call('/auth/v1/settings')).json
   check('Auth settings are identical before and after the migration', JSON.stringify(now) === JSON.stringify(SETTINGS_BEFORE))
-  check('public sign-up is still disabled, email login on, confirmation required',
-    now.disable_signup === true && now.external?.email === true && now.mailer_autoconfirm === false)
+  // Sign-up is on at the Auth level since 20261130000000, gated by the account
+  // creation hook (section 3 proves a sign-up without a valid link is refused).
+  check('email login on, confirmation required, sign-up gated by the account creation hook',
+    now.disable_signup === false && now.external?.email === true && now.mailer_autoconfirm === false
+      && sql("select has_function_privilege('supabase_auth_admin', 'public.hook_before_user_created(jsonb)', 'EXECUTE')") === 't')
 }
 
 // 2. Backfill and the pre-migration invitee.
@@ -98,13 +101,18 @@ check('every confirmed identity has a profile',
   check('confirming creates their profile (trigger under the Auth role)', profileCount(PRE_INVITED_ID) === 1)
 }
 
-// 3. Public sign-up stays refused and creates nothing.
+// 3. Sign-up without a valid registration link is refused and creates nothing
+//    (20261130000000: the account creation hook; Auth sign-up itself is on).
 {
   const email = `signup-${RUN}@example.test`
-  const r = await call('/auth/v1/signup', { method: 'POST', body: { email, password: 'Correct-Horse-42-battery' } })
-  check('direct sign-up is refused', r.status === 422 && r.json?.error_code === 'signup_disabled', `${r.status} ${r.json?.error_code}`)
+  const hookOn = sql("select to_regprocedure('public.hook_before_user_created(jsonb)') is not null") === 't'
+  const r = await call('/auth/v1/signup', { method: 'POST', body: { email, password: 'Correct-Horse-42-battery', data: { adult_attested: true, registration_code: '0123456789abcdef' } } })
+  if (hookOn) check('sign-up with an unknown registration code is refused by the account creation hook', r.status === 403 && /not valid/.test(r.json?.msg ?? ''), `${r.status} ${r.json?.msg}`)
+  else check('direct sign-up is refused', r.status === 422 && r.json?.error_code === 'signup_disabled', `${r.status} ${r.json?.error_code}`)
   check('refused sign-up created no identity or profile', sql(`select count(*) from auth.users where email = '${email}'`) === '0')
 }
+// Founder email invitations are recorded first (ops.invitations); the hook lets them through.
+const recordInvitation = (email) => sql(`insert into ops.invitations (email, source, campaign, expires_at) values ('${email}', 'founder', 'integration', now() + interval '7 days')`)
 
 // 4. Invite, confirm, repeat, set password, sign in.
 const PASSWORD = 'Correct-Horse-42-battery'
@@ -112,6 +120,7 @@ const emailA = `alice-${RUN}@example.test`
 const emailB = `bob-${RUN}@example.test`
 let A, B, tokenA
 {
+  recordInvitation(emailA)
   const inv = await admin('/auth/v1/invite', { method: 'POST', body: { email: emailA } })
   A = inv.json?.id
   check('server-side invite works with sign-up disabled', inv.status === 200 && !!A, String(inv.status))
@@ -140,6 +149,7 @@ let A, B, tokenA
   const usersBefore = sql('select count(*) from auth.users')
   const profilesBefore = sql('select count(*) from public.profiles')
   const emailC = `carol-${RUN}@example.test`
+  recordInvitation(emailC)
   const inv = await admin('/auth/v1/invite', { method: 'POST', body: { email: emailC } })
   const C = inv.json?.id
   const hash = await inviteLink(emailC)

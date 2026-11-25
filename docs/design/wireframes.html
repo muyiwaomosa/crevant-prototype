@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splitpost Wireframes</title>
+<!-- SP-DESIGN-001 functional wireframes (structure only; visual design is SP-DESIGN-002 in docs/design/hifi). Static wireframes for founder review; sample names and numbers are illustrative only. -->
+<style>
+:root{
+  --paper:#faf7f1;--card:#fff;--ink-900:#13191b;--ink-700:#333b3e;--ink-500:#5a666a;--ink-300:#aab2b5;--ink-100:#e7e9e9;--ink-50:#f4f5f5;
+  --brand-50:#eef2fb;--brand-100:#dce4f6;--brand-500:#3156b5;--brand-600:#2447a6;--brand-800:#172f70;
+  --spark-50:#fef4ec;--spark-300:#f6b888;--spark-500:#b35a22;--mint:#a8d9cf;--mint-50:#e7f4f1;--heart:#e0483a;
+  --r:14px;--font:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--display:Archivo,"Arial Narrow",Inter,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e9e5dc;font-family:var(--font);color:var(--ink-900)}
+.board{padding:32px;display:flex;flex-direction:column;gap:28px}
+.row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+h1{font-family:var(--display);font-size:28px;margin:0}
+h2.sec{font-family:var(--display);font-size:20px;margin:8px 0 0}
+.note{font-size:13px;color:var(--ink-500);max-width:900px;line-height:1.5}
+.frame{width:390px}
+.cap{font-size:13px;font-weight:600;color:var(--ink-700);margin:0 0 8px}
+.phone{width:390px;height:800px;background:var(--paper);border-radius:36px;border:10px solid #1c2224;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.top{padding:14px 16px 0;background:var(--paper)}
+.brandbar{display:flex;align-items:center;justify-content:space-between;height:36px}
+.logo{font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.3px;color:var(--brand-600)}
+.logo b{color:var(--spark-500)}
+.icon{width:30px;height:30px;border-radius:50%;background:var(--ink-100)}
+.faces{display:flex;gap:6px;margin:10px 0 0;border-bottom:1px solid var(--ink-100)}
+.face{flex:1;text-align:center;font-size:13.5px;font-weight:600;color:var(--ink-500);padding:10px 4px 9px;border-bottom:3px solid transparent}
+.face.on{color:var(--brand-600);border-color:var(--brand-600)}
+.dots{display:flex;justify-content:center;gap:5px;padding:6px 0 2px}
+.dots i{width:6px;height:6px;border-radius:3px;background:var(--ink-300)}.dots i.on{width:16px;background:var(--brand-600)}
+.body{flex:1;overflow:hidden;padding:8px 16px 0}
+.nav{height:70px;border-top:1px solid var(--ink-100);background:#fff;display:flex;align-items:center;justify-content:space-around;padding-bottom:8px}
+.nav div{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--ink-500);font-weight:600}
+.nav div i{width:22px;height:22px;border-radius:6px;background:var(--ink-300);display:block}
+.nav div.on{color:var(--brand-600)}.nav div.on i{background:var(--brand-600)}
+.nav div.create i{width:40px;height:40px;border-radius:14px;background:var(--brand-600)}
+.group{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--spark-500);margin:10px 0 6px;display:flex;justify-content:space-between}
+.group span{color:var(--ink-500);text-transform:none;letter-spacing:0;font-weight:500}
+.card{background:var(--card);border-radius:var(--r);border:1px solid var(--ink-100);padding:12px;margin-bottom:10px}
+.ph{display:flex;gap:10px;align-items:center}
+.av{width:38px;height:38px;border-radius:50%;background:var(--brand-100);flex:none;display:grid;place-items:center;font-weight:700;color:var(--brand-600);font-size:13px}
+.nm{font-weight:700;font-size:14px}.meta{font-size:12px;color:var(--ink-500)}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;margin-left:4px;vertical-align:1px}
+.b-clique{background:var(--spark-50);color:var(--spark-500)}.b-sp{background:var(--ink-50);color:var(--ink-700);border:1px solid var(--ink-100)}
+.b-sim{background:var(--mint-50);color:#1f6b5c}.b-topic{background:var(--brand-50);color:var(--brand-600)}
+.txt{font-size:14px;line-height:1.45;margin:8px 0}
+.media{height:150px;border-radius:10px;background:linear-gradient(135deg,var(--brand-100),var(--mint-50));display:grid;place-items:center;color:var(--ink-500);font-size:12px}
+.media.vid{background:linear-gradient(135deg,#2a3236,#4a565b);color:#fff}
+.acts{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-500);margin-top:8px}
+.repost{font-size:12px;color:var(--ink-500);margin-bottom:6px}
+.why{font-size:12px;color:var(--brand-600);background:var(--brand-50);border-radius:8px;padding:6px 8px;margin-top:8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.chip{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--ink-100);background:#fff;font-weight:600;color:var(--ink-700)}
+.chip.on{background:var(--brand-600);border-color:var(--brand-600);color:#fff}
+.search{height:40px;border-radius:12px;background:#fff;border:1px solid var(--ink-100);display:flex;align-items:center;padding:0 12px;color:var(--ink-300);font-size:14px;margin:4px 0 8px}
+.btn{display:inline-block;background:var(--brand-600);color:#fff;font-weight:700;font-size:13px;border-radius:10px;padding:8px 14px}
+.btn.sec{background:#fff;color:var(--brand-600);border:1px solid var(--brand-200,#b8c8ec)}
+.btn.full{display:block;text-align:center;padding:12px}
+.stat{background:#fff;border:1px solid var(--ink-100);border-radius:var(--r);padding:12px}
+.stat .k{font-size:12px;color:var(--ink-500);font-weight:600}.stat .v{font-family:var(--display);font-size:26px;font-weight:800;margin-top:2px}
+.stat .s{font-size:11.5px;color:var(--ink-500)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.hero{background:var(--brand-600);color:#fff;border-radius:18px;padding:16px;margin:4px 0 10px}
+.hero .k{opacity:.85;font-size:12.5px}.hero .v{font-family:var(--display);font-size:36px;font-weight:800}
+.hero .split{display:flex;gap:8px;margin-top:10px}.hero .split div{flex:1;background:rgba(255,255,255,.12);border-radius:10px;padding:8px;font-size:12px}
+.hero .split b{display:block;font-size:18px;font-family:var(--display)}
+.disc{font-size:11.5px;color:var(--ink-500);line-height:1.45;background:var(--mint-50);border-radius:10px;padding:8px 10px;margin-bottom:10px}
+.li{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--ink-100);font-size:13.5px}
+.li .pts{font-weight:700;color:var(--brand-600)}.li .pts.r{color:var(--spark-500)}
+.bar{height:8px;border-radius:4px;background:var(--ink-100);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--brand-500)}
+.spark{height:46px;margin-top:6px;background:linear-gradient(transparent 60%,var(--brand-50) 60%);border-bottom:2px solid var(--brand-500);clip-path:polygon(0 80%,15% 70%,30% 75%,45% 50%,60% 55%,75% 30%,90% 35%,100% 15%,100% 100%,0 100%)}
+.insight{font-size:12.5px;background:var(--spark-50);border-radius:10px;padding:8px 10px;margin-bottom:10px;color:var(--ink-700)}
+.field{background:#fff;border:1px solid var(--ink-100);border-radius:12px;padding:12px;font-size:14px;color:var(--ink-300);margin-bottom:10px}
+.prog{background:#fff;border:1px solid var(--ink-100);border-radius:12px;padding:10px 12px;font-size:12.5px;margin-bottom:10px}
+.desk{width:1200px;height:740px;background:var(--paper);border-radius:14px;border:1px solid #cfc9bc;overflow:hidden;display:flex}
+.side{width:220px;background:#fff;border-right:1px solid var(--ink-100);padding:20px 16px;display:flex;flex-direction:column;gap:6px}
+.side .it{padding:10px 12px;border-radius:10px;font-weight:600;font-size:14px;color:var(--ink-700);display:flex;gap:10px;align-items:center}
+.side .it i{width:18px;height:18px;border-radius:5px;background:var(--ink-300)}
+.side .it.on{background:var(--brand-50);color:var(--brand-600)}.side .it.on i{background:var(--brand-600)}
+.main{flex:1;padding:20px 28px;overflow:hidden}
+.flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.step{background:#fff;border:1px solid var(--ink-100);border-radius:10px;padding:8px 10px;font-size:12.5px;font-weight:600}
+.arrow{color:var(--ink-300);font-weight:700}
+.lane{display:flex;gap:12px;align-items:center;margin-bottom:10px}.lane .who{width:110px;font-weight:800;font-family:var(--display);color:var(--brand-600)}
+table.t{border-collapse:collapse;width:100%;font-size:13px;background:#fff;border-radius:12px;overflow:hidden}
+table.t td,table.t th{padding:9px 10px;border-bottom:1px solid var(--ink-100);text-align:left}
+table.t th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-500);background:var(--ink-50)}
+.site{width:1200px;background:var(--paper);border-radius:14px;border:1px solid #cfc9bc;overflow:hidden}
+.site .hdr{display:flex;justify-content:space-between;align-items:center;padding:18px 40px;background:#fff;border-bottom:1px solid var(--ink-100)}
+.site .heroL{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;padding:48px 40px;align-items:center}
+.site h3{font-family:var(--display);font-size:52px;line-height:1.02;margin:0;letter-spacing:-1px}
+.site h3 em{font-style:normal;color:var(--spark-500)}
+.sig{font-family:var(--display);font-weight:800;font-size:20px;color:var(--brand-600);margin:14px 0}
+.paths{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0 40px 40px}
+.path{background:#fff;border:1px solid var(--ink-100);border-radius:16px;padding:18px}
+.path h4{margin:0 0 6px;font-family:var(--display);font-size:20px}
+.shot{height:330px;border-radius:24px;border:8px solid #1c2224;background:var(--paper);overflow:hidden;padding:10px}
+.legend{font-size:12px;color:var(--ink-500);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="board" id="board">
+
+<section id="s-intro">
+  <h1>Splitpost SP-DESIGN-001: wireframes for founder review</h1>
+  <p class="note">Static previews of the proposed information architecture and multi-face navigation. Five primary destinations; swipeable faces inside Home, Discover, My Split and Profile, always reachable by tapping the labels too. Brand colours and type come from the existing design tokens. All names and numbers are sample data, and every simulated amount is labelled.</p>
+</section>
+
+<section id="s-core">
+<h2 class="sec">1. Core mobile screens (390 px)</h2>
+<div class="row">
+
+  <div class="frame"><p class="cap">Home · face 1 of 3 "Clique first" (default)</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">split<b>post</b></span><span class="icon"></span></div>
+      <div class="faces"><div class="face on">Clique first</div><div class="face">My Clique</div><div class="face">Following</div></div>
+      <div class="dots"><i class="on"></i><i></i><i></i></div></div>
+    <div class="body">
+      <div class="group">From your Clique <span>3 new</span></div>
+      <div class="card"><div class="ph"><div class="av">AO</div><div><div class="nm">Ada Okafor <span class="badge b-clique">Clique</span></div><div class="meta">12 min · Food &amp; cooking</div></div></div>
+        <div class="txt">One-pan jollof for four in 40 minutes. Full method in the video.</div><div class="media vid">▶ 3:42 · 720p</div>
+        <div class="acts"><span>♥ 48</span><span>💬 12</span><span>↻ Repost</span><span>↗ Share</span><span>☆ Save</span></div></div>
+      <div class="group">Creators you follow <span>newest first</span></div>
+      <div class="card"><div class="repost">↻ Sam reposted · original by Mei Lin</div><div class="ph"><div class="av">ML</div><div><div class="nm">Mei Lin</div><div class="meta">1 h · Tech</div></div></div>
+        <div class="txt">I tested five free note apps for a month. This is the one I kept.</div></div>
+    </div>
+    <div class="nav"><div class="on"><i></i>Home</div><div><i></i>Discover</div><div class="create"><i></i></div><div><i></i>My Split</div><div><i></i>Profile</div></div>
+  </div></div>
+
+  <div class="frame"><p class="cap">Discover · face 1 of 3 "Relevant"</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">split<b>post</b></span><span class="icon"></span></div>
+      <div class="search">Search creators, posts and topics</div>
+      <div class="faces"><div class="face on">Relevant</div><div class="face">Creators</div><div class="face">Content</div></div>
+      <div class="dots"><i class="on"></i><i></i><i></i></div></div>
+    <div class="body">
+      <div class="chips"><span class="chip on">All</span><span class="chip">Food</span><span class="chip">Money</span><span class="chip">Fitness</span><span class="chip">+ Edit</span></div>
+      <div class="card"><div class="ph"><div class="av">KA</div><div style="flex:1"><div class="nm">Kwame Asante <span class="badge b-topic">New creator</span></div><div class="meta">Art &amp; design · 84 followers</div></div><span class="btn">Follow</span></div>
+        <div class="txt">Hand-stitched leather goods, start to finish.</div><div class="why">Why you're seeing this: you chose Art &amp; design. New creators get a fair share of spots.</div></div>
+      <div class="card"><div class="ph"><div class="av">RJ</div><div><div class="nm">Rosa Jiménez</div><div class="meta">Post · Food &amp; cooking</div></div></div><div class="media">photo</div>
+        <div class="why">Because you like Food &amp; cooking</div></div>
+    </div>
+    <div class="nav"><div><i></i>Home</div><div class="on"><i></i>Discover</div><div class="create"><i></i></div><div><i></i>My Split</div><div><i></i>Profile</div></div>
+  </div></div>
+
+  <div class="frame"><p class="cap">Create · one simple composer (no faces)</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">Create</span><span class="btn">Post</span></div></div>
+    <div class="body">
+      <div class="field" style="height:120px">Share something with the people who follow you…</div>
+      <div class="chips"><span class="chip">＋ Photo</span><span class="chip on">＋ Video</span><span class="chip">Topic: Food &amp; cooking ▾</span></div>
+            <div class="prog"><b>Uploading</b> · 74 MB of 96 MB<div class="bar"><i style="width:77%"></i></div><div class="meta" style="margin-top:6px">H.264 · 720p · 3 min 40 s · supported format</div></div>
+      <div class="disc">Videos: up to 5 minutes. MP4 or MOV files recorded in H.264 are supported. If a file can't be used, we'll explain why before you post.</div>
+      <div class="meta">Posts with a topic can appear in Discover. Without a topic, your followers still see it in Home.</div>
+    </div>
+    <div class="nav"><div><i></i>Home</div><div><i></i>Discover</div><div class="create on"><i></i></div><div><i></i>My Split</div><div><i></i>Profile</div></div>
+  </div></div>
+
+  <div class="frame"><p class="cap">My Split · face 1 of 3 "Overview"</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">My Split</span><span class="badge b-sim">Pilot · simulated</span></div>
+      <div class="faces"><div class="face on">Overview</div><div class="face">History</div><div class="face">Opportunities</div></div>
+      <div class="dots"><i class="on"></i><i></i><i></i></div></div>
+    <div class="body">
+      <div class="hero"><div class="k">Connection Points</div><div class="v">1,240</div>
+        <div class="split"><div><b>1,040</b>recognized</div><div><b>200</b>redemption eligible</div></div></div>
+      <div class="stat" style="margin-bottom:10px"><div class="k">Estimated value of eligible points <span class="badge b-sim">Simulated</span></div><div class="v">$3.20</div><div class="s">Fan pool estimate today. Changes with pool size and points outstanding. Not cash, not guaranteed.</div></div>
+      <div class="grid2"><div class="stat"><div class="k">Creators you support</div><div class="v">6</div><div class="s">2 in your Clique</div></div><div class="stat"><div class="k">Qualified referrals</div><div class="v">2</div><div class="s">1 awaiting follow</div></div></div>
+      <div class="disc">During the pilot all rewards are simulated. No money is paid out. How it works ›</div>
+    </div>
+    <div class="nav"><div><i></i>Home</div><div><i></i>Discover</div><div class="create"><i></i></div><div class="on"><i></i>My Split</div><div><i></i>Profile</div></div>
+  </div></div>
+
+  <div class="frame"><p class="cap">Profile (creator view) · face 2 of 4 "Attention"</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">Ada Okafor</span><span class="icon"></span></div>
+      <div class="faces"><div class="face">Profile</div><div class="face on">Attention</div><div class="face">Retention</div><div class="face">Money</div></div>
+      <div class="dots"><i></i><i class="on"></i><i></i><i></i></div></div>
+    <div class="body">
+      <div class="meta" style="margin:4px 0 8px">Last 7 days · only you can see this</div>
+      <div class="grid2"><div class="stat"><div class="k">Distribution coverage</div><div class="v">100%</div><div class="s">posts available to all followers</div></div><div class="stat"><div class="k">Actual reach</div><div class="v">61%</div><div class="s">of followers saw a post</div></div></div>
+      <div class="stat" style="margin-bottom:10px"><div class="k">New followers by source</div><div class="spark"></div><div class="s">Discover 14 · Shared links 9 · Profile 4</div></div>
+      <div class="insight">Your Clique comments 3× more than other followers. Ask them a question in your next post.</div>
+      <div class="grid2"><div class="stat"><div class="k">Active Supporters</div><div class="v">23</div></div><div class="stat"><div class="k">Clique Connections</div><div class="v">41</div></div></div>
+    </div>
+    <div class="nav"><div><i></i>Home</div><div><i></i>Discover</div><div class="create"><i></i></div><div><i></i>My Split</div><div class="on"><i></i>Profile</div></div>
+  </div></div>
+
+  <div class="frame"><p class="cap">Profile (creator view) · face 4 of 4 "Money"</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">Ada Okafor</span><span class="icon"></span></div>
+      <div class="faces"><div class="face">Profile</div><div class="face">Attention</div><div class="face">Retention</div><div class="face on">Money</div></div>
+      <div class="dots"><i></i><i></i><i></i><i class="on"></i></div></div>
+    <div class="body">
+      <div class="stat" style="margin-bottom:10px"><div class="k">Simulated earnings this month <span class="badge b-sim">Simulated</span></div><div class="v">$41.60</div><div class="s">Your 40% share of ads shown with your posts. Not paid during the pilot.</div></div>
+      <div class="li"><span>Campaign · Kitchen brand<br><span class="meta">3 posts · 2,140 impressions</span></span><span class="pts">$28.00</span></div>
+      <div class="li"><span>Campaign · Grocery app<br><span class="meta">1 post · 960 impressions</span></span><span class="pts">$13.60</span></div>
+      <div class="stat" style="margin:10px 0"><div class="k">Support Intent <span class="badge b-sp">Non-binding</span></div><div class="v">12 people</div><div class="s">said they'd support you. Not payments, not revenue.</div></div>
+    </div>
+    <div class="nav"><div><i></i>Home</div><div><i></i>Discover</div><div class="create"><i></i></div><div><i></i>My Split</div><div class="on"><i></i>Profile</div></div>
+  </div></div>
+</div>
+</section>
+
+<section id="s-more">
+<h2 class="sec">2. Faces, sponsored content, registration and empty states</h2>
+<div class="row">
+  <div class="frame"><p class="cap">Home · face 2 "My Clique" with sponsored card</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">split<b>post</b></span><span class="icon"></span></div>
+      <div class="faces"><div class="face">Clique first</div><div class="face on">My Clique</div><div class="face">Following</div></div><div class="dots"><i></i><i class="on"></i><i></i></div></div>
+    <div class="body">
+      <div class="chips"><span class="chip">Manage Clique (8)</span></div>
+      <div class="card"><div class="ph"><div class="av">AO</div><div><div class="nm">Ada Okafor <span class="badge b-clique">Clique</span></div><div class="meta">12 min</div></div></div><div class="txt">Thank you for 1,000 followers. Ask me anything below.</div></div>
+      <div class="card" style="border-color:var(--spark-300)"><div class="meta"><b>Sponsored</b> · shown with Ada's post · Why this ad?</div><div class="media" style="height:110px;margin-top:6px">ad creative</div><div class="acts"><span>Kitchen brand</span><span class="btn">Learn more</span></div></div>
+    </div>
+    <div class="nav"><div class="on"><i></i>Home</div><div><i></i>Discover</div><div class="create"><i></i></div><div><i></i>My Split</div><div><i></i>Profile</div></div>
+  </div></div>
+
+  <div class="frame"><p class="cap">Public preview from a shared link (signed out)</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">split<b>post</b></span><span class="btn sec">Sign in</span></div></div>
+    <div class="body">
+      <div class="card"><div class="ph"><div class="av">AO</div><div><div class="nm">Ada Okafor</div><div class="meta">Food &amp; cooking</div></div></div><div class="txt">One-pan jollof for four in 40 minutes.</div><div class="media vid">▶ 3:42</div></div>
+      <div class="hero"><div class="k">Sam invited you to Splitpost</div><div style="font-family:var(--display);font-size:22px;font-weight:800;margin:4px 0">Don't just post. Get your split.</div><div style="font-size:12.5px;opacity:.9">A controlled pilot for adults (18+), joined through invitation and referral links.</div></div>
+      <span class="btn full">Join with this invitation</span>
+      <p class="meta" style="margin-top:8px">You'll verify your email and confirm you're 18 or older. Following Ada is your choice; we never follow anyone for you.</p>
+    </div>
+  </div></div>
+
+  <div class="frame"><p class="cap">Registration · eligibility step</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">Create your account</span><span class="meta">Step 2 of 3</span></div></div>
+    <div class="body">
+      <div class="field">Display name</div><div class="field">Username</div>
+      <div class="card"><b style="font-size:14px">☐ I am 18 or older</b><div class="meta" style="margin-top:4px">The pilot is for adults only. We record that you confirmed this.</div></div>
+      <div class="card"><b style="font-size:14px">☐ I agree to the Terms and Pilot Rules</b><div class="meta" style="margin-top:4px">Including how simulated rewards work. Privacy Notice ›</div></div>
+      <span class="btn full">Continue</span>
+      <div class="disc" style="margin-top:10px">Pilot places left today: shown only when limits apply. If the pilot is paused, you'll join the waitlist instead.</div>
+    </div>
+  </div></div>
+
+  <div class="frame"><p class="cap">Empty, loading and error states</p>
+  <div class="phone">
+    <div class="top"><div class="brandbar"><span class="logo">split<b>post</b></span><span class="icon"></span></div>
+      <div class="faces"><div class="face">Clique first</div><div class="face">My Clique</div><div class="face on">Following</div></div><div class="dots"><i></i><i></i><i class="on"></i></div></div>
+    <div class="body">
+      <div class="card" style="text-align:center;padding:24px"><div class="nm">Your Home starts with people you choose</div><p class="meta">Follow creators to see every post they share, newest first. Nobody is added for you.</p><span class="btn">Find creators</span></div>
+      <div class="card"><div class="ph"><div class="av" style="background:var(--ink-100)"></div><div style="flex:1"><div style="height:10px;background:var(--ink-100);border-radius:5px;width:60%"></div><div style="height:8px;background:var(--ink-50);border-radius:4px;width:40%;margin-top:6px"></div></div></div><div style="height:80px;background:var(--ink-50);border-radius:10px;margin-top:10px"></div></div>
+      <div class="card" style="border-color:#f1c7c2;background:#fff7f6"><b style="font-size:13.5px">Couldn't load new posts</b><div class="meta">You're offline. We'll try again when you reconnect.</div><span class="btn sec" style="margin-top:8px">Try again</span></div>
+    </div>
+    <div class="nav"><div class="on"><i></i>Home</div><div><i></i>Discover</div><div class="create"><i></i></div><div><i></i>My Split</div><div><i></i>Profile</div></div>
+  </div></div>
+</div>
+</section>
+
+<section id="s-desktop">
+<h2 class="sec">3. Desktop: Home and Control Center</h2>
+<div class="row">
+  <div><p class="cap">Desktop Home (left navigation, faces as tabs, same cards)</p>
+  <div class="desk">
+    <div class="side"><div class="logo" style="margin-bottom:16px">split<b>post</b></div><div class="it on"><i></i>Home</div><div class="it"><i></i>Discover</div><div class="it"><i></i>Create</div><div class="it"><i></i>My Split</div><div class="it"><i></i>Profile</div><div style="flex:1"></div><div class="it"><i></i>Send feedback</div></div>
+    <div class="main" style="display:grid;grid-template-columns:1fr 300px;gap:24px">
+      <div><div class="faces" style="margin:0 0 10px"><div class="face on">Clique first</div><div class="face">My Clique</div><div class="face">Following</div></div>
+        <div class="group">From your Clique <span>3 new</span></div>
+        <div class="card"><div class="ph"><div class="av">AO</div><div><div class="nm">Ada Okafor <span class="badge b-clique">Clique</span></div><div class="meta">12 min · Food &amp; cooking</div></div></div><div class="txt">One-pan jollof for four in 40 minutes.</div><div class="media vid" style="height:220px">▶ 3:42</div><div class="acts"><span>♥ 48</span><span>💬 12</span><span>↻ Repost</span><span>↗ Share</span><span>☆ Save</span></div></div>
+      </div>
+      <div><div class="stat" style="margin-bottom:12px"><div class="k">My Split</div><div class="v">1,240 CP</div><div class="s">200 redemption eligible · simulated</div></div><div class="stat"><div class="k">Your Clique</div><div class="li"><span>Ada Okafor<br><span class="meta">3 new posts</span></span></div><div class="li" style="border:0"><span>Mei Lin<br><span class="meta">All caught up</span></span></div></div></div>
+    </div>
+  </div></div>
+
+  <div><p class="cap">Control Center (founder and authorised operators only)</p>
+  <div class="desk">
+    <div class="side"><div class="logo" style="margin-bottom:16px">Control Center</div><div class="it on"><i></i>Overview</div><div class="it"><i></i>Members &amp; access</div><div class="it"><i></i>Moderation (4)</div><div class="it"><i></i>Appeals (1)</div><div class="it"><i></i>Referral review (2)</div><div class="it"><i></i>Campaigns</div><div class="it"><i></i>Economics</div><div class="it"><i></i>Feedback</div><div class="it"><i></i>Health</div><div class="it"><i></i>Audit log</div></div>
+    <div class="main">
+      <div style="display:flex;justify-content:space-between;align-items:center"><h1 style="font-size:22px">Ecosystem this week</h1><span><span class="badge b-sp">Actual</span><span class="badge b-sim">Simulated</span><span class="badge b-sp" style="background:#fff">Test excluded</span></span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0">
+        <div class="stat"><div class="k">Weekly Active Creator-Consumer Connections</div><div class="v">312</div><div class="s">▲ 18% vs last week</div></div>
+        <div class="stat"><div class="k">Activated members</div><div class="v">64%</div><div class="s">of new members, 7 days</div></div>
+        <div class="stat"><div class="k">Registration</div><div class="v">142 / 200</div><div class="s">pilot limit · Pause registration</div></div>
+        <div class="stat"><div class="k">Fan pool <span class="badge b-sim">Simulated</span></div><div class="v">$62.40</div><div class="s">reconciled ✓</div></div></div>
+      <table class="t"><tr><th>Queue</th><th>Open</th><th>Oldest</th><th>Action</th></tr>
+        <tr><td>Reports</td><td>4</td><td>3 h</td><td><span class="btn sec">Review</span></td></tr>
+        <tr><td>Flagged referrals</td><td>2</td><td>1 d</td><td><span class="btn sec">Review</span></td></tr>
+        <tr><td>Campaigns awaiting approval</td><td>1</td><td>5 h</td><td><span class="btn sec">Review</span></td></tr>
+        <tr><td>Data quality checks</td><td>0 failing</td><td>today 06:00</td><td><span class="btn sec">View</span></td></tr></table>
+    </div>
+  </div></div>
+</div>
+</section>
+
+<section id="s-journeys">
+<h2 class="sec">4. Stakeholder journeys and the multi-face map</h2>
+<div class="row"><div style="width:1200px;background:#fff;border-radius:14px;padding:22px;border:1px solid #cfc9bc">
+  <div class="lane"><div class="who">Creator</div><div class="flow"><span class="step">Register</span><span class="arrow">→</span><span class="step">Profile + topics</span><span class="arrow">→</span><span class="step">Create: text, photo, video</span><span class="arrow">→</span><span class="step">Discover (others)</span><span class="arrow">→</span><span class="step">Followers + Clique</span><span class="arrow">→</span><span class="step">Home delivers 100%</span><span class="arrow">→</span><span class="step">Profile: Attention · Retention · Money</span></div></div>
+  <div class="lane"><div class="who">Consumer</div><div class="flow"><span class="step">Shared link preview</span><span class="arrow">→</span><span class="step">Register 18+</span><span class="arrow">→</span><span class="step">Interests</span><span class="arrow">→</span><span class="step">Discover: Relevant</span><span class="arrow">→</span><span class="step">Follow · Clique</span><span class="arrow">→</span><span class="step">Home: Clique first</span><span class="arrow">→</span><span class="step">Engage · repost · share</span><span class="arrow">→</span><span class="step">My Split</span></div></div>
+  <div class="lane"><div class="who">Advertiser</div><div class="flow"><span class="step">Inquiry on website</span><span class="arrow">→</span><span class="step">Objective + audience agreed</span><span class="arrow">→</span><span class="step">Creative approved (Control Center)</span><span class="arrow">→</span><span class="step">Sponsored cards in Home/Discover</span><span class="arrow">→</span><span class="step">Measured + reconciled</span><span class="arrow">→</span><span class="step">Campaign report</span></div></div>
+  <div class="lane"><div class="who">Splitpost</div><div class="flow"><span class="step">Access limits</span><span class="arrow">→</span><span class="step">Health + NSM</span><span class="arrow">→</span><span class="step">Moderation · appeals</span><span class="arrow">→</span><span class="step">Referral review</span><span class="arrow">→</span><span class="step">Economics reconciled</span><span class="arrow">→</span><span class="step">Investor evidence</span></div></div>
+  <table class="t" style="margin-top:14px"><tr><th>Destination</th><th>Face 1 (default)</th><th>Face 2</th><th>Face 3</th><th>Face 4</th></tr>
+    <tr><td><b>Home</b></td><td>Clique first (Clique group, then all followed, chronological)</td><td>My Clique</td><td>Following</td><td></td></tr>
+    <tr><td><b>Discover</b></td><td>Relevant (creators and posts, with reasons)</td><td>Creators</td><td>Content</td><td></td></tr>
+    <tr><td><b>Create</b></td><td colspan="4">Single composer, no faces</td></tr>
+    <tr><td><b>My Split</b></td><td>Overview</td><td>History</td><td>Opportunities</td><td></td></tr>
+    <tr><td><b>Profile</b></td><td>Profile and content (everyone)</td><td>Attention (owner only)</td><td>Retention (owner only)</td><td>Money (owner only)</td></tr></table>
+  <p class="legend">Visitors to someone else's profile see only face 1, with no dots or swipe. Faces change by swipe, tap on the label, or arrow keys; the URL records the face so Back and shared links work.</p>
+</div></div>
+</section>
+
+<section id="s-site">
+<h2 class="sec">5. Public website: hero and acquisition paths (evolution, not rebuild)</h2>
+<div class="site">
+  <div class="hdr"><span class="logo">split<b>post</b></span><span><span class="meta" style="margin-right:18px">Creators · Members · Advertisers</span><span class="btn sec" style="margin-right:8px">Sign in</span><span class="btn">Join the pilot</span></span></div>
+  <div class="heroL"><div><h3>You Create The Post.<br><em>You Deserve a Split.</em></h3><div class="sig">Don't just post. Get your split.</div>
+    <p style="font-size:17px;line-height:1.5;color:var(--ink-700);max-width:520px">A social platform where everything you post is available to everyone who follows you, your community is recognised for helping you grow, and ad revenue is shared.</p>
+    <p class="meta">A controlled pilot for adults 18+, joined through invitation and referral links or the waitlist. During the pilot, rewards and earnings are simulated: nothing is paid out and nothing is guaranteed.</p></div>
+    <div style="display:flex;gap:16px;justify-content:center"><div class="shot" style="width:200px"><div class="group">From your Clique</div><div class="card"><div class="nm" style="font-size:12px">Ada Okafor</div><div class="media" style="height:70px"></div></div></div><div class="shot" style="width:200px;margin-top:40px"><div class="hero" style="padding:10px"><div class="k">Connection Points</div><div class="v" style="font-size:24px">1,240</div></div><div class="disc">Simulated during the pilot</div></div></div></div>
+  <div class="paths"><div class="path"><h4>For creators</h4><p class="meta">Your posts are available to everyone who follows you; see what works and get 40% of ads shown with your posts (simulated in the pilot).</p><span class="btn">Apply as a creator</span></div>
+    <div class="path"><h4>For members</h4><p class="meta">Follow people you value, build your Clique, and earn Connection Points for helping creators grow.</p><span class="btn">Join the waitlist</span></div>
+    <div class="path"><h4>For advertisers</h4><p class="meta">Managed test campaigns placed beside relevant creators, with clear reporting.</p><span class="btn sec">Talk to us</span></div></div>
+</div>
+<p class="legend">Real app screenshots replace these mock phones once the internal demonstration build exists (December 7). Approved headline and copy are kept; the signature line is added.</p>
+</section>
+
+</div>
+</body>
+</html>

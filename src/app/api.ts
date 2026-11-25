@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { forgetRegistrationCode, storedRegistrationCode } from './registration'
 
 /**
  * The members area's data layer (Release 1: the social core).
@@ -152,13 +153,27 @@ export type ViewBasis = 'visible' | 'played'
  * Only 'active' may use the member app; the database enforces it for every
  * member function, so this is for explaining, not for protecting.
  */
-export type AccessStatus = 'active' | 'none' | 'revoked' | 'expired'
+export type AccessStatus = 'active' | 'none' | 'revoked' | 'expired' | 'attestation_required'
 /**
  * preGate: true only when the database has no membership gate yet (before
  * 20261122000000 is applied), so every signed-in account is a member exactly
  * as before. Never set for any other reason.
  */
-export type AccessState = { status: AccessStatus; expiresAt: string | null; preGate?: true }
+/**
+ * registration (foundation v2, 20261130000000) explains a 'none' state after
+ * the automatic claim through a registration link: why the account has no
+ * membership yet. 'retry' means the claim itself failed; the next load tries again.
+ */
+export type RegistrationOutcome = 'link_required' | 'not_confirmed' | 'invalid' | 'paused' | 'closed' | 'full' | 'referrer_limit' | 'retry'
+export type AccessState = { status: AccessStatus; expiresAt: string | null; preGate?: true; registration?: RegistrationOutcome }
+
+/** The wording version of the 18+ confirmation shown in the app and at registration. */
+export const ADULT_WORDING_VERSION = 'adult-v1'
+
+/** Where a page of posts ends: the next page starts strictly after it (20261130000000 pages on both). */
+export type PostCursor = { createdAt: string; id: string }
+/** Home faces: everyone followed (and your own posts), or only My Clique. */
+export type FeedFilter = 'all' | 'clique'
 
 /** The member's own profile row (Phase 1A own-row read), used to decide whether setup is needed. */
 export type OwnProfile = { id: string; createdAt: string; username: string | null; displayName: string | null }
@@ -246,12 +261,16 @@ export type FeedbackFilters = { category?: FeedbackCategory; status?: FeedbackSt
 export interface AppApi {
   /** The signed-in account's own pilot membership state (needs no membership itself). */
   accessState(): Promise<AccessState>
+  /** Confirms the signed-in member is 18 or older (once; needs active membership). */
+  attestAdult(): Promise<void>
+  /** The member's personal referral link code (created on first request), or null before 20261130000000. */
+  myReferralCode(): Promise<string | null>
   ownProfile(): Promise<OwnProfile | null>
   saveProfile(input: { username: string; displayName: string }): Promise<void>
   me(): Promise<Me>
-  feed(before?: string): Promise<Post[]>
+  feed(before?: PostCursor, filter?: FeedFilter): Promise<Post[]>
   member(username: string): Promise<Member | null>
-  memberPosts(memberId: string, before?: string): Promise<Post[]>
+  memberPosts(memberId: string, before?: PostCursor): Promise<Post[]>
   post(id: string): Promise<Post | null>
   comments(postId: string): Promise<Comment[]>
   /** Other members by name and (when the database has profile details) one interest, shared interests first. */
@@ -666,9 +685,54 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       }
       // An unexpected reply is never treated as access.
       const r = Array.isArray(data) ? (data[0] as { status?: unknown; expires_at?: unknown } | undefined) : undefined
-      const status = (['active', 'none', 'revoked', 'expired'] as const).find((s) => s === r?.status) ?? 'none'
-      const expiresAt = status === 'active' && typeof r?.expires_at === 'string' ? r.expires_at : null
-      return { status, expiresAt }
+      const status = (['active', 'none', 'revoked', 'expired', 'attestation_required'] as const).find((s) => s === r?.status) ?? 'none'
+      const expiresAt = (status === 'active' || status === 'attestation_required') && typeof r?.expires_at === 'string' ? r.expires_at : null
+      if (status !== 'none') return { status, expiresAt }
+      // Foundation v2 (20261130000000): an account with no membership at all
+      // claims it through the registration link it signed up with. The
+      // database grants it only with a verified email, a valid link within the
+      // limits, and the 18+ confirmation given at sign-up; it never reopens a
+      // revoked or expired membership. Idempotent: a failed claim is made again
+      // on the next load.
+      let meta: { registration_code?: unknown; adult_attested?: unknown } = {}
+      try {
+        const { data: auth } = await client.auth.getUser()
+        meta = (auth?.user?.user_metadata ?? {}) as typeof meta
+      } catch {
+        // Not readable now: the database falls back to the code stored with the account.
+      }
+      const code = typeof meta.registration_code === 'string' ? meta.registration_code : storedRegistrationCode()
+      const claim = await client.rpc('app_claim_access', {
+        p_code: code,
+        p_adult_attested: meta.adult_attested === true || meta.adult_attested === 'true',
+        p_wording_version: ADULT_WORDING_VERSION,
+      })
+      if (claim.error) {
+        // Before that migration there is nothing to claim: as before.
+        if (isMissingFunction(claim.error, 'app_claim_access')) return { status, expiresAt }
+        return { status, expiresAt, registration: 'retry' }
+      }
+      if (claim.data === 'active') {
+        forgetRegistrationCode()
+        return { status: 'active', expiresAt: null }
+      }
+      if (claim.data === 'revoked' || claim.data === 'expired') return { status: claim.data, expiresAt: null }
+      const outcomes: RegistrationOutcome[] = ['link_required', 'not_confirmed', 'invalid', 'paused', 'closed', 'full', 'referrer_limit']
+      const outcome = outcomes.find((o) => o === claim.data)
+      // An adult_required answer means sign-up skipped the confirmation: ask for a new link.
+      return { status, expiresAt, registration: outcome ?? 'link_required' }
+    },
+    async attestAdult() {
+      const { error } = await client.rpc('app_attest_adult', { p_wording_version: ADULT_WORDING_VERSION })
+      if (error) throw toAppError(error)
+    },
+    async myReferralCode() {
+      const { data, error } = await client.rpc('app_my_referral_link')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_referral_link')) return null
+        throw toAppError(error)
+      }
+      return typeof data === 'string' ? data : null
     },
     async ownProfile() {
       const { data, error } = await client.from('profiles').select('id, created_at, username, display_name').eq('id', userId).maybeSingle()
@@ -705,8 +769,19 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         postCount: num(r.post_count as number),
       }
     },
-    async feed(before) {
-      return (await rpc<PostRow[]>('app_feed', { p_before: before ?? null, p_limit: 20 })).map(toPost)
+    async feed(before, filter = 'all') {
+      // Pages on (created_at, id), so posts with the same time are never skipped (20261130000000).
+      const { data, error } = await client.rpc('app_feed_page', {
+        p_before_at: before?.createdAt ?? null,
+        p_before_id: before?.id ?? null,
+        p_limit: 20,
+        p_filter: filter,
+      })
+      if (!error) return ((data ?? []) as PostRow[]).map(toPost)
+      if (!isMissingFunction(error, 'app_feed_page')) throw toAppError(error)
+      // Before that migration: the earlier time-only paging, filtered here for My Clique.
+      const posts = (await rpc<PostRow[]>('app_feed', { p_before: before?.createdAt ?? null, p_limit: 20 })).map(toPost)
+      return filter === 'clique' ? posts.filter((p) => p.authorInMyClique) : posts
     },
     async member(username) {
       const rows = await rpc<Array<Record<string, unknown>>>('app_member', { p_username: username })
@@ -725,7 +800,15 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       }
     },
     async memberPosts(memberId, before) {
-      return (await rpc<PostRow[]>('app_member_posts', { p_member: memberId, p_before: before ?? null, p_limit: 20 })).map(toPost)
+      const { data, error } = await client.rpc('app_member_posts_page', {
+        p_member: memberId,
+        p_before_at: before?.createdAt ?? null,
+        p_before_id: before?.id ?? null,
+        p_limit: 20,
+      })
+      if (!error) return ((data ?? []) as PostRow[]).map(toPost)
+      if (!isMissingFunction(error, 'app_member_posts_page')) throw toAppError(error)
+      return (await rpc<PostRow[]>('app_member_posts', { p_member: memberId, p_before: before?.createdAt ?? null, p_limit: 20 })).map(toPost)
     },
     async post(id) {
       const rows = await rpc<PostRow[]>('app_post', { p_post: id })

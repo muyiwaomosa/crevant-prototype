@@ -4,11 +4,12 @@ import { buttonClass } from '../../components/ui'
 import { useAuth } from '../../auth/AuthProvider'
 import { AuthCard, Message, Unavailable } from './AuthUi'
 
-export type EmailLinkType = 'invite' | 'recovery'
+export type EmailLinkType = 'invite' | 'recovery' | 'email'
 export type EmailLink = { tokenHash: string; type: EmailLinkType }
 
 /**
- * Reads the one-time code from an invitation or reset email link.
+ * Reads the one-time code from an invitation, reset or sign-up confirmation
+ * email link (type 'email': the open beta's "confirm your email" message).
  *
  * The code travels in the fragment (the part after #), for example
  * /auth/confirm#token_hash=...&type=invite. Browsers never send the fragment
@@ -22,12 +23,12 @@ export function readEmailLink(hash: string): EmailLink | null {
   const tokenHash = params.get('token_hash') ?? ''
   const type = params.get('type')
   if (!/^[A-Za-z0-9_-]{16,256}$/.test(tokenHash)) return null
-  if (type !== 'invite' && type !== 'recovery') return null
+  if (type !== 'invite' && type !== 'recovery' && type !== 'email') return null
   return { tokenHash, type }
 }
 
 /**
- * Landing page for invitation and password-reset emails.
+ * Landing page for invitation, password-reset and sign-up confirmation emails.
  *
  * Protection against email scanners: opening this page does nothing. The
  * one-time code is only sent to Supabase when a person presses Continue.
@@ -47,11 +48,13 @@ export function ConfirmPage() {
     if (location.search || location.hash) navigate('/auth/confirm', { replace: true })
   }, [location.search, location.hash, navigate])
 
-  // Move on only once the new sign-in is registered, so the password page
-  // never sees a signed-out visitor.
+  // Move on only once the new sign-in is registered, so the next page never
+  // sees a signed-out visitor. A confirmed sign-up already has its password,
+  // so it goes straight to the members area, which claims membership.
   useEffect(() => {
     if (state === 'verified' && status === 'signed-in' && link) {
-      navigate('/auth/set-password', { replace: true, state: { reason: link.type } })
+      if (link.type === 'email') navigate('/app', { replace: true })
+      else navigate('/auth/set-password', { replace: true, state: { reason: link.type } })
     }
   }, [state, status, link, navigate])
 
@@ -61,7 +64,7 @@ export function ConfirmPage() {
     return (
       <AuthCard
         title="Open the link from your email"
-        intro={<p>This page works with the link in your Splitpost invitation or password reset email. If the link has already been used, you can ask for a new one.</p>}
+        intro={<p>This page works with the link in your Splitpost confirmation, invitation or password reset email. If the link has already been used, you can ask for a new one.</p>}
       >
         <div className="flex flex-col gap-3 min-[380px]:flex-row">
           <Link to="/forgot-password" className={buttonClass('primary')}>
@@ -76,6 +79,7 @@ export function ConfirmPage() {
   }
 
   const isInvite = link.type === 'invite'
+  const isSignUp = link.type === 'email'
 
   async function onContinue() {
     if (!client || !link || state === 'verifying' || state === 'verified') return
@@ -90,12 +94,14 @@ export function ConfirmPage() {
 
   return (
     <AuthCard
-      title={isInvite ? 'Welcome to Splitpost' : 'Reset your password'}
+      title={isSignUp ? 'Confirm your email' : isInvite ? 'Welcome to Splitpost' : 'Reset your password'}
       intro={
         <p>
-          {isInvite
-            ? 'Press Continue to accept your invitation. Next, you will choose a password.'
-            : 'Press Continue, then choose a new password.'}
+          {isSignUp
+            ? 'Press Continue to confirm your email address and start using Splitpost.'
+            : isInvite
+              ? 'Press Continue to accept your invitation. Next, you will choose a password.'
+              : 'Press Continue, then choose a new password.'}
         </p>
       }
     >
@@ -103,7 +109,13 @@ export function ConfirmPage() {
         {state === 'expired' && (
           <Message tone="error">
             This link has expired or was already used. Links work once and last one hour.{' '}
-            {isInvite ? 'Ask the person who invited you to send a new invitation.' : <Link to="/forgot-password" className="font-semibold underline">Request a new reset link.</Link>}
+            {isSignUp ? (
+              <Link to="/sign-in" className="font-semibold underline">Sign in to get a new confirmation email.</Link>
+            ) : isInvite ? (
+              'Ask the person who invited you to send a new invitation.'
+            ) : (
+              <Link to="/forgot-password" className="font-semibold underline">Request a new reset link.</Link>
+            )}
           </Message>
         )}
         {state === 'failed' && <Message tone="error">Something went wrong. Please try again in a moment.</Message>}

@@ -224,7 +224,7 @@ out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations
 all=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | tr '\n' ' ' | sed 's/ $//')
 if [ $code -eq 0 ] && [ "$out" = "$all" ]; then ok "a new project with no history: every migration pending"; else bad "pending on a new project (exit $code): $out"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-run-checks.sh 2>&1); code=$?
-if [ $code -eq 0 ] && grep -q 'PASS: one immutable identity marker' <<<"$out" && [ "$(grep -c '^Skipped' <<<"$out")" = 14 ]; then
+if [ $code -eq 0 ] && grep -q 'PASS: one immutable identity marker' <<<"$out" && [ "$(grep -c '^Skipped' <<<"$out")" = "$(grep -cE '^[0-9]{3}_' supabase/members-checks.txt)" ]; then
   ok "check mode on the new project: the marker passes, every shared check skipped and named"
 else bad "check mode on the new project (exit $code): $(tail -3 <<<"$out")"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-run-checks.sh --require-all 2>&1); code=$?
@@ -314,7 +314,12 @@ if [ $code -eq 0 ] && grep -q 'STATE: activated' <<<"$out"; then ok "the read-on
 activate "$M" "$FOUNDER" activate "ACTIVATE MEMBER PRODUCTION ACCESS"
 if [ $code -ne 0 ] && grep -q 'already recorded' <<<"$out"; then ok "a second activation is refused"; else bad "second activation (exit $code)"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>&1)
-if [ -z "$out" ]; then ok "after the activation, nothing is pending (20261122000000 to 20261129000000 recorded)"; else bad "pending after activation: $out"; fi
+later=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | awk '$1 > "20261129000000"' | tr '\n' ' ' | sed 's/ $//')
+if [ "$out" = "$later" ]; then ok "after the activation, only the later migrations are pending (${later:-none})"; else bad "pending after activation: $out (expected ${later:-none})"; fi
+# The later migrations go through the normal member deploy (db push of the "all" set).
+if [ -n "$later" ]; then apply_range "$M" 20261129000001 29991231235959 || bad "could not apply the later migrations"; fi
+out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>&1)
+if [ -z "$out" ]; then ok "after the later migrations, nothing is pending"; else bad "pending after the later migrations: $out"; fi
 want=$(ls supabase/migrations/*.sql | xargs -n1 basename | sed 's/\.sql$//' | tr '\n' ' ' | sed 's/ $//')
 got=$(psql "$M" -X -At -c "select string_agg(version || '_' || name, ' ' order by version) from supabase_migrations.schema_migrations")
 if [ "$got" = "$want" ]; then ok "the migration history records every migration once, in order, with its name (as db push would)"; else bad "migration history: $got"; fi

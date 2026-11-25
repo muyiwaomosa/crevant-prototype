@@ -157,3 +157,13 @@
   from { opacity: 0.15; }
   to { opacity: 1; }
 }
+
+/* Multi-face view (src/components/FaceView.tsx): the incoming face slides in. */
+@keyframes face-in-right {
+  from { transform: translateX(40%); opacity: 0.35; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes face-in-left {
+  from { transform: translateX(-40%); opacity: 0.35; }
+  to { transform: none; opacity: 1; }
+}
