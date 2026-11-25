@@ -62,9 +62,10 @@ begin
      + (select count(*) from ops.media_deletions where bucket = 'post-videos')
      + (select count(*) from ops.media_admin_events where action = 'video_cap_changed')
      + (select count(*) from ops.media_settings where video_storage_cap_bytes is not null)
+     + (select count(*) from ops.video_delivery_daily)
      + o;
   if n > 0 then
-    raise exception 'refused, nothing changed: % rows of data depend on video posts (video uploads or posts, device tests, queued or stored video files, the video cap). Fix forward instead.', n;
+    raise exception 'refused, nothing changed: % rows of data depend on video posts (video uploads or posts, device tests, queued or stored video files, the video cap, delivery counts). Fix forward instead.', n;
   end if;
   if ops.feature_on('video_posts') then
     raise exception 'refused, nothing changed: video posts are switched on. Turn them off first, or fix forward.';
@@ -73,6 +74,32 @@ end $$;
 
 \echo 'Checks passed. Removing video posts and the migration record.'
 
+drop function public.app_founder_video_emergency_stop(text);
+drop function public.svc_video_links_issued(integer, bigint);
+drop table ops.video_delivery_daily;
+delete from ops.feature_switches where feature = 'video_playback';
+alter table ops.feature_switches drop constraint feature_switches_feature_check;
+alter table ops.feature_switches add constraint feature_switches_feature_check check (feature in ('ads', 'sharing', 'video_posts'));
+create or replace function public.app_features()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := social.current_member();
+begin
+  return pg_catalog.jsonb_build_object(
+    'ads', ops.feature_on('ads'),
+    'sharing', ops.feature_on('sharing'),
+    'video_posts', ops.feature_on('video_posts'),
+    'photos', coalesce((select m.photos_enabled from ops.media_settings m where m.id), false),
+    'rewards', not coalesce((select r.paused from sim.reward_settings r limit 1), false));
+end;
+$$;
+revoke all on function public.app_features() from public, anon;
+grant execute on function public.app_features() to authenticated;
 drop function public.app_founder_video_status();
 drop function public.app_founder_set_video_cap(integer);
 drop function public.app_founder_record_device_test(text, boolean, text);

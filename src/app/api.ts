@@ -122,7 +122,13 @@ export type VideoVerified = { width: number; height: number; durationMs: number;
 export type DeviceKind = 'iphone_safari' | 'android_chrome' | 'desktop'
 export type DeviceTestResult = { device: DeviceKind; passed: boolean; notes: string | null; at: string }
 export type FounderVideoStatus = {
+  /** New video uploads and publishing (the video_posts switch). */
   enabled: boolean
+  /** Playback of published videos, a separate switch. */
+  playbackEnabled: boolean
+  /** Playback links issued and the bytes behind them: an upper-bound delivery estimate. */
+  delivery7d: { links: number; videoBytes: number }
+  delivery30d: { links: number; videoBytes: number }
   ready: boolean
   capBytes: number | null
   usedBytes: number
@@ -542,8 +548,8 @@ export type MyAdvertising = {
   campaigns: Array<{ id: string; name: string; advertiser: string; status: string; startsOn: string; endsOn: string; placement: string }>
 }
 /** Privacy requests and switches (20261212000000). */
-export type Features = { ads: boolean; sharing: boolean; videoPosts: boolean; photos: boolean; rewards: boolean }
-export type SwitchFeature = 'ads' | 'sharing' | 'video_posts'
+export type Features = { ads: boolean; sharing: boolean; videoPosts: boolean; videoPlayback: boolean; photos: boolean; rewards: boolean }
+export type SwitchFeature = 'ads' | 'sharing' | 'video_posts' | 'video_playback'
 export type FounderSwitches = {
   switches: Array<{ feature: SwitchFeature; enabled: boolean; updatedAt: string }>
   registrationPaused: boolean
@@ -771,6 +777,8 @@ export interface AppApi {
   founderVideoStatus(): Promise<FounderVideoStatus | null>
   founderRecordDeviceTest(device: DeviceKind, passed: boolean, notes: string): Promise<void>
   founderSetVideoCap(gigabytes: number): Promise<void>
+  /** Founder: new video uploads and video playback off together, with a recorded reason. */
+  founderVideoEmergencyStop(reason: string): Promise<void>
   following(): Promise<FollowedCreator[]>
   /** requestId: the browser's id for this post, reused on retry, so it's stored once (issue #48). */
   createPost(body: string, requestId?: string): Promise<string>
@@ -2041,10 +2049,17 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         notes: typeof x.notes === 'string' ? x.notes : null,
         at: String(x.at),
       })
+      const delivery = (v: unknown) => {
+        const d = (v ?? {}) as Record<string, unknown>
+        return { links: Number(d.links ?? 0), videoBytes: Number(d.video_bytes ?? 0) }
+      }
       const latest: FounderVideoStatus['latest'] = {}
       for (const [k, v] of Object.entries((r.latest ?? {}) as Record<string, Record<string, unknown>>)) latest[k as DeviceKind] = result(v, k)
       return {
         enabled: r.enabled === true,
+        playbackEnabled: r.playback_enabled !== false,
+        delivery7d: delivery(r.delivery_7d),
+        delivery30d: delivery(r.delivery_30d),
         ready: r.ready === true,
         capBytes: r.cap_bytes === null || r.cap_bytes === undefined ? null : Number(r.cap_bytes),
         usedBytes: Number(r.used_bytes ?? 0),
@@ -2057,6 +2072,7 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     founderRecordDeviceTest: (device, passed, notes) =>
       rpc<void>('app_founder_record_device_test', { p_device: device, p_passed: passed, p_notes: notes.trim() || null }),
     founderSetVideoCap: (gigabytes) => rpc<void>('app_founder_set_video_cap', { p_cap_gb: gigabytes }),
+    founderVideoEmergencyStop: (reason) => rpc<void>('app_founder_video_emergency_stop', { p_reason: reason.trim() }),
     async follow(id, source) {
       // The source is recorded since 20261201000000; an older database follows without it.
       const { error } = await client.rpc('app_follow', { p_creator: id, p_source: source ?? null })
@@ -2543,7 +2559,7 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         throw toAppError(error)
       }
       const r = (data ?? {}) as Record<string, unknown>
-      return { ads: r.ads !== false, sharing: r.sharing !== false, videoPosts: r.video_posts === true, photos: r.photos === true, rewards: r.rewards !== false }
+      return { ads: r.ads !== false, sharing: r.sharing !== false, videoPosts: r.video_posts === true, videoPlayback: r.video_playback !== false, photos: r.photos === true, rewards: r.rewards !== false }
     },
     async founderSwitches() {
       const { data, error } = await client.rpc('app_founder_switches')

@@ -127,7 +127,7 @@ declare
   privacy text[] := array['app_features', 'app_founder_delete_member', 'app_founder_member_requests', 'app_founder_resolve_member_request',
                           'app_founder_set_switch', 'app_founder_switches', 'app_my_member_requests', 'app_submit_member_request', 'app_withdraw_member_request'];
   -- Video posts (20261213000000), once applied: status, uploads, playback, device tests and the cap.
-  video text[] := array['app_founder_record_device_test', 'app_founder_set_video_cap', 'app_founder_video_status', 'app_post_videos',
+  video text[] := array['app_founder_record_device_test', 'app_founder_set_video_cap', 'app_founder_video_emergency_stop', 'app_founder_video_status', 'app_post_videos',
                         'app_video_status', 'app_video_upload_begin', 'app_video_upload_paths'];
   found text[];
 begin
@@ -361,7 +361,7 @@ begin
                -- And foundation v2 (20261130000000): adult confirmations, controlled
                -- registration (settings, links, records, the shared check) and the
                -- launch settings it reads. No waitlist, invitation or admin data.
-               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators|other_moderator_available|connections|week_start|feature_switches|feature_switch_events|feature_on|member_requests|member_request_events|video_device_tests|video_device_passed|video_ready|videos_open|video_tester|video_storage_used|video_member_bytes)\M', '', 'g')
+               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators|other_moderator_available|connections|week_start|feature_switches|feature_switch_events|feature_on|member_requests|member_request_events|video_device_tests|video_device_passed|video_ready|videos_open|video_tester|video_storage_used|video_member_bytes|video_delivery_daily)\M', '', 'g')
                   -- Relationships (20261201000000): the member's own non-binding Support Intent.
                   ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings|reverse|restore_hidden)\M)') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';

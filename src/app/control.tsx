@@ -219,7 +219,8 @@ export function InvitationLinksPanel() {
 const SWITCH_TEXT: Record<SwitchFeature, { title: string; body: string }> = {
   ads: { title: 'Advertising', body: 'Sponsored posts in Home and under posts.' },
   sharing: { title: 'Sharing', body: 'Copy link and the share sheet on posts.' },
-  video_posts: { title: 'Video posts', body: 'Turns on only once the iPhone and Android device tests have passed and the video storage cap is set (see Video posts below).' },
+  video_posts: { title: 'New video uploads', body: 'New video posts. Turns on only once the iPhone and Android device tests have passed and the video storage cap is set (see Video posts below).' },
+  video_playback: { title: 'Video playback', body: 'Playing videos already published. Separate from uploads, so pausing uploads never hides existing videos.' },
 }
 
 export function SwitchesPanel() {

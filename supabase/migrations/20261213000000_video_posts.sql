@@ -36,8 +36,14 @@
 --     a stored video. Founder: app_founder_record_device_test,
 --     app_founder_set_video_cap, app_founder_video_status. Service only:
 --     svc_video_upload_stored, svc_video_poster_stored.
---   * While the switch is off, video uploads for posts, publishing and
---     playback links are all refused by the server (the founder's pause).
+--   * Separate controls (founder decision): the video_posts switch governs
+--     new video uploads and publishing; a new video_playback switch governs
+--     playback of videos already published (on by default, so pausing uploads
+--     never hides creators' existing videos); app_founder_video_emergency_stop
+--     turns both off in one recorded step. All are enforced by the server.
+--   * ops.video_delivery_daily: playback links issued per day and the bytes
+--     those videos hold, an upper-bound estimate of delivery for the founder
+--     (exact egress is in the Supabase usage page).
 --     Device-test uploads work for the founder and testers only.
 --
 -- Photos, avatars and text posts behave exactly as before.
@@ -159,6 +165,23 @@ grant select on table ops.video_device_tests to service_role;
 create trigger video_device_tests_no_update
 before update or delete on ops.video_device_tests
 for each row execute function ops.history_append_only();
+
+-- Playback of published videos is its own switch (on), separate from new uploads.
+alter table ops.feature_switches drop constraint feature_switches_feature_check;
+alter table ops.feature_switches add constraint feature_switches_feature_check
+  check (feature in ('ads', 'sharing', 'video_posts', 'video_playback'));
+insert into ops.feature_switches (feature, enabled) values ('video_playback', true);
+
+-- Playback links issued each day and the size of the videos behind them: an
+-- upper-bound estimate (a link may be opened partly or not at all).
+create table ops.video_delivery_daily (
+  day         date primary key,
+  links       integer not null default 0 check (links >= 0),
+  video_bytes bigint not null default 0 check (video_bytes >= 0)
+);
+comment on table ops.video_delivery_daily is 'Video playback links issued per day (Toronto) and the bytes of those videos: an upper-bound delivery estimate for the founder. Counts only, never who watched.';
+alter table ops.video_delivery_daily enable row level security;
+revoke all on table ops.video_delivery_daily from public, anon, authenticated;
 
 -- Whether the latest test on a device passed.
 create function ops.video_device_passed(p_device text)
@@ -330,7 +353,12 @@ declare
 begin
   return pg_catalog.jsonb_build_object(
     'enabled', ops.feature_on('video_posts'),
+    'playback_enabled', ops.feature_on('video_playback'),
     'ready', ops.video_ready(),
+    'delivery_7d', (select pg_catalog.jsonb_build_object('links', coalesce(sum(d.links), 0), 'video_bytes', coalesce(sum(d.video_bytes), 0))
+                    from ops.video_delivery_daily d where d.day > (pg_catalog.now() at time zone 'America/Toronto')::date - 7),
+    'delivery_30d', (select pg_catalog.jsonb_build_object('links', coalesce(sum(d.links), 0), 'video_bytes', coalesce(sum(d.video_bytes), 0))
+                     from ops.video_delivery_daily d where d.day > (pg_catalog.now() at time zone 'America/Toronto')::date - 30),
     'cap_bytes', (select s.video_storage_cap_bytes from ops.media_settings s where s.id),
     'used_bytes', ops.video_storage_used(),
     'video_posts', (select count(*) from social.posts p where p.media_kind = 'video' and p.deleted_at is null),
@@ -342,6 +370,66 @@ begin
     'recent', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('device', r.device, 'passed', r.passed, 'notes', r.notes, 'at', r.recorded_at)
                                                     order by r.recorded_at desc, r.id desc)
                         from (select * from ops.video_device_tests t order by t.recorded_at desc, t.id desc limit 20) r), '[]'::jsonb));
+end;
+$$;
+
+-- Emergency: new uploads and playback off together, in one recorded step.
+create function public.app_founder_video_emergency_stop(p_reason text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := social.current_founder();
+  v_reason text := pg_catalog.btrim(coalesce(p_reason, ''));
+begin
+  if char_length(v_reason) < 3 or char_length(v_reason) > 280 then
+    raise exception 'reason_required' using errcode = 'P0001';
+  end if;
+  update ops.feature_switches set enabled = false, updated_at = pg_catalog.now(), updated_by = 'founder:' || v_uid::text
+  where feature in ('video_posts', 'video_playback');
+  insert into ops.feature_switch_events (feature, enabled, reason, changed_by)
+  values ('video_posts', false, 'Emergency stop: ' || v_reason, 'founder:' || v_uid::text),
+         ('video_playback', false, 'Emergency stop: ' || v_reason, 'founder:' || v_uid::text);
+end;
+$$;
+
+-- What the app may show, now with video playback (otherwise as in 20261212000000).
+create or replace function public.app_features()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := social.current_member();
+begin
+  return pg_catalog.jsonb_build_object(
+    'ads', ops.feature_on('ads'),
+    'sharing', ops.feature_on('sharing'),
+    'video_posts', ops.feature_on('video_posts'),
+    'video_playback', ops.feature_on('video_playback'),
+    'photos', coalesce((select m.photos_enabled from ops.media_settings m where m.id), false),
+    'rewards', not coalesce((select r.paused from sim.reward_settings r limit 1), false));
+end;
+$$;
+
+-- The post-media Edge Function reports the playback links it issued (best effort).
+create function public.svc_video_links_issued(p_links integer, p_bytes bigint)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if p_links is null or p_links < 0 or p_links > 1000 or p_bytes is null or p_bytes < 0 then
+    raise exception 'invalid_request' using errcode = 'P0001';
+  end if;
+  insert into ops.video_delivery_daily as d (day, links, video_bytes)
+  values ((pg_catalog.now() at time zone 'America/Toronto')::date, p_links, p_bytes)
+  on conflict (day) do update set links = d.links + excluded.links, video_bytes = d.video_bytes + excluded.video_bytes;
 end;
 $$;
 
@@ -454,7 +542,7 @@ $$;
 -- Video paths for the posts the member can see (live, by a visible member),
 -- for the Edge Function to sign. None while video posts are paused. At most 100.
 create function public.app_post_videos(p_posts uuid[])
-returns table (post_id uuid, video_path text, poster_path text, has_poster boolean)
+returns table (post_id uuid, video_path text, poster_path text, has_poster boolean, video_bytes integer)
 language plpgsql
 stable
 security definer
@@ -466,11 +554,12 @@ begin
   if cardinality(coalesce(p_posts, '{}')) > 100 then
     raise exception 'too_many' using errcode = 'P0001';
   end if;
-  if not ops.feature_on('video_posts') then
+  -- Playback has its own switch: pausing new uploads never hides published videos.
+  if not ops.feature_on('video_playback') then
     return;
   end if;
   return query
-  select s.id, u.full_path, u.feed_path, u.feed_bytes is not null
+  select s.id, u.full_path, u.feed_path, u.feed_bytes is not null, u.full_bytes
   from social.posts s
   join social.visible_members a on a.id = s.author_id
   join social.post_media m on m.post_id = s.id and m.kind = 'video'
@@ -815,14 +904,16 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 6. Comments and grants.
 
-comment on function public.app_founder_set_switch(text, boolean, text) is 'Founder: turns advertising, sharing or video posts on or off, with a recorded reason. Video posts turn on only after both phone device tests passed and the video storage cap is set.';
+comment on function public.app_founder_set_switch(text, boolean, text) is 'Founder: turns advertising, sharing, new video uploads or video playback on or off, with a recorded reason. New video uploads turn on only after both phone device tests passed and the video storage cap is set.';
 comment on function public.app_founder_record_device_test(text, boolean, text) is 'Founder: records one video device test result (iPhone Safari, Android Chrome or desktop), with notes. Append-only.';
 comment on function public.app_founder_set_video_cap(integer) is 'Founder: sets the project video storage cap in GB (recorded).';
 comment on function public.app_founder_video_status() is 'Founder: video posts at a glance: the switch, whether it may be turned on, storage against the cap and the device tests.';
 comment on function public.app_video_status() is 'Whether the member can post videos now, whether they may run device tests, and the video limits with what they have used.';
 comment on function public.app_video_upload_begin(integer, integer, text) is 'Authorises one video upload (post or device test) of the declared size and duration. The database chooses the paths.';
 comment on function public.app_video_upload_paths(uuid) is 'The member''s own open video upload, for the post-media Edge Function to check, add a poster or play back a device test.';
-comment on function public.app_post_videos(uuid[]) is 'Video paths of posts the member can see, for the post-media Edge Function to sign (at most 100). None while video posts are paused.';
+comment on function public.app_post_videos(uuid[]) is 'Video paths of posts the member can see, for the post-media Edge Function to sign (at most 100). None while video playback is switched off (new uploads have their own switch).';
+comment on function public.app_founder_video_emergency_stop(text) is 'Founder: turns off new video uploads and video playback together, with a recorded reason.';
+comment on function public.svc_video_links_issued(integer, bigint) is 'Service only: adds issued video playback links and their bytes to today''s delivery estimate.';
 comment on function public.app_create_post(text, uuid, uuid, text) is 'Publishes a post with a stored photo or video (caption optional). One post per request id.';
 
 do $$
@@ -834,6 +925,8 @@ begin
     'public.app_founder_record_device_test(text, boolean, text)',
     'public.app_founder_set_video_cap(integer)',
     'public.app_founder_video_status()',
+    'public.app_founder_video_emergency_stop(text)',
+    'public.app_features()',
     'public.app_video_status()',
     'public.app_video_upload_begin(integer, integer, text)',
     'public.app_video_upload_paths(uuid)',
@@ -848,6 +941,7 @@ begin
   foreach f in array array[
     'public.svc_video_upload_stored(uuid, integer, integer, integer, integer, text)',
     'public.svc_video_poster_stored(uuid, integer)',
+    'public.svc_video_links_issued(integer, bigint)',
     'public.svc_photo_upload_failed(uuid, text)',
     'public.svc_media_drain_claim(integer)'
   ] loop

@@ -61,9 +61,16 @@ In the Control Center, **Video posts**:
 2. Set the **Video storage cap** (50 GB proposed for the pilot) and press
    **Save cap**.
 3. Once the latest iPhone Safari and Android Chrome results both passed and the
-   cap is set, **Turn video posts on** in Operational switches becomes
-   available (with a reason, as for every switch). Turning it off again pauses
-   new uploads, posts and playback at once.
+   cap is set, **Turn new video uploads on** in Operational switches becomes
+   available (with a reason, as for every switch).
+
+Three separate controls, each recorded with its reason:
+
+* **New video uploads** pauses new uploads and video posts. Videos already
+  published keep playing.
+* **Video playback** stops playback of published videos (for bandwidth),
+  without touching uploads.
+* **Stop all video now** (in the Video posts panel) turns both off at once.
 
 Before the test, the staging project's Storage upload size limit must be at
 least 110 MB (Supabase dashboard, Storage settings); Claude checks this.

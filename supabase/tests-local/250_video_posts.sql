@@ -254,33 +254,84 @@ begin
 end $$;
 rollback;
 
--- 5. The founder's pause: uploads, publishing and links stop at once; text and photos are unaffected.
+-- 5. Separate controls: pausing uploads keeps published videos playing;
+--    playback has its own switch; the emergency stop turns both off; the
+--    delivery estimate counts issued links.
 begin;
 do $$
 declare
   v_post uuid := (select s.id from social.posts s where s.author_id = pg_temp.g('3') and s.media_kind = 'video' limit 1);
+  st jsonb;
 begin
   perform pg_temp.begin_as('3', 'p1', 'post');
   perform pg_temp.stored('p1');
   perform pg_temp.as_member('1');
   execute 'set local role authenticated';
-  perform public.app_founder_set_switch('video_posts', false, 'Pausing video to check egress');
+  perform public.app_founder_set_switch('video_posts', false, 'Pausing new uploads to check storage');
   execute 'reset role';
   perform pg_temp.as_member('3');
   execute 'set local role authenticated';
-  perform pg_temp.expect_error('select * from public.app_video_upload_begin(1000, 1000, ''post'')', 'videos_unavailable', 'a video upload while paused');
-  perform pg_temp.expect_error(format('select public.app_create_post(''Paused'', gen_random_uuid(), %L, null)', (select id from vu where name = 'p1')), 'videos_unavailable', 'publishing a video while paused');
+  perform pg_temp.expect_error('select * from public.app_video_upload_begin(1000, 1000, ''post'')', 'videos_unavailable', 'a video upload while uploads are paused');
+  perform pg_temp.expect_error(format('select public.app_create_post(''Paused'', gen_random_uuid(), %L, null)', (select id from vu where name = 'p1')), 'videos_unavailable', 'publishing a video while uploads are paused');
   perform public.app_create_post('Text still works', gen_random_uuid());
   execute 'reset role';
   perform pg_temp.as_member('4');
   execute 'set local role authenticated';
-  if exists (select 1 from public.app_post_videos(array[v_post])) then
-    raise exception 'FAIL: playback links are issued while video is paused';
+  if not exists (select 1 from public.app_post_videos(array[v_post])) or (select video_bytes from public.app_post_videos(array[v_post])) is null then
+    raise exception 'FAIL: pausing uploads stopped playback of a published video';
+  end if;
+  if not (public.app_features()->>'video_playback')::boolean or (public.app_features()->>'video_posts')::boolean then
+    raise exception 'FAIL: the app is not told uploads are paused and playback is on';
   end if;
   execute 'reset role';
-  -- The tester can still test while paused.
+  -- The tester can still test while uploads are paused.
   perform pg_temp.begin_as('2', 'test2', 'device_test');
-  raise notice 'PASS: pausing video refuses uploads, publishing and playback links at once; text posting and device tests still work';
+
+  -- Playback off on its own.
+  perform pg_temp.as_member('1');
+  execute 'set local role authenticated';
+  perform public.app_founder_set_switch('video_playback', false, 'Checking bandwidth');
+  execute 'reset role';
+  perform pg_temp.as_member('4');
+  execute 'set local role authenticated';
+  if exists (select 1 from public.app_post_videos(array[v_post])) then
+    raise exception 'FAIL: playback links are issued while playback is switched off';
+  end if;
+  execute 'reset role';
+
+  -- Both back on, then the emergency stop turns both off with the reason recorded.
+  perform pg_temp.as_member('1');
+  execute 'set local role authenticated';
+  perform public.app_founder_set_switch('video_playback', true, 'Bandwidth fine');
+  perform public.app_founder_set_switch('video_posts', true, 'Storage fine');
+  perform pg_temp.expect_error('select public.app_founder_video_emergency_stop('''')', 'reason_required', 'an emergency stop without a reason');
+  perform public.app_founder_video_emergency_stop('Unexpected egress spike');
+  if (public.app_founder_video_status()->>'enabled')::boolean or (public.app_founder_video_status()->>'playback_enabled')::boolean then
+    raise exception 'FAIL: the emergency stop left a video control on';
+  end if;
+  execute 'reset role';
+  if (select count(*) from ops.feature_switch_events where reason = 'Emergency stop: Unexpected egress spike' and not enabled) <> 2 then
+    raise exception 'FAIL: the emergency stop is not recorded for both controls';
+  end if;
+  perform pg_temp.as_member('4');
+  execute 'set local role authenticated';
+  perform pg_temp.expect_error('select public.app_founder_video_emergency_stop(''because'')', 'not_founder', 'a member using the emergency stop');
+  execute 'reset role';
+
+  -- The delivery estimate: links and bytes per day, service only.
+  execute 'set local role service_role';
+  perform public.svc_video_links_issued(3, 3000000);
+  perform public.svc_video_links_issued(2, 2000000);
+  execute 'reset role';
+  perform pg_temp.as_member('1');
+  execute 'set local role authenticated';
+  st := public.app_founder_video_status();
+  if (st->'delivery_7d'->>'links')::int < 5 or (st->'delivery_7d'->>'video_bytes')::bigint < 5000000 then
+    raise exception 'FAIL: the delivery estimate is wrong: %', st->'delivery_7d';
+  end if;
+  perform pg_temp.expect_error('select public.svc_video_links_issued(1, 1)', 'permission denied', 'a member writing delivery counts');
+  execute 'reset role';
+  raise notice 'PASS: pausing uploads keeps published videos playing; playback has its own switch; the emergency stop turns both off and is recorded; the delivery estimate counts issued links';
 end $$;
 rollback;
 

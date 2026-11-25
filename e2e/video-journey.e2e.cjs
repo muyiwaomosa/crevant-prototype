@@ -17,7 +17,7 @@
 //     the Home view.
 //  5. The server refuses an HEVC file uploaded directly and queues it for
 //     deletion; deleting the post queues both files and the cleanup removes
-//     them; pausing video stops new links at once.
+//     them; pausing new uploads keeps published videos playing; playback has its own switch.
 // WCAG 2.2 AA at 320 and 390 px, no sideways scrolling, no CSP violations.
 // Run by scripts/e2e/auth-journey.sh. Fixtures: e2e/fixtures/video (ffmpeg).
 const { chromium } = require('playwright')
@@ -218,7 +218,7 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
       const sw = page.getByTestId('switches-panel')
       // (Device tests are append-only: on a database where an earlier run recorded them, this step is skipped.)
       if (sql('select count(*) from ops.video_device_tests') === '0') {
-        check('before the device tests, video posts cannot be switched on', await sw.getByRole('button', { name: 'Turn video posts on' }).isDisabled())
+        check('before the device tests, video posts cannot be switched on', await sw.getByRole('button', { name: 'Turn new video uploads on' }).isDisabled())
       }
       for (const device of ['iphone_safari', 'android_chrome']) {
         await panel.getByLabel('Device', { exact: true }).selectOption(device)
@@ -231,10 +231,10 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
       await panel.getByRole('button', { name: 'Save cap' }).click()
       await panel.getByText('Video storage cap saved.').waitFor()
       await sw.getByLabel('Reason').fill('Both phones passed the device test')
-      const on = sw.getByRole('button', { name: 'Turn video posts on' })
+      const on = sw.getByRole('button', { name: 'Turn new video uploads on' })
       for (let i = 0; i < 20 && (await on.isDisabled()); i++) await page.waitForTimeout(150)
       await on.click()
-      await sw.getByText('Video posts: On').waitFor()
+      await sw.getByText('New video uploads: On').waitFor()
       check('after both phone tests and the cap, the founder turns video posts on (recorded)', sql("select enabled from ops.feature_switches where feature = 'video_posts'") === 't'
         && sql("select count(*) from ops.video_device_tests where notes like '%journey " + RUN + "%'") === '2')
       const v = await axe(page, '[data-testid="video-readiness-panel"]')
@@ -290,6 +290,16 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
       check('the follower plays the video', p.ok, p.why)
       await screenChecks(page, 'Home with a video post')
       await ctx.close()
+      // Separate controls: pausing new uploads keeps this video playing; playback has its own switch.
+      sql("update ops.feature_switches set enabled = false where feature = 'video_posts'")
+      const keep = await (await fn(tV, 'video-links', { ids: [postId] })).json()
+      check('pausing new uploads keeps the published video playing', Object.keys(keep.videos ?? {}).length === 1, JSON.stringify(keep))
+      sql("update ops.feature_switches set enabled = false where feature = 'video_playback'")
+      const none = await (await fn(tV, 'video-links', { ids: [postId] })).json()
+      check('switching playback off stops new playback links', Object.keys(none.videos ?? {}).length === 0)
+      sql("update ops.feature_switches set enabled = true where feature in ('video_posts', 'video_playback')")
+      check('issued playback links are counted for the founder (links and bytes, no viewers)',
+        Number(sql('select coalesce(sum(links), 0) from ops.video_delivery_daily')) >= 1 && Number(sql('select coalesce(sum(video_bytes), 0) from ops.video_delivery_daily')) > 0)
     }
 
     // 5. The server's own check, deletion and the pause.
@@ -333,11 +343,10 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
       check('the server removes both files from Storage (the cleanup after a delete)', objects(`name in ('${paths[0]}', '${paths[1]}')`) === '0')
       await ctx.close()
 
-      // The founder's pause: no new links, uploads or posts at once.
+      // Pausing new uploads refuses the next upload at once.
       sql("update ops.feature_switches set enabled = false where feature = 'video_posts'")
-      const links = await fn(tV, 'video-links', { ids: [postId] })
       const begin = await fn(tV, 'video-begin', { bytes: 1000, durationMs: 1000, purpose: 'post' })
-      check('pausing video posts stops links and uploads at once', links.status === 200 && Object.keys((await links.json()).videos).length === 0 && begin.status === 403)
+      check('pausing new video uploads refuses uploads at once', begin.status === 403)
     }
 
     check('no Content Security Policy violations', csp.length === 0, csp.slice(0, 2).join(' | '))

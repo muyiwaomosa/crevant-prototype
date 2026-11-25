@@ -345,5 +345,5 @@ export function useFeatures(): Features {
       live = false
     }
   }, [api])
-  return f ?? { ads: true, sharing: true, videoPosts: false, photos: false, rewards: true }
+  return f ?? { ads: true, sharing: true, videoPosts: false, videoPlayback: true, photos: false, rewards: true }
 }

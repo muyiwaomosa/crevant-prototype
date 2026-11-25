@@ -433,10 +433,10 @@ async function handleVideo(req: Request, action: string, deps: Deps, asCaller: C
     const ids = Array.isArray(body?.ids) ? (body!.ids as unknown[]) : null
     if (!ids || ids.length > 100 || !ids.every((x) => typeof x === 'string' && UUID.test(x))) return json(400, { error: 'invalid_request' })
     if (ids.length === 0) return json(200, { videos: {} })
-    // The database returns paths only for live posts by visible members, only to members, and none while video is paused.
+    // The database returns paths only for live posts by visible members, only to members, and none while playback is switched off.
     const r = await asCaller('app_post_videos', { p_posts: [...new Set(ids)] })
     if (!r.ok) return refuse(r)
-    const rows = (Array.isArray(r.data) ? r.data : []) as Array<{ post_id?: unknown; video_path?: unknown; poster_path?: unknown; has_poster?: unknown }>
+    const rows = (Array.isArray(r.data) ? r.data : []) as Array<{ post_id?: unknown; video_path?: unknown; poster_path?: unknown; has_poster?: unknown; video_bytes?: unknown }>
     const valid = rows.filter((x) => typeof x.post_id === 'string' && typeof x.video_path === 'string' && typeof x.poster_path === 'string'
       && VIDEO_PATH.test(x.video_path) && POSTER_PATH.test(x.poster_path))
     if (valid.length === 0) return json(200, { videos: {} })
@@ -448,6 +448,10 @@ async function handleVideo(req: Request, action: string, deps: Deps, asCaller: C
       const src = links[x.video_path as string]
       if (src) videos[x.post_id as string] = { src, poster: x.has_poster === true ? (links[x.poster_path as string] ?? null) : null }
     }
+    // Best effort: today's delivery estimate for the founder (links and the bytes behind them).
+    const issued = valid.filter((x) => videos[x.post_id as string])
+    const bytes = issued.reduce((n, x) => n + (typeof x.video_bytes === 'number' ? x.video_bytes : 0), 0)
+    if (issued.length > 0) await deps.serviceRpc('svc_video_links_issued', { p_links: issued.length, p_bytes: bytes }).catch(() => undefined)
     return json(200, { videos, expiresIn: VIDEO_LINK_SECONDS })
   }
 

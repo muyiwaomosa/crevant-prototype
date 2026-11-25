@@ -299,7 +299,7 @@ function fakeApi(
     advertising: { requests: [], campaigns: [] } as MyAdvertising,
     adRequests: [] as AdvertisingRequest[],
     report: null as CampaignReport | null,
-    features: { ads: true, sharing: true, videoPosts: false, photos: false, rewards: true } as Features,
+    features: { ads: true, sharing: true, videoPosts: false, videoPlayback: true, photos: false, rewards: true } as Features,
     switches: [
       { feature: 'ads', enabled: true, updatedAt: '2026-12-01T00:00:00Z' },
       { feature: 'sharing', enabled: true, updatedAt: '2026-12-01T00:00:00Z' },
@@ -350,6 +350,7 @@ function fakeApi(
   // Video posts (20261213000000), with the database's and the server's rules.
   const video = {
     on: opts.video ?? false,
+    playback: true,
     tester: opts.tester ?? false,
     uploads: new Map<string, { purpose: string; bytes: number; stored: boolean; used: boolean; poster: boolean }>(),
     calls: [] as string[],
@@ -668,7 +669,8 @@ function fakeApi(
     async videoLinks(ids) {
       video.calls.push(`links:${ids.join(',')}`)
       const out: Record<string, VideoLinks> = {}
-      if (!video.on) return out
+      // Playback has its own switch: pausing uploads never hides published videos.
+      if (!video.playback) return out
       for (const id of ids) {
         const p = posts.find((x) => x.id === id && !x.deleted && x.media?.kind === 'video')
         if (p) out[id] = { src: `https://videos.test/${id}.mp4`, poster: `https://videos.test/${id}-poster.jpg` }
@@ -690,7 +692,25 @@ function fakeApi(
       const latest: Partial<Record<DeviceKind, { device: DeviceKind; passed: boolean; notes: string | null; at: string }>> = {}
       for (const t of video.tests) latest[t.device] = t
       const ready = latest.iphone_safari?.passed === true && latest.android_chrome?.passed === true && video.capBytes !== null
-      return { enabled: video.on, ready, capBytes: video.capBytes, usedBytes: 0, videoPosts: 0, testUploads24h: 0, latest, recent: [...video.tests].reverse() }
+      return {
+        enabled: video.on,
+        playbackEnabled: video.playback,
+        delivery7d: { links: 3, videoBytes: 30000000 },
+        delivery30d: { links: 9, videoBytes: 90000000 },
+        ready,
+        capBytes: video.capBytes,
+        usedBytes: 0,
+        videoPosts: 0,
+        testUploads24h: 0,
+        latest,
+        recent: [...video.tests].reverse(),
+      }
+    },
+    async founderVideoEmergencyStop(reason) {
+      requireFounder()
+      if (reason.trim().length < 3) throw new AppApiError('reason_required')
+      video.on = false
+      video.playback = false
     },
     async founderRecordDeviceTest(device, passed, notes) {
       requireFounder()
@@ -4614,7 +4634,7 @@ describe('unified account and progressive onboarding (20261211000000, 2026121200
     expect(f.onb.registrationCalls.at(-1)?.paused).toBe(false)
 
     const sw = await screen.findByTestId('switches-panel')
-    expect((within(sw).getByRole('button', { name: 'Turn video posts on' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((within(sw).getByRole('button', { name: 'Turn new video uploads on' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(within(sw).getByLabelText('Reason'), { target: { value: 'Review a complaint' } })
     fireEvent.click(within(sw).getByRole('button', { name: 'Turn advertising off' }))
     expect(await within(sw).findByText('Advertising: Off')).toBeTruthy()
@@ -4731,7 +4751,7 @@ describe('video posts (20261213000000)', () => {
     renderApp('/app/control', f.api)
     const panel = await screen.findByTestId('video-readiness-panel')
     const sw = await screen.findByTestId('switches-panel')
-    const turnOn = () => within(sw).getByRole('button', { name: 'Turn video posts on' }) as HTMLButtonElement
+    const turnOn = () => within(sw).getByRole('button', { name: 'Turn new video uploads on' }) as HTMLButtonElement
     expect(turnOn().disabled).toBe(true)
     expect(within(panel).getAllByText('Not tested yet')).toHaveLength(3)
     fireEvent.change(within(panel).getByLabelText('Device'), { target: { value: 'iphone_safari' } })
@@ -4754,7 +4774,7 @@ describe('video posts (20261213000000)', () => {
     await waitFor(() => expect(turnOn().disabled).toBe(false))
     fireEvent.change(within(sw).getByLabelText('Reason'), { target: { value: 'Both phones passed' } })
     fireEvent.click(turnOn())
-    expect(await within(sw).findByText('Video posts: On')).toBeTruthy()
+    expect(await within(sw).findByText('New video uploads: On')).toBeTruthy()
     expect(f.video.on).toBe(true)
   })
 })

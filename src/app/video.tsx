@@ -509,6 +509,7 @@ export function VideoReadinessPanel() {
   const [passed, setPassed] = useState<'yes' | 'no'>('yes')
   const [notes, setNotes] = useState('')
   const [cap, setCap] = useState('50')
+  const [reason, setReason] = useState('')
   const deviceId = useId()
   const [error, setError] = useState<unknown>(null)
   const [done, setDone] = useState<string | null>(null)
@@ -560,6 +561,20 @@ export function VideoReadinessPanel() {
       setError(err)
     }
   }
+  async function stop(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setDone(null)
+    try {
+      await api.founderVideoEmergencyStop(reason)
+      setReason('')
+      setDone('All video is stopped: no new uploads and no playback.')
+      await load()
+      window.dispatchEvent(new Event(VIDEO_READINESS_EVENT))
+    } catch (err) {
+      setError(err)
+    }
+  }
   const capText = s.capBytes === null ? 'not set' : `${formatMb(s.usedBytes)} of ${Math.round(s.capBytes / 1073741824)} GB`
   const share = s.capBytes ? s.usedBytes / s.capBytes : 0
   return (
@@ -592,14 +607,34 @@ export function VideoReadinessPanel() {
             <dd className="font-semibold text-ink-900">{s.ready ? 'Yes' : 'Not yet'}</dd>
           </div>
           <div>
-            <dt className="text-ink-500">Video posts</dt>
+            <dt className="text-ink-500">New video uploads</dt>
             <dd className="font-semibold text-ink-900">
               {s.enabled ? 'On' : 'Off'} ({s.videoPosts} live)
             </dd>
           </div>
+          <div>
+            <dt className="text-ink-500">Video playback</dt>
+            <dd className="font-semibold text-ink-900">{s.playbackEnabled ? 'On' : 'Off'}</dd>
+          </div>
+          <div>
+            <dt className="text-ink-500">Delivered, last 7 days (estimate)</dt>
+            <dd className="font-semibold text-ink-900">
+              {formatMb(s.delivery7d.videoBytes)} over {s.delivery7d.links} {s.delivery7d.links === 1 ? 'play' : 'plays'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-ink-500">Delivered, last 30 days (estimate)</dt>
+            <dd className="font-semibold text-ink-900">
+              {formatMb(s.delivery30d.videoBytes)} over {s.delivery30d.links} {s.delivery30d.links === 1 ? 'play' : 'plays'}
+            </dd>
+          </div>
         </dl>
+        <p className="text-[13px] text-ink-600">
+          Delivery is an upper estimate: each started play counts the whole video. Exact bandwidth is on the Supabase project's Usage page. Turn uploads and playback on or
+          off separately under Operational switches.
+        </p>
         {share >= 0.8 ? (
-          <Message tone="error">Video storage is over 80% of the cap. Consider pausing video posts.</Message>
+          <Message tone="error">Video storage is over 80% of the cap. Consider pausing new video uploads.</Message>
         ) : share >= 0.5 ? (
           <Message tone="info">Video storage is over half of the cap.</Message>
         ) : null}
@@ -651,6 +686,19 @@ export function VideoReadinessPanel() {
           </label>
           <button type="submit" className={buttonClass('secondary', 'md') + ' min-h-11'}>
             Save cap
+          </button>
+        </form>
+        <form onSubmit={stop} className="space-y-2 rounded-2xl border border-[#f0c8c2] bg-[#fdf3f1] p-4" aria-labelledby="video-emergency-title">
+          <h3 id="video-emergency-title" className="font-semibold text-ink-900">
+            Emergency stop
+          </h3>
+          <p className="text-[14px] text-ink-700">Turns off new uploads and playback together, at once, for everyone. Turn each back on under Operational switches.</p>
+          <label className="block text-sm font-semibold text-ink-800">
+            Reason (recorded)
+            <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={280} className={field} />
+          </label>
+          <button type="submit" className={buttonClass('danger', 'md') + ' min-h-11'} disabled={!s.enabled && !s.playbackEnabled}>
+            Stop all video now
           </button>
         </form>
         {done && <Message tone="success">{done}</Message>}

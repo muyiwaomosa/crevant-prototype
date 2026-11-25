@@ -216,6 +216,7 @@ declare
   video text[] := array[
     'public.app_founder_record_device_test(text,boolean,text)',
     'public.app_founder_set_video_cap(integer)',
+    'public.app_founder_video_emergency_stop(text)',
     'public.app_founder_video_status()',
     'public.app_post_videos(uuid[])',
     'public.app_video_status()',
