@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Heart, MessageCircle, Sparkles, Trash2, Users } from 'lucide-react'
+import { Check, Heart, MessageCircle, Repeat2, Sparkles, Trash2, Users } from 'lucide-react'
 import { Card, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
@@ -11,6 +11,7 @@ import { useTrackView } from './ViewTracker'
 import { ReportButton } from './moderation'
 import { PictureAvatar } from './avatars'
 import { PostPhoto } from './media'
+import { EditPost, PostMetaLine, SaveRepostButtons } from './content'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
   return <PictureAvatar id={member.id} name={member.displayName} size={size} />
@@ -48,6 +49,8 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const [body, setBody] = useState(post.body)
+  useEffect(() => setBody(post.body), [post.body])
   useEffect(() => {
     setLiked(post.likedByMe)
     setLikes(post.likeCount)
@@ -88,12 +91,18 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
   return (
     <Card className="p-4 sm:p-5">
       <article ref={trackView} aria-label={`Post by ${post.author.displayName}`} data-testid="post">
+        {post.repostedBy && (
+          <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-600" data-testid="reposted-by">
+            <Repeat2 className="h-4 w-4" aria-hidden="true" /> Reposted by <MemberLink member={post.repostedBy} className="text-[13px]" />
+          </p>
+        )}
         <header className="flex items-center gap-3">
           <MemberAvatar member={post.author} />
           <div className="min-w-0 flex-1 leading-tight">
             <MemberLink member={post.author} />
             <p className="truncate text-[13px] text-ink-500">
               @{post.author.username} · <When iso={post.createdAt} />
+              <PostMetaLine postId={post.id} />
             </p>
           </div>
           {post.authorInMyClique && (
@@ -103,8 +112,8 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
           )}
         </header>
         {post.media && <PostPhoto post={post} />}
-        {post.body !== '' && <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-800">{post.body}</p>}
-        <footer className="mt-3 flex items-center gap-1">
+        {body !== '' && <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-800">{body}</p>}
+        <footer className="mt-3 flex flex-wrap items-center gap-1">
           <button
             type="button"
             onClick={toggleLike}
@@ -140,9 +149,11 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
               <span className="sr-only">{post.commentCount === 1 ? ' comment' : ' comments'}</span>
             </span>
           )}
+          <SaveRepostButtons post={post} />
           {!post.isMine && <ReportButton target="post" targetId={post.id} name={post.author.displayName} className="ml-auto" />}
           {post.isMine && onDeleted && (
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2 has-[.post-editor]:w-full">
+              {!confirming && <EditPost post={{ ...post, body }} onEdited={setBody} />}
               {confirming ? (
                 <>
                   <span className="text-sm text-ink-600">Delete this post?</span>

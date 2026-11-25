@@ -15,7 +15,8 @@ Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 | IP-1 Foundation | Yes | Yes, CI 6 of 6 | Yes, PR #106, Nov 25 | Database: apply run awaiting environment approval. Then founder Auth settings (A3) and staging access (A4) | Pending | Production registration paused, launch gate closed |
 | IP-2 Relationships and Home | Yes | Yes, CI 6 of 6, all 8 browser journeys | Yes, PR #107, Nov 25 | Same apply run as IP-1 (migrations apply in order). No Auth step | Pending | Active Supporter definition provisional until metric review (N8) |
 | IP-3 Governance core | Not started | | | | | Awaiting authorization |
-| IP-4 Content and discovery | In progress | | | | | Value and intent-based discovery, basic search kept |
+| IP-4a Content (topics, editing, saves, reposts) | Yes | Local: all suites and 9 browser journeys pass; CI pending | No | No | No | Review guide `docs/CONTENT.md`; no dashboard step |
+| IP-4b Discovery and sharing | In progress | | | | | Value and intent-based discovery, basic search kept; public previews need a separate founder decision |
 | IP-5 Video posts | Not started | | | | | Depends on the device test |
 | IP-6 Contributions and rewards | Not started | | | | | Depends on IP-4 |
 | IP-7 Advertising | Not started | | | | | Depends on IP-3, IP-4 |

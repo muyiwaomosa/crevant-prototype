@@ -150,7 +150,8 @@ const makePhoto = (page, w, h) =>
       && [img, change, remove, caption, post].every((b) => b.x >= 0 && b.x + b.width <= vw)
   }
   check('at 390px: photo, then Change photo and Remove photo (44px targets), then the caption, then Post', await layout())
-  // Keyboard: from Change photo, Tab moves to Remove photo, then the caption, then Post.
+  // Keyboard: from Change photo, Tab moves to Remove photo, then the caption,
+  // then the optional topic (20261202000000), then Post.
   {
     const focused = (l) => l.evaluate((el) => el === document.activeElement)
     await form.getByRole('button', { name: 'Change photo' }).focus()
@@ -159,8 +160,10 @@ const makePhoto = (page, w, h) =>
     await pageP.keyboard.press('Tab')
     const b = await focused(form.getByRole('textbox', { name: 'Write a post' }))
     await pageP.keyboard.press('Tab')
+    const t = await focused(form.getByRole('combobox', { name: 'Topic (optional)' }))
+    await pageP.keyboard.press('Tab')
     const c = await focused(form.getByRole('button', { name: 'Post', exact: true }))
-    check('Tab order: Change photo, Remove photo, the caption, then Post', a && b && c, `${a} ${b} ${c}`)
+    check('Tab order: Change photo, Remove photo, the caption, the topic, then Post', a && b && t && c, `${a} ${b} ${t} ${c}`)
   }
   {
     const v = await axe(pageP, 'main')

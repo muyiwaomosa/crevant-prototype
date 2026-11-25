@@ -24,6 +24,7 @@ import {
 import { useAppApi } from "./AppApiContext";
 import { ErrorNote, When } from "./components";
 import { preparePhoto } from "./photoPrep";
+import { TopicSelect, useTopicList } from "./content";
 
 /**
  * Photo posts (Build 5.3).
@@ -296,6 +297,8 @@ export type NewPost = {
   text: string;
   requestId: string;
   photo?: { uploadId: string; description: string };
+  /** Content (20261202000000): an optional topic from the approved list. */
+  topic?: string;
 };
 
 export function PostComposer({
@@ -342,6 +345,8 @@ function PhotoComposer({
   const textId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
+  const topics = useTopicList();
+  const [topic, setTopic] = useState("");
   const [photo, setPhoto] = useState<{
     blob: Blob;
     preview: string;
@@ -409,10 +414,16 @@ function PhotoComposer({
       if (!request.current || request.current.key !== key)
         request.current = { key, id: newRequestId() };
       setStage("posting");
-      await onPost({ text, requestId: request.current.id, photo: photoPart });
+      await onPost({
+        text,
+        requestId: request.current.id,
+        photo: photoPart,
+        topic: topic || undefined,
+      });
       request.current = null;
       uploaded.current = null;
       setText("");
+      setTopic("");
       setPhoto(null);
     } catch (err) {
       // An expired or unusable upload can't be retried: the photo is sent again next time.
@@ -486,7 +497,7 @@ function PhotoComposer({
         className="block w-full resize-y rounded-2xl border border-ink-200 bg-white px-4 py-3 text-[15px] leading-relaxed text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {photosEnabled && !photo && (
             <button
               type="button"
@@ -496,6 +507,9 @@ function PhotoComposer({
             >
               <ImagePlus className="h-4 w-4" aria-hidden="true" /> Add photo
             </button>
+          )}
+          {topics && topics.length > 0 && (
+            <TopicSelect value={topic} onChange={setTopic} topics={topics} />
           )}
           <span
             className={clsx(

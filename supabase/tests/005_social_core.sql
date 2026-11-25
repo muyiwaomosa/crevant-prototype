@@ -49,7 +49,9 @@ begin
                             -- photo posts (20261127000000), once applied
                             'media_uploads', 'post_media',
                             -- relationships (20261201000000), once applied
-                            'mutes', 'mute_events')
+                            'mutes', 'mute_events',
+                            -- content (20261202000000), once applied
+                            'post_edits', 'saves', 'reposts', 'content_actions')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -89,6 +91,8 @@ declare
   -- Relationships (20261201000000), once applied: mute, Clique first Home,
   -- Support Intent, relationship lists and audience insight.
   relationships text[] := array['app_home_priority', 'app_mute', 'app_my_audience', 'app_my_relationships', 'app_record_support_intent', 'app_support_intent', 'app_unmute'];
+  -- Content (20261202000000), once applied: topics, editing, saves, reposts, Home with reposts.
+  content text[] := array['app_edit_post', 'app_feed_items_page', 'app_post_edits', 'app_post_meta', 'app_repost', 'app_save', 'app_saved_page', 'app_set_post_topic', 'app_unrepost', 'app_unsave'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -111,6 +115,9 @@ begin
   end if;
   if to_regclass('social.mutes') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || relationships) x);
+  end if;
+  if to_regclass('social.saves') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || content) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -177,7 +184,10 @@ begin
           when to_regclass('social.mutes') is null
           then array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_media_json', 'post_views_are_permanent', 'rate_check']
           -- Relationships (20261201000000) add Active Supporter, meaningful activity and the mute history guard.
-          else array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_active_supporter', 'is_member', 'meaningful_comment', 'mute_history_is_append_only', 'post_media_json', 'post_views_are_permanent', 'rate_check']
+          when to_regclass('social.saves') is null
+          then array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_active_supporter', 'is_member', 'meaningful_comment', 'mute_history_is_append_only', 'post_media_json', 'post_views_are_permanent', 'rate_check']
+          -- Content (20261202000000) adds its rate limit and history guard.
+          else array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'content_history_is_append_only', 'content_rate_check', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_active_supporter', 'is_member', 'meaningful_comment', 'mute_history_is_append_only', 'post_media_json', 'post_views_are_permanent', 'rate_check']
         end) then
     raise exception 'FAIL: the social helper and trigger functions are not the approved set (found %)', n;
   end if;

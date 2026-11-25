@@ -406,18 +406,25 @@ describe('foundation v2 (20261130000000): complete paging, adult confirmation, r
   })
   const MISSING = (fn: string) => ({ code: 'PGRST202', message: `Could not find the function public.${fn}(p_before_at, p_before_id, p_filter, p_limit) in the schema cache` })
 
-  it('pages Home on (created_at, id) with the face filter', async () => {
-    const { api, calls } = fakeClient([{ data: [row('p2', '2026-11-30T12:00:00Z')] }])
+  it('pages Home with reposts on (activity, id) with the face filter (20261202000000)', async () => {
+    const { api, calls } = fakeClient([{ data: [{ ...row('p2', '2026-11-30T12:00:00Z'), activity_at: '2026-11-30T13:00:00Z', reposted_by_id: 'r1', reposted_by_username: 'rae', reposted_by_display_name: 'Rae' }] }])
+    const posts = await api.feed({ createdAt: '2026-11-30T14:00:00Z', id: 'p3' }, 'all')
+    expect(posts.map((p) => [p.id, p.activityAt, p.repostedBy?.username])).toEqual([['p2', '2026-11-30T13:00:00Z', 'rae']])
+    expect(calls).toEqual([{ fn: 'app_feed_items_page', args: { p_before_at: '2026-11-30T14:00:00Z', p_before_id: 'p3', p_limit: 20, p_filter: 'all' } }])
+  })
+
+  it('before content, pages Home on (created_at, id) with the face filter', async () => {
+    const { api, calls } = fakeClient([{ error: MISSING('app_feed_items_page') }, { data: [row('p2', '2026-11-30T12:00:00Z')] }])
     const posts = await api.feed({ createdAt: '2026-11-30T12:00:00Z', id: 'p3' }, 'clique')
     expect(posts.map((p) => p.id)).toEqual(['p2'])
-    expect(calls).toEqual([{ fn: 'app_feed_page', args: { p_before_at: '2026-11-30T12:00:00Z', p_before_id: 'p3', p_limit: 20, p_filter: 'clique' } }])
+    expect(calls[1]).toEqual({ fn: 'app_feed_page', args: { p_before_at: '2026-11-30T12:00:00Z', p_before_id: 'p3', p_limit: 20, p_filter: 'clique' } })
   })
 
   it('before the migration, falls back to time-only paging and filters My Clique in the app', async () => {
-    const { api, calls } = fakeClient([{ error: MISSING('app_feed_page') }, { data: [row('a', '2026-11-30T12:00:00Z', true), row('b', '2026-11-30T11:00:00Z', false)] }])
+    const { api, calls } = fakeClient([{ error: MISSING('app_feed_items_page') }, { error: MISSING('app_feed_page') }, { data: [row('a', '2026-11-30T12:00:00Z', true), row('b', '2026-11-30T11:00:00Z', false)] }])
     const posts = await api.feed(undefined, 'clique')
     expect(posts.map((p) => p.id)).toEqual(['a'])
-    expect(calls[1]).toEqual({ fn: 'app_feed', args: { p_before: null, p_limit: 20 } })
+    expect(calls[2]).toEqual({ fn: 'app_feed', args: { p_before: null, p_limit: 20 } })
   })
 
   it('any other paging error is reported, never silently downgraded', async () => {

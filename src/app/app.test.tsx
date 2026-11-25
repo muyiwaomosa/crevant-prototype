@@ -41,7 +41,7 @@ vi.mock('./photoPrep', async (importOriginal) => {
   }
 })
 import { clampOffset, coverScale, sourceRect } from './avatars'
-import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
+import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage, SavedPage } from './pages'
 import { MySplitPage } from './split'
 
 afterEach(cleanup)
@@ -86,6 +86,11 @@ function fakeApi(
   const mutes = new Set<string>()
   const followSources = new Map<string, string | undefined>()
   const supportIntents = new Map<string, string>()
+  // Content (20261202000000): topics, edits, saves, reposts.
+  const postTopics = new Map<string, string>()
+  const edits = new Map<string, Array<{ previousBody: string; previousTopic: string | null; editedAt: string }>>()
+  const saves = new Map<string, number>()
+  const reposts = new Set<string>()
   const likes = new Set<string>()
   const comments: Array<{ id: string; post: string; author: string; body: string; at: number; deleted: boolean }> = []
   let clock = Date.parse('2026-11-17T12:00:00Z')
@@ -635,6 +640,72 @@ function fakeApi(
       complete()
       return (supportIntents.get(key(meId, id)) ?? null) as 'usd_3' | 'usd_5' | 'usd_10' | 'not_sure' | null
     },
+    async postMeta(ids) {
+      complete()
+      const out: Record<string, { topic: string | null; topicLabel: string | null; editedAt: string | null; savedByMe: boolean; repostCount: number; repostedByMe: boolean }> = {}
+      for (const id of ids) {
+        const p = posts.find((x) => x.id === id && !x.deleted)
+        if (!p) continue
+        const t = postTopics.get(id) ?? null
+        out[id] = {
+          topic: t,
+          topicLabel: t ? (topicList.find((x) => x.slug === t)?.label ?? t) : null,
+          editedAt: edits.get(id)?.[0]?.editedAt ?? null,
+          savedByMe: saves.has(key(meId, id)),
+          repostCount: [...reposts].filter((k) => k.endsWith(`>${id}`)).length,
+          repostedByMe: reposts.has(key(meId, id)),
+        }
+      }
+      return out
+    },
+    async setPostTopic(id, topic) {
+      const p = posts.find((x) => x.id === id && !x.deleted && x.author === meId)
+      if (!p || postTopics.has(id)) throw new AppApiError('not_found')
+      if (!topicList.some((t) => t.slug === topic)) throw new AppApiError('unknown_topic')
+      postTopics.set(id, topic)
+    },
+    async editPost(id, body, topic) {
+      maybeFail('editPost')
+      const p = posts.find((x) => x.id === id && !x.deleted && x.author === meId)
+      if (!p) throw new AppApiError('not_found')
+      const b = body.trim()
+      if (!b && !p.media) throw new AppApiError('empty')
+      if (b === p.body && (topic ?? null) === (postTopics.get(id) ?? null)) return
+      edits.set(id, [{ previousBody: p.body, previousTopic: postTopics.get(id) ?? null, editedAt: new Date((clock += 1000)).toISOString() }, ...(edits.get(id) ?? [])])
+      p.body = b
+      if (topic) postTopics.set(id, topic)
+      else postTopics.delete(id)
+    },
+    async postEdits(id) {
+      return edits.get(id) ?? []
+    },
+    async save(id) {
+      maybeFail('save')
+      live(id)
+      if (!saves.has(key(meId, id))) saves.set(key(meId, id), (clock += 1000))
+    },
+    async unsave(id) {
+      saves.delete(key(meId, id))
+    },
+    async savedPosts(before) {
+      complete()
+      return [...saves]
+        .filter(([k]) => k.startsWith(`${meId}>`))
+        .map(([k, at]) => ({ p: posts.find((x) => x.id === k.split('>')[1] && !x.deleted), at }))
+        .filter((x): x is { p: (typeof posts)[number]; at: number } => !!x.p)
+        .sort((a, b) => b.at - a.at)
+        .filter((x) => !before || x.at < Date.parse(before.createdAt))
+        .map((x) => ({ ...toP(x.p), activityAt: new Date(x.at).toISOString() }))
+    },
+    async repost(id) {
+      const p = posts.find((x) => x.id === id && !x.deleted)
+      if (!p) throw new AppApiError('not_found')
+      if (p.author === meId) throw new AppApiError('cannot_repost_own')
+      reposts.add(key(meId, id))
+    },
+    async unrepost(id) {
+      reposts.delete(key(meId, id))
+    },
     async recordSupportIntent(id, choice) {
       maybeFail('recordSupportIntent')
       if (id === meId) throw new AppApiError('invalid_request')
@@ -749,7 +820,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
+  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -774,6 +845,7 @@ function renderApp(path: string, api: AppApi) {
             <Route path="post/:id" element={<PostPage />} />
             <Route path="u/:username" element={<MemberPage />} />
             <Route path="clique" element={<CliquePage />} />
+            <Route path="saved" element={<SavedPage />} />
             <Route path="split" element={<MySplitPage />} />
             <Route path="catch-up/:username" element={<CatchUpPage />} />
             <Route path="profile" element={<ProfilePage />} />
@@ -2638,5 +2710,80 @@ describe('photo posts (Build 5.3)', () => {
     await screen.findByRole('heading', { name: 'Photo storage' })
     expect(screen.getByText('Off')).toBeTruthy()
     expect(screen.getByText(/hasn't run in the last 2 hours/)).toBeTruthy()
+  })
+})
+
+describe('content (20261202000000): topics, saves, reposts, editing', () => {
+  it('a post can carry a topic from the composer, shown on its card', async () => {
+    const fake = fakeApi()
+    renderApp('/app/new', fake.api)
+    fireEvent.change(await screen.findByLabelText('Write a post'), { target: { value: 'My weekly budget, explained' } })
+    fireEvent.change(await screen.findByLabelText('Topic (optional)'), { target: { value: 'money' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    expect(await screen.findByTestId('post-topic')).toBeTruthy()
+    expect(screen.getByTestId('post-topic').textContent).toBe('Money & business')
+    expect([...fake.postTopics.values()]).toEqual(['money'])
+  })
+
+  it('saving keeps a post in the private Saved list; tapping again removes it', async () => {
+    const fake = fakeApi()
+    fake.follows.add(fake.key('me', 'c1'))
+    fake.seedPost('c1', 'Worth keeping')
+    renderApp('/app?face=following', fake.api)
+    const card = within(await screen.findByTestId('post'))
+    fireEvent.click(await card.findByRole('button', { name: 'Save' }))
+    expect(await card.findByRole('button', { name: 'Saved (tap to remove)' })).toBeTruthy()
+    cleanup()
+    renderApp('/app/saved', fake.api)
+    expect(await screen.findByText('Worth keeping')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'Saved (tap to remove)' }))
+    await waitFor(() => expect(fake.saves.size).toBe(0))
+    cleanup()
+    renderApp('/app/saved', fake.api)
+    expect(await screen.findByText('Nothing saved yet')).toBeTruthy()
+  })
+
+  it('reposting someone else\'s post counts it; your own posts offer no repost', async () => {
+    const fake = fakeApi()
+    fake.follows.add(fake.key('me', 'c1'))
+    fake.seedPost('c1', 'Share this one')
+    fake.seedPost('me', 'My own post')
+    renderApp('/app?face=following', fake.api)
+    const others = within((await screen.findAllByTestId('post')).find((p) => p.textContent?.includes('Share this one'))!)
+    fireEvent.click(await others.findByRole('button', { name: 'Repost, 0 reposts' }))
+    expect(await others.findByRole('button', { name: 'Undo repost, 1 repost' })).toBeTruthy()
+    expect(fake.reposts.has(fake.key('me', 'p001'))).toBe(true)
+    const mine = within(screen.getAllByTestId('post').find((p) => p.textContent?.includes('My own post'))!)
+    expect(mine.queryByRole('button', { name: /Repost/ })).toBeNull()
+  })
+
+  it('the author edits their post: the text and topic change, "Edited" shows, and the earlier version is kept', async () => {
+    const fake = fakeApi()
+    const id = fake.seedPost('me', 'First draft')
+    renderApp(`/app/post/${id}`, fake.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit post' }))
+    const editor = within(screen.getByTestId('post-editor'))
+    fireEvent.change(editor.getByLabelText('Edit your post'), { target: { value: 'Final version' } })
+    fireEvent.change(editor.getByLabelText('Topic'), { target: { value: 'tech' } })
+    expect(editor.getByText(/People will see that this post was edited/)).toBeTruthy()
+    fireEvent.click(editor.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText('Final version')).toBeTruthy()
+    expect(await screen.findByTestId('post-edited')).toBeTruthy()
+    expect(screen.getByTestId('post-topic').textContent).toBe('Tech')
+    expect(fake.edits.get(id)?.[0]).toMatchObject({ previousBody: 'First draft', previousTopic: null })
+  })
+
+  it('a reposted post on Home says who reposted it', async () => {
+    const fake = fakeApi()
+    const post = toPost({
+      id: 'p9', author_id: 'c2', author_username: 'creator_2', author_display_name: 'Creator 2', body: 'Reached you through a repost',
+      created_at: '2026-11-17T12:00:00Z', like_count: 0, comment_count: 0, liked_by_me: false, author_in_my_clique: false, is_mine: false,
+      activity_at: '2026-11-17T13:00:00Z', reposted_by_id: 'c1', reposted_by_username: 'creator_1', reposted_by_display_name: 'Creator 1',
+    })
+    expect(post.repostedBy).toEqual({ id: 'c1', username: 'creator_1', displayName: 'Creator 1' })
+    expect(post.activityAt).toBe('2026-11-17T13:00:00Z')
+    fake.api.feed = async () => [post]
+    renderApp('/app?face=following', fake.api)
+    expect((await screen.findByTestId('reposted-by')).textContent).toMatch(/Reposted by Creator 1/)
   })
 })

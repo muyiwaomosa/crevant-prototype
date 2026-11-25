@@ -21,3 +21,4 @@
 014_member_launch_gate.sql 20261129000000
 016_foundation_v2.sql 20261130000000
 017_relationships.sql 20261201000000
+018_content.sql 20261202000000
