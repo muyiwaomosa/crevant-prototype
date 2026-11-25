@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { AdvertisePage, PrivacyPage as MemberPrivacyPage } from './account'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -14,6 +15,15 @@ import {
   toPost,
   usernameProblem,
   type AppApi,
+  type CreatorSetup,
+  type Inviter,
+  type RegistrationSettings,
+  type InvitationLink,
+  type MyAdvertising,
+  type AdvertisingRequest,
+  type Features,
+  type FounderSwitches,
+  type FounderMemberRequest,
   type FeedbackEntry,
   type PhotoLinks,
   type PostMedia,
@@ -89,7 +99,7 @@ function fakeApi(
     users.set(id, { id, username, displayName, createdAt: '2026-11-17T10:00:00Z' })
   if (opts.profile !== null) {
     const pr = opts.profile ?? {}
-    add(meId, 'username' in pr ? pr.username ?? null : 'mia', 'displayName' in pr ? pr.displayName ?? null : 'Mia')
+    add(meId, 'username' in pr ? (pr.username ?? null) : 'mia', 'displayName' in pr ? (pr.displayName ?? null) : 'Mia')
   }
   for (let i = 1; i <= (opts.creators ?? 11); i++) add(`c${i}`, `creator_${i}`, `Creator ${i}`)
   const posts: Array<{ id: string; author: string; body: string; at: number; deleted: boolean; hidden?: boolean; media?: PostMedia }> = []
@@ -111,14 +121,42 @@ function fakeApi(
   const searchNotes: Array<Record<string, unknown>> = []
   const previews = { allowed: false }
   const rewards = {
-    points: null as null | { recognized: number; redeemablePending: number; redeemableApproved: number; settled: number; simulatedPointValueCents: number; simulatedValueCents: number },
-    history: [] as Array<{ id: number; action: string; points: number; redeemable: boolean; status: string; createdAt: string; creator: { username: string; displayName: string } | null; postId: string | null }>,
+    points: null as null | {
+      recognized: number
+      redeemablePending: number
+      redeemableApproved: number
+      settled: number
+      simulatedPointValueCents: number
+      simulatedValueCents: number
+    },
+    history: [] as Array<{
+      id: number
+      action: string
+      points: number
+      redeemable: boolean
+      status: string
+      createdAt: string
+      creator: { username: string; displayName: string } | null
+      postId: string | null
+    }>,
     earnings: null as null | Array<{ month: string; creatorCents: number }>,
     queue: [] as Array<{ awardId: number; referrer: string | null; referred: string | null; firstFollow: string | null; createdAt: string }>,
     reviewed: [] as Array<{ id: number; approve: boolean }>,
     revenue: [] as Array<{ month: string; kind: string; creatorId: string | null; netCents: number; note: string }>,
     closed: [] as string[],
-    overview: null as null | { recognized: number; redeemablePending: number; redeemableApproved: number; settled: number; revenueCents: number; creatorCents: number; poolCents: number; splitpostCents: number; openPoolCents: number; paused: boolean; ruleVersion: string },
+    overview: null as null | {
+      recognized: number
+      redeemablePending: number
+      redeemableApproved: number
+      settled: number
+      revenueCents: number
+      creatorCents: number
+      poolCents: number
+      splitpostCents: number
+      openPoolCents: number
+      paused: boolean
+      ruleVersion: string
+    },
   }
   const likes = new Set<string>()
   const comments: Array<{ id: string; post: string; author: string; body: string; at: number; deleted: boolean }> = []
@@ -167,12 +205,22 @@ function fakeApi(
   const savedDetails: ProfileDetails[] = []
   const detailsOf = (id: string): ProfileDetails => {
     const d = details.get(id)
-    return d ? { identity: d.identity, bio: d.bio, followReason: d.followReason, topics: [...d.topics] } : { identity: null, bio: null, followReason: null, topics: [] }
+    return d
+      ? { identity: d.identity, bio: d.bio, followReason: d.followReason, topics: [...d.topics] }
+      : { identity: null, bio: null, followReason: null, topics: [] }
   }
   // Reports and moderation, with the database's rules.
   type FakeReport = {
-    id: string; reporter: string; targetType: 'post' | 'profile' | 'comment'; targetId: string; owner: string; reason: string
-    details: string | null; snapshot: Record<string, string | null>; status: 'open' | 'hidden' | 'dismissed' | 'restored'; at: number
+    id: string
+    reporter: string
+    targetType: 'post' | 'profile' | 'comment'
+    targetId: string
+    owner: string
+    reason: string
+    details: string | null
+    snapshot: Record<string, string | null>
+    status: 'open' | 'hidden' | 'dismissed' | 'restored'
+    at: number
   }
   const reports: FakeReport[] = []
   const ads = {
@@ -199,13 +247,52 @@ function fakeApi(
     overview: null as FounderOverview | null,
     opens: [] as string[],
   }
+  // Unified onboarding, privacy requests and switches (20261211000000, 20261212000000).
+  const onb = {
+    setup: { postingTopics: [] as string[], posts: 0, followers: 0, joinedThroughMyLink: 0 } as CreatorSetup | null,
+    inviter: null as Inviter | null,
+    topicCalls: [] as string[][],
+    registration: {
+      paused: true,
+      totalCap: 200,
+      dailyCap: 25,
+      perReferrerDailyCap: 5,
+      registeredTotal: 0,
+      registeredToday: 0,
+      externalAccessApproved: false,
+      updatedAt: null,
+    } as RegistrationSettings,
+    registrationCalls: [] as Array<{ paused: boolean; reason: string }>,
+    links: [] as InvitationLink[],
+    advertising: { requests: [], campaigns: [] } as MyAdvertising,
+    adRequests: [] as AdvertisingRequest[],
+    report: null as CampaignReport | null,
+    features: { ads: true, sharing: true, videoPosts: false, photos: false, rewards: true } as Features,
+    switches: [
+      { feature: 'ads', enabled: true, updatedAt: '2026-12-01T00:00:00Z' },
+      { feature: 'sharing', enabled: true, updatedAt: '2026-12-01T00:00:00Z' },
+      { feature: 'video_posts', enabled: false, updatedAt: '2026-12-01T00:00:00Z' },
+    ] as FounderSwitches['switches'],
+    switchCalls: [] as Array<{ feature: string; enabled: boolean; reason: string }>,
+    requests: [] as FounderMemberRequest[],
+    resolved: [] as Array<{ id: number; completed: boolean; note: string }>,
+    deleted: [] as Array<{ id: number; username: string }>,
+  }
   const governance = {
     blocks: [] as Array<{ id: string; username: string; displayName: string; blockedAt: string }>,
     blockCalls: [] as Array<{ id: string; block: boolean }>,
     standing: null as null | { standing: 'restricted' | 'suspended'; endsAt: string | null },
     notices: [] as MemberNotice[],
     appealed: [] as Array<{ noticeId: number; body: string }>,
-    enforced: [] as Array<{ memberId: string; level: string; reason: string; reportId: string | null; days: number | null; immediate?: boolean; note?: string }>,
+    enforced: [] as Array<{
+      memberId: string
+      level: string
+      reason: string
+      reportId: string | null
+      days: number | null
+      immediate?: boolean
+      note?: string
+    }>,
     lifted: [] as number[],
     record: null as MemberRecord | null,
     appeals: [] as ModAppeal[],
@@ -246,7 +333,8 @@ function fakeApi(
   const access: { status: 'active' | 'none' | 'revoked' | 'expired' | 'attestation_required'; expiresAt: string | null } = { status: 'active', expiresAt: null }
   // Pages on (time, id), newest first, like app_feed_page (20261130000000).
   const newestFirst = (a: { at: number; id: string }, b: { at: number; id: string }) => b.at - a.at || (b.id < a.id ? -1 : b.id > a.id ? 1 : 0)
-  const afterCursor = (p: { at: number; id: string }, c?: { createdAt: string; id: string }) => !c || p.at < Date.parse(c.createdAt) || (p.at === Date.parse(c.createdAt) && p.id < c.id)
+  const afterCursor = (p: { at: number; id: string }, c?: { createdAt: string; id: string }) =>
+    !c || p.at < Date.parse(c.createdAt) || (p.at === Date.parse(c.createdAt) && p.id < c.id)
   const maybeFail = (name: keyof AppApi) => {
     if (failures[name]) throw failures[name]
   }
@@ -290,7 +378,13 @@ function fakeApi(
     async feed(before, filter = 'all') {
       complete()
       return posts
-        .filter((p) => !p.deleted && !mutes.has(key(meId, p.author)) && (filter === 'clique' ? clique.has(key(meId, p.author)) : p.author === meId || follows.has(key(meId, p.author))) && afterCursor(p, before))
+        .filter(
+          (p) =>
+            !p.deleted &&
+            !mutes.has(key(meId, p.author)) &&
+            (filter === 'clique' ? clique.has(key(meId, p.author)) : p.author === meId || follows.has(key(meId, p.author))) &&
+            afterCursor(p, before),
+        )
         .sort(newestFirst)
         .slice(0, 20)
         .map(toP)
@@ -365,7 +459,13 @@ function fakeApi(
       if ((d.bio ?? '').trim().length > 160) throw new AppApiError('bio_too_long')
       if (d.topics.length > 5) throw new AppApiError('too_many_topics')
       savedDetails.push({ ...d, topics: [...d.topics] })
-      details.set(meId, { identity: d.identity, bio: d.bio?.trim() || null, followReason: d.followReason?.trim() || null, topics: [...new Set(d.topics)], onboarded: true })
+      details.set(meId, {
+        identity: d.identity,
+        bio: d.bio?.trim() || null,
+        followReason: d.followReason?.trim() || null,
+        topics: [...new Set(d.topics)],
+        onboarded: true,
+      })
     },
     async memberDetails(id) {
       if (detailsMode === 'absent') return null
@@ -396,7 +496,14 @@ function fakeApi(
       if ([...body.trim()].length > 2000) throw new AppApiError('too_long')
       u.used = true
       const id = `p${String(++n).padStart(3, '0')}`
-      posts.push({ id, author: meId, body: body.trim(), at: (clock += 1000), deleted: false, media: { kind: 'photo', width: u.width, height: u.height, description: description?.trim() || null } })
+      posts.push({
+        id,
+        author: meId,
+        body: body.trim(),
+        at: (clock += 1000),
+        deleted: false,
+        media: { kind: 'photo', width: u.width, height: u.height, description: description?.trim() || null },
+      })
       requests.set(requestId, { id, body: body.trim() })
       return id
     },
@@ -421,10 +528,22 @@ function fakeApi(
     async mediaStatus() {
       requireModerator()
       return {
-        photosEnabled: photo.on, capBytes: 1_000_000_000, usedBytes: 52_428_800, photoPosts: posts.filter((p) => p.media && !p.deleted).length,
-        queued: 2, oldestQueuedAt: null, failing: 1, gaveUp: 0, held: 1, heldOpenOver30Days: 1,
-        lastScheduledAt: new Date(Date.now() - 3 * 3600_000).toISOString(), lastRunAt: null, lastRunFailed: false,
-        egressReviewGb: 10, egressPauseGb: 20, checks: [],
+        photosEnabled: photo.on,
+        capBytes: 1_000_000_000,
+        usedBytes: 52_428_800,
+        photoPosts: posts.filter((p) => p.media && !p.deleted).length,
+        queued: 2,
+        oldestQueuedAt: null,
+        failing: 1,
+        gaveUp: 0,
+        held: 1,
+        heldOpenOver30Days: 1,
+        lastScheduledAt: new Date(Date.now() - 3 * 3600_000).toISOString(),
+        lastRunAt: null,
+        lastRunFailed: false,
+        egressReviewGb: 10,
+        egressPauseGb: 20,
+        checks: [],
       }
     },
     async modMediaDrain() {
@@ -459,16 +578,32 @@ function fakeApi(
       const u = users.get(meId)!
       const id = `fb${++n}`
       feedback.unshift({
-        id, category: input.category, feature: input.feature, body, status: 'new', cohort: 'tester',
-        submitterUsername: u.username, submitterName: u.displayName, noteCount: 0, createdAt: at, updatedAt: at,
-        requestId, notes: [], history: [],
+        id,
+        category: input.category,
+        feature: input.feature,
+        body,
+        status: 'new',
+        cohort: 'tester',
+        submitterUsername: u.username,
+        submitterName: u.displayName,
+        noteCount: 0,
+        createdAt: at,
+        updatedAt: at,
+        requestId,
+        notes: [],
+        history: [],
       })
       return id
     },
     async feedbackInbox(filters) {
       requireFounder()
       return feedback
-        .filter((f) => (!filters.category || f.category === filters.category) && (!filters.status || f.status === filters.status) && (!filters.cohort || f.cohort === filters.cohort))
+        .filter(
+          (f) =>
+            (!filters.category || f.category === filters.category) &&
+            (!filters.status || f.status === filters.status) &&
+            (!filters.cohort || f.cohort === filters.cohort),
+        )
         .map(({ requestId: _r, notes, history: _h, ...f }) => ({ ...f, noteCount: notes.length }))
     },
     async feedbackEntry(id) {
@@ -522,8 +657,20 @@ function fakeApi(
         snapshot = { username: u.username, display_name: u.displayName, bio: detailsOf(targetId).bio, follow_reason: detailsOf(targetId).followReason }
       }
       if (owner === meId) throw new AppApiError('cannot_report_self')
-      if (reports.some((r) => r.reporter === meId && r.targetType === targetType && r.targetId === targetId && r.status === 'open')) throw new AppApiError('already_reported')
-      reports.push({ id: `r${reports.length + 1}`, reporter: meId, targetType, targetId, owner, reason, details: details?.trim() || null, snapshot, status: 'open', at: (clock += 1000) })
+      if (reports.some((r) => r.reporter === meId && r.targetType === targetType && r.targetId === targetId && r.status === 'open'))
+        throw new AppApiError('already_reported')
+      reports.push({
+        id: `r${reports.length + 1}`,
+        reporter: meId,
+        targetType,
+        targetId,
+        owner,
+        reason,
+        details: details?.trim() || null,
+        snapshot,
+        status: 'open',
+        at: (clock += 1000),
+      })
     },
     async modQueue(status) {
       requireModerator()
@@ -532,10 +679,18 @@ function fakeApi(
         .filter((r) => (status === 'open' ? r.status === 'open' : r.status !== 'open'))
         .sort((a, b) => priority(b) - priority(a) || a.at - b.at)
         .map((r) => ({
-          id: r.id, targetType: r.targetType, targetId: r.targetId, reason: r.reason as never, priority: priority(r) === 1, hasDetails: r.details !== null,
-          excerpt: r.snapshot.body ?? r.snapshot.bio ?? r.snapshot.display_name ?? '', targetUsername: r.snapshot.author_username ?? r.snapshot.username ?? null,
+          id: r.id,
+          targetType: r.targetType,
+          targetId: r.targetId,
+          reason: r.reason as never,
+          priority: priority(r) === 1,
+          hasDetails: r.details !== null,
+          excerpt: r.snapshot.body ?? r.snapshot.bio ?? r.snapshot.display_name ?? '',
+          targetUsername: r.snapshot.author_username ?? r.snapshot.username ?? null,
           openReportsForTarget: reports.filter((o) => o.targetId === r.targetId && o.status === 'open').length,
-          status: r.status, createdAt: new Date(r.at).toISOString(), resolvedAt: r.status === 'open' ? null : new Date(r.at).toISOString(),
+          status: r.status,
+          createdAt: new Date(r.at).toISOString(),
+          resolvedAt: r.status === 'open' ? null : new Date(r.at).toISOString(),
         }))
     },
     async modReport(id) {
@@ -543,13 +698,32 @@ function fakeApi(
       const r = reports.find((x) => x.id === id)
       if (!r) return null
       const p = r.targetType === 'post' ? posts.find((x) => x.id === r.targetId) : undefined
-      const targetState = r.targetType === 'post'
-        ? (!p ? 'gone' : p.hidden ? 'hidden' : p.deleted ? 'deleted_by_author' : 'live')
-        : hiddenProfiles.has(r.targetId) ? 'hidden' : 'live'
+      const targetState =
+        r.targetType === 'post'
+          ? !p
+            ? 'gone'
+            : p.hidden
+              ? 'hidden'
+              : p.deleted
+                ? 'deleted_by_author'
+                : 'live'
+          : hiddenProfiles.has(r.targetId)
+            ? 'hidden'
+            : 'live'
       return {
-        id: r.id, targetType: r.targetType, targetId: r.targetId, reason: r.reason as never, priority: r.reason === 'violence' || r.reason === 'self_harm',
-        details: r.details, snapshot: r.snapshot, status: r.status, createdAt: new Date(r.at).toISOString(), resolvedAt: null, dataPurged: false,
-        targetState, currentBody: p && !p.deleted ? p.body : null,
+        id: r.id,
+        targetType: r.targetType,
+        targetId: r.targetId,
+        reason: r.reason as never,
+        priority: r.reason === 'violence' || r.reason === 'self_harm',
+        details: r.details,
+        snapshot: r.snapshot,
+        status: r.status,
+        createdAt: new Date(r.at).toISOString(),
+        resolvedAt: null,
+        dataPurged: false,
+        targetState,
+        currentBody: p && !p.deleted ? p.body : null,
         openReportsForTarget: reports.filter((o) => o.targetId === r.targetId && o.status === 'open').length,
         targetOwnerId: r.owner,
       }
@@ -591,7 +765,9 @@ function fakeApi(
     },
     async avatarLinks(ids) {
       maybeFail('avatarLinks')
-      return Object.fromEntries(ids.filter((id) => pictures.has(id) && users.get(id)?.displayName).map((id) => [id, { url: pictures.get(id)!, updatedAt: null }]))
+      return Object.fromEntries(
+        ids.filter((id) => pictures.has(id) && users.get(id)?.displayName).map((id) => [id, { url: pictures.get(id)!, updatedAt: null }]),
+      )
     },
     async uploadAvatar(jpeg) {
       complete()
@@ -633,7 +809,12 @@ function fakeApi(
       return [...follows]
         .filter((k) => k.startsWith(`${meId}>`))
         .map((k) => k.split('>')[1])
-        .map((id) => ({ ...summary(id), followedAt: '2026-11-17T11:00:00Z', inMyClique: clique.has(key(meId, id)), cliqueAddedAt: clique.has(key(meId, id)) ? '2026-11-17T11:30:00Z' : null }))
+        .map((id) => ({
+          ...summary(id),
+          followedAt: '2026-11-17T11:00:00Z',
+          inMyClique: clique.has(key(meId, id)),
+          cliqueAddedAt: clique.has(key(meId, id)) ? '2026-11-17T11:30:00Z' : null,
+        }))
     },
     async createPost(body, requestId) {
       complete()
@@ -676,8 +857,15 @@ function fakeApi(
     async homePriority() {
       complete()
       return posts
-        .filter((p) => !p.deleted && clique.has(key(meId, p.author)) && !mutes.has(key(meId, p.author)) && !views.has(key(meId, p.id))
-          && p.at >= (followedAt.get(key(meId, p.author)) ?? 0) && p.at >= clock - 7 * 86400000)
+        .filter(
+          (p) =>
+            !p.deleted &&
+            clique.has(key(meId, p.author)) &&
+            !mutes.has(key(meId, p.author)) &&
+            !views.has(key(meId, p.id)) &&
+            p.at >= (followedAt.get(key(meId, p.author)) ?? 0) &&
+            p.at >= clock - 7 * 86400000,
+        )
         .sort(newestFirst)
         .slice(0, 10)
         .map(toP)
@@ -713,7 +901,10 @@ function fakeApi(
     },
     async postMeta(ids) {
       complete()
-      const out: Record<string, { topic: string | null; topicLabel: string | null; editedAt: string | null; savedByMe: boolean; repostCount: number; repostedByMe: boolean }> = {}
+      const out: Record<
+        string,
+        { topic: string | null; topicLabel: string | null; editedAt: string | null; savedByMe: boolean; repostCount: number; repostedByMe: boolean }
+      > = {}
       for (const id of ids) {
         const p = posts.find((x) => x.id === id && !x.deleted)
         if (!p) continue
@@ -742,7 +933,10 @@ function fakeApi(
       const b = body.trim()
       if (!b && !p.media) throw new AppApiError('empty')
       if (b === p.body && (topic ?? null) === (postTopics.get(id) ?? null)) return
-      edits.set(id, [{ previousBody: p.body, previousTopic: postTopics.get(id) ?? null, editedAt: new Date((clock += 1000)).toISOString() }, ...(edits.get(id) ?? [])])
+      edits.set(id, [
+        { previousBody: p.body, previousTopic: postTopics.get(id) ?? null, editedAt: new Date((clock += 1000)).toISOString() },
+        ...(edits.get(id) ?? []),
+      ])
       p.body = b
       if (topic) postTopics.set(id, topic)
       else postTopics.delete(id)
@@ -796,7 +990,15 @@ function fakeApi(
       const w = q.trim().toLowerCase()
       return posts
         .filter((p) => !p.deleted && !mutes.has(key(meId, p.author)))
-        .filter((p) => p.body.toLowerCase().includes(w) || (topicList.find((t) => t.slug === postTopics.get(p.id))?.label.toLowerCase().includes(w) ?? false))
+        .filter(
+          (p) =>
+            p.body.toLowerCase().includes(w) ||
+            (topicList
+              .find((t) => t.slug === postTopics.get(p.id))
+              ?.label.toLowerCase()
+              .includes(w) ??
+              false),
+        )
         .sort(newestFirst)
         .map(toP)
     },
@@ -821,6 +1023,145 @@ function fakeApi(
     },
     async noteOpen(postId) {
       intel.opens.push(postId)
+    },
+    async myCreatorSetup() {
+      complete()
+      return onb.setup
+    },
+    async setCreatorTopics(t) {
+      complete()
+      if (t.length > 3) throw new AppApiError('too_many_posting_topics')
+      onb.topicCalls.push(t)
+      if (onb.setup) onb.setup = { ...onb.setup, postingTopics: [...new Set(t)] }
+      return [...new Set(t)]
+    },
+    async memberCreatorTopics() {
+      return []
+    },
+    async myInviter() {
+      complete()
+      return onb.inviter
+    },
+    async founderRegistration() {
+      requireFounder()
+      return onb.registration
+    },
+    async founderSetRegistration(x, reason) {
+      requireFounder()
+      onb.registrationCalls.push({ paused: x.paused, reason })
+      onb.registration = { ...onb.registration, ...x }
+    },
+    async founderCreateInvitationLink(maxUses, days, creatorUsername) {
+      requireFounder()
+      const code = `${onb.links.length + 1}`.padStart(16, 'a')
+      onb.links.unshift({
+        code,
+        creatorUsername: creatorUsername?.trim() || null,
+        cohort: 'fan',
+        uses: 0,
+        maxUses,
+        expiresAt: new Date(Date.now() + days * 86400000).toISOString(),
+        revokedAt: null,
+        createdAt: new Date().toISOString(),
+        registered: 0,
+      })
+      return code
+    },
+    async founderInvitationLinks() {
+      requireFounder()
+      return onb.links
+    },
+    async founderRevokeInvitationLink(code) {
+      requireFounder()
+      onb.links = onb.links.map((l) => (l.code === code ? { ...l, revokedAt: new Date().toISOString() } : l))
+    },
+    async requestAdvertising(r) {
+      complete()
+      if (onb.advertising.requests.some((x) => x.status === 'pending')) throw new AppApiError('request_pending')
+      onb.adRequests.push(r)
+      const id = `req-${onb.adRequests.length}`
+      onb.advertising = {
+        ...onb.advertising,
+        requests: [
+          { id, name: r.name, status: 'pending', reviewNote: null, objective: r.objective, requestedAt: new Date().toISOString() },
+          ...onb.advertising.requests,
+        ],
+      }
+      return id
+    },
+    async myAdvertising() {
+      complete()
+      return onb.advertising
+    },
+    async myCampaignReport() {
+      if (!onb.report) throw new AppApiError('not_found')
+      return onb.report
+    },
+    async features() {
+      return onb.features
+    },
+    async founderSwitches() {
+      requireFounder()
+      return {
+        switches: onb.switches,
+        registrationPaused: onb.registration.paused,
+        externalAccessApproved: false,
+        rewardsPaused: false,
+        photosEnabled: false,
+        recent: onb.switchCalls.map((c) => ({ feature: c.feature, enabled: c.enabled, reason: c.reason, changedAt: new Date().toISOString() })).reverse(),
+      }
+    },
+    async founderSetSwitch(feature, enabled, reason) {
+      requireFounder()
+      if (reason.trim().length < 3) throw new AppApiError('reason_required')
+      if (feature === 'video_posts' && enabled) throw new AppApiError('video_not_ready')
+      onb.switchCalls.push({ feature, enabled, reason })
+      onb.switches = onb.switches.map((x) => (x.feature === feature ? { ...x, enabled } : x))
+    },
+    async submitMemberRequest(kind, details) {
+      complete()
+      if (onb.requests.some((r) => r.kind === kind && r.status === 'open' && r.username === (users.get(meId)?.username ?? null)))
+        throw new AppApiError('request_open')
+      const id = onb.requests.length + 1
+      onb.requests.unshift({
+        id,
+        kind,
+        status: 'open',
+        createdAt: new Date().toISOString(),
+        resolvedAt: null,
+        details: details.trim() || null,
+        username: users.get(meId)?.username ?? null,
+        displayName: users.get(meId)?.displayName ?? null,
+      })
+      return id
+    },
+    async myMemberRequests() {
+      complete()
+      return onb.requests
+        .filter((r) => r.username === (users.get(meId)?.username ?? null))
+        .map(({ id, kind, status, createdAt, resolvedAt }) => ({ id, kind, status, createdAt, resolvedAt }))
+    },
+    async withdrawMemberRequest(id) {
+      onb.requests = onb.requests.map((r) => (r.id === id && r.status === 'open' ? { ...r, status: 'withdrawn', resolvedAt: new Date().toISOString() } : r))
+    },
+    async founderMemberRequests() {
+      requireFounder()
+      return onb.requests
+    },
+    async founderResolveMemberRequest(id, completed, note) {
+      requireFounder()
+      if (!note.trim()) throw new AppApiError('note_required')
+      onb.resolved.push({ id, completed, note })
+      onb.requests = onb.requests.map((r) => (r.id === id ? { ...r, status: completed ? 'completed' : 'declined', resolvedAt: new Date().toISOString() } : r))
+    },
+    async founderDeleteMember(id, username) {
+      requireFounder()
+      const r = onb.requests.find((x) => x.id === id)
+      if (!r || r.kind !== 'deletion' || r.status !== 'open') throw new AppApiError('not_found')
+      if (r.username !== username.trim().toLowerCase()) throw new AppApiError('confirmation_mismatch')
+      onb.deleted.push({ id, username })
+      onb.requests = onb.requests.map((x) => (x.id === id ? { ...x, status: 'completed', details: null, username: null, displayName: null } : x))
+      return { postsRemoved: 1, awardsForfeited: 2 }
     },
     async adFor(surface, postId) {
       ads.calls.push({ surface, postId })
@@ -858,7 +1199,8 @@ function fakeApi(
     },
     async founderReviewAdvertiser(id, approve) {
       ads.reviews.push({ id, approve })
-      if (ads.admin) ads.admin = { ...ads.admin, advertisers: ads.admin.advertisers.map((x) => (x.id === id ? { ...x, status: approve ? 'approved' : 'declined' } : x)) }
+      if (ads.admin)
+        ads.admin = { ...ads.admin, advertisers: ads.admin.advertisers.map((x) => (x.id === id ? { ...x, status: approve ? 'approved' : 'declined' } : x)) }
     },
     async founderSaveCampaign(c) {
       ads.savedCampaigns.push(c)
@@ -1079,7 +1421,49 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, searchNotes, previews, rewards, governance, ads, intel, commentStore: comments, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
+  return {
+    api,
+    photo,
+    posts,
+    feedback,
+    feedbackCalls,
+    isFounder,
+    seedPost,
+    follows,
+    clique,
+    mutes,
+    followSources,
+    supportIntents,
+    postTopics,
+    edits,
+    saves,
+    reposts,
+    shares,
+    searchNotes,
+    previews,
+    rewards,
+    governance,
+    ads,
+    intel,
+    onb,
+    commentStore: comments,
+    failures,
+    key,
+    views,
+    marks,
+    followedAt,
+    access,
+    setDetails,
+    savedDetails,
+    details,
+    reports,
+    modActions,
+    isModerator,
+    seedReport,
+    pictures,
+    pictureCalls,
+    storage,
+  }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -1115,6 +1499,8 @@ function renderApp(path: string, api: AppApi) {
             <Route path="notices" element={<NoticesPage />} />
             <Route path="ads" element={<AdsManagePage />} />
             <Route path="control" element={<ControlCenterPage />} />
+            <Route path="advertise" element={<AdvertisePage />} />
+            <Route path="privacy" element={<MemberPrivacyPage />} />
             <Route path="feedback" element={<FeedbackPage />} />
             <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
             <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />
@@ -1155,8 +1541,17 @@ describe('data layer helpers', () => {
 
   it('maps database rows to posts, including counts sent as text', () => {
     const p = toPost({
-      id: 'p1', author_id: 'a', author_username: 'aye', author_display_name: 'Aye', body: 'hi', created_at: '2026-11-17T12:00:00Z',
-      like_count: '3', comment_count: 2, liked_by_me: true, author_in_my_clique: false, is_mine: false,
+      id: 'p1',
+      author_id: 'a',
+      author_username: 'aye',
+      author_display_name: 'Aye',
+      body: 'hi',
+      created_at: '2026-11-17T12:00:00Z',
+      like_count: '3',
+      comment_count: 2,
+      liked_by_me: true,
+      author_in_my_clique: false,
+      is_mine: false,
     })
     expect(p).toMatchObject({ likeCount: 3, commentCount: 2, author: { username: 'aye', displayName: 'Aye' } })
   })
@@ -1264,18 +1659,19 @@ describe('first-time setup and profile details (20261123000000)', () => {
     f.setDetails('c1', { identity: 'creator', bio: 'Budget recipes.', followReason: 'A new recipe every week', topics: ['food', 'music'] })
     f.setDetails('c2', { identity: 'fan', topics: ['travel'] })
     renderApp('/app', f.api)
-    expect(await screen.findByText('Step 1 of 5: Your name')).toBeTruthy()
+    expect(await screen.findByText('Step 1 of 6: Your name')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'mia' } })
     fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Mia' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     // 2. Identity: descriptive only, and the page says so.
-    expect(await screen.findByRole('heading', { name: 'How will you use Splitpost?' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })).toBeTruthy()
     const bar = screen.getByRole('progressbar', { name: 'Profile setup' })
     expect(bar.getAttribute('aria-valuenow')).toBe('2')
-    expect(screen.getByText(/This only describes you\. Everyone can post, follow and build a Clique, whatever you choose/)).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(screen.getByRole('radio', { name: /Creator/ }))
+    expect(screen.getByText(/It only helps us suggest where to start\. Every account can post, follow, build a Clique and advertise/)).toBeTruthy()
+    // Optional: Continue works without an answer (unified account, nothing to declare).
+    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(screen.getByRole('radio', { name: /Share my own work/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     // 3. Interests, from the database's list, at most 5.
@@ -1309,18 +1705,20 @@ describe('first-time setup and profile details (20261123000000)', () => {
     fireEvent.click(within(first).getByRole('button', { name: 'Follow Creator 1' }))
     expect(await within(first).findByRole('button', { name: 'Following (Creator 1, tap to unfollow)' })).toBeTruthy()
     expect(f.follows.has(f.key('me', 'c1'))).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Go to my feed' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Go to my feed' }))
     expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
   })
 
   it('every step can be skipped: "Skip the rest" saves empty details and setup is not shown again', async () => {
     const f = fakeApi('me', { details: 'new' })
     const view = renderApp('/app', f.api)
-    expect(await screen.findByRole('heading', { name: 'How will you use Splitpost?' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Skip the rest' }))
     expect(await screen.findByRole('heading', { name: 'People you might like' })).toBeTruthy()
     expect(f.savedDetails).toEqual([{ identity: null, bio: null, followReason: null, topics: [] }])
-    fireEvent.click(screen.getByRole('button', { name: 'Go to my feed' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Go to my feed' }))
     expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
     view.unmount()
     renderApp('/app', f.api)
@@ -1331,8 +1729,8 @@ describe('first-time setup and profile details (20261123000000)', () => {
   it('interests are encouraged, not required: Continue works with none or one', async () => {
     const f = fakeApi('me', { details: 'new' })
     renderApp('/app', f.api)
-    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
-    fireEvent.click(screen.getByRole('radio', { name: /Fan/ }))
+    await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })
+    fireEvent.click(screen.getByRole('radio', { name: /Find creators I'll love/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByRole('heading', { name: 'What are you into?' })
     fireEvent.click(screen.getByRole('button', { name: 'Tech' }))
@@ -1347,8 +1745,8 @@ describe('first-time setup and profile details (20261123000000)', () => {
   it('checks the limits before saving, and keeps the member on the step if saving fails', async () => {
     const f = fakeApi('me', { details: 'new' })
     renderApp('/app', f.api)
-    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
-    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: how you use Splitpost' }))
+    await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: what brings you here' }))
     await screen.findByRole('heading', { name: 'What are you into?' })
     for (const t of ['Food & cooking', 'Money & business', 'Tech']) fireEvent.click(screen.getByRole('button', { name: t }))
     expect(screen.getByTestId('topic-progress').textContent).toBe("3 of 5 chosen. That's enough to find your people.")
@@ -1401,13 +1799,22 @@ describe('first-time setup and profile details (20261123000000)', () => {
     expect(within(items[0]).getByRole('link', { name: 'Creator 1' })).toBeTruthy()
     expect(within(items[0]).getByText('Shares 1 of your interests')).toBeTruthy()
     expect(within(items[0]).getByText(/Why follow:/)).toBeTruthy()
-    expect(within(items[0]).getByText(/Creator ·/)).toBeTruthy()
+    // The goal question is private personalization: never a public label (unified account).
+    expect(within(items[0]).queryByText(/Creator ·/)).toBeNull()
     const filter = screen.getByLabelText('Browse by interest') as HTMLSelectElement
-    expect([...filter.options].map((o) => o.textContent)).toEqual(['Everyone', 'Food & cooking', 'Money & business', 'Tech', 'Music', 'Travel', 'Books & writing'])
+    expect([...filter.options].map((o) => o.textContent)).toEqual([
+      'Everyone',
+      'Food & cooking',
+      'Money & business',
+      'Tech',
+      'Music',
+      'Travel',
+      'Books & writing',
+    ])
     fireEvent.change(filter, { target: { value: 'travel' } })
     await waitFor(() => expect(screen.queryByRole('link', { name: 'Creator 1' })).toBeNull())
     expect(screen.getByRole('link', { name: 'Creator 2' })).toBeTruthy()
-    expect(screen.getByText(/Creator and fan ·/)).toBeTruthy()
+    expect(screen.queryByText(/Creator and fan ·/)).toBeNull()
     fireEvent.change(filter, { target: { value: 'books' } })
     expect(await screen.findByText('Nobody has chosen Books & writing yet. Try another interest.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Show everyone' }))
@@ -1419,11 +1826,15 @@ describe('first-time setup and profile details (20261123000000)', () => {
     f.setDetails('c1', { identity: 'creator', bio: 'Budget recipes.', followReason: 'A new recipe every week', topics: ['food', 'music'] })
     renderApp('/app/u/creator_1', f.api)
     const about = await screen.findByTestId('member-about')
-    expect(within(about).getByText('Creator')).toBeTruthy()
+    expect(within(about).queryByText('Creator')).toBeNull()
     expect(within(about).getByText('Budget recipes.')).toBeTruthy()
     expect(within(about).getByText('Why follow')).toBeTruthy()
     expect(within(about).getByText('A new recipe every week')).toBeTruthy()
-    expect(within(within(about).getByRole('list', { name: 'Interests' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Food & cooking', 'Music'])
+    expect(
+      within(within(about).getByRole('list', { name: 'Interests' }))
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['Food & cooking', 'Music'])
     cleanup()
     renderApp('/app/u/creator_2', f.api)
     expect(await screen.findByRole('heading', { name: 'Creator 2' })).toBeTruthy()
@@ -1435,10 +1846,10 @@ describe('first-time setup and profile details (20261123000000)', () => {
     f.setDetails('me', { identity: 'fan', bio: 'Old bio', topics: ['tech'] })
     renderApp('/app/profile', f.api)
     expect(await screen.findByRole('heading', { name: 'About you' })).toBeTruthy()
-    expect((screen.getByRole('radio', { name: /Fan/ }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByRole('radio', { name: /Find creators I'll love/ }) as HTMLInputElement).checked).toBe(true)
     expect((screen.getByLabelText('Short bio') as HTMLTextAreaElement).value).toBe('Old bio')
-    fireEvent.click(screen.getByRole('radio', { name: /Both/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Music' }))
+    fireEvent.click(screen.getByRole('radio', { name: /A bit of both/ }))
+    fireEvent.click(within(screen.getByRole('form', { name: 'About you' })).getByRole('button', { name: 'Music' }))
     fireEvent.change(screen.getByLabelText('Why should people follow you?'), { target: { value: 'Honest reviews' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save details' }))
     expect(await screen.findByText('Saved.')).toBeTruthy()
@@ -1471,8 +1882,19 @@ describe('reporting and moderation (20261124000000)', () => {
     fireEvent.click(within(theirs).getByRole('button', { name: 'Report this post by Creator 1' }))
     const dialog = await screen.findByRole('dialog', { name: 'Report this post' })
     expect(within(dialog).getByRole('note').textContent).toMatch(/Reporting isn't an emergency service\..*not around the clock.*call 911.*988/)
-    expect(within(dialog).getAllByRole('radio').map((r) => r.closest('label')?.textContent)).toEqual([
-      'Spam or scam', 'Harassment or bullying', 'Hate or discrimination', 'Nudity or sexual content', 'Violence or threats', 'Self-harm', 'Impersonation', 'Something else',
+    expect(
+      within(dialog)
+        .getAllByRole('radio')
+        .map((r) => r.closest('label')?.textContent),
+    ).toEqual([
+      'Spam or scam',
+      'Harassment or bullying',
+      'Hate or discrimination',
+      'Nudity or sexual content',
+      'Violence or threats',
+      'Self-harm',
+      'Impersonation',
+      'Something else',
     ])
     fireEvent.click(within(dialog).getByRole('button', { name: 'Send report' }))
     expect((await within(dialog).findByRole('alert')).textContent).toBe('Choose a reason.')
@@ -1504,7 +1926,9 @@ describe('reporting and moderation (20261124000000)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Report Creator 2' })
     fireEvent.click(within(dialog).getByRole('radio', { name: 'Self-harm' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Send report' }))
-    expect((await within(dialog).findByTestId('report-sent')).textContent).toMatch(/reviewed first, but not around the clock\. If someone is in danger now, call 911/)
+    expect((await within(dialog).findByTestId('report-sent')).textContent).toMatch(
+      /reviewed first, but not around the clock\. If someone is in danger now, call 911/,
+    )
     expect(f.reports[0]).toMatchObject({ targetType: 'profile', targetId: 'c2', reason: 'self_harm' })
   })
 
@@ -1533,8 +1957,24 @@ describe('reporting and moderation (20261124000000)', () => {
     const p2 = f.seedPost('c2', 'A harmless post')
     f.follows.add(f.key('me', 'c1'))
     f.follows.add(f.key('me', 'c2'))
-    const rRude = f.seedReport({ reporter: 'c3', targetType: 'post', targetId: p1, owner: 'c1', reason: 'harassment', details: 'Aimed at me.', snapshot: { body: 'A rude post', author_username: 'creator_1', author_display_name: 'Creator 1' } })
-    f.seedReport({ reporter: 'c4', targetType: 'post', targetId: p2, owner: 'c2', reason: 'violence', details: null, snapshot: { body: 'A harmless post', author_username: 'creator_2', author_display_name: 'Creator 2' } })
+    const rRude = f.seedReport({
+      reporter: 'c3',
+      targetType: 'post',
+      targetId: p1,
+      owner: 'c1',
+      reason: 'harassment',
+      details: 'Aimed at me.',
+      snapshot: { body: 'A rude post', author_username: 'creator_1', author_display_name: 'Creator 1' },
+    })
+    f.seedReport({
+      reporter: 'c4',
+      targetType: 'post',
+      targetId: p2,
+      owner: 'c2',
+      reason: 'violence',
+      details: null,
+      snapshot: { body: 'A harmless post', author_username: 'creator_2', author_display_name: 'Creator 2' },
+    })
     renderApp('/app/profile', f.api)
     fireEvent.click(await screen.findByRole('link', { name: 'Moderation' }))
     const list = await screen.findByRole('list', { name: 'Open reports' })
@@ -1602,11 +2042,15 @@ describe('Clique confirmation (the suggestion card fix)', () => {
   async function toSuggestions(f: ReturnType<typeof fakeApi>) {
     f.setDetails('c1', { topics: ['food'], followReason: 'Recipes' })
     renderApp('/app', f.api)
-    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
+    await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })
     fireEvent.click(screen.getByRole('button', { name: 'Skip the rest' }))
     await screen.findByRole('heading', { name: 'People you might like' })
     const people = await screen.findByTestId('suggested-people')
-    return within(within(people).getAllByRole('listitem').find((li) => li.textContent?.includes('Creator 1'))!)
+    return within(
+      within(people)
+        .getAllByRole('listitem')
+        .find((li) => li.textContent?.includes('Creator 1'))!,
+    )
   }
 
   it('after adding someone, the card says "Added to your Clique!" and shows "In your Clique", and stays that way; Discover agrees after navigating', async () => {
@@ -1625,7 +2069,8 @@ describe('Clique confirmation (the suggestion card fix)', () => {
     expect(card.queryByRole('button', { name: 'Join Clique (Creator 1)' })).toBeNull()
     expect(f.clique.has(f.key('me', 'c1'))).toBe(true)
     // After leaving setup, Discover shows the same (server) state.
-    fireEvent.click(screen.getByRole('button', { name: 'Go to my feed' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Go to my feed' }))
     await screen.findByRole('heading', { name: 'Home' })
     cleanup()
     renderApp('/app/discover?face=creators', f.api)
@@ -1726,8 +2171,8 @@ describe('profile pictures (20261125000000)', () => {
   it('the About you step offers an optional photo', async () => {
     const f = fakeApi('me', { details: 'new' })
     renderApp('/app', f.api)
-    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
-    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: how you use Splitpost' }))
+    await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: what brings you here' }))
     await screen.findByRole('heading', { name: 'What are you into?' })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByRole('heading', { name: 'Tell people about you' })
@@ -1745,12 +2190,13 @@ describe('profile pictures (20261125000000)', () => {
     f.seedPost('c1', 'Still readable')
     renderApp('/app', f.api)
     // Setup still works, including the About you step with its photo field.
-    await screen.findByRole('heading', { name: 'How will you use Splitpost?' })
-    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: how you use Splitpost' }))
+    await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now: what brings you here' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     await screen.findByRole('heading', { name: 'Tell people about you' })
     expect(screen.getByRole('button', { name: 'Add a photo' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Go to my feed' }))
     expect(await screen.findByText('Still readable')).toBeTruthy()
     expect(document.querySelector('img[src^="https://pics.test"]')).toBeNull()
@@ -2119,7 +2565,12 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     fireEvent.click(await screen.findByTestId('support-button'))
     const sheet = within(await screen.findByRole('dialog', { name: "Show Creator you'd support their work" }))
     expect(sheet.getByTestId('support-disclosure').textContent).toMatch(/Non-binding\. Nothing is charged, now or later\./)
-    expect(sheet.getAllByRole('radio').map((r) => (r.closest('label') as HTMLElement).textContent)).toEqual(['$3 a month', '$5 a month', '$10 a month', 'Not sure yet'])
+    expect(sheet.getAllByRole('radio').map((r) => (r.closest('label') as HTMLElement).textContent)).toEqual([
+      '$3 a month',
+      '$5 a month',
+      '$10 a month',
+      'Not sure yet',
+    ])
     const record = sheet.getByRole('button', { name: 'Record my support intent' }) as HTMLButtonElement
     expect(record.disabled).toBe(true)
     fireEvent.click(sheet.getByRole('radio', { name: '$5 a month' }))
@@ -2180,7 +2631,10 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     expect(tabs).toEqual(['Clique first', 'My Clique', 'Following'])
     expect(screen.getByRole('tab', { name: 'Clique first' }).getAttribute('aria-selected')).toBe('true')
     const panel = () => screen.getByRole('tabpanel')
-    const bodies = () => within(panel()).getAllByTestId('post').map((p) => p.textContent ?? '')
+    const bodies = () =>
+      within(panel())
+        .getAllByTestId('post')
+        .map((p) => p.textContent ?? '')
     // Clique first: the unseen Clique post leads, then everything else newest first, each once.
     await waitFor(() => expect(bodies()).toHaveLength(2))
     expect(bodies()[0]).toMatch(/Older, from my Clique/)
@@ -2312,7 +2766,8 @@ describe('Unseen-first Home', () => {
       globalThis.IntersectionObserver = FakeObserver as unknown as typeof IntersectionObserver
     }
     function show(ratio: number) {
-      for (const o of observed) o.cb([{ target: o.el, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry], {} as IntersectionObserver)
+      for (const o of observed)
+        o.cb([{ target: o.el, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry], {} as IntersectionObserver)
     }
     let visibility: DocumentVisibilityState = 'visible'
     function setVisibility(v: DocumentVisibilityState) {
@@ -2558,7 +3013,7 @@ describe('adult confirmation and My Split (foundation v2)', () => {
     expect(screen.getByRole('tabpanel').textContent).not.toMatch(/\$\d|\d+ points/)
   })
 
-  it('Opportunities shows the member\'s personal referral link', async () => {
+  it("Opportunities shows the member's personal referral link", async () => {
     const { api } = fakeApi()
     renderApp('/app/split?face=opportunities', api)
     expect((await screen.findByTestId('referral-link')).textContent).toBe(`${window.location.origin}/register/0123456789abcdef`)
@@ -2622,7 +3077,8 @@ describe('feedback (Build 5.2c)', () => {
     )
     // No promise of a personal reply (not part of this build).
     expect(document.body.textContent).not.toMatch(/follow up|get back to you|reply to you|respond to you/i)
-    for (const label of ['Report a problem', 'Suggest an improvement', 'Share something I like']) expect(screen.getByRole('radio', { name: label })).toBeTruthy()
+    for (const label of ['Report a problem', 'Suggest an improvement', 'Share something I like'])
+      expect(screen.getByRole('radio', { name: label })).toBeTruthy()
     // The founder's inbox link is only for the founder.
     expect(screen.queryByRole('link', { name: 'Open the feedback inbox' })).toBeNull()
   })
@@ -2682,7 +3138,7 @@ describe('feedback (Build 5.2c)', () => {
     expect(f.feedback).toHaveLength(2)
   })
 
-  it('the server\'s limits are explained plainly (rate limit)', async () => {
+  it("the server's limits are explained plainly (rate limit)", async () => {
     const f = fakeApi()
     f.failures.sendFeedback = new AppApiError('rate_limited')
     renderApp('/app', f.api)
@@ -2708,7 +3164,7 @@ describe('feedback (Build 5.2c)', () => {
     expect(await screen.findByRole('heading', { name: "This page isn't available" })).toBeTruthy()
   })
 
-  it('on a database without feedback, there is no entry point and the page says it isn\'t available', async () => {
+  it("on a database without feedback, there is no entry point and the page says it isn't available", async () => {
     const f = fakeApi('me', { feedback: 'absent' })
     renderApp('/app', f.api)
     await screen.findByRole('heading', { name: 'Home' })
@@ -2753,7 +3209,10 @@ describe('feedback (Build 5.2c)', () => {
 })
 
 describe('photo posts (Build 5.3)', () => {
-  const choose = (name = 'IMG_0001.HEIC') => fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [new File(['x'], name, { type: name.endsWith('.txt') ? 'text/plain' : 'image/heic' })] } })
+  const choose = (name = 'IMG_0001.HEIC') =>
+    fireEvent.change(screen.getByTestId('photo-input'), {
+      target: { files: [new File(['x'], name, { type: name.endsWith('.txt') ? 'text/plain' : 'image/heic' })] },
+    })
 
   it('sizes photos to at most 1600 px on the longest edge, never upscaling', () => {
     expect(fitWithin(4032, 3024)).toEqual({ width: 1600, height: 1200 })
@@ -3007,7 +3466,7 @@ describe('content (20261202000000): topics, saves, reposts, editing', () => {
     expect(await screen.findByText('Nothing saved yet')).toBeTruthy()
   })
 
-  it('reposting someone else\'s post counts it; your own posts offer no repost', async () => {
+  it("reposting someone else's post counts it; your own posts offer no repost", async () => {
     const fake = fakeApi()
     fake.follows.add(fake.key('me', 'c1'))
     fake.seedPost('c1', 'Share this one')
@@ -3040,9 +3499,21 @@ describe('content (20261202000000): topics, saves, reposts, editing', () => {
   it('a reposted post on Home says who reposted it', async () => {
     const fake = fakeApi()
     const post = toPost({
-      id: 'p9', author_id: 'c2', author_username: 'creator_2', author_display_name: 'Creator 2', body: 'Reached you through a repost',
-      created_at: '2026-11-17T12:00:00Z', like_count: 0, comment_count: 0, liked_by_me: false, author_in_my_clique: false, is_mine: false,
-      activity_at: '2026-11-17T13:00:00Z', reposted_by_id: 'c1', reposted_by_username: 'creator_1', reposted_by_display_name: 'Creator 1',
+      id: 'p9',
+      author_id: 'c2',
+      author_username: 'creator_2',
+      author_display_name: 'Creator 2',
+      body: 'Reached you through a repost',
+      created_at: '2026-11-17T12:00:00Z',
+      like_count: 0,
+      comment_count: 0,
+      liked_by_me: false,
+      author_in_my_clique: false,
+      is_mine: false,
+      activity_at: '2026-11-17T13:00:00Z',
+      reposted_by_id: 'c1',
+      reposted_by_username: 'creator_1',
+      reposted_by_display_name: 'Creator 1',
     })
     expect(post.repostedBy).toEqual({ id: 'c1', username: 'creator_1', displayName: 'Creator 1' })
     expect(post.activityAt).toBe('2026-11-17T13:00:00Z')
@@ -3053,13 +3524,17 @@ describe('content (20261202000000): topics, saves, reposts, editing', () => {
 })
 
 describe('discovery (20261203000000): value and intent based, search, share', () => {
-  it('Discover opens on For you: posts in your interests from people you don\'t follow, each with its reason, two per creator', async () => {
+  it("Discover opens on For you: posts in your interests from people you don't follow, each with its reason, two per creator", async () => {
     const fake = fakeApi()
     fake.setDetails('me', { topics: ['money'] })
     for (const [author, body, topic] of [
-      ['c1', 'Budget one', 'money'], ['c1', 'Budget two', 'money'], ['c1', 'Budget three', 'money'],
-      ['c2', 'A recipe', 'food'], ['c3', 'Followed already', 'money'],
-    ] as const) fake.postTopics.set(fake.seedPost(author, body), topic)
+      ['c1', 'Budget one', 'money'],
+      ['c1', 'Budget two', 'money'],
+      ['c1', 'Budget three', 'money'],
+      ['c2', 'A recipe', 'food'],
+      ['c3', 'Followed already', 'money'],
+    ] as const)
+      fake.postTopics.set(fake.seedPost(author, body), topic)
     fake.follows.add(fake.key('me', 'c3'))
     renderApp('/app/discover', fake.api)
     expect((await screen.findByRole('tab', { name: 'For you' })).getAttribute('aria-selected')).toBe('true')
@@ -3127,7 +3602,7 @@ describe('previews and search measurement (20261204000000)', () => {
     await waitFor(() => expect(fake.followSources.get(fake.key('me', 'c4'))).toBe('search'))
   })
 
-  it('a shared link is the public preview with the sharer\'s referral link', async () => {
+  it("a shared link is the public preview with the sharer's referral link", async () => {
     const fake = fakeApi()
     const id = fake.seedPost('c1', 'Pass this on')
     const writeText = vi.fn(async () => undefined)
@@ -3174,7 +3649,14 @@ describe('previews and search measurement (20261204000000)', () => {
 describe('rewards (20261205000000): simulated Connection Points', () => {
   it('My Split shows recognized and redeemable points separately, and their value marked as simulated', async () => {
     const fake = fakeApi()
-    fake.rewards.points = { recognized: 14, redeemablePending: 100, redeemableApproved: 100, settled: 0, simulatedPointValueCents: 20, simulatedValueCents: 2000 }
+    fake.rewards.points = {
+      recognized: 14,
+      redeemablePending: 100,
+      redeemableApproved: 100,
+      settled: 0,
+      simulatedPointValueCents: 20,
+      simulatedValueCents: 2000,
+    }
     renderApp('/app/split', fake.api)
     const box = within(await screen.findByTestId('split-points'))
     expect(box.getByText('Recognized').nextSibling?.textContent).toBe('14')
@@ -3188,8 +3670,26 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
     const fake = fakeApi()
     fake.rewards.points = { recognized: 3, redeemablePending: 0, redeemableApproved: 0, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 0 }
     fake.rewards.history = [
-      { id: 3, action: 'meaningful_comment', points: -2, redeemable: false, status: 'reversal', createdAt: '2026-11-25T12:00:00Z', creator: { username: 'creator_1', displayName: 'Creator 1' }, postId: 'p1' },
-      { id: 2, action: 'repost', points: 5, redeemable: false, status: 'recognized', createdAt: '2026-11-25T11:00:00Z', creator: { username: 'creator_1', displayName: 'Creator 1' }, postId: 'p1' },
+      {
+        id: 3,
+        action: 'meaningful_comment',
+        points: -2,
+        redeemable: false,
+        status: 'reversal',
+        createdAt: '2026-11-25T12:00:00Z',
+        creator: { username: 'creator_1', displayName: 'Creator 1' },
+        postId: 'p1',
+      },
+      {
+        id: 2,
+        action: 'repost',
+        points: 5,
+        redeemable: false,
+        status: 'recognized',
+        createdAt: '2026-11-25T11:00:00Z',
+        creator: { username: 'creator_1', displayName: 'Creator 1' },
+        postId: 'p1',
+      },
     ]
     renderApp('/app/split?face=history', fake.api)
     const list = within(await screen.findByTestId('points-history'))
@@ -3203,7 +3703,19 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
     const fake = fakeApi('me', { founder: true })
     fake.rewards.points = { recognized: 0, redeemablePending: 0, redeemableApproved: 0, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 0 }
     fake.rewards.queue = [{ awardId: 7, referrer: 'creator_1', referred: 'creator_2', firstFollow: 'creator_3', createdAt: '2026-11-25T12:00:00Z' }]
-    fake.rewards.overview = { recognized: 10, redeemablePending: 100, redeemableApproved: 0, settled: 0, revenueCents: 15001, creatorCents: 4000, poolCents: 2000, splitpostCents: 9001, openPoolCents: 2000, paused: false, ruleVersion: 'd6-v1' }
+    fake.rewards.overview = {
+      recognized: 10,
+      redeemablePending: 100,
+      redeemableApproved: 0,
+      settled: 0,
+      revenueCents: 15001,
+      creatorCents: 4000,
+      poolCents: 2000,
+      splitpostCents: 9001,
+      openPoolCents: 2000,
+      paused: false,
+      ruleVersion: 'd6-v1',
+    }
     renderApp('/app/split', fake.api)
     fireEvent.click(await screen.findByRole('link', { name: 'Founder: review referrals and rewards' }))
     const overview = within(await screen.findByTestId('rewards-overview'))
@@ -3226,7 +3738,19 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
 
   it('the founder records simulated revenue (content ads need the creator) and closes a month', async () => {
     const f = fakeApi('me', { founder: true })
-    f.rewards.overview = { recognized: 0, redeemablePending: 0, redeemableApproved: 100, settled: 0, revenueCents: 0, creatorCents: 0, poolCents: 0, splitpostCents: 0, openPoolCents: 0, paused: false, ruleVersion: 'd6-v1' }
+    f.rewards.overview = {
+      recognized: 0,
+      redeemablePending: 0,
+      redeemableApproved: 100,
+      settled: 0,
+      revenueCents: 0,
+      creatorCents: 0,
+      poolCents: 0,
+      splitpostCents: 0,
+      openPoolCents: 0,
+      paused: false,
+      ruleVersion: 'd6-v1',
+    }
     renderApp('/app/split/review', f.api)
     fireEvent.change(await screen.findByLabelText('Creator username'), { target: { value: '@creator_1' } })
     fireEvent.change(screen.getByLabelText('Net amount ($)'), { target: { value: '100' } })
@@ -3243,8 +3767,19 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
 // ---------------------------------------------------------------------------
 describe('governance (20261206000000): blocking, notices, appeals and the enforcement ladder', () => {
   const notice = (over: Partial<MemberNotice>): MemberNotice => ({
-    id: 1, kind: 'content_hidden', targetType: 'comment', targetId: 'x', reason: 'harassment', excerpt: 'You are all terrible',
-    endsAt: null, createdAt: new Date().toISOString(), read: false, appealStatus: null, canAppeal: true, sameModerator: false, ...over,
+    id: 1,
+    kind: 'content_hidden',
+    targetType: 'comment',
+    targetId: 'x',
+    reason: 'harassment',
+    excerpt: 'You are all terrible',
+    endsAt: null,
+    createdAt: new Date().toISOString(),
+    read: false,
+    appealStatus: null,
+    canAppeal: true,
+    sameModerator: false,
+    ...over,
   })
 
   it('blocks from a profile after explaining what a block does, then shows the block with Unblock', async () => {
@@ -3319,10 +3854,23 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
   it('a moderator sees the account behind a report and takes the next step on the ladder', async () => {
     const f = fakeApi('me', { moderator: true })
     const p1 = f.seedPost('c1', 'Spammy post')
-    const r = f.seedReport({ reporter: 'c3', targetType: 'post', targetId: p1, owner: 'c1', reason: 'spam', details: null, snapshot: { body: 'Spammy post', author_username: 'creator_1', author_display_name: 'Creator 1' } })
+    const r = f.seedReport({
+      reporter: 'c3',
+      targetType: 'post',
+      targetId: p1,
+      owner: 'c1',
+      reason: 'spam',
+      details: null,
+      snapshot: { body: 'Spammy post', author_username: 'creator_1', author_display_name: 'Creator 1' },
+    })
     f.governance.record = {
-      username: 'creator_1', displayName: 'Creator 1', standing: null, hiddenContent: 1,
-      enforcements: [{ id: 3, level: 'warning', reason: 'spam', startsAt: new Date().toISOString(), endsAt: null, liftedAt: null, liftedVia: null, active: false }],
+      username: 'creator_1',
+      displayName: 'Creator 1',
+      standing: null,
+      hiddenContent: 1,
+      enforcements: [
+        { id: 3, level: 'warning', reason: 'spam', startsAt: new Date().toISOString(), endsAt: null, liftedAt: null, liftedVia: null, active: false },
+      ],
     }
     renderApp(`/app/moderation/${r}`, f.api)
     const record = await screen.findByTestId('member-record')
@@ -3337,11 +3885,26 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
 
   it('appeals: a moderator is told when they took the original action, and can reverse or keep a decision', async () => {
     const f = fakeApi('me', { moderator: true })
-    f.governance.appeals = [{
-      id: 'a1', memberId: 'c1', memberUsername: 'creator_1', kind: 'content_hidden', targetType: 'post', targetId: 'p', reason: 'spam',
-      excerpt: 'Buy now', body: 'This was a real recommendation.', status: 'open', createdAt: new Date().toISOString(), decidedAt: null, decisionNote: null, decidedOriginal: true,
-      anotherModeratorAvailable: true, sameModerator: false,
-    }]
+    f.governance.appeals = [
+      {
+        id: 'a1',
+        memberId: 'c1',
+        memberUsername: 'creator_1',
+        kind: 'content_hidden',
+        targetType: 'post',
+        targetId: 'p',
+        reason: 'spam',
+        excerpt: 'Buy now',
+        body: 'This was a real recommendation.',
+        status: 'open',
+        createdAt: new Date().toISOString(),
+        decidedAt: null,
+        decisionNote: null,
+        decidedOriginal: true,
+        anotherModeratorAvailable: true,
+        sameModerator: false,
+      },
+    ]
     renderApp('/app/moderation/appeals', f.api)
     const list = await screen.findByRole('list', { name: 'Open appeals' })
     expect(list.textContent).toMatch(/Hidden content.*Spam or scam.*@creator_1.*Buy now.*This was a real recommendation\./)
@@ -3351,11 +3914,26 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
 
   it('the sole-moderator exception: allowed only without another moderator, needs a reason, and is disclosed', async () => {
     const f = fakeApi('me', { moderator: true })
-    f.governance.appeals = [{
-      id: 'a1', memberId: 'c1', memberUsername: 'creator_1', kind: 'content_hidden', targetType: 'post', targetId: 'p', reason: 'spam',
-      excerpt: 'Buy now', body: 'This was a real recommendation.', status: 'open', createdAt: new Date().toISOString(), decidedAt: null, decisionNote: null, decidedOriginal: true,
-      anotherModeratorAvailable: false, sameModerator: false,
-    }]
+    f.governance.appeals = [
+      {
+        id: 'a1',
+        memberId: 'c1',
+        memberUsername: 'creator_1',
+        kind: 'content_hidden',
+        targetType: 'post',
+        targetId: 'p',
+        reason: 'spam',
+        excerpt: 'Buy now',
+        body: 'This was a real recommendation.',
+        status: 'open',
+        createdAt: new Date().toISOString(),
+        decidedAt: null,
+        decisionNote: null,
+        decidedOriginal: true,
+        anotherModeratorAvailable: false,
+        sameModerator: false,
+      },
+    ]
     renderApp('/app/moderation/appeals', f.api)
     const list = await screen.findByRole('list', { name: 'Open appeals' })
     expect(within(list).getByTestId('sole-moderator').textContent).toMatch(/no other moderator is available.*conflict of interest.*the member is told/)
@@ -3377,7 +3955,15 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
   it('a serious violation can be acted on at once, with a required reason', async () => {
     const f = fakeApi('me', { moderator: true })
     const p1 = f.seedPost('c1', 'Threatening post')
-    const r = f.seedReport({ reporter: 'c3', targetType: 'post', targetId: p1, owner: 'c1', reason: 'sexual', details: null, snapshot: { body: 'x', author_username: 'creator_1', author_display_name: 'Creator 1' } })
+    const r = f.seedReport({
+      reporter: 'c3',
+      targetType: 'post',
+      targetId: p1,
+      owner: 'c1',
+      reason: 'sexual',
+      details: null,
+      snapshot: { body: 'x', author_username: 'creator_1', author_display_name: 'Creator 1' },
+    })
     f.governance.record = { username: 'creator_1', displayName: 'Creator 1', standing: null, hiddenContent: 0, enforcements: [] }
     renderApp(`/app/moderation/${r}`, f.api)
     await screen.findByTestId('member-record')
@@ -3385,7 +3971,9 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
     fireEvent.click(screen.getByRole('checkbox', { name: /Serious violation: act now/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Give a suspension' }))
     expect(await screen.findByText('Write a note first.')).toBeTruthy()
-    fireEvent.change(screen.getByLabelText(/Note for the record \(optional, never shown to the member\)/), { target: { value: 'Explicit images sent to a minor.' } })
+    fireEvent.change(screen.getByLabelText(/Note for the record \(optional, never shown to the member\)/), {
+      target: { value: 'Explicit images sent to a minor.' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Give a suspension' }))
     await waitFor(() => expect(f.governance.enforced[0]).toMatchObject({ level: 'suspension', immediate: true, note: 'Explicit images sent to a minor.' }))
   })
@@ -3394,12 +3982,23 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
 // ---------------------------------------------------------------------------
 describe('advertising (20261208000000): labelled, explainable, controllable', () => {
   const ad = (over: Partial<Ad> = {}): Ad => ({
-    impressionId: 'imp1', advertiser: 'Budgetly', headline: 'Plan your month in minutes', body: 'See where your money goes.', ctaLabel: 'Try it free',
-    landingUrl: 'https://budgetly.example/start', match: 'preference', matched: 'Software & apps', placement: 'content',
-    creativeKind: 'text', mediaUrl: null, mediaAlt: null, shownWith: null, ...over,
+    impressionId: 'imp1',
+    advertiser: 'Budgetly',
+    headline: 'Plan your month in minutes',
+    body: 'See where your money goes.',
+    ctaLabel: 'Try it free',
+    landingUrl: 'https://budgetly.example/start',
+    match: 'preference',
+    matched: 'Software & apps',
+    placement: 'content',
+    creativeKind: 'text',
+    mediaUrl: null,
+    mediaAlt: null,
+    shownWith: null,
+    ...over,
   })
 
-  it('an ad under someone else\'s post is labelled Sponsored, explains why, opens safely, and can be hidden', async () => {
+  it("an ad under someone else's post is labelled Sponsored, explains why, opens safely, and can be hidden", async () => {
     const f = fakeApi()
     const post = f.seedPost('c1', 'A post about budgets')
     f.ads.next = ad()
@@ -3435,7 +4034,11 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
   it('an image ad shows its picture with the text alternative from Splitpost storage', async () => {
     const f = fakeApi()
     const post = f.seedPost('c1', 'A post')
-    f.ads.next = ad({ creativeKind: 'image', mediaUrl: 'https://kpudeppgokpjhvaqrprn.supabase.co/storage/v1/object/public/ad-creatives/a.jpg', mediaAlt: 'A phone showing a monthly budget.' })
+    f.ads.next = ad({
+      creativeKind: 'image',
+      mediaUrl: 'https://kpudeppgokpjhvaqrprn.supabase.co/storage/v1/object/public/ad-creatives/a.jpg',
+      mediaAlt: 'A phone showing a monthly budget.',
+    })
     renderApp(`/app/post/${post}`, f.api)
     const img = within(await screen.findByTestId('ad')).getByRole('img', { name: 'A phone showing a monthly budget.' })
     expect(img.getAttribute('src')).toMatch(/\/storage\/v1\/object\/public\/ad-creatives\/a\.jpg$/)
@@ -3487,19 +4090,66 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
 
   it('the founder onboards and approves an advertiser, activates a campaign and reads an aggregate report', async () => {
     const f = fakeApi('me', { founder: true })
-    const base = { website: 'https://b.example', offering: 'An app', problem_solved: 'p', desired_outcome: 'o', customer_needs: 'n', objective: 'traffic' as const,
-      conversion_action: 'Sign-up', eligibility_notes: null, categories: ['software_apps'], review_note: null }
+    const base = {
+      website: 'https://b.example',
+      offering: 'An app',
+      problem_solved: 'p',
+      desired_outcome: 'o',
+      customer_needs: 'n',
+      objective: 'traffic' as const,
+      conversion_action: 'Sign-up',
+      eligibility_notes: null,
+      categories: ['software_apps'],
+      review_note: null,
+    }
     f.ads.admin = {
       advertisers: [{ id: 'a1', name: 'Budgetly', status: 'pending', ...base }],
-      campaigns: [{ id: 'k1', advertiser_id: 'a1', advertiser: 'Budgetly', name: 'Spring', status: 'draft', placement: 'both', categories: ['software_apps'],
-        context_topics: [], allow_general: false, starts_on: '2026-11-01', ends_on: '2026-12-31', daily_cap: 3, price_cents: 0, headline: 'H', body: 'B',
-        cta_label: 'Go', landing_url: 'https://b.example' }],
+      campaigns: [
+        {
+          id: 'k1',
+          advertiser_id: 'a1',
+          advertiser: 'Budgetly',
+          name: 'Spring',
+          status: 'draft',
+          placement: 'both',
+          categories: ['software_apps'],
+          context_topics: [],
+          allow_general: false,
+          starts_on: '2026-11-01',
+          ends_on: '2026-12-31',
+          daily_cap: 3,
+          price_cents: 0,
+          headline: 'H',
+          body: 'B',
+          cta_label: 'Go',
+          landing_url: 'https://b.example',
+        },
+      ],
       categories: [{ slug: 'software_apps', label: 'Software & apps' }],
       topics: [{ slug: 'money', label: 'Money & business' }],
     }
-    f.ads.report = { eligibleAudience: null, served: 3, impressions: 2, clicks: 1, ctr: 0.5, reach: null, relevant: 1, notRelevant: 0, hidden: 0, reported: 0,
+    f.ads.report = {
+      eligibleAudience: null,
+      served: 3,
+      impressions: 2,
+      clicks: 1,
+      ctr: 0.5,
+      reach: null,
+      relevant: 1,
+      notRelevant: 0,
+      hidden: 0,
+      reported: 0,
       byMatch: { preference: { impressions: 2, clicks: 1 }, context: { impressions: 0, clicks: 0 }, general: { impressions: 0, clicks: 0 } },
-      contentImpressions: 1, feedImpressions: 1, creativeKind: 'text', videoPlays: 0, videoCompletions: 0, verifiedConversions: 0, selfReportedConversions: null, advertiserSatisfaction: null, simulatedRevenueCents: 0 }
+      contentImpressions: 1,
+      feedImpressions: 1,
+      creativeKind: 'text',
+      videoPlays: 0,
+      videoCompletions: 0,
+      verifiedConversions: 0,
+      selfReportedConversions: null,
+      advertiserSatisfaction: null,
+      simulatedRevenueCents: 0,
+    }
     renderApp('/app/ads', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Approve Budgetly' }))
     await waitFor(() => expect(f.ads.reviews).toEqual([{ id: 'a1', approve: true }]))
@@ -3523,7 +4173,12 @@ function creatorInsightsFixture(over: Partial<CreatorInsights> = {}): CreatorIns
   return {
     days: 7,
     attention: {
-      followers: 10, new_followers: 4, new_followers_before: 2, sources: { discover: 3, search: 1 }, reached: 6, posts: 2,
+      followers: 10,
+      new_followers: 4,
+      new_followers_before: 2,
+      sources: { discover: 3, search: 1 },
+      reached: 6,
+      posts: 2,
       top_posts: [{ id: 'p1', excerpt: 'Budget tips', topic: 'money', views: 6, comments: 2, saves: 1, reposts: 0, shares: 1 }],
     },
     retention: { followers: 10, active_supporters: 3, clique: 2, returning: 4, connections_this_week: 5, connections_last_week: 3 },
@@ -3536,11 +4191,28 @@ function creatorInsightsFixture(over: Partial<CreatorInsights> = {}): CreatorIns
   }
 }
 function overviewFixture(): FounderOverview {
-  const weeks = Array.from({ length: 8 }, (_, i) => ({ week_start: `2026-10-${String(5 + i * 7).padStart(2, '0')}T04:00:00Z`, connections: 10 + i, founder_dependent: 2, test: 1 }))
+  const weeks = Array.from({ length: 8 }, (_, i) => ({
+    week_start: `2026-10-${String(5 + i * 7).padStart(2, '0')}T04:00:00Z`,
+    connections: 10 + i,
+    founder_dependent: 2,
+    test: 1,
+  }))
   return {
-    generated_at: '2026-11-25T18:00:00Z', week_start: '2026-11-23T05:00:00Z',
+    generated_at: '2026-11-25T18:00:00Z',
+    week_start: '2026-11-23T05:00:00Z',
     north_star: { kind: 'actual', definition: 'Unique (consumer, creator) pairs…', weeks },
-    members: { kind: 'actual', active_members: 40, test_members: 3, registrations_this_week: 5, registration_cap: 200, registration_paused: false, by_referral: 7, activation_eligible: 10, activated: 6, retained: 8 },
+    members: {
+      kind: 'actual',
+      active_members: 40,
+      test_members: 3,
+      registrations_this_week: 5,
+      registration_cap: 200,
+      registration_paused: false,
+      by_referral: 7,
+      activation_eligible: 10,
+      activated: 6,
+      retained: 8,
+    },
     discovery: { kind: 'actual', searches_7d: 30, searches_with_results_7d: 25, follows_7d: 12, follows_from_search_7d: 4, follows_from_discover_7d: 5 },
     content: { kind: 'actual', posts_7d: 22, creators_posting_7d: 6, meaningful_comments_7d: 14 },
     rewards: { kind: 'simulated', recognized_points: 300, referrals_waiting: 2, open_pool_cents: 6240, revenue_cents: 31200 },
@@ -3561,7 +4233,14 @@ describe('intelligence (20261210000000): what happened, what it means, what to d
     const m = moneyStory(i, null)
     expect(m.happened).toMatch(/would earn you \$40\.00 for October 2026/)
     expect(m.means).toMatch(/Spring \(Budgetly\) carried most of it: 120 impressions/)
-    expect(contributionStory({ connections_this_week: 2, connections_last_week: 1, referrals: { joined: 1, waiting_review: 1, approved: 0, not_approved: 0 }, opportunities: [{ post_id: 'p', creator: 'Kofi', username: 'kofi', excerpt: 'x' }] }).next).toBe("Share Kofi's new post with someone who'd value it.")
+    expect(
+      contributionStory({
+        connections_this_week: 2,
+        connections_last_week: 1,
+        referrals: { joined: 1, waiting_review: 1, approved: 0, not_approved: 0 },
+        opportunities: [{ post_id: 'p', creator: 'Kofi', username: 'kofi', excerpt: 'x' }],
+      }).next,
+    ).toBe("Share Kofi's new post with someone who'd value it.")
   })
 
   it('the Profile has four faces; Attention shows availability versus reach and where followers came from', async () => {
@@ -3588,7 +4267,12 @@ describe('intelligence (20261210000000): what happened, what it means, what to d
 
   it("My Split shows the member's week, their referrals and opportunities", async () => {
     const f = fakeApi()
-    f.intel.contribution = { connections_this_week: 2, connections_last_week: 1, referrals: { joined: 2, waiting_review: 1, approved: 1, not_approved: 0 }, opportunities: [{ post_id: 'p9', creator: 'Kofi', username: 'kofi', excerpt: 'Weekly budget' }] }
+    f.intel.contribution = {
+      connections_this_week: 2,
+      connections_last_week: 1,
+      referrals: { joined: 2, waiting_review: 1, approved: 1, not_approved: 0 },
+      opportunities: [{ post_id: 'p9', creator: 'Kofi', username: 'kofi', excerpt: 'Weekly budget' }],
+    }
     renderApp('/app/split', f.api)
     const panel = await screen.findByTestId('contribution-insight')
     expect(panel.textContent).toMatch(/You connected with 2 creators this week \(last week: 1\)/)
@@ -3629,13 +4313,167 @@ describe('intelligence (20261210000000): what happened, what it means, what to d
   })
 
   it('advertiser observations: small samples are called noise; high negative feedback leads to a review', () => {
-    const base: CampaignReport = { eligibleAudience: 12, served: 300, impressions: 250, clicks: 10, ctr: 0.04, reach: 40, relevant: 5, notRelevant: 10, hidden: 4, reported: 1,
+    const base: CampaignReport = {
+      eligibleAudience: 12,
+      served: 300,
+      impressions: 250,
+      clicks: 10,
+      ctr: 0.04,
+      reach: 40,
+      relevant: 5,
+      notRelevant: 10,
+      hidden: 4,
+      reported: 1,
       byMatch: { preference: { impressions: 150, clicks: 8 }, context: { impressions: 0, clicks: 0 }, general: { impressions: 100, clicks: 2 } },
-      contentImpressions: 200, feedImpressions: 50, creativeKind: 'text', videoPlays: 0, videoCompletions: 0, verifiedConversions: 1, selfReportedConversions: 4,
-      advertiserSatisfaction: null, simulatedRevenueCents: 0 }
+      contentImpressions: 200,
+      feedImpressions: 50,
+      creativeKind: 'text',
+      videoPlays: 0,
+      videoCompletions: 0,
+      verifiedConversions: 1,
+      selfReportedConversions: 4,
+      advertiserSatisfaction: null,
+      simulatedRevenueCents: 0,
+    }
     const s = campaignStory(base)
     expect(s.means).toMatch(/Preference-based delivery clicked at 5\.3% against 2\.0% when not personalized\. 15 members found it not relevant/)
     expect(s.next).toMatch(/Review the creative and categories/)
     expect(campaignStory({ ...base, byMatch: { ...base.byMatch, preference: { impressions: 20, clicks: 1 } } }).means).toMatch(/Too few impressions yet/)
+  })
+})
+
+describe('unified account and progressive onboarding (20261211000000, 20261212000000)', () => {
+  it('setup shows who invited you (follow only by choice), then explains My Split, and points creators to their setup', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    f.onb.inviter = { id: 'c1', username: 'creator_1', displayName: 'Creator 1', following: false, postingTopics: [] }
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })
+    fireEvent.click(screen.getByRole('radio', { name: /Share my own work/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skip the rest' }))
+    const card = await screen.findByTestId('inviter-card')
+    expect(within(card).getAllByText(/Creator 1/).length).toBeGreaterThan(0)
+    expect(f.follows.has(f.key('me', 'c1'))).toBe(false)
+    fireEvent.click(within(card).getByRole('button', { name: 'Not now' }))
+    expect(within(card).getByText(/You can follow them from their profile any time/)).toBeTruthy()
+    expect(f.follows.has(f.key('me', 'c1'))).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findByRole('heading', { name: 'How My Split works' })).toBeTruthy()
+    const intro = screen.getByTestId('my-split-intro')
+    expect(intro.textContent).toMatch(/Points are not money and nothing is paid/)
+    expect(intro.textContent).not.toMatch(/\b(40|20)\s*%/)
+    expect(screen.getByRole('link', { name: 'Set up my creator profile' })).toBeTruthy()
+  })
+
+  it('following the inviter is one tap and is recorded', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    f.onb.inviter = { id: 'c1', username: 'creator_1', displayName: 'Creator 1', following: false, postingTopics: [] }
+    renderApp('/app', f.api)
+    await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })
+    fireEvent.click(screen.getByRole('button', { name: 'Skip the rest' }))
+    const card = await screen.findByTestId('inviter-card')
+    fireEvent.click(within(card).getByRole('button', { name: 'Follow Creator 1' }))
+    expect(await within(card).findByText("You're following Creator 1.")).toBeTruthy()
+    expect(f.follows.has(f.key('me', 'c1'))).toBe(true)
+  })
+
+  it('creator setup on Profile saves up to three posting topics and guides the first post', async () => {
+    const f = fakeApi()
+    renderApp('/app/profile', f.api)
+    const setup = await screen.findByTestId('creator-setup')
+    expect(within(setup).getByText(/Optional\. Every Splitpost account can post/)).toBeTruthy()
+    fireEvent.click(await within(setup).findByRole('button', { name: 'Music' }))
+    fireEvent.click(within(setup).getByRole('button', { name: 'Food & cooking' }))
+    fireEvent.click(within(setup).getByRole('button', { name: 'Save topics' }))
+    expect(await within(setup).findByText(/You'll appear in suggestions for these topics/)).toBeTruthy()
+    expect(f.onb.topicCalls.at(-1)).toEqual(['music', 'food'])
+    expect(within(setup).getByRole('link', { name: 'Write a post' }).getAttribute('href')).toBe('/app/new')
+    cleanup()
+    renderApp('/app/new', f.api)
+    expect(await screen.findByTestId('first-post-guide')).toBeTruthy()
+  })
+
+  it('any member can ask to advertise from their account; the request waits for review', async () => {
+    const f = fakeApi()
+    renderApp('/app/profile', f.api)
+    expect((await screen.findByRole('link', { name: 'Advertise with Splitpost' })).getAttribute('href')).toBe('/app/advertise')
+    cleanup()
+    renderApp('/app/advertise', f.api)
+    expect(await screen.findByRole('heading', { name: 'Tell us about your business' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Send my request' }))
+    expect(await screen.findByText(/Please answer every question/)).toBeTruthy()
+    expect(f.onb.adRequests).toHaveLength(0)
+    const fill = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
+    fill('Business name', 'Budgetly')
+    fill('Website', 'https://budgetly.example')
+    fill('What do you offer?', 'A budgeting app')
+    fill('What problem does it solve?', 'Money stress')
+    fill('What do your customers need?', 'A simple plan')
+    fill('What outcome do you want for them?', 'Save more')
+    fill('What should people do after seeing your ad?', 'Start a free trial')
+    const categories = screen.getByRole('group', { name: 'What you sell' })
+    fireEvent.click(within(categories).getAllByRole('button')[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Send my request' }))
+    expect(await screen.findByText(/Your request is with the Splitpost team/)).toBeTruthy()
+    expect(f.onb.adRequests[0]).toMatchObject({ name: 'Budgetly', objective: 'awareness' })
+    expect(await screen.findByText('Waiting for review')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Tell us about your business' })).toBeNull()
+  })
+
+  it('a member asks to delete their account only after confirming what it means', async () => {
+    const f = fakeApi()
+    renderApp('/app/privacy', f.api)
+    fireEvent.click(await screen.findByRole('radio', { name: /Delete my account/ }))
+    const send = screen.getByRole('button', { name: 'Send request' }) as HTMLButtonElement
+    expect(send.disabled).toBe(true)
+    fireEvent.click(screen.getByRole('checkbox', { name: /I understand my account/ }))
+    fireEvent.click(send)
+    expect(await screen.findByText(/We've received your request to delete your account/)).toBeTruthy()
+    expect(f.onb.requests[0]).toMatchObject({ kind: 'deletion', status: 'open' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Withdraw' }))
+    await waitFor(() => expect(f.onb.requests[0].status).toBe('withdrawn'))
+  })
+
+  it('the Control Center manages registration, invitation links, switches and deletion requests', async () => {
+    const f = fakeApi('me', { founder: true })
+    f.onb.requests = [
+      {
+        id: 7,
+        kind: 'deletion',
+        status: 'open',
+        createdAt: '2026-12-01T00:00:00Z',
+        resolvedAt: null,
+        details: 'Please delete',
+        username: 'dee',
+        displayName: 'Dee',
+      },
+    ]
+    renderApp('/app/control', f.api)
+    const links = await screen.findByTestId('invitation-links-panel')
+    fireEvent.change(within(links).getByLabelText("Creator's username (optional)"), { target: { value: 'creator_1' } })
+    fireEvent.click(within(links).getByRole('button', { name: 'Create link' }))
+    expect(await within(links).findByText('For @creator_1')).toBeTruthy()
+    fireEvent.click(within(links).getByRole('button', { name: 'Stop this link' }))
+    expect(await within(links).findByText('Stopped')).toBeTruthy()
+
+    const reg = await screen.findByTestId('registration-panel')
+    fireEvent.click(within(reg).getByRole('checkbox', { name: /Accept new registrations/ }))
+    fireEvent.click(within(reg).getByRole('button', { name: 'Save registration settings' }))
+    expect(await within(reg).findByText('Saved and recorded.')).toBeTruthy()
+    expect(f.onb.registrationCalls.at(-1)?.paused).toBe(false)
+
+    const sw = await screen.findByTestId('switches-panel')
+    expect((within(sw).getByRole('button', { name: 'Turn video posts on' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(within(sw).getByLabelText('Reason'), { target: { value: 'Review a complaint' } })
+    fireEvent.click(within(sw).getByRole('button', { name: 'Turn advertising off' }))
+    expect(await within(sw).findByText('Advertising: Off')).toBeTruthy()
+    expect(f.onb.switchCalls[0]).toEqual({ feature: 'ads', enabled: false, reason: 'Review a complaint' })
+
+    const pr = await screen.findByTestId('privacy-requests-panel')
+    fireEvent.change(within(pr).getByLabelText('Type the username to confirm'), { target: { value: 'someone' } })
+    fireEvent.click(within(pr).getByRole('button', { name: 'Delete this account' }))
+    expect(await within(pr).findByText(/Type the confirmation exactly/)).toBeTruthy()
+    fireEvent.change(within(pr).getByLabelText('Type the username to confirm'), { target: { value: 'dee' } })
+    fireEvent.click(within(pr).getByRole('button', { name: 'Delete this account' }))
+    await waitFor(() => expect(f.onb.deleted).toEqual([{ id: 7, username: 'dee' }]))
   })
 })

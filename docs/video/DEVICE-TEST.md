@@ -1,0 +1,55 @@
+# Video device test (founder or testers, about half a day)
+
+Video posts stay **off** until this test passes. The switch in the Control
+Center refuses to turn them on before then. Everything else in Splitpost works
+without video.
+
+**When:** once the video pull request is merged and deployed to staging (Claude
+will say when). The test page is `/app/video-test` on the staging app.
+Nothing you record is published: test uploads stay private and are deleted
+after 24 hours.
+
+## What you need
+
+* An iPhone (any iOS 18 or newer) with Safari.
+* An Android phone (Samsung or Pixel) with Chrome.
+* One computer with Chrome (Windows or Mac).
+* Wi-Fi, and once on each phone, mobile data (4G or 5G).
+
+## On each phone (about 20 minutes per phone)
+
+Open the staging app, sign in, go to `/app/video-test`.
+
+| # | Do | Write down |
+|---|---|---|
+| 1 | Record a **1 minute** video with the phone's camera app (just film the room and talk) | Nothing yet |
+| 2 | Record a **5 minute** video the same way | Nothing yet |
+| 3 | On the test page, **Choose a video**, pick the 1 minute clip | Did the picker open your Photos or Gallery? (yes or no) |
+| 4 | Wait for **Check, Convert, Upload** to finish | The three times the page shows, and the result line (Pass or the message) |
+| 5 | Press **Play** on the uploaded clip | Did it play with sound? |
+| 6 | Repeat 3 to 5 with the **5 minute** clip | The same, plus: did the screen lock during conversion? If so, what happened when you unlocked it? |
+| 7 | Turn Wi-Fi off and repeat 3 to 5 with the 1 minute clip on mobile data | Upload time |
+| 8 | **Android only:** in the camera settings choose "High efficiency" or "HEVC" if offered, record 30 seconds, and repeat 3 to 5 | The result line |
+
+The page shows a summary box at the end. Press **Copy results** and paste it
+into Splitpost Feedback (category: Problem, feature: Create) or send it to
+Claude. That is all Claude needs; no screenshots required.
+
+## On the computer (about 10 minutes)
+
+1. On `/app/video-test`, upload one `.MOV` (from the iPhone, via AirDrop or a
+   cable) and one `.MP4` (from the Android phone).
+2. Play both, and play one of the phone uploads.
+3. Copy results as above.
+
+## What counts as a pass
+
+| Device | Must work |
+|---|---|
+| iPhone Safari | 1 and 5 minute clips check, convert (or pass through), upload and play |
+| Android Chrome | The same, including the HEVC clip (converted, or a clear message explaining how to export H.264) |
+| Computer | .MOV and .MP4 upload and play |
+
+If the iPhone cannot finish the 5 minute conversion reliably, Claude applies the
+agreed fallback (SP-VID-001, section 6: accept iPhone H.264 up to 1080p as
+delivered by iOS, with a larger size cap) and asks you before turning video on.

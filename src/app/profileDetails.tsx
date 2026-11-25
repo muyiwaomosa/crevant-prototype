@@ -19,6 +19,7 @@ import {
 import { useAppApi } from './AppApiContext'
 import { MemberAvatar, MemberLink, RelationshipButtons } from './components'
 import { ProfilePictureField } from './avatars'
+import { InviterCard, MySplitIntro } from './onboarding'
 
 /**
  * Profile details (Build 5, Stage 5.1): identity preference, interests, bio
@@ -30,9 +31,9 @@ import { ProfilePictureField } from './avatars'
  */
 
 export const IDENTITY_TEXT: Record<Identity, { label: string; body: string; badge: string }> = {
-  creator: { label: 'Creator', body: 'I share my own work and want people to follow along.', badge: 'Creator' },
-  fan: { label: 'Fan', body: "I'm here to discover creators and support them.", badge: 'Fan' },
-  both: { label: 'Both', body: 'I create, and I support other creators too.', badge: 'Creator and fan' },
+  creator: { label: 'Share my own work', body: "I'd like to post and grow an audience.", badge: 'Creator' },
+  fan: { label: "Find creators I'll love", body: "I'm mostly here to discover, follow and support.", badge: 'Fan' },
+  both: { label: 'A bit of both', body: 'I want to post and to follow other creators.', badge: 'Creator and fan' },
 }
 
 /** Step N of M, as text and a progress bar. */
@@ -62,9 +63,10 @@ export function IdentityPicker({ value, onChange, hideLegend }: { value: Identit
   return (
     <fieldset>
       {/* In setup the page heading asks the same question, so the legend is for screen readers only there. */}
-      <legend className={hideLegend ? 'sr-only' : 'text-sm font-semibold text-ink-800'}>How will you use Splitpost?</legend>
+      <legend className={hideLegend ? 'sr-only' : 'text-sm font-semibold text-ink-800'}>What brings you to Splitpost?</legend>
       <p id={`${name}-note`} className="mt-1 text-sm text-ink-500">
-        This only describes you. Everyone can post, follow and build a Clique, whatever you choose, and you can change it later.
+        Optional. It only helps us suggest where to start. Every account can post, follow, build a Clique and advertise, whatever you choose, and you can change
+        it later.
       </p>
       <div className="mt-3 grid gap-2" aria-describedby={`${name}-note`}>
         {IDENTITIES.map((id) => {
@@ -77,14 +79,7 @@ export function IdentityPicker({ value, onChange, hideLegend }: { value: Identit
                 checked ? 'border-brand-500 bg-brand-50' : 'border-ink-200 bg-white hover:border-ink-300',
               )}
             >
-              <input
-                type="radio"
-                name={name}
-                value={id}
-                checked={checked}
-                onChange={() => onChange(id)}
-                className="mt-1 h-4 w-4 accent-brand-600"
-              />
+              <input type="radio" name={name} value={id} checked={checked} onChange={() => onChange(id)} className="mt-1 h-4 w-4 accent-brand-600" />
               <span>
                 <span className="block font-semibold text-ink-900">{IDENTITY_TEXT[id].label}</span>
                 <span className="block text-sm text-ink-600">{IDENTITY_TEXT[id].body}</span>
@@ -116,28 +111,36 @@ export function TopicPicker({
   value,
   onChange,
   hideLegend,
+  max = LIMITS.topics,
+  legend = 'Your interests',
+  hint,
 }: {
   topics: Topic[]
   value: string[]
   onChange: (v: string[]) => void
   hideLegend?: boolean
+  /** Creator posting topics use 3 (20261211000000); interests use 5. */
+  max?: number
+  legend?: string
+  hint?: string
 }) {
   const id = useId()
-  const full = value.length >= LIMITS.topics
+  const full = value.length >= max
   const enough = value.length >= SUGGESTED_TOPICS
+  const interests = max === LIMITS.topics
   return (
     <fieldset>
-      <legend className={hideLegend ? 'sr-only' : 'text-sm font-semibold text-ink-800'}>Your interests</legend>
+      <legend className={hideLegend ? 'sr-only' : 'text-sm font-semibold text-ink-800'}>{legend}</legend>
       <p id={`${id}-hint`} className="mt-1 text-sm text-ink-500">
-        We suggest at least {SUGGESTED_TOPICS}. You can choose up to {LIMITS.topics}, and change them any time.
+        {hint ?? `We suggest at least ${SUGGESTED_TOPICS}. You can choose up to ${LIMITS.topics}, and change them any time.`}
       </p>
       <p
         id={`${id}-count`}
         aria-live="polite"
-        data-testid="topic-progress"
-        className={clsx('mt-1 text-sm font-semibold', enough ? 'text-brand-800' : 'text-ink-700')}
+        data-testid={interests ? 'topic-progress' : 'posting-topic-progress'}
+        className={clsx('mt-1 text-sm font-semibold', (interests ? enough : value.length > 0) ? 'text-brand-800' : 'text-ink-700')}
       >
-        {topicProgress(value.length)}
+        {interests ? topicProgress(value.length) : `${value.length} of ${max} chosen`}
       </p>
       <div className="mt-3 flex flex-wrap gap-2" role="group" aria-describedby={`${id}-hint ${id}-count`}>
         {topics.map((t) => {
@@ -223,7 +226,7 @@ export function detailsProblem(d: ProfileDetails): string | null {
 const fields = (d: ProfileDetails): ProfileDetails => ({ identity: d.identity, bio: d.bio, followReason: d.followReason, topics: d.topics })
 
 /** The topic list, or null while loading or when the database has none. */
-function useTopics() {
+export function useTopics() {
   const api = useAppApi()
   const [topics, setTopics] = useState<Topic[] | null | undefined>(undefined)
   const [error, setError] = useState<unknown>(null)
@@ -245,7 +248,7 @@ function useTopics() {
 // statement, then people to follow. Every step can be skipped; nothing here is
 // required to use Splitpost.
 
-export const SETUP_STEPS = ['Your name', 'How you use Splitpost', 'Your interests', 'About you', 'People to follow'] as const
+export const SETUP_STEPS = ['Your name', 'What brings you here', 'Your interests', 'About you', 'People to follow', 'How My Split works'] as const
 
 export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: () => void }) {
   const api = useAppApi()
@@ -294,8 +297,8 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
       <>
         <IdentityPicker value={draft.identity} onChange={(identity) => set({ identity })} hideLegend />
         <div className="flex items-center justify-between gap-3">
-          {skip(() => (set({ identity: null }), setStep(3)), 'how you use Splitpost')}
-          <button type="button" onClick={() => setStep(3)} disabled={!draft.identity} className={buttonClass('primary')}>
+          {skip(() => (set({ identity: null }), setStep(3)), 'what brings you here')}
+          <button type="button" onClick={() => setStep(3)} className={buttonClass('primary')}>
             Continue
           </button>
         </div>
@@ -352,14 +355,37 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
         </div>
       </form>
     )
-  } else {
+  } else if (step === 5) {
     body = (
       <>
         <Message tone="success">Your profile is saved. You can change it any time from Profile.</Message>
+        <InviterCard />
         <SuggestedPeople heading={null} emptyText="No suggestions yet. As more members join, people who share your interests will appear here." />
-        <button type="button" onClick={onDone} className={`${buttonClass('primary')} w-full`}>
-          Go to my feed
+        <button type="button" onClick={() => setStep(6)} className={`${buttonClass('primary')} w-full`}>
+          Continue
         </button>
+      </>
+    )
+  } else {
+    const creating = draft.identity === 'creator' || draft.identity === 'both'
+    body = (
+      <>
+        <MySplitIntro heading={null} />
+        {creating && (
+          <p className="rounded-2xl bg-brand-50 px-4 py-3 text-[14px] leading-relaxed text-ink-800 ring-1 ring-brand-100">
+            Ready to share your own work? Your Profile has a short creator setup: what you post about, your first post and your invitation link.
+          </p>
+        )}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {creating && (
+            <Link to="/app/profile" onClick={onDone} className={`${buttonClass('secondary')} w-full sm:w-auto`}>
+              Set up my creator profile
+            </Link>
+          )}
+          <button type="button" onClick={onDone} className={`${buttonClass('primary')} w-full sm:flex-1`}>
+            Go to my feed
+          </button>
+        </div>
       </>
     )
   }
@@ -370,10 +396,11 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
         <SetupProgress step={step} total={SETUP_STEPS.length} label={label} />
         <Card className="space-y-5 p-5 sm:p-6">
           <h1 id={headingId} tabIndex={-1} className="font-display text-2xl font-extrabold text-ink-900 outline-none">
-            {step === 2 && 'How will you use Splitpost?'}
+            {step === 2 && 'What brings you to Splitpost?'}
             {step === 3 && 'What are you into?'}
             {step === 4 && 'Tell people about you'}
             {step === 5 && 'People you might like'}
+            {step === 6 && 'How My Split works'}
           </h1>
           {body}
         </Card>
@@ -491,13 +518,11 @@ export function TopicTags({ slugs, topics, highlight }: { slugs: string[]; topic
 /** Bio, identity, follow statement and interests, for a profile page. Shows nothing when empty. */
 export function MemberAbout({ details, topics }: { details: ProfileDetails | null | undefined; topics: Topic[] | null | undefined }) {
   if (!details) return null
-  const { identity, bio, followReason } = details
-  if (!identity && !bio && !followReason && details.topics.length === 0) return null
+  // The goal question is private personalization (unified account): never shown as a public label.
+  const { bio, followReason } = details
+  if (!bio && !followReason && details.topics.length === 0) return null
   return (
     <div className="mt-4 space-y-3" data-testid="member-about">
-      {identity && (
-        <p className="inline-block rounded-full bg-ink-100/70 px-2.5 py-0.5 text-[13px] font-semibold text-ink-700">{IDENTITY_TEXT[identity].badge}</p>
-      )}
       {bio && <p className="text-[15px] leading-relaxed text-ink-800">{bio}</p>}
       {followReason && (
         <div className="rounded-2xl bg-brand-50 px-4 py-3 ring-1 ring-brand-100">
@@ -537,8 +562,8 @@ export function PersonSummary({
           <MemberLink member={member} className="block truncate" />
           <p className="truncate text-[13px] text-ink-500">
             @{member.username}
-            {d?.identity ? ` · ${IDENTITY_TEXT[d.identity].badge}` : ''} · {member.postCount} {member.postCount === 1 ? 'post' : 'posts'} ·{' '}
-            {member.followerCount} {member.followerCount === 1 ? 'follower' : 'followers'}
+            {' · '}
+            {member.postCount} {member.postCount === 1 ? 'post' : 'posts'} · {member.followerCount} {member.followerCount === 1 ? 'follower' : 'followers'}
           </p>
         </div>
       </div>
@@ -552,11 +577,7 @@ export function PersonSummary({
       {d && d.topics.length > 0 && (
         <div className="mt-3">
           <TopicTags slugs={d.topics} topics={topics} highlight={myTopics} />
-          {member.sharedTopics ? (
-            <p className="mt-1.5 text-[13px] text-ink-500">
-              Shares {member.sharedTopics} of your interests
-            </p>
-          ) : null}
+          {member.sharedTopics ? <p className="mt-1.5 text-[13px] text-ink-500">Shares {member.sharedTopics} of your interests</p> : null}
         </div>
       )}
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -623,5 +644,3 @@ export function SuggestedPeople({ heading = 'Suggested for you', emptyText, limi
     </section>
   )
 }
-
-export { useTopics }

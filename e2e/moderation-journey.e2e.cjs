@@ -243,7 +243,7 @@ async function signIn(page, email) {
     await pageC.getByLabel('Email address', { exact: true }).fill(email)
     await pageC.getByLabel('Password', { exact: true }).fill(PASSWORD)
     await pageC.getByRole('button', { name: 'Sign in' }).click()
-    await pageC.getByRole('heading', { name: 'How will you use Splitpost?' }).waitFor()
+    await pageC.getByRole('heading', { name: 'What brings you to Splitpost?' }).waitFor()
     await pageC.getByRole('button', { name: 'Skip the rest' }).click()
     await pageC.getByRole('heading', { name: 'People you might like' }).waitFor()
     const card = pageC.getByTestId('suggested-people').getByRole('listitem').filter({ hasText: A.displayName })
@@ -262,6 +262,7 @@ async function signIn(page, email) {
       check('"People you might like" with the confirmation has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
       await fits(pageC, '"People you might like"')
     }
+    await pageC.getByRole('button', { name: 'Continue' }).click()
     await pageC.getByRole('button', { name: 'Go to my feed' }).click()
     await pageC.getByRole('heading', { name: 'Home' }).waitFor()
     await pageC.reload()

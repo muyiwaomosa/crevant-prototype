@@ -5,6 +5,7 @@ import { Card, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import { messageFor, type Audience, type ContributionInsights, type CreatorInsights, type FounderOverview } from './api'
 import { useAppApi } from './AppApiContext'
+import { InvitationLinksPanel, PrivacyRequestsPanel, RegistrationPanel, SwitchesPanel } from './control'
 import { useFeedbackAccess } from './feedback'
 import { simulatedDollars } from './split'
 
@@ -629,7 +630,7 @@ function Stat({ label, value, kind, detail }: { label: string; value: ReactNode;
   )
 }
 
-export function ControlCenterPage() {
+function EcosystemHealth() {
   const api = useAppApi()
   const { founder } = useFeedbackAccess()
   const [o, setO] = useState<FounderOverview | null | undefined>(undefined)
@@ -747,5 +748,44 @@ export function ControlCenterPage() {
       </Card>
       <p className="mt-4 text-[12px] text-ink-600">{o.north_star.definition}</p>
     </>
+  )
+}
+
+/** The founder's Control Center: ecosystem health, then the operational tools (20261211000000, 20261212000000). */
+export function ControlCenterPage() {
+  const { founder } = useFeedbackAccess()
+  if (!founder) return <Message tone="info">Only the founder can see this.</Message>
+  return (
+    <div className="space-y-6">
+      <nav aria-label="Control Center sections" className="flex flex-wrap gap-2 text-sm font-semibold">
+        <a href="#health" className="rounded-full bg-brand-50 px-3 py-1.5 text-brand-800">
+          Health
+        </a>
+        <a href="#operations" className="rounded-full bg-brand-50 px-3 py-1.5 text-brand-800">
+          Registration and links
+        </a>
+        <Link to="/app/ads" className="rounded-full bg-brand-50 px-3 py-1.5 text-brand-800">
+          Advertisers and campaigns
+        </Link>
+        <Link to="/app/split" className="rounded-full bg-brand-50 px-3 py-1.5 text-brand-800">
+          Rewards and reconciliation
+        </Link>
+        <Link to="/app/moderation" className="rounded-full bg-brand-50 px-3 py-1.5 text-brand-800">
+          Moderation
+        </Link>
+      </nav>
+      <section id="health" aria-label="Ecosystem health">
+        <EcosystemHealth />
+      </section>
+      <section id="operations" aria-labelledby="operations-title" className="space-y-4">
+        <h2 id="operations-title" className="font-display text-xl font-extrabold text-ink-900">
+          Operations
+        </h2>
+        <RegistrationPanel />
+        <InvitationLinksPanel />
+        <SwitchesPanel />
+        <PrivacyRequestsPanel />
+      </section>
+    </div>
   )
 }

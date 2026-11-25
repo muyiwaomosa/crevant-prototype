@@ -159,6 +159,7 @@ async function signIn(page, email) {
   await Promise.race([skip.waitFor(), home.waitFor()])
   if (await skip.isVisible().catch(() => false)) {
     await skip.click()
+    await page.getByRole('button', { name: 'Continue' }).click()
     await page.getByRole('button', { name: 'Go to my feed' }).click()
   }
   await home.waitFor()
@@ -254,11 +255,12 @@ async function signIn(page, email) {
       await page.goto(await emailLink(emailN, 'email'))
       await page.getByRole('button', { name: 'Continue' }).click()
       await page.waitForURL(`${APP}/app`)
-      await page.getByText('Step 1 of 5: Your name').waitFor({ timeout: 15000 })
+      await page.getByText('Step 1 of 6: Your name').waitFor({ timeout: 15000 })
       await page.getByLabel('Username').fill(`rwn${RUN}`)
       await page.getByLabel('Display name').fill('Nia New')
       await page.getByRole('button', { name: 'Continue' }).click()
       await page.getByRole('button', { name: 'Skip the rest' }).click()
+      await page.getByRole('button', { name: 'Continue' }).click()
       await page.getByRole('button', { name: 'Go to my feed' }).click()
       await page.getByRole('heading', { name: 'Home' }).waitFor()
       const n = sql(`select id from auth.users where email = '${emailN}'`)

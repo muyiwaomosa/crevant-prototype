@@ -371,6 +371,8 @@ export interface Advertiser {
   conversion_action: string
   eligibility_notes: string | null
   categories: string[]
+  /** The member who asked to advertise from their own account (20261211000000), if any. */
+  requested_by_username?: string | null
   status: 'pending' | 'approved' | 'declined'
   review_note: string | null
 }
@@ -427,6 +429,8 @@ export interface CampaignReport {
   selfReportedConversions: number | null
   advertiserSatisfaction: number | null
   simulatedRevenueCents: number
+  /** The advertiser's own view withholds feedback counts under 10 (20261211000000). */
+  feedbackWithheld?: boolean
 }
 
 /** Intelligence (20261210000000). Aggregates only; every figure says whether it is actual or simulated. */
@@ -455,6 +459,75 @@ export interface ContributionInsights {
   opportunities: Array<{ post_id: string; creator: string; username: string; excerpt: string }>
 }
 export type MetricKind = 'actual' | 'simulated' | 'test' | 'hypothesis'
+
+/** Unified onboarding (20261211000000). */
+export type CreatorSetup = { postingTopics: string[]; posts: number; followers: number; joinedThroughMyLink: number }
+export type Inviter = { id: string; username: string; displayName: string; following: boolean; postingTopics: string[] }
+export type InvitationLink = {
+  code: string
+  creatorUsername: string | null
+  cohort: string
+  uses: number
+  maxUses: number | null
+  expiresAt: string | null
+  revokedAt: string | null
+  createdAt: string
+  registered: number
+}
+export type RegistrationSettings = {
+  paused: boolean
+  totalCap: number
+  dailyCap: number
+  perReferrerDailyCap: number
+  registeredTotal: number
+  registeredToday: number
+  externalAccessApproved: boolean
+  updatedAt: string | null
+}
+export type AdObjective = 'awareness' | 'traffic' | 'sign_ups' | 'sales'
+export type AdvertisingRequest = {
+  name: string
+  website: string
+  offering: string
+  problemSolved: string
+  desiredOutcome: string
+  customerNeeds: string
+  objective: AdObjective
+  conversionAction: string
+  eligibilityNotes?: string
+  categories: string[]
+}
+export type MyAdvertising = {
+  requests: Array<{
+    id: string
+    name: string
+    status: 'pending' | 'approved' | 'declined'
+    reviewNote: string | null
+    objective: string
+    requestedAt: string | null
+  }>
+  campaigns: Array<{ id: string; name: string; advertiser: string; status: string; startsOn: string; endsOn: string; placement: string }>
+}
+/** Privacy requests and switches (20261212000000). */
+export type Features = { ads: boolean; sharing: boolean; videoPosts: boolean; photos: boolean; rewards: boolean }
+export type SwitchFeature = 'ads' | 'sharing' | 'video_posts'
+export type FounderSwitches = {
+  switches: Array<{ feature: SwitchFeature; enabled: boolean; updatedAt: string }>
+  registrationPaused: boolean
+  externalAccessApproved: boolean
+  rewardsPaused: boolean
+  photosEnabled: boolean
+  recent: Array<{ feature: string; enabled: boolean; reason: string; changedAt: string }>
+}
+export type MemberRequestKind = 'access' | 'correction' | 'deletion'
+export type MemberRequest = {
+  id: number
+  kind: MemberRequestKind
+  status: 'open' | 'completed' | 'declined' | 'withdrawn'
+  createdAt: string
+  resolvedAt: string | null
+}
+export type FounderMemberRequest = MemberRequest & { details: string | null; username: string | null; displayName: string | null }
 export interface FounderOverview {
   generated_at: string
   week_start: string
@@ -498,7 +571,16 @@ export interface MemberRecord {
   displayName: string
   standing: 'restricted' | 'suspended' | null
   hiddenContent: number
-  enforcements: Array<{ id: number; level: EnforcementLevel; reason: string; startsAt: string; endsAt: string | null; liftedAt: string | null; liftedVia: string | null; active: boolean }>
+  enforcements: Array<{
+    id: number
+    level: EnforcementLevel
+    reason: string
+    startsAt: string
+    endsAt: string | null
+    liftedAt: string | null
+    liftedVia: string | null
+    active: boolean
+  }>
 }
 export interface ModAppeal {
   id: string
@@ -713,6 +795,29 @@ export interface AppApi {
   noteOpen(postId: string): Promise<void>
   founderAttributeCampaignRevenue(id: string, month: string, netCents: number): Promise<{ contentCents: number; feedCents: number }>
   founderAdDemand(): Promise<Array<{ category: string; label: string; members: number | null }>>
+  /** Unified onboarding (20261211000000). Null or empty before the migration. */
+  myCreatorSetup(): Promise<CreatorSetup | null>
+  setCreatorTopics(topics: string[]): Promise<string[]>
+  memberCreatorTopics(memberId: string): Promise<string[]>
+  myInviter(): Promise<Inviter | null>
+  founderRegistration(): Promise<RegistrationSettings | null>
+  founderSetRegistration(s: { paused: boolean; totalCap: number; dailyCap: number; perReferrerDailyCap: number }, reason: string): Promise<void>
+  founderCreateInvitationLink(maxUses: number | null, days: number, creatorUsername?: string): Promise<string>
+  founderInvitationLinks(): Promise<InvitationLink[]>
+  founderRevokeInvitationLink(code: string): Promise<void>
+  requestAdvertising(r: AdvertisingRequest): Promise<string>
+  myAdvertising(): Promise<MyAdvertising | null>
+  myCampaignReport(campaignId: string): Promise<CampaignReport>
+  /** Privacy requests and switches (20261212000000). */
+  features(): Promise<Features | null>
+  founderSwitches(): Promise<FounderSwitches | null>
+  founderSetSwitch(feature: SwitchFeature, enabled: boolean, reason: string): Promise<void>
+  submitMemberRequest(kind: MemberRequestKind, details: string): Promise<number>
+  myMemberRequests(): Promise<MemberRequest[] | null>
+  withdrawMemberRequest(id: number): Promise<void>
+  founderMemberRequests(): Promise<FounderMemberRequest[]>
+  founderResolveMemberRequest(id: number, completed: boolean, note: string): Promise<void>
+  founderDeleteMember(requestId: number, confirmUsername: string): Promise<{ postsRemoved: number; awardsForfeited: number }>
   /** Governance (20261206000000). Blocks: two way, never shown to the blocked member. */
   block(memberId: string): Promise<void>
   unblock(memberId: string): Promise<void>
@@ -725,7 +830,15 @@ export interface AppApi {
   markNoticesRead(): Promise<void>
   appeal(noticeId: number, body: string): Promise<void>
   /** immediate: a serious violation acted on at once (skipping the ladder), with the justification in note. */
-  modEnforce(memberId: string, level: EnforcementLevel, reason: ReportReason, reportId?: string | null, days?: number | null, note?: string, immediate?: boolean): Promise<void>
+  modEnforce(
+    memberId: string,
+    level: EnforcementLevel,
+    reason: ReportReason,
+    reportId?: string | null,
+    days?: number | null,
+    note?: string,
+    immediate?: boolean,
+  ): Promise<void>
   modLift(enforcementId: number, note?: string): Promise<void>
   modMemberRecord(memberId: string): Promise<MemberRecord | null>
   modAppeals(status: 'open' | 'decided'): Promise<ModAppeal[] | null>
@@ -761,8 +874,23 @@ export const LIMITS = {
 
 /** Same reserved names as the profiles table (supabase/migrations/20261107000000_profiles_and_ops.sql). */
 const RESERVED_USERNAMES = new Set([
-  'admin', 'administrator', 'crevant', 'support', 'help', 'staff', 'moderator', 'official',
-  'root', 'system', 'api', 'app', 'auth', 'tour', 'sign_in', 'settings', 'null',
+  'admin',
+  'administrator',
+  'crevant',
+  'support',
+  'help',
+  'staff',
+  'moderator',
+  'official',
+  'root',
+  'system',
+  'api',
+  'app',
+  'auth',
+  'tour',
+  'sign_in',
+  'settings',
+  'null',
 ])
 
 export function usernameProblem(raw: string): string | null {
@@ -876,7 +1004,8 @@ const MESSAGES: Record<string, string> = {
   creative_missing: 'Upload the image or video to the ad-creatives bucket first (JPEG, PNG or WebP image, or MP4 video up to 8 MB).',
   restricted: "You can't post, comment or repost while a restriction is in place. Your notices say when it ends.",
   suspended: 'Your account is suspended. You can still read your notices and appeal.',
-  ladder_step_required: 'Take the earlier step first: a warning before a restriction, a restriction before a suspension (threats, self-harm and hate excepted).',
+  ladder_step_required:
+    'Take the earlier step first: a warning before a restriction, a restriction before a suspension (threats, self-harm and hate excepted).',
   cannot_enforce_self: "You can't take action on your own account.",
   not_active: 'This has already ended. Nothing was changed.',
   not_appealable: "This notice can't be appealed.",
@@ -884,6 +1013,18 @@ const MESSAGES: Record<string, string> = {
   already_appealed: "You've already appealed this. We'll let you know the decision.",
   needs_another_moderator: 'Another moderator decides appeals on your own actions.',
   cannot_decide_own_appeal: "You can't decide your own appeal.",
+  too_many_posting_topics: 'Choose up to 3 topics you post about.',
+  invalid_posting_topic: 'Choose topics from the list.',
+  unknown_member: 'No member has that username.',
+  invalid_expiry: 'Choose how many days the link lasts (1 to 366).',
+  invalid_max_uses: 'Choose how many people can join with it (1 to 10,000), or leave it empty.',
+  request_pending: "You already have a request waiting for review. We'll let you know.",
+  request_open: 'You already have a request like this open.',
+  sharing_paused: 'Sharing is paused for a moment. Please try again later.',
+  reason_required: 'Write a short reason first.',
+  video_not_ready: 'Video posts stay off until the device test has passed.',
+  use_delete_account: 'Complete a deletion request by deleting the account.',
+  cannot_delete_founder: "A founder account can't be deleted here.",
   network: "We couldn't reach Splitpost. Check your connection and try again.",
   unknown: 'Something went wrong. Please try again.',
 }
@@ -973,7 +1114,10 @@ export function isMissingRequestIdVersion(error: { code?: string; message?: stri
   if (!error || error.code !== 'PGRST202') return false
   const m = /Could not find the function public\.([a-z_]+)\(([^)]*)\)/.exec(error.message ?? '')
   if (!m || m[1] !== fn) return false
-  return m[2].split(',').map((p) => p.trim()).includes('p_request_id')
+  return m[2]
+    .split(',')
+    .map((p) => p.trim())
+    .includes('p_request_id')
 }
 
 /**
@@ -990,9 +1134,8 @@ export function isMissingFunction(error: { code?: string; message?: string } | n
   return !!m && m[1] === fn
 }
 
-const asSupportChoice = (v: unknown): SupportChoice | null =>
-  SUPPORT_CHOICES.some((c) => c.value === v) ? (v as SupportChoice) : null
-const asIdentity = (v: unknown): Identity | null => (IDENTITIES as unknown[]).includes(v) ? (v as Identity) : null
+const asSupportChoice = (v: unknown): SupportChoice | null => (SUPPORT_CHOICES.some((c) => c.value === v) ? (v as SupportChoice) : null)
+const asIdentity = (v: unknown): Identity | null => ((IDENTITIES as unknown[]).includes(v) ? (v as Identity) : null)
 const asText = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 const asTopics = (v: unknown): string[] => (Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : [])
 
@@ -1075,6 +1218,47 @@ function toFeedbackItem(r: Record<string, unknown>): FeedbackItem {
     noteCount: num(r.note_count as number),
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
+  }
+}
+
+function toCampaignReport(r: Record<string, unknown>): CampaignReport {
+  const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
+  const m = (r.by_match ?? {}) as Record<string, { impressions: number; clicks: number }>
+  return {
+    eligibleAudience: n(r.eligible_audience),
+    served: Number(r.served ?? 0),
+    impressions: Number(r.impressions ?? 0),
+    clicks: Number(r.clicks ?? 0),
+    ctr: n(r.ctr),
+    reach: n(r.reach),
+    relevant: Number(r.relevant ?? 0),
+    notRelevant: Number(r.not_relevant ?? 0),
+    hidden: Number(r.hidden ?? 0),
+    reported: Number(r.reported ?? 0),
+    byMatch: {
+      preference: m.preference ?? { impressions: 0, clicks: 0 },
+      context: m.context ?? { impressions: 0, clicks: 0 },
+      general: m.general ?? { impressions: 0, clicks: 0 },
+    },
+    contentImpressions: Number(r.content_impressions ?? 0),
+    feedImpressions: Number(r.feed_impressions ?? 0),
+    creativeKind: ((r.creative_kind as string | undefined) ?? 'text') as CampaignReport['creativeKind'],
+    videoPlays: Number(r.video_plays ?? 0),
+    videoCompletions: Number(r.video_completions ?? 0),
+    verifiedConversions: Number(r.verified_conversions ?? 0),
+    selfReportedConversions: n(r.self_reported_conversions),
+    advertiserSatisfaction: n(r.advertiser_satisfaction),
+    simulatedRevenueCents: Number(r.simulated_revenue_cents ?? 0),
+  }
+}
+
+function toMemberRequest(r: Record<string, unknown>): MemberRequest {
+  return {
+    id: Number(r.id),
+    kind: r.kind as MemberRequestKind,
+    status: r.status as MemberRequest['status'],
+    createdAt: String(r.created_at),
+    resolvedAt: r.resolved_at ? String(r.resolved_at) : null,
   }
 }
 
@@ -1514,7 +1698,12 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       const base = client.storage.from('post-photos').getPublicUrl('x').data.publicUrl.split('/object/')[0]
       const out: Record<string, PhotoLinks> = {}
       for (const [id, v] of Object.entries(photos)) {
-        if (typeof v?.feed === 'string' && typeof v?.full === 'string' && v.feed.startsWith('/object/sign/post-photos/') && v.full.startsWith('/object/sign/post-photos/')) {
+        if (
+          typeof v?.feed === 'string' &&
+          typeof v?.full === 'string' &&
+          v.feed.startsWith('/object/sign/post-photos/') &&
+          v.full.startsWith('/object/sign/post-photos/')
+        ) {
           out[id] = { feed: `${base}${v.feed}`, full: `${base}${v.full}` }
         }
       }
@@ -1527,7 +1716,14 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       const { data, error } = await client.functions.invoke('post-media/mod-photo', { body: { report: reportId } })
       if (error) throw await photoFunctionError(error)
       const p = (data as { photo?: { feed?: unknown; full?: unknown; description?: unknown } | null })?.photo
-      if (!p || typeof p.feed !== 'string' || typeof p.full !== 'string' || !p.feed.startsWith('/object/sign/post-photos/') || !p.full.startsWith('/object/sign/post-photos/')) return null
+      if (
+        !p ||
+        typeof p.feed !== 'string' ||
+        typeof p.full !== 'string' ||
+        !p.feed.startsWith('/object/sign/post-photos/') ||
+        !p.full.startsWith('/object/sign/post-photos/')
+      )
+        return null
       const base = client.storage.from('post-photos').getPublicUrl('x').data.publicUrl.split('/object/')[0]
       return { feed: `${base}${p.feed}`, full: `${base}${p.full}`, description: typeof p.description === 'string' ? p.description : null }
     },
@@ -1550,7 +1746,9 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         lastRunFailed: s.last_run_failed === true,
         egressReviewGb: n(s.egress_review_gb),
         egressPauseGb: n(s.egress_pause_gb),
-        checks: Array.isArray(s.checks) ? (s.checks as Array<Record<string, unknown>>).map((c) => ({ ok: c.ok === true, ms: Number(c.ms ?? 0), at: String(c.at) })) : [],
+        checks: Array.isArray(s.checks)
+          ? (s.checks as Array<Record<string, unknown>>).map((c) => ({ ok: c.ok === true, ms: Number(c.ms ?? 0), at: String(c.at) }))
+          : [],
       }
     },
     async modMediaDrain() {
@@ -1656,7 +1854,11 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     editPost: (postId, body, topic) => rpc<void>('app_edit_post', { p_post: postId, p_body: body, p_topic: topic }),
     async postEdits(postId) {
       const rows = await rpc<Array<Record<string, unknown>>>('app_post_edits', { p_post: postId })
-      return rows.map((r) => ({ previousBody: String(r.previous_body), previousTopic: (r.previous_topic as string | null) ?? null, editedAt: String(r.edited_at) }))
+      return rows.map((r) => ({
+        previousBody: String(r.previous_body),
+        previousTopic: (r.previous_topic as string | null) ?? null,
+        editedAt: String(r.edited_at),
+      }))
     },
     save: (postId) => rpc<void>('app_save', { p_post: postId }),
     unsave: (postId) => rpc<void>('app_unsave', { p_post: postId }),
@@ -1774,12 +1976,24 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       }
     },
     founderRecordSimRevenue: async (month, kind, creatorId, netCents, note) => {
-      await rpc<number>('app_founder_record_sim_revenue', { p_month: month, p_kind: kind, p_creator: creatorId, p_post: null, p_net_cents: netCents, p_note: note.trim() })
+      await rpc<number>('app_founder_record_sim_revenue', {
+        p_month: month,
+        p_kind: kind,
+        p_creator: creatorId,
+        p_post: null,
+        p_net_cents: netCents,
+        p_note: note.trim(),
+      })
     },
     async founderCloseMonth(month) {
       const rows = await rpc<Array<Record<string, unknown>>>('app_founder_close_month', { p_month: month })
       const r = rows[0] ?? {}
-      return { poolCents: num(r.pool_cents as number), points: num(r.points as number), members: num(r.members as number), allocatedCents: num(r.allocated_cents as number) }
+      return {
+        poolCents: num(r.pool_cents as number),
+        points: num(r.points as number),
+        members: num(r.members as number),
+        allocatedCents: num(r.allocated_cents as number),
+      }
     },
     async adFor(surface, postId) {
       const { data, error } = await client.rpc('app_ad_for', { p_surface: surface, p_post: postId ?? null })
@@ -1812,13 +2026,23 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         if (isMissingFunction(error, 'app_ad_categories')) return null
         throw toAppError(error)
       }
-      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({ slug: String(r.slug), label: String(r.label), chosen: Boolean(r.chosen), excluded: Boolean(r.excluded) }))
+      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        slug: String(r.slug),
+        label: String(r.label),
+        chosen: Boolean(r.chosen),
+        excluded: Boolean(r.excluded),
+      }))
     },
     setAdPreference: (category, state) => rpc<void>('app_set_ad_preference', { p_category: category, p_state: state }),
     clearAdPreferences: () => rpc<void>('app_clear_ad_preferences'),
     async myAdExclusions() {
       const rows = await rpc<Array<Record<string, unknown>>>('app_my_ad_exclusions')
-      return rows.map((r) => ({ kind: r.kind as AdExclusion['kind'], target: String(r.target), label: (r.label as string | null) ?? null, createdAt: String(r.created_at) }))
+      return rows.map((r) => ({
+        kind: r.kind as AdExclusion['kind'],
+        target: String(r.target),
+        label: (r.label as string | null) ?? null,
+        createdAt: String(r.created_at),
+      }))
     },
     removeAdExclusion: (kind, target) => rpc<void>('app_remove_ad_exclusion', { p_kind: kind, p_target: target }),
     async founderAds() {
@@ -1830,40 +2054,14 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       return data as AdsAdmin
     },
     founderSaveAdvertiser: (a) => rpc<string>('app_founder_save_advertiser', { p: a }),
-    founderReviewAdvertiser: (id, approve, note) => rpc<void>('app_founder_review_advertiser', { p_advertiser: id, p_approve: approve, p_note: note?.trim() || null }),
+    founderReviewAdvertiser: (id, approve, note) =>
+      rpc<void>('app_founder_review_advertiser', { p_advertiser: id, p_approve: approve, p_note: note?.trim() || null }),
     founderSaveCampaign: (c) => rpc<string>('app_founder_save_campaign', { p: c }),
     founderSetCampaignStatus: (id, status) => rpc<void>('app_founder_set_campaign_status', { p_campaign: id, p_status: status }),
     async founderCampaignReport(id) {
-      const r = await rpc<Record<string, unknown>>('app_founder_campaign_report', { p_campaign: id })
-      const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
-      const m = (r.by_match ?? {}) as Record<string, { impressions: number; clicks: number }>
-      return {
-        eligibleAudience: n(r.eligible_audience),
-        served: Number(r.served ?? 0),
-        impressions: Number(r.impressions ?? 0),
-        clicks: Number(r.clicks ?? 0),
-        ctr: n(r.ctr),
-        reach: n(r.reach),
-        relevant: Number(r.relevant ?? 0),
-        notRelevant: Number(r.not_relevant ?? 0),
-        hidden: Number(r.hidden ?? 0),
-        reported: Number(r.reported ?? 0),
-        byMatch: {
-          preference: m.preference ?? { impressions: 0, clicks: 0 },
-          context: m.context ?? { impressions: 0, clicks: 0 },
-          general: m.general ?? { impressions: 0, clicks: 0 },
-        },
-        contentImpressions: Number(r.content_impressions ?? 0),
-        feedImpressions: Number(r.feed_impressions ?? 0),
-        creativeKind: ((r.creative_kind as string | undefined) ?? 'text') as CampaignReport['creativeKind'],
-        videoPlays: Number(r.video_plays ?? 0),
-        videoCompletions: Number(r.video_completions ?? 0),
-        verifiedConversions: Number(r.verified_conversions ?? 0),
-        selfReportedConversions: n(r.self_reported_conversions),
-        advertiserSatisfaction: n(r.advertiser_satisfaction),
-        simulatedRevenueCents: Number(r.simulated_revenue_cents ?? 0),
-      }
+      return toCampaignReport(await rpc<Record<string, unknown>>('app_founder_campaign_report', { p_campaign: id }))
     },
+
     founderRecordConversions: (id, month, verified, note, selfReported) =>
       rpc<void>('app_founder_record_conversions', {
         p_campaign: id,
@@ -1903,6 +2101,206 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     async founderAttributeCampaignRevenue(id, month, netCents) {
       const r = await rpc<Record<string, unknown>>('app_founder_attribute_campaign_revenue', { p_campaign: id, p_month: month, p_net_cents: netCents })
       return { contentCents: Number(r.content_cents ?? 0), feedCents: Number(r.feed_cents ?? 0) }
+    },
+    async myCreatorSetup() {
+      const { data, error } = await client.rpc('app_my_creator_setup')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_creator_setup')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      return {
+        postingTopics: Array.isArray(r.posting_topics) ? (r.posting_topics as string[]) : [],
+        posts: Number(r.posts ?? 0),
+        followers: Number(r.followers ?? 0),
+        joinedThroughMyLink: Number(r.joined_through_my_link ?? 0),
+      }
+    },
+    async setCreatorTopics(topics) {
+      const r = await rpc<string[] | null>('app_set_creator_topics', { p_topics: topics })
+      return r ?? []
+    },
+    async memberCreatorTopics(memberId) {
+      const { data, error } = await client.rpc('app_member_creator_topics', { p_member: memberId })
+      if (error) {
+        if (isMissingFunction(error, 'app_member_creator_topics')) return []
+        throw toAppError(error)
+      }
+      return (data as string[] | null) ?? []
+    },
+    async myInviter() {
+      const { data, error } = await client.rpc('app_my_inviter')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_inviter')) return null
+        throw toAppError(error)
+      }
+      const r = (data as Array<Record<string, unknown>> | null)?.[0]
+      if (!r) return null
+      return {
+        id: String(r.id),
+        username: String(r.username),
+        displayName: String(r.display_name),
+        following: !!r.following,
+        postingTopics: Array.isArray(r.posting_topics) ? (r.posting_topics as string[]) : [],
+      }
+    },
+    async founderRegistration() {
+      const { data, error } = await client.rpc('app_founder_registration')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_registration')) return null
+        throw toAppError(error)
+      }
+      const r = (data as Array<Record<string, unknown>> | null)?.[0]
+      if (!r) return null
+      return {
+        paused: !!r.paused,
+        totalCap: Number(r.total_cap ?? 0),
+        dailyCap: Number(r.daily_cap ?? 0),
+        perReferrerDailyCap: Number(r.per_referrer_daily_cap ?? 0),
+        registeredTotal: Number(r.registered_total ?? 0),
+        registeredToday: Number(r.registered_today ?? 0),
+        externalAccessApproved: !!r.external_access_approved,
+        updatedAt: r.updated_at ? String(r.updated_at) : null,
+      }
+    },
+    founderSetRegistration: (x, reason) =>
+      rpc<void>('app_founder_set_registration', {
+        p_paused: x.paused,
+        p_total_cap: x.totalCap,
+        p_daily_cap: x.dailyCap,
+        p_per_referrer_daily_cap: x.perReferrerDailyCap,
+        p_reason: reason.trim(),
+      }),
+    async founderCreateInvitationLink(maxUses, days, creatorUsername) {
+      if (creatorUsername && creatorUsername.trim())
+        return rpc<string>('app_founder_create_creator_invitation', { p_creator_username: creatorUsername.trim(), p_max_uses: maxUses, p_days: days })
+      return rpc<string>('app_founder_create_invitation_link', { p_cohort: 'fan', p_max_uses: maxUses, p_days: days })
+    },
+    async founderInvitationLinks() {
+      const { data, error } = await client.rpc('app_founder_invitation_links')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_invitation_links')) return []
+        throw toAppError(error)
+      }
+      return ((data as Array<Record<string, unknown>> | null) ?? []).map((r) => ({
+        code: String(r.code),
+        creatorUsername: r.creator_username ? String(r.creator_username) : null,
+        cohort: String(r.cohort),
+        uses: Number(r.uses ?? 0),
+        maxUses: r.max_uses === null || r.max_uses === undefined ? null : Number(r.max_uses),
+        expiresAt: r.expires_at ? String(r.expires_at) : null,
+        revokedAt: r.revoked_at ? String(r.revoked_at) : null,
+        createdAt: String(r.created_at),
+        registered: Number(r.registered ?? 0),
+      }))
+    },
+    founderRevokeInvitationLink: (code) => rpc<void>('app_founder_revoke_invitation_link', { p_code: code }),
+    requestAdvertising: (r) =>
+      rpc<string>('app_request_advertising', {
+        p: {
+          name: r.name.trim(),
+          website: r.website.trim(),
+          offering: r.offering.trim(),
+          problem_solved: r.problemSolved.trim(),
+          desired_outcome: r.desiredOutcome.trim(),
+          customer_needs: r.customerNeeds.trim(),
+          objective: r.objective,
+          conversion_action: r.conversionAction.trim(),
+          eligibility_notes: r.eligibilityNotes?.trim() ?? '',
+          categories: r.categories,
+        },
+      }),
+    async myAdvertising() {
+      const { data, error } = await client.rpc('app_my_advertising')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_advertising')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as { requests?: Array<Record<string, unknown>>; campaigns?: Array<Record<string, unknown>> }
+      return {
+        requests: (r.requests ?? []).map((x) => ({
+          id: String(x.id),
+          name: String(x.name),
+          status: x.status as 'pending' | 'approved' | 'declined',
+          reviewNote: x.review_note ? String(x.review_note) : null,
+          objective: String(x.objective ?? ''),
+          requestedAt: x.requested_at ? String(x.requested_at) : null,
+        })),
+        campaigns: (r.campaigns ?? []).map((x) => ({
+          id: String(x.id),
+          name: String(x.name),
+          advertiser: String(x.advertiser),
+          status: String(x.status),
+          startsOn: String(x.starts_on),
+          endsOn: String(x.ends_on),
+          placement: String(x.placement),
+        })),
+      }
+    },
+    async myCampaignReport(id) {
+      const raw = await rpc<Record<string, unknown>>('app_my_campaign_report', { p_campaign: id })
+      const withheld = ['relevant', 'not_relevant', 'hidden', 'reported'].some((k) => raw[k] === null)
+      return { ...toCampaignReport(raw), feedbackWithheld: withheld }
+    },
+    async features() {
+      const { data, error } = await client.rpc('app_features')
+      if (error) {
+        if (isMissingFunction(error, 'app_features')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      return { ads: r.ads !== false, sharing: r.sharing !== false, videoPosts: r.video_posts === true, photos: r.photos === true, rewards: r.rewards !== false }
+    },
+    async founderSwitches() {
+      const { data, error } = await client.rpc('app_founder_switches')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_switches')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      return {
+        switches: ((r.switches as Array<Record<string, unknown>>) ?? []).map((x) => ({
+          feature: x.feature as SwitchFeature,
+          enabled: !!x.enabled,
+          updatedAt: String(x.updated_at),
+        })),
+        registrationPaused: r.registration_paused !== false,
+        externalAccessApproved: r.external_access_approved === true,
+        rewardsPaused: r.rewards_paused === true,
+        photosEnabled: r.photos_enabled === true,
+        recent: ((r.recent as Array<Record<string, unknown>>) ?? []).map((x) => ({
+          feature: String(x.feature),
+          enabled: !!x.enabled,
+          reason: String(x.reason),
+          changedAt: String(x.changed_at),
+        })),
+      }
+    },
+    founderSetSwitch: (feature, enabled, reason) => rpc<void>('app_founder_set_switch', { p_feature: feature, p_enabled: enabled, p_reason: reason.trim() }),
+    submitMemberRequest: (kind, details) => rpc<number>('app_submit_member_request', { p_kind: kind, p_details: details.trim() || null }),
+    async myMemberRequests() {
+      const { data, error } = await client.rpc('app_my_member_requests')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_member_requests')) return null
+        throw toAppError(error)
+      }
+      return ((data as Array<Record<string, unknown>> | null) ?? []).map(toMemberRequest)
+    },
+    withdrawMemberRequest: (id) => rpc<void>('app_withdraw_member_request', { p_id: id }),
+    async founderMemberRequests() {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_founder_member_requests')
+      return (rows ?? []).map((r) => ({
+        ...toMemberRequest(r),
+        details: r.details ? String(r.details) : null,
+        username: r.username ? String(r.username) : null,
+        displayName: r.display_name ? String(r.display_name) : null,
+      }))
+    },
+    founderResolveMemberRequest: (id, completed, note) =>
+      rpc<void>('app_founder_resolve_member_request', { p_id: id, p_completed: completed, p_note: note.trim() }),
+    async founderDeleteMember(id, username) {
+      const r = await rpc<Record<string, unknown>>('app_founder_delete_member', { p_request: id, p_confirm_username: username })
+      return { postsRemoved: Number(r?.posts_removed ?? 0), awardsForfeited: Number(r?.awards_forfeited ?? 0) }
     },
     async founderAdDemand() {
       const rows = await rpc<Array<Record<string, unknown>>>('app_founder_ad_demand')

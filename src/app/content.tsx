@@ -5,6 +5,7 @@ import { Bookmark, Check, Pencil, Repeat2, Share2 } from 'lucide-react'
 import { Card, buttonClass } from '../components/ui'
 import { AppApiError, LIMITS, type Post, type PostMeta, type Topic } from './api'
 import { useAppApi } from './AppApiContext'
+import { useFeatures } from './onboarding'
 import { ErrorNote } from './components'
 
 /**
@@ -300,6 +301,7 @@ export function EditPost({ post, onEdited }: { post: Post; onEdited: (body: stri
  * recording fails.
  */
 export function ShareButton({ post }: { post: Post }) {
+  const features = useFeatures()
   const api = useAppApi()
   const { available } = usePostMeta(post.id)
   const [copied, setCopied] = useState(false)
@@ -345,6 +347,7 @@ export function ShareButton({ post }: { post: Post }) {
     }
     void api.recordShare(post.id, channel).catch(() => undefined)
   }
+  if (!features.sharing) return null
   return (
     <>
     <button

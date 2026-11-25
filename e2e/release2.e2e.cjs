@@ -88,6 +88,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.getByRole('button', { name: 'Follow 3 and continue' }).click()
   await shot(page, 'onboarding-3')
   check('final step points out that anyone can post', (await page.getByText('Anyone can post').count()) === 1)
+  await page.getByRole('button', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Go to my feed' }).click()
   await page.waitForURL(HOME)
   let s = await stored(page)

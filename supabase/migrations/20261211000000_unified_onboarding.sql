@@ -46,10 +46,10 @@ declare
                                where pg_catalog.btrim(t) <> ''), '{}');
 begin
   if cardinality(v_topics) > 3 then
-    raise exception 'too_many_topics' using errcode = 'P0001';
+    raise exception 'too_many_posting_topics' using errcode = 'P0001';
   end if;
   if exists (select 1 from unnest(v_topics) t where not exists (select 1 from social.topics s where s.slug = t and s.active)) then
-    raise exception 'invalid_topic' using errcode = 'P0001';
+    raise exception 'invalid_posting_topic' using errcode = 'P0001';
   end if;
   delete from social.creator_topics where user_id = v_uid and topic <> all (v_topics);
   insert into social.creator_topics (user_id, topic) select v_uid, t from unnest(v_topics) t on conflict do nothing;

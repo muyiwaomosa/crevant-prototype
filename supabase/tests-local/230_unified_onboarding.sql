@@ -47,8 +47,8 @@ do $$
 declare
   s jsonb;
 begin
-  perform pg_temp.expect_error('select public.app_set_creator_topics(array[''food'', ''music'', ''travel'', ''art''])', 'too_many_topics', 'four posting topics');
-  perform pg_temp.expect_error('select public.app_set_creator_topics(array[''not_a_topic''])', 'invalid_topic', 'an unknown topic');
+  perform pg_temp.expect_error('select public.app_set_creator_topics(array[''food'', ''music'', ''travel'', ''art''])', 'too_many_posting_topics', 'four posting topics');
+  perform pg_temp.expect_error('select public.app_set_creator_topics(array[''not_a_topic''])', 'invalid_posting_topic', 'an unknown topic');
   if public.app_set_creator_topics(array['music', 'food', 'food']) <> array['food', 'music'] then
     raise exception 'FAIL: posting topics are not saved once each, in display order';
   end if;

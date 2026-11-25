@@ -11,6 +11,7 @@ import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
 import { DetailsEditor, MemberAbout, SuggestedPeople, useTopics } from './profileDetails'
 import { ReportButton, useModeration } from './moderation'
+import { CreatorSetupCard, FirstPostGuide } from './onboarding'
 import { PostComposer, usePhotosEnabled } from './media'
 import { ProfilePictureField } from './avatars'
 import { AudienceInsight, SupportButton } from './relationships'
@@ -127,7 +128,10 @@ function PostList({
 export function FeedPage() {
   return (
     <>
-      <PageHeader title="Home" subtitle="Posts from creators you follow, newest first, with new posts from your Clique at the top. Only you decide what is hidden." />
+      <PageHeader
+        title="Home"
+        subtitle="Posts from creators you follow, newest first, with new posts from your Clique at the top. Only you decide what is hidden."
+      />
       <GovernanceBanner />
       <JoinedForPrompt />
       <FaceView
@@ -243,9 +247,7 @@ function HomeFeed({
               <PostItem key={p.id} post={p} onDeleted={(id) => group.setData((d) => d?.filter((x) => x.id !== id))} />
             ))}
           </div>
-          {rest.length > 0 && (
-            <h2 className="mb-2 mt-6 font-display text-[15px] font-bold text-ink-900">Everything else, newest first</h2>
-          )}
+          {rest.length > 0 && <h2 className="mb-2 mt-6 font-display text-[15px] font-bold text-ink-900">Everything else, newest first</h2>}
         </section>
       )}
       {/* A general feed ad between the sections: never removes or reorders a post. */}
@@ -284,9 +286,12 @@ function UnseenStrip() {
       void strip.reload()
     }, 2000)
   })
-  useEffect(() => () => {
-    if (refresh.current) clearTimeout(refresh.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (refresh.current) clearTimeout(refresh.current)
+    },
+    [],
+  )
   // The strip is optional: while loading, on error or when empty it takes no space.
   if (!strip.data || strip.data.length === 0) return null
   return (
@@ -428,17 +433,17 @@ export function CatchUpPage() {
           </ul>
           {/* Only once no earlier unseen posts remain. */}
           {!hasEarlier && (
-          <Card className="mt-4 p-5 text-center">
-            <p className="font-semibold text-ink-900">That's everything new from {m.displayName}</p>
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-              <Link to="/app" className={buttonClass('primary', 'sm')}>
-                Back to Home
-              </Link>
-              <Link to={`/app/u/${m.username}`} className={buttonClass('secondary', 'sm')}>
-                See profile
-              </Link>
-            </div>
-          </Card>
+            <Card className="mt-4 p-5 text-center">
+              <p className="font-semibold text-ink-900">That's everything new from {m.displayName}</p>
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <Link to="/app" className={buttonClass('primary', 'sm')}>
+                  Back to Home
+                </Link>
+                <Link to={`/app/u/${m.username}`} className={buttonClass('secondary', 'sm')}>
+                  See profile
+                </Link>
+              </div>
+            </Card>
           )}
         </>
       )}
@@ -450,8 +455,18 @@ export function CatchUpPage() {
 function GettingStarted() {
   const steps: Array<{ title: string; body: string; to: string; cta: string }> = [
     { title: 'Find people', body: 'Browse Discover or search by name, then open a profile to read their posts.', to: '/app/discover', cta: 'Discover people' },
-    { title: 'Follow them', body: 'Their new posts appear here on Home, newest first. Nobody is added for you.', to: '/app/discover', cta: 'Find someone to follow' },
-    { title: 'Choose your Clique', body: 'Choose the people you follow that you want closest. You can change them at any time.', to: '/app/clique', cta: 'Your Clique' },
+    {
+      title: 'Follow them',
+      body: 'Their new posts appear here on Home, newest first. Nobody is added for you.',
+      to: '/app/discover',
+      cta: 'Find someone to follow',
+    },
+    {
+      title: 'Choose your Clique',
+      body: 'Choose the people you follow that you want closest. You can change them at any time.',
+      to: '/app/clique',
+      cta: 'Your Clique',
+    },
   ]
   return (
     <Card className="p-5">
@@ -491,7 +506,13 @@ export function ComposePage() {
   const photos = usePhotosEnabled()
   return (
     <>
-      <PageHeader title="Create a post" subtitle={`${photos ? 'Text, or one photo with an optional caption.' : 'Text posts for now.'} Everyone who follows you will see it in their feed.`} />
+      <PageHeader
+        title="Create a post"
+        subtitle={`${photos ? 'Text, or one photo with an optional caption.' : 'Text posts for now.'} Everyone who follows you will see it in their feed.`}
+      />
+      <div className="mb-4">
+        <FirstPostGuide />
+      </div>
       <Card className="p-4 sm:p-5">
         <PostComposer
           label="Write a post"
@@ -825,6 +846,12 @@ function ProfileFace() {
             <Link to="/app/notices" className={buttonClass('secondary', 'sm')}>
               Notices
             </Link>
+            <Link to="/app/advertise" className={buttonClass('secondary', 'sm')}>
+              Advertise with Splitpost
+            </Link>
+            <Link to="/app/privacy" className={buttonClass('secondary', 'sm')}>
+              Your data and privacy
+            </Link>
             {moderator && (
               <Link to="/app/moderation" className={buttonClass('secondary', 'sm')}>
                 Moderation
@@ -844,6 +871,9 @@ function ProfileFace() {
         </Card>
       )}
       {me.error !== null && <ErrorNote error={me.error} />}
+      <div className="mb-4">
+        <CreatorSetupCard />
+      </div>
       <AudienceInsight />
       <Card className="mb-4 p-5">
         <ProfilePictureField />

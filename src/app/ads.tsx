@@ -772,6 +772,7 @@ export function AdsManagePage() {
               <p className="font-semibold text-ink-900">
                 {a.name} <span className="ml-1 text-[12px] font-bold uppercase text-ink-600">{a.status}</span>
               </p>
+              {a.requested_by_username && <p className="text-[13px] font-semibold text-brand-800">Requested by @{a.requested_by_username} from their account</p>}
               <p className="mt-1 text-ink-700">
                 {a.offering}. Solves: {a.problem_solved}. Outcome: {a.desired_outcome}.
               </p>
