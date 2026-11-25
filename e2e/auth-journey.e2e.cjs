@@ -364,14 +364,16 @@ async function shows(locator, timeout = 5000) {
       await mine.close()
     }
 
-    // 12. The sample tour and landing page still work under the security policy.
+    // 12. The landing page works under the security policy, and the retired
+    //     sample tour redirects to it.
     {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await page.goto(`${APP}/`)
       check('landing page loads', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ').includes('You Create The Post. You Deserve a Split.'))
       await page.goto(`${APP}/tour/discover`)
-      check('sample tour loads', await shows(page.getByRole('complementary', { name: 'Sample tour' })))
+      await page.waitForURL(`${APP}/`, { timeout: 5000 }).catch(() => {})
+      check('the retired sample tour redirects to the landing page', page.url() === `${APP}/` && (await page.getByRole('complementary', { name: 'Sample tour' }).count()) === 0, page.url())
       await collectCsp(page)
       await ctx.close()
     }

@@ -167,17 +167,14 @@ async function newContext(browser, options = {}) {
       const axeViolations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] })).violations.map((v) => `${v.id} x${v.nodes.length}`))
       check(`${label}: /pilot-access has no WCAG 2.2 AA violations`, axeViolations.length === 0, axeViolations.join(', '))
 
-      // 5. The sample tour still works, and old prototype links still redirect.
-      await page.goto(`${BASE}/tour`)
-      check(`${label}: /tour shows the sample tour`, await shows(page.getByText(/sample/i)))
-      // Creator invitation links open the tour's welcome screen: the banner
-      // there says the points and rewards are an early concept.
-      await page.goto(`${BASE}/tour/welcome?invite=7c1e94a2b05d3f68e1a9`)
-      check(`${label}: an invitation link's welcome screen says the tour's points and rewards aren't the pilot's`,
-        await shows(page.getByRole('complementary', { name: 'Sample tour' }).getByText("The points and rewards shown aren't how the Splitpost pilot works.")))
-      await page.goto(`${BASE}/discover`)
-      await page.waitForURL(/\/tour\/discover$/, { timeout: 5000 }).catch(() => {})
-      check(`${label}: /discover redirects into the tour`, page.url().endsWith('/tour/discover'), page.url())
+      // 5. The sample tour is retired: /tour, anything under it and the old
+      //    prototype links that used to open it all land on the homepage.
+      for (const p of ['/tour', '/tour/welcome?invite=7c1e94a2b05d3f68e1a9', '/tour/discover', '/discover']) {
+        await page.goto(`${BASE}${p}`)
+        await page.waitForURL(`${BASE}/`, { timeout: 5000 }).catch(() => {})
+        check(`${label}: ${p} redirects to the homepage`, page.url() === `${BASE}/` && (await shows(page.locator('#hero-title'))), page.url())
+        check(`${label}: ${p} shows nothing of the old tour`, (await page.getByRole('complementary', { name: 'Sample tour' }).count()) === 0)
+      }
 
       await ctx.close()
     }
@@ -221,7 +218,7 @@ async function newContext(browser, options = {}) {
       await page.goto(`${BASE}/`)
 
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check(`${label}: the six sections in order`, ids === 'hero,problem,building,creators,split,vision,invitation', ids)
+      check(`${label}: the nine sections in order`, ids === 'hero,problem,building,paths,creators,split,vision,pilot,invitation', ids)
       const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
       {
@@ -281,7 +278,7 @@ async function newContext(browser, options = {}) {
       check(`${label}: each illustration fits the screen and carries its concept tag and headline`, ills.every((i) => i.fits && i.tagged), JSON.stringify(ills))
       check(`${label}: every numbered marker sits inside its phone screen`, ills.filter((i) => i.id !== 'illustration-referral').every((i) => i.markers === 3 && i.markersInside), JSON.stringify(ills))
 
-      // The official logo, the same file everywhere: header, footer and the six seams.
+      // The official logo, the same file everywhere: header, footer, the hero signature and the eight seams.
       const logos = await page.$$eval('img[data-testid="splitpost-logo"]', (els) => els.map((e) => ({ src: e.getAttribute('src'), w: e.naturalWidth, box: Math.round(e.getBoundingClientRect().width), ratio: e.getBoundingClientRect().width / e.getBoundingClientRect().height })))
       check(`${label}: one logo file, used in the header, footer and every seam`, logos.length >= 8 && new Set(logos.map((l) => l.src)).size === 1 && logos.every((l) => l.w > 0), `${logos.length} logos, ${new Set(logos.map((l) => l.src)).size} sources`)
       check(`${label}: the logo keeps its proportions everywhere`, logos.every((l) => Math.abs(l.ratio - 1) < 0.02), logos.map((l) => l.ratio.toFixed(2)).join())
@@ -335,7 +332,7 @@ async function newContext(browser, options = {}) {
     }
 
     // 5c. Link audit, as a first-time visitor on desktop and on a phone: follow
-    //     every link on the public pages and every tour screen. Each one must
+    //     every link on the public pages. Each one must
     //     land somewhere that works, show Splitpost (never Crevant) in its text
     //     and title, and every #anchor must exist on the page it points to.
     for (const [label, options] of [
@@ -345,8 +342,7 @@ async function newContext(browser, options = {}) {
       const ctx = await newContext(browser, options)
       const page = await ctx.newPage()
       page.on('pageerror', (e) => problems.push(`${label} audit: ${e.message}`))
-      const TOUR = ['/tour', '/tour/welcome', '/tour/discover', '/tour/create', '/tour/rewards', '/tour/profile', '/tour/profile/tools', '/tour/creator/amara', '/tour/post/p_amara_1']
-      const queue = ['/', '/join', '/request-invite', '/privacy', ...TOUR]
+      const queue = ['/', '/join', '/request-invite', '/privacy']
       const seen = new Set()
       const hashes = []
       const external = new Set()
@@ -374,7 +370,7 @@ async function newContext(browser, options = {}) {
           if (u.origin !== new URL(BASE).origin) continue
           if (u.hash) hashes.push([u.pathname, u.hash.slice(1)])
           const next = u.pathname + u.search
-          if (!seen.has(next) && !/^\/tour\/(creator|post)\//.test(next)) queue.push(next)
+          if (!seen.has(next)) queue.push(next)
         }
       }
       for (const [path, id] of [...new Map(hashes.map((h) => [h.join('#'), h])).values()]) {
@@ -502,7 +498,7 @@ async function newContext(browser, options = {}) {
     }
 
     // 5d. Image quality on high-density screens: every image on the homepage
-    //     and tour loads, and none is shown more than 1.25x larger than its
+    //     and /join loads, and none is shown more than 1.25x larger than its
     //     real pixels (which is when photos start to look soft or blurry).
     for (const [label, viewport] of [
       ['desktop', { width: 1440, height: 900 }],
@@ -511,7 +507,7 @@ async function newContext(browser, options = {}) {
       const ctx = await newContext(browser, { viewport, deviceScaleFactor: 2 })
       const page = await ctx.newPage()
       const issues = []
-      for (const path of ['/', '/join', '/tour/discover', '/tour/creator/amara', '/tour/profile']) {
+      for (const path of ['/', '/join']) {
         // 'load', not 'networkidle': a slow third-party font request must not
         // stall the check. Whether each image finished loading is checked below.
         await page.goto(`${BASE}${path}`, { waitUntil: 'load' })

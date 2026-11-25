@@ -1,10 +1,13 @@
 // The Splitpost homepage copy, in one place. Section components and tests
 // both read from here, so the words on the page are exactly these.
 //
-// Seven sections, founder-approved copy (2026-11-16), one continuous story
-// around "You Create The Post. You Deserve a Split.":
-//   HERO, THE PROBLEM, WHAT WE'RE BUILDING, WHO WE'RE BUILDING FOR,
-//   A BETTER SPLIT, OUR BIGGER VISION, THE INVITATION.
+// Nine sections, one continuous story around "You Create The Post. You
+// Deserve a Split.". The seven founder-approved sections (copy approved
+// 2026-11-16) plus the two added by the approved landing page evolution
+// (docs/design/SP-DESIGN-002.md section 5):
+//   HERO, THE PROBLEM, WHAT WE'RE BUILDING, FIND YOUR PATH,
+//   WHO WE'RE BUILDING FOR, A BETTER SPLIT, OUR BIGGER VISION,
+//   PILOT DETAILS (the one disclosure band), THE INVITATION.
 // Do not rewrite this copy without the founder's approval. Sample people and
 // posts are labelled SAMPLE wherever they appear and carry no real results.
 // Disclosures come from claims.ts or are the founder's own wording, and sit
@@ -21,6 +24,9 @@ export const HOMEPAGE_COPY = {
     headline: 'You Create The Post. You Deserve a Split.',
     /** Exactly two lines on every screen, one sentence each; the second in gold. */
     headlineLines: ['You Create The Post.', 'You Deserve a Split.'],
+    /** The approved signature line, word for word, under the headline with the logo mark. */
+    signature: "Don't just post. Get your split.",
+    signatureLines: ["Don't just post.", 'Get your split.'],
     /** The brand line, used in the footer. */
     tagline: 'Every Post. A Better Split.',
     body: [
@@ -63,9 +69,17 @@ export const HOMEPAGE_COPY = {
 
   /** Everyday sample posts for the product screens. All labelled SAMPLE. */
   samplePosts: [
-    { author: 'Mr. Daniel Osei', role: 'Math teacher', text: 'Fractions keep tripping up my class, so here is the trick that finally worked: turn both into the same-size pieces first.' },
+    {
+      author: 'Mr. Daniel Osei',
+      role: 'Math teacher',
+      text: 'Fractions keep tripping up my class, so here is the trick that finally worked: turn both into the same-size pieces first.',
+    },
     { author: 'Rosa Jiménez', role: 'Home cook', text: 'Feeding four for under an hour: one-pan rice and beans with whatever vegetables you have left.' },
-    { author: 'Kwame Asante', role: 'Leather maker', text: 'From one hide to a wallet: how I cut, stitch and finish every piece by hand in my small workshop.' },
+    {
+      author: 'Kwame Asante',
+      role: 'Leather maker',
+      text: 'From one hide to a wallet: how I cut, stitch and finish every piece by hand in my small workshop.',
+    },
     { author: 'Mei Lin', role: 'Tech reviewer', text: 'I tested five free note-taking apps for a month. This is the one I kept, and why.' },
   ],
 
@@ -103,6 +117,40 @@ export const HOMEPAGE_COPY = {
     /** Beside the screens: what they are, and what they don't promise. */
     note: `${DISCLOSURES.stillTesting} ${DISCLOSURES.noGuarantee}`,
     mockupLabel: `${DISCLOSURES.concept} · ${DISCLOSURES.sampleData}`,
+  },
+
+  /**
+   * FIND YOUR PATH: what Splitpost offers creators, members and advertisers.
+   * One account and one sign up for everyone, so every card's button goes to
+   * the same place. Advertising is requested from an account after joining,
+   * never through a separate form.
+   */
+  paths: {
+    status: 'approved-in-principle' as CopyStatus,
+    eyebrow: 'Find your path',
+    headline: 'One Account. Every Way to Take Part.',
+    intro: 'Everyone joins Splitpost the same way. Share your own posts, support the people you love, and advertise once your request is approved.',
+    cards: [
+      {
+        id: 'creators',
+        tag: 'For creators',
+        title: 'Share what you know.',
+        body: 'Post for the people who chose to follow you. Your newest posts wait for them in their Following feed, and who looks is always their choice.',
+      },
+      {
+        id: 'members',
+        tag: 'For members and fans',
+        title: 'Support the creators you value.',
+        body: 'Follow the people you care about and help their communities grow. During the pilot, your support can be recognized with perks.',
+      },
+      {
+        id: 'advertisers',
+        tag: 'For advertisers',
+        title: 'Reach people who care about your topic.',
+        body: 'Join like everyone else, then ask to advertise from your account. Every request is reviewed, and every ad is clearly labelled.',
+      },
+    ],
+    note: 'Every account can do all three, so you never have to pick a side.',
   },
 
   creators: {
@@ -177,21 +225,34 @@ export const HOMEPAGE_COPY = {
     ],
     shape: "We're building Splitpost, and we'd love you to help shape it.",
     close: 'Join the waitlist. Be part of a better split.',
+    /** The same line once registration is authorized (see waitlistCta). */
+    closeRegistration: 'Join Splitpost. Be part of a better split.',
     cta: 'Join the Waitlist',
-    pilotDetailsTitle: 'Pilot details',
-    pilotDetails: [
+    signOff: 'Muyiwa Omosa, Founder of Splitpost',
+  },
+
+  /**
+   * PILOT DETAILS, the one disclosure band (BRD-10), just before the
+   * invitation so it sits near signup. It gathers the pilot's limits in one
+   * place; /join shows the same list, word for word.
+   */
+  pilot: {
+    status: 'approved-in-principle' as CopyStatus,
+    eyebrow: 'Pilot details',
+    headline: 'What the Pilot Is, Plainly.',
+    intro: "Splitpost is still being built and tested with a small group of people. Here's what that means for you.",
+    details: [
       DISCLOSURES.invitationOnly,
+      DISCLOSURES.cpNotMoney,
+      DISCLOSURES.simulated,
+      DISCLOSURES.noGuarantee,
       DISCLOSURES.stillTesting,
-      DISCLOSURES.noFanCash,
-      `${DISCLOSURES.cpNoCashValue} ${DISCLOSURES.cpRules}`,
       DISCLOSURES.creatorSupportTest,
       DISCLOSURES.adsAreDemos,
       DISCLOSURES.pilotStart,
     ],
-    signOff: 'Muyiwa Omosa, Founder of Splitpost',
   },
 
-  /** Shown on the page so no one mistakes a sample for a real member. */
   /**
    * The three product illustrations (concept, sample data), one benefit each,
    * told from the creator's side. Headlines are the founder's own wording.

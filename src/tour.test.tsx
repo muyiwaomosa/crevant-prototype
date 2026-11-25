@@ -2,55 +2,67 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import App from './App'
-import { TOUR_BASE } from './entry'
+import { resolveEntry } from './entry'
 
-const TOUR_PATHS = ['/tour', '/tour/welcome', '/tour/discover', '/tour/create', '/tour/rewards', '/tour/profile', '/tour/profile/tools']
+// The public sample tour (/tour) is retired: it showed an obsolete
+// creator-specific points model. Its addresses now redirect to the homepage,
+// and the sample prototype is served only as the frozen production demo.
+
+const TOUR_PATHS = [
+  '/tour',
+  '/tour/',
+  '/tour/welcome',
+  '/tour/discover',
+  '/tour/create',
+  '/tour/rewards',
+  '/tour/profile',
+  '/tour/profile/tools',
+  '/tour/creator/amara',
+]
 
 beforeEach(() => {
   localStorage.clear()
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
-  window.matchMedia ??= ((q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false })) as unknown as typeof window.matchMedia
-  window.IntersectionObserver ??= class { observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } } as unknown as typeof IntersectionObserver
+  window.matchMedia ??= ((q: string) => ({
+    matches: false,
+    media: q,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    onchange: null,
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+  window.IntersectionObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  } as unknown as typeof IntersectionObserver
 })
 afterEach(() => {
   cleanup()
   window.history.replaceState(null, '', '/')
 })
 
-const go = (path: string) => window.history.replaceState(null, '', path)
-
-describe('the sample tour', () => {
-  it.each(TOUR_PATHS)('%s shows the sample data banner', (path) => {
-    go(path)
-    const { getByRole } = render(<App basename={TOUR_BASE} banner />)
-    const banner = getByRole('complementary', { name: 'Sample tour' })
-    expect(banner.textContent).toContain('Everything here is made up')
-    expect(banner.textContent).toContain('Sample tour of an early concept.')
-    expect(banner.textContent).toContain("The points and rewards shown aren't how the Splitpost pilot works.")
-    expect(banner.querySelector('a')?.getAttribute('href')).toBe('/')
-  })
-
-  it('links inside the tour stay inside /tour', () => {
-    go('/tour/discover')
-    const { container } = render(<App basename={TOUR_BASE} banner />)
-    const hrefs = [...container.querySelectorAll('a[href^="/"]')].map((a) => a.getAttribute('href')!)
-    const outside = hrefs.filter((h) => !h.startsWith('/tour') && h !== '/')
-    expect(outside).toEqual([])
-  })
-
-  it('first visit to /tour starts the prototype onboarding', () => {
-    go('/tour')
-    render(<App basename={TOUR_BASE} banner />)
-    expect(window.location.pathname).toBe('/tour/welcome')
+describe('the retired sample tour', () => {
+  it.each(TOUR_PATHS)('%s redirects to the homepage of the public site', (path) => {
+    expect(resolveEntry({ hostname: 'localhost', pathname: path, search: '?invite=7c1e94a2b05d3f68e1a9', hash: '' })).toEqual({
+      kind: 'public',
+      redirectTo: '/',
+    })
   })
 })
 
 describe('production fallback rendering', () => {
-  it('renders the prototype at the root with no banner and no public site', () => {
-    go('/discover')
+  it('renders the prototype at the root with no tour banner and no public site', () => {
+    window.history.replaceState(null, '', '/discover')
     const { container, queryByRole } = render(<App />)
     expect(queryByRole('complementary', { name: 'Sample tour' })).toBeNull()
-    expect(container.textContent).not.toContain("You need the right 1,000")
+    expect(container.textContent).not.toContain('Sample tour of an early concept.')
+    expect(container.textContent).not.toContain('You need the right 1,000')
     expect(container.textContent).not.toContain('Request an invitation')
   })
 })

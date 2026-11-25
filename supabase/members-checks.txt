@@ -30,3 +30,5 @@
 024_advertising.sql 20261208000000
 025_ad_creatives_and_caps.sql 20261209000000
 026_intelligence.sql 20261210000000
+027_unified_onboarding.sql 20261211000000
+028_privacy_and_switches.sql 20261212000000

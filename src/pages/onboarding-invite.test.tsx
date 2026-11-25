@@ -2,19 +2,35 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import App from '../App'
-import { TOUR_BASE } from '../entry'
 import { STORAGE_KEY } from '../state/storage'
 import { EARN_RULES } from '../lib/points'
 
-// Personalized onboarding in the tour: intent and topics, the inviting
+// Personalized onboarding in the sample prototype (the frozen production
+// demo; the public /tour is retired): intent and topics, the inviting
 // creator shown with an explicit choice, matched suggestions, and Discover
 // kept separate from Following.
 
 beforeEach(() => {
   localStorage.clear()
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
-  window.matchMedia ??= ((q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false })) as unknown as typeof window.matchMedia
-  window.IntersectionObserver ??= class { observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } } as unknown as typeof IntersectionObserver
+  window.matchMedia ??= ((q: string) => ({
+    matches: false,
+    media: q,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    onchange: null,
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+  window.IntersectionObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  } as unknown as typeof IntersectionObserver
 })
 afterEach(() => {
   cleanup()
@@ -24,8 +40,8 @@ afterEach(() => {
 const JORDAN_LINK = '7c1e94a2b05d3f68e1a9'
 const saved = () => JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
 const start = (search = '') => {
-  window.history.replaceState(null, '', `/tour/welcome${search}`)
-  render(<App basename={TOUR_BASE} banner />)
+  window.history.replaceState(null, '', `/welcome${search}`)
+  render(<App />)
 }
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }))
 
@@ -59,7 +75,7 @@ describe('personalized onboarding', () => {
     expect(s.invite).toBeNull()
   })
 
-  it("shows the inviting creator first and follows them only if the visitor chooses", () => {
+  it('shows the inviting creator first and follows them only if the visitor chooses', () => {
     start(`?invite=${JORDAN_LINK}`)
     expect(screen.getByTestId('invite-banner').textContent).toContain('Jordan Hayes invited you to Splitpost.')
     click('Get started')
@@ -155,8 +171,8 @@ describe('Discover and Following stay separate', () => {
     click('Continue')
     click('Go to my feed')
     cleanup()
-    window.history.replaceState(null, '', '/tour/discover')
-    render(<App basename={TOUR_BASE} banner />)
+    window.history.replaceState(null, '', '/discover')
+    render(<App />)
     const forYou = screen.getByTestId('discover-for-you')
     expect(forYou.textContent).toContain('Kofi Mensah')
     expect(forYou.textContent).not.toContain('Jordan Hayes')

@@ -9,7 +9,7 @@ const SITE_EXCLUDED_ENV = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY']
 
 /**
  * `vite build --mode site` builds the public site only (src/site/main.tsx):
- * the landing page, /join, /privacy and the sample tour, with no member pages
+ * the landing page, /join, /privacy and /pilot-access, with no member pages
  * and no Supabase settings. scripts/check-site-bundle.mjs then inspects the
  * output. Every other mode builds the full app from src/main.tsx, as before.
  *
@@ -56,7 +56,10 @@ function publicSiteBuild(): Plugin {
         if (!site) return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    ${member}${robots}\n    ${commit}`)
         const out = html
           .replace('<script type="module" src="/src/main.tsx"></script>', '<script type="module" src="/src/site/main.tsx"></script>')
-          .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta name="crevant-build" content="public-site" />\n    ${robots}\n    ${commit}`)
+          .replace(
+            '<meta charset="UTF-8" />',
+            `<meta charset="UTF-8" />\n    <meta name="crevant-build" content="public-site" />\n    ${robots}\n    ${commit}`,
+          )
         if (!out.includes('/src/site/main.tsx')) throw new Error('public site build: could not switch index.html to the site entry')
         return out
       },

@@ -9,7 +9,8 @@
 const { chromium, devices } = require('playwright')
 
 const BASE = process.argv[2] || 'http://localhost:4175'
-// The suites also run against the tour on `main`: pass http://localhost:4175/tour.
+// Runs against the sample prototype at the root (the frozen demo). The public
+// /tour that once served it on `main` is retired and redirects to the homepage.
 const PREFIX = new URL(BASE).pathname.replace(/\/$/, '')
 const HOME = PREFIX ? BASE.replace(/\/$/, '') : BASE + '/'
 const SHOTS = process.argv[3] || null
@@ -87,6 +88,7 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.getByRole('button', { name: 'Follow 3 and continue' }).click()
   await shot(page, 'onboarding-3')
   check('final step points out that anyone can post', (await page.getByText('Anyone can post').count()) === 1)
+  await page.getByRole('button', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Go to my feed' }).click()
   await page.waitForURL(HOME)
   let s = await stored(page)

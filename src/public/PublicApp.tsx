@@ -25,6 +25,7 @@ import { MySplitPage, RewardsReviewPage } from '../app/split'
 import { NoticesPage } from '../app/governance'
 import { AdsManagePage } from '../app/ads'
 import { ControlCenterPage } from '../app/insights'
+import { AdvertisePage, PrivacyPage as MemberPrivacyPage } from '../app/account'
 import { ModerationQueuePage, ModerationAppealsPage, ModerationReportPage } from '../app/moderation'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from '../app/feedback'
 
@@ -57,7 +58,14 @@ export function PublicRoutes() {
 /** The members area (Release 1: the social core), with its own layout. */
 function memberAreaRoute() {
   return (
-    <Route path="app" element={<RequireAuth><MemberArea /></RequireAuth>}>
+    <Route
+      path="app"
+      element={
+        <RequireAuth>
+          <MemberArea />
+        </RequireAuth>
+      }
+    >
       <Route index element={<FeedPage />} />
       <Route path="discover" element={<DiscoverPage />} />
       <Route path="new" element={<ComposePage />} />
@@ -75,6 +83,8 @@ function memberAreaRoute() {
       <Route path="notices" element={<NoticesPage />} />
       <Route path="ads" element={<AdsManagePage />} />
       <Route path="control" element={<ControlCenterPage />} />
+      <Route path="advertise" element={<AdvertisePage />} />
+      <Route path="privacy" element={<MemberPrivacyPage />} />
       <Route path="feedback" element={<FeedbackPage />} />
       <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
       <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />
@@ -101,8 +111,22 @@ function AllRoutes() {
         <Route path="p/:id" element={<PublicPostPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />
-        <Route path="auth/set-password" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />
-        <Route path="app/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
+        <Route
+          path="auth/set-password"
+          element={
+            <RequireAuth>
+              <SetPasswordPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="app/account"
+          element={
+            <RequireAuth>
+              <AccountPage />
+            </RequireAuth>
+          }
+        />
         <Route path="*" element={<PublicNotFound />} />
       </Route>
       {memberAreaRoute()}
@@ -127,8 +151,22 @@ function MemberHostRoutes() {
         <Route path="p/:id" element={<PublicPostPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />
-        <Route path="auth/set-password" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />
-        <Route path="app/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
+        <Route
+          path="auth/set-password"
+          element={
+            <RequireAuth>
+              <SetPasswordPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="app/account"
+          element={
+            <RequireAuth>
+              <AccountPage />
+            </RequireAuth>
+          }
+        />
         <Route path="privacy" element={<PrivacyPage backTo="/app" />} />
         <Route path="*" element={<Navigate to="/app" replace />} />
       </Route>

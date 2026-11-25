@@ -2,10 +2,10 @@ import clsx from 'clsx'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { waitlistCta } from '../../waitlist/status'
+import { JOIN_PATH, waitlistCta } from '../../waitlist/status'
 
 /**
- * Phones only: a slim Join the Waitlist bar once the hero has scrolled away,
+ * Phones only: a slim bar with the primary call to action (Join the Waitlist) once the hero has scrolled away,
  * hidden again as soon as the invitation section comes into view.
  */
 export function MobileWaitlistBar() {
@@ -41,7 +41,7 @@ export function MobileWaitlistBar() {
       )}
     >
       <Link
-        to="/join"
+        to={JOIN_PATH}
         tabIndex={show ? 0 : -1}
         className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-sp-secondary text-base font-bold text-sp-ink focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-white"
       >

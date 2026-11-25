@@ -16,8 +16,10 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: intelligence (20261210000000,
-# scripts/db/rollback-intelligence-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: privacy requests and switches (20261212000000,
+# scripts/db/rollback-privacy-switches-test.sh, the newest, so it goes first),
+# unified onboarding (20261211000000, scripts/db/rollback-unified-onboarding-test.sh),
+# intelligence (20261210000000, scripts/db/rollback-intelligence-test.sh),
 # ad creatives (20261209000000, scripts/db/rollback-ad-creatives-test.sh),
 # advertising (20261208000000, scripts/db/rollback-advertising-test.sh),
 # governance refinements (20261207000000, scripts/db/rollback-governance-refinements-test.sh),
@@ -119,9 +121,35 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+PRIVACY=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261212000000')")
+if [ "$PRIVACY" = t ]; then
+  # The newest migration (privacy requests and switches) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-unified-onboarding.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the unified onboarding rollback refuses while privacy and switches are recorded" \
+    || bad "the unified onboarding rollback did not refuse while privacy and switches are recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-privacy-switches-test.sh; then
+    ok "privacy and switches: the rollback refuses while requests, switch changes or a later migration exist, and otherwise removes exactly its own objects"
+  else
+    bad "the privacy and switches rollback tests failed"
+  fi
+fi
+ONBOARDING=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261211000000')")
+if [ "$ONBOARDING" = t ]; then
+  # Then unified onboarding.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-intelligence.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the intelligence rollback refuses while unified onboarding is recorded" \
+    || bad "the intelligence rollback did not refuse while unified onboarding is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-unified-onboarding-test.sh; then
+    ok "unified onboarding: the rollback refuses while posting topics, member advertising requests or a later migration exist, and otherwise removes exactly its own objects"
+  else
+    bad "the unified onboarding rollback tests failed"
+  fi
+fi
 INTELLIGENCE=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261210000000')")
 if [ "$INTELLIGENCE" = t ]; then
-  # The newest migration (intelligence) goes first.
+  # Then intelligence.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-ad-creatives.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the ad creatives rollback refuses while intelligence is recorded" \
@@ -598,9 +626,29 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
                             && ok "after reapplying, the ad creatives rollback refuses while intelligence is recorded" \
                             || bad "the ad creatives rollback did not refuse after reapply while intelligence is recorded (exit $code)"
                           out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-intelligence.sql 2>&1); code=$?
-                          [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-                            && ok "after reapplying, the intelligence rollback check passes again" \
-                            || bad "intelligence rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                          if [ "$ONBOARDING" = t ]; then
+                            [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                              && ok "after reapplying, the intelligence rollback refuses while unified onboarding is recorded" \
+                              || bad "the intelligence rollback did not refuse after reapply while unified onboarding is recorded (exit $code)"
+                            out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-unified-onboarding.sql 2>&1); code=$?
+                            if [ "$PRIVACY" = t ]; then
+                              [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                                && ok "after reapplying, the unified onboarding rollback refuses while privacy and switches are recorded" \
+                                || bad "the unified onboarding rollback did not refuse after reapply while privacy and switches are recorded (exit $code)"
+                              out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-privacy-switches.sql 2>&1); code=$?
+                              [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                && ok "after reapplying, the privacy and switches rollback check passes again" \
+                                || bad "privacy and switches rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                            else
+                              [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                && ok "after reapplying, the unified onboarding rollback check passes again" \
+                                || bad "unified onboarding rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                            fi
+                          else
+                            [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                              && ok "after reapplying, the intelligence rollback check passes again" \
+                              || bad "intelligence rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                          fi
                         else
                           [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                             && ok "after reapplying, the ad creatives rollback check passes again" \

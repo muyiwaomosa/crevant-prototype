@@ -156,6 +156,7 @@ async function signIn(page, email) {
   await Promise.race([skip.waitFor(), home.waitFor()])
   if (await skip.isVisible().catch(() => false)) {
     await skip.click()
+    await page.getByRole('button', { name: 'Continue' }).click()
     await page.getByRole('button', { name: 'Go to my feed' }).click()
   }
   await home.waitFor()

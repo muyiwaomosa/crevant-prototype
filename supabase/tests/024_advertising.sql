@@ -54,7 +54,7 @@ begin
   if (select points from sim.point_rules where version = 'd6-v1' and action = 'ad_view') <> 0 then
     bad := bad || 'viewing ads earns points'::text;
   end if;
-  if ads.private_count(9) is not null or (select prosrc from pg_proc where oid = 'public.app_founder_campaign_report(uuid)'::regprocedure) !~ 'private_count' then
+  if ads.private_count(9) is not null or (select prosrc from pg_proc where oid = coalesce(to_regprocedure('ads.campaign_report(uuid)'), 'public.app_founder_campaign_report(uuid)'::regprocedure)) !~ 'private_count' then
     bad := bad || 'reports can show groups under 10'::text;
   end if;
   -- Revenue: never an open or closed month, once per campaign and month.

@@ -158,11 +158,11 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   await page.getByRole('button', { name: 'Sign in' }).click()
   await page.waitForURL(`${APP}/app`)
   await page.getByText('Your profile is ready').waitFor()
-  await page.getByText('Step 1 of 5: Your name').waitFor()
+  await page.getByText('Step 1 of 6: Your name').waitFor()
   await page.getByLabel('Username').fill(username)
   await page.getByLabel('Display name').fill(displayName)
   await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('heading', { name: 'How will you use Splitpost?' }).waitFor()
+  await page.getByRole('heading', { name: 'What brings you to Splitpost?' }).waitFor()
   if (setup) {
     const v = await axe(page)
     check('setup step 2 (identity) has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
@@ -188,6 +188,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     check('"Skip the rest" saves empty details, so setup is not shown again', saved === 200 || saved === 204, String(saved))
   }
   await page.getByRole('heading', { name: 'People you might like' }).waitFor()
+  await page.getByRole('button', { name: 'Continue' }).click()
   await page.getByRole('button', { name: 'Go to my feed' }).click()
   await page.getByRole('heading', { name: 'Home' }).waitFor()
 }
@@ -230,7 +231,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   const ctxA = await newContext(browser)
   const pageA = await ctxA.newPage()
   await signInAndSetUp(pageA, emailA, userA, 'Aye Teacher', {
-    identity: 'Creator',
+    identity: 'Share my own work',
     topics: ['Learning', 'Books & writing'],
     bio: 'Maths teacher making fractions fun.',
     followReason: 'One five-minute maths trick every week',
@@ -271,9 +272,9 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   {
     const card = pageB.getByRole('region', { name: 'People' }).getByRole('listitem').filter({ hasText: 'Aye Teacher' })
     await card.getByText('Maths teacher making fractions fun.').waitFor()
-    check("Discover shows A's bio, why to follow, identity and interests", (await card.getByText('Maths teacher making fractions fun.').count()) === 1
+    check("Discover shows A's bio, why to follow and interests, and never a stakeholder label", (await card.getByText('Maths teacher making fractions fun.').count()) === 1
       && (await card.getByText('One five-minute maths trick every week').count()) === 1
-      && (await card.getByText(/Creator ·/).count()) === 1
+      && (await card.getByText(/Creator ·/).count()) === 0
       && (await card.getByRole('list', { name: 'Interests' }).getByText('Learning').count()) === 1)
     // Interest-based discovery: by topic, without searching.
     await pageB.getByRole('button', { name: 'Clear search' }).click()

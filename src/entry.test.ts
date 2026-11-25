@@ -6,8 +6,7 @@ const at = (pathname: string, hostname = 'crevant-prototype-git-main-example.ver
 
 describe('production fallback', () => {
   it('serves only the sample prototype on the production demo address, whatever the path', () => {
-    for (const p of ['/', '/sign-in', '/request-invite', '/tour', '/discover'])
-      expect(at(p, 'crevant-prototype.vercel.app')).toEqual({ kind: 'demo-fallback' })
+    for (const p of ['/', '/sign-in', '/request-invite', '/tour', '/discover']) expect(at(p, 'crevant-prototype.vercel.app')).toEqual({ kind: 'demo-fallback' })
     expect(at('/', 'CREVANT-PROTOTYPE.VERCEL.APP')).toEqual({ kind: 'demo-fallback' })
   })
 
@@ -18,34 +17,33 @@ describe('production fallback', () => {
   })
 })
 
-describe('tour routing', () => {
-  it('sends /tour and everything under it to the prototype', () => {
-    expect(at('/tour')).toEqual({ kind: 'tour' })
-    expect(at('/tour/discover')).toEqual({ kind: 'tour' })
+describe('the retired tour', () => {
+  it('redirects /tour and everything under it to the homepage', () => {
+    for (const p of ['/tour', '/tour/', '/tour/welcome', '/tour/discover', '/tour/creator/amara']) expect(at(p), p).toEqual({ kind: 'public', redirectTo: '/' })
+    expect(at('/tour/welcome', undefined, '?invite=7c1e94a2b05d3f68e1a9')).toEqual({ kind: 'public', redirectTo: '/' })
     expect(at('/tourist')).toEqual({ kind: 'public' })
   })
 
-  it('redirects every old prototype path to /tour, keeping query and hash', () => {
-    const cases: Array<[string, string]> = [
-      ['/welcome', '/tour/welcome'],
-      ['/discover', '/tour/discover'],
-      ['/create', '/tour/create'],
-      ['/creator/maya', '/tour/creator/maya'],
-      ['/post/p1', '/tour/post/p1'],
-      ['/rewards', '/tour/rewards'],
-      ['/profile', '/tour/profile'],
-      ['/profile/tools', '/tour/profile/tools'],
-      ['/points', '/tour/points'],
-      ['/studio', '/tour/studio'],
-      ['/studio/rewards', '/tour/studio/rewards'],
-    ]
-    for (const [from, to] of cases) expect(at(from)).toEqual({ kind: 'tour', redirectTo: to })
-    expect(at('/rewards', undefined, '?tab=cp', '#top')).toEqual({ kind: 'tour', redirectTo: '/tour/rewards?tab=cp#top' })
+  it('redirects every old prototype path, which used to open the tour, to the homepage', () => {
+    for (const p of [
+      '/welcome',
+      '/discover',
+      '/create',
+      '/creator/maya',
+      '/post/p1',
+      '/rewards',
+      '/profile',
+      '/profile/tools',
+      '/points',
+      '/studio',
+      '/studio/rewards',
+    ])
+      expect(at(p), p).toEqual({ kind: 'public', redirectTo: '/' })
+    expect(at('/rewards', undefined, '?tab=cp', '#top')).toEqual({ kind: 'public', redirectTo: '/' })
   })
 
   it('leaves public paths alone', () => {
-    for (const p of ['/', '/request-invite', '/sign-in', '/something-else', '/creator'])
-      expect(at(p)).toEqual({ kind: 'public' })
+    for (const p of ['/', '/request-invite', '/sign-in', '/something-else', '/creator']) expect(at(p)).toEqual({ kind: 'public' })
   })
 })
 
@@ -53,7 +51,18 @@ describe('the member app address (app.splitpost.ca)', () => {
   const app = (pathname: string, search = '', hash = '') => resolveEntry({ hostname: 'app.splitpost.ca', pathname, search, hash })
 
   it('serves the member pages there, untouched', () => {
-    for (const p of ['/app', '/app/', '/app/discover', '/app/u/someone', '/app/account', '/sign-in', '/forgot-password', '/auth/confirm', '/auth/set-password', '/privacy'])
+    for (const p of [
+      '/app',
+      '/app/',
+      '/app/discover',
+      '/app/u/someone',
+      '/app/account',
+      '/sign-in',
+      '/forgot-password',
+      '/auth/confirm',
+      '/auth/set-password',
+      '/privacy',
+    ])
       expect(app(p), p).toEqual({ kind: 'member' })
     // The invitation link keeps its fragment: no redirect touches it.
     expect(app('/auth/confirm', '', '#token_hash=abc&type=invite')).toEqual({ kind: 'member' })
@@ -62,7 +71,20 @@ describe('the member app address (app.splitpost.ca)', () => {
   })
 
   it('sends everything else (landing page, waitlist, sample tour, old prototype paths) to /app', () => {
-    for (const p of ['/', '/join', '/join/creator', '/pilot-access', '/request-invite', '/tour', '/tour/discover', '/discover', '/studio', '/apple', '/sign-in/extra', '/anything'])
+    for (const p of [
+      '/',
+      '/join',
+      '/join/creator',
+      '/pilot-access',
+      '/request-invite',
+      '/tour',
+      '/tour/discover',
+      '/discover',
+      '/studio',
+      '/apple',
+      '/sign-in/extra',
+      '/anything',
+    ])
       expect(app(p), p).toEqual({ kind: 'member', redirectTo: '/app' })
   })
 

@@ -5,7 +5,7 @@ import { SplitpostLogo } from '../../../logo/SplitpostLogo'
 import { HOMEPAGE_COPY } from '../copy'
 
 /**
- * Shared pieces that keep the seven sections reading as one story: the
+ * Shared pieces that keep the sections reading as one story: the
  * eyebrow, the Splitpost logo on each "seam" where one section hands over to
  * the next, and the photo placeholder
  * used until the founder approves the photography shortlist.
@@ -14,17 +14,14 @@ import { HOMEPAGE_COPY } from '../copy'
 export function Eyebrow({ children, tone = 'light' }: { children: ReactNode; tone?: 'light' | 'dark' }) {
   return (
     <p
-      className={clsx(
-        'font-sp-display text-[13px] font-extrabold uppercase tracking-[0.18em]',
-        tone === 'dark' ? 'text-sp-secondary-on-dark' : 'text-sp-link',
-      )}
+      className={clsx('font-sp-display text-[13px] font-extrabold uppercase tracking-[0.18em]', tone === 'dark' ? 'text-sp-secondary-on-dark' : 'text-sp-link')}
     >
       {children}
     </p>
   )
 }
 
-/** The Splitpost logo sitting on the boundary between two sections, so the seven sections read as one story. */
+/** The Splitpost logo sitting on the boundary between two sections, so the sections read as one story. */
 export function Seam() {
   return (
     <div aria-hidden="true" data-testid="seam" className="pointer-events-none relative z-20 -my-7 flex justify-center">

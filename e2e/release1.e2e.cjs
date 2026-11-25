@@ -10,7 +10,8 @@
 const { chromium, devices } = require('playwright')
 
 const BASE = process.argv[2] || 'http://localhost:4175'
-// The suites also run against the tour on `main`: pass http://localhost:4175/tour.
+// Runs against the sample prototype at the root (the frozen demo). The public
+// /tour that once served it on `main` is retired and redirects to the homepage.
 const PREFIX = new URL(BASE).pathname.replace(/\/$/, '')
 const HOME = PREFIX ? BASE.replace(/\/$/, '') : BASE + '/'
 const SHOTS = process.argv[3] || null

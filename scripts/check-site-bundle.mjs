@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Inspects a public site build (npm run build:site) and fails if it contains
-// anything beyond the landing page, /join and the sample tour: sign in or
+// anything beyond the landing page and its public pages: sign in or
 // account code, the Supabase client, member routes, Supabase project
 // addresses or keys, or anything that looks like a secret.
 //

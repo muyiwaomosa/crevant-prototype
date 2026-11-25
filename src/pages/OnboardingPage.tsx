@@ -9,7 +9,6 @@ import type { Category, Intent } from '../types'
 import { Wordmark } from '../components/Wordmark'
 import { Button, CreatorAvatar, SparkIcon } from '../components/ui'
 import { Toasts } from '../components/Toasts'
-import { TourBannerSlot } from '../components/TourBanner'
 
 type Step = 0 | 1 | 2 | 3
 
@@ -66,7 +65,7 @@ export function OnboardingPage() {
   const [creatorCategories, setCreatorCategories] = useState<Category[]>(state.creatorCategories)
   const inviteCode = params.get('invite')
   const invite = inviteCode ? resolveDemoInvite(inviteCode) : null
-  const inviter = invite?.creatorId ? creators.find((c) => c.id === invite.creatorId) ?? null : null
+  const inviter = invite?.creatorId ? (creators.find((c) => c.id === invite.creatorId) ?? null) : null
   const [inviteDecision, setInviteDecision] = useState<'pending' | 'followed' | 'declined'>('pending')
   const asksCreating = intent === 'create' || intent === 'both'
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -101,7 +100,6 @@ export function OnboardingPage() {
 
   return (
     <div className="min-h-dvh bg-paper">
-      <TourBannerSlot />
       <div className="mx-auto flex min-h-dvh w-full max-w-[560px] flex-col px-5 pb-8 pt-[max(env(safe-area-inset-top),20px)]">
         <header className="flex items-center justify-between gap-3 py-2">
           <Wordmark size="sm" />
@@ -127,7 +125,10 @@ export function OnboardingPage() {
           {step === 0 && (
             <>
               {inviter && (
-                <p data-testid="invite-banner" className="mb-4 flex items-center gap-2 rounded-2xl bg-spark-50 px-4 py-3 text-sm font-semibold text-spark-700 ring-1 ring-spark-200">
+                <p
+                  data-testid="invite-banner"
+                  className="mb-4 flex items-center gap-2 rounded-2xl bg-spark-50 px-4 py-3 text-sm font-semibold text-spark-700 ring-1 ring-spark-200"
+                >
                   <Mail className="h-4 w-4 shrink-0" aria-hidden="true" /> {inviter.name} invited you to Splitpost.
                 </p>
               )}
@@ -170,7 +171,9 @@ export function OnboardingPage() {
               <h1 ref={headingRef} tabIndex={-1} className="font-display text-[1.75rem] font-extrabold leading-tight tracking-[-0.02em] outline-none">
                 What are you into?
               </h1>
-              <p className="mt-1 text-[15px] text-ink-600">This shapes who we suggest in Discover. It never follows anyone for you, and you can change it any time.</p>
+              <p className="mt-1 text-[15px] text-ink-600">
+                This shapes who we suggest in Discover. It never follows anyone for you, and you can change it any time.
+              </p>
 
               <h2 className="mt-5 text-sm font-semibold text-ink-900">How do you plan to use Splitpost?</h2>
               <div role="group" aria-label="How do you plan to use Splitpost?" className="mt-2 flex flex-wrap gap-2">
@@ -238,14 +241,26 @@ export function OnboardingPage() {
                   </div>
                   <p className="mt-3 text-[15px] font-semibold text-ink-900">Follow {inviter.name.split(' ')[0]}?</p>
                   <div className="mt-2 grid grid-cols-2 gap-2">
-                    <Button size="md" variant={inviteDecision === 'followed' ? 'primary' : 'secondary'} aria-pressed={inviteDecision === 'followed'} onClick={() => setInviteDecision('followed')}>
+                    <Button
+                      size="md"
+                      variant={inviteDecision === 'followed' ? 'primary' : 'secondary'}
+                      aria-pressed={inviteDecision === 'followed'}
+                      onClick={() => setInviteDecision('followed')}
+                    >
                       Follow
                     </Button>
-                    <Button size="md" variant={inviteDecision === 'declined' ? 'primary' : 'secondary'} aria-pressed={inviteDecision === 'declined'} onClick={() => setInviteDecision('declined')}>
+                    <Button
+                      size="md"
+                      variant={inviteDecision === 'declined' ? 'primary' : 'secondary'}
+                      aria-pressed={inviteDecision === 'declined'}
+                      onClick={() => setInviteDecision('declined')}
+                    >
                       Not now
                     </Button>
                   </div>
-                  <p className="mt-2 text-[13px] leading-snug text-ink-600">Your choice. Nobody is followed for you, and an invitation earns nothing for anyone.</p>
+                  <p className="mt-2 text-[13px] leading-snug text-ink-600">
+                    Your choice. Nobody is followed for you, and an invitation earns nothing for anyone.
+                  </p>
                 </section>
               )}
               <h1 ref={headingRef} tabIndex={-1} className="font-display text-[1.75rem] font-extrabold leading-tight tracking-[-0.02em] outline-none">
@@ -276,10 +291,7 @@ export function OnboardingPage() {
                           </span>
                         </span>
                         <span
-                          className={clsx(
-                            'grid h-7 w-7 shrink-0 place-items-center rounded-full',
-                            on ? 'bg-brand-600 text-white' : 'bg-ink-100 text-ink-600',
-                          )}
+                          className={clsx('grid h-7 w-7 shrink-0 place-items-center rounded-full', on ? 'bg-brand-600 text-white' : 'bg-ink-100 text-ink-600')}
                           aria-hidden="true"
                         >
                           {on ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -321,8 +333,8 @@ export function OnboardingPage() {
                   Anyone can post
                 </p>
                 <p className="mt-2 text-sm leading-snug text-ink-600">
-                  When you have something to share, tap Create. There's no special account to set up: the people who follow you will see it in their
-                  feed. Rewards and audience tools are in Profile when you want them.
+                  When you have something to share, tap Create. There's no special account to set up: the people who follow you will see it in their feed.
+                  Rewards and audience tools are in Profile when you want them.
                 </p>
               </div>
               <div className="mt-auto pt-6">

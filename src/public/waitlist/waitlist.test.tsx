@@ -82,7 +82,6 @@ describe('waitlist switch (browser)', () => {
       expect(readAcquisition(bad).creatorRef, bad).toBeNull()
     }
   })
-
 })
 
 describe('waitlist form', () => {
@@ -200,7 +199,11 @@ describe('waitlist form', () => {
       expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(["You're on the list!"])
       for (const id of ['join-intro', 'join-pilot-details']) expect(screen.queryByTestId(id)).toBeNull()
       expect(document.querySelector('form, input, select, textarea')).toBeNull()
-      expect(screen.getByText(/Thanks for joining Splitpost! We're inviting people to try the platform in small groups\. If you're selected for the pilot, we'll send you an invitation by email\./)).toBeTruthy()
+      expect(
+        screen.getByText(
+          /Thanks for joining Splitpost! We're inviting people to try the platform in small groups\. If you're selected for the pilot, we'll send you an invitation by email\./,
+        ),
+      ).toBeTruthy()
       expect(screen.getByTestId('waitlist-success-disclosure').textContent).toBe("Joining the waitlist doesn't guarantee an invitation.")
       // One action: Explore Splitpost, to the homepage. The other links are the privacy ones.
       const links = [...document.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')])
@@ -231,7 +234,10 @@ describe('waitlist form', () => {
           <Routes>
             <Route element={<PublicLayout />}>
               <Route index element={<p>Home page</p>} />
-              <Route path="join" element={<JoinPage env={{ ...ENV, VITE_PRIVACY_NOTICE_VERSION: '1.0' }} mount={mount} fetchImpl={respond('ok') as unknown as typeof fetch} />} />
+              <Route
+                path="join"
+                element={<JoinPage env={{ ...ENV, VITE_PRIVACY_NOTICE_VERSION: '1.0' }} mount={mount} fetchImpl={respond('ok') as unknown as typeof fetch} />}
+              />
             </Route>
           </Routes>
         </MemoryRouter>,
@@ -261,7 +267,16 @@ describe('waitlist form', () => {
         <MemoryRouter initialEntries={['/join']}>
           <Routes>
             <Route element={<PublicLayout />}>
-              <Route path="join" element={<JoinPage env={{ ...ENV, VITE_PRIVACY_NOTICE_VERSION: '1.0' }} mount={mount} fetchImpl={respond('verification_failed', 400) as unknown as typeof fetch} />} />
+              <Route
+                path="join"
+                element={
+                  <JoinPage
+                    env={{ ...ENV, VITE_PRIVACY_NOTICE_VERSION: '1.0' }}
+                    mount={mount}
+                    fetchImpl={respond('verification_failed', 400) as unknown as typeof fetch}
+                  />
+                }
+              />
             </Route>
           </Routes>
         </MemoryRouter>,
@@ -292,7 +307,9 @@ describe('waitlist form', () => {
         expect(screen.getByRole('heading', { level: 1, name: 'Join the Waitlist' })).toBeTruthy()
         cleanup()
       }
-      const broken = vi.fn(async () => { throw new Error('offline') })
+      const broken = vi.fn(async () => {
+        throw new Error('offline')
+      })
       renderJoin(broken as unknown as ReturnType<typeof respond>)
       fillRequired()
       await tokenReady()
@@ -309,7 +326,9 @@ describe('waitlist form', () => {
       </MemoryRouter>,
     )
     const text = container.textContent ?? ''
-    expect(text).not.toMatch(/How do you plan to use Splitpost|Create content|Discover and support creators|account type|creator or (a )?fan|as a (creator|fan|supporter)/i)
+    expect(text).not.toMatch(
+      /How do you plan to use Splitpost|Create content|Discover and support creators|account type|creator or (a )?fan|as a (creator|fan|supporter)/i,
+    )
     expect(container.querySelector('input[name="wl-intent"]')).toBeNull()
     // The optional questions are the same for everyone, always shown.
     expect(screen.getByTestId('waitlist-sharing')).toBeTruthy()
@@ -401,6 +420,24 @@ describe('waitlist button wording follows whether registration is open', () => {
     expect(waitlistCta()).toBe('Waitlist Opens Soon')
     // The closed wording never claims anyone can sign up.
     for (const t of Object.values(WAITLIST_CLOSED_COPY)) expect(t).not.toMatch(/sign up now|join now|register now/i)
+  })
+  it('switches to "Join Splitpost" only when registration is authorized, and stays pre-launch by default', async () => {
+    const { waitlistCta, readRegistrationOpen, REGISTRATION_OPEN, JOIN_PATH } = await import('./status')
+    // One switch: VITE_REGISTRATION_OPEN, exactly 'true'. Off in every build today.
+    expect(REGISTRATION_OPEN).toBe(false)
+    expect([
+      readRegistrationOpen('true'),
+      readRegistrationOpen(' true '),
+      readRegistrationOpen('1'),
+      readRegistrationOpen(undefined),
+      readRegistrationOpen(true),
+    ]).toEqual([true, true, false, false, false])
+    expect(waitlistCta(true, false)).toBe('Join the Waitlist')
+    expect(waitlistCta(true, true)).toBe('Join Splitpost')
+    // Never a promise the page can't keep: closed means closed, whatever the phase.
+    expect(waitlistCta(false, true)).toBe('Waitlist Opens Soon')
+    // Every call to action goes to the same one place.
+    expect(JOIN_PATH).toBe('/join')
   })
   it('is open exactly when the form would show: same settings, same approved notice', () => {
     expect(readWaitlistConfig(ENV, NOTICE)).not.toBeNull()

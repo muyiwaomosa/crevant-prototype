@@ -4,13 +4,34 @@ The one current guide for setting up staging and accepting what is built on it,
 organised by stakeholder journey. It reflects everything merged to `main`.
 Production batch PB-1, which needs its own approval, is at the end.
 
+## 0. Founder action guide (start here)
+
+Everything that needs you, in one place. **Sequential** steps depend on the one
+before; **independent** ones can be done any time, in any order.
+
+| # | Action | Where | Depends on | Expected result | How Claude verifies |
+|---|---|---|---|---|---|
+| 1 | **Approve the database deploy** [run 45677972966](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45677972966): one run applies all seven pending migrations, 20261204000000 to 20261210000000, then runs every staging security and separation check | GitHub, the run, **Review deployments, staging, Approve** | Nothing | The run is green; its summary lists each migration as applied and every check as passed | Reads the run log and reports |
+| 2 | **Step A: Vercel builds the staging app** (5 minutes) | Vercel, below | Nothing (independent of 1) | `splitpost-app-git-staging-crevant.vercel.app` loads the sign-in page | Pushes `staging`, loads the address |
+| 3 | **Step B: Resend sends staging email** (15 minutes plus DNS time) | Resend and Supabase, below | Nothing (start now: DNS can take hours) | A password reset arrives from "Splitpost" | Asks you to confirm the email arrived |
+| 4 | **Step C: Supabase Auth** (10 minutes) | Supabase dashboard, below | **After 1** (the account hook function must exist) | Signing up through a link works; a sign up without a link is refused | Runs the staging checks again |
+| 5 | **Step D: activate staging** (2 minutes) | Supabase SQL editor, below | **After 2, 3 and 4** | You have a founder account, an invitation link and the moderator role | Checks registration state is open on staging only |
+| 6 | **Authorize the merge of the onboarding pull request** (20261211000000 and 20261212000000 checksums, D7) once its six checks are green | GitHub | Nothing | Merged; one more staging deploy appears for you to approve | Starts the deploy and fast-forwards `staging` |
+| 7 | Hands-on acceptance, section 3 | The staging app | After 5 | Each row behaves as written; note anything that doesn't in Feedback | Fixes what you report and redeploys |
+| 8 | PB-1 member Production operations, section 4 | Resend, Supabase, GitHub | Independent | Production email, drain key and health checks in place | Reruns the schedule and health checks |
+| 9 | The video device test, `docs/video/DEVICE-TEST.md` (the test page arrives with the video pull request, next) | Your iPhone, an Android phone and a computer | After the video pull request is deployed | A pass or fail per device, sent to Claude | Turns on video posts only after a pass |
+
+After step 5, staging stays usable while development continues: each merged
+pull request gets its own small deploy for you to approve, and the `staging`
+app branch follows `main`, so you can accept features as they land.
+
 ## 1. Where staging stands
 
 | Layer | Status | What you do |
 |---|---|---|
-| **Database deploy waiting for you** | [Run 45663465302](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45663465302) applies 20261204000000 (previews and search), 20261205000000 (rewards), 20261206000000 (governance), 20261207000000 (governance refinements) and 20261208000000 (advertising) in one go, then runs every staging security and separation check. It replaces run 45652930512, which was cancelled so you approve once instead of twice | **Review deployments, staging, Approve** |
+| **Database deploy waiting for you** | [run 45677972966](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45677972966) applies 20261204000000 to 20261210000000 in one go (previews and search, rewards, governance and its refinements, advertising, ad creatives and caps, intelligence). It replaces runs 45652930512 and 45663465302, cancelled so you approve once | **Review deployments, staging, Approve** |
 | Database already applied | Every migration up to 20261203000000 (IP-1, IP-2, IP-4a and IP-4b), checked Nov 25 at 14:00 and 14:59 | Nothing |
-| Next database deploy | 20261209000000 (ad creatives and caps) and 20261210000000 (intelligence) together, after their pull request merges | Approve the one run when it appears |
+| Next database deploy | 20261211000000 (unified onboarding) and 20261212000000 (privacy requests and switches) together, after their pull request merges | Approve the one run when it appears |
 | Staging app (Vercel) | Not building yet: `splitpost-app` builds only an older branch | Step A |
 | Email | Supabase's default sender: team addresses only, about two an hour | Step B |
 | Auth (sign up through links, the account hook, Splitpost emails) | Not configured | Step C, after the deploy above |
@@ -35,13 +56,15 @@ once the deploy above is approved and steps A to D are done.
 | 20261106000000 to 20261130000000 | Foundations through foundation v2 and the launch gate | Applied |
 | 20261201000000 | Relationships and Home | Applied |
 | 20261202000000, 20261203000000 | Content, discovery and sharing | Applied |
-| 20261204000000 | Fair rotation, search measurement, public previews | In run 45663465302 |
-| 20261205000000 | Contributions and rewards (simulated) | In run 45663465302 |
-| 20261206000000 | Governance | In run 45663465302 |
-| 20261207000000 | Governance refinements | In run 45663465302 |
-| 20261208000000 | Advertising | In run 45663465302 |
-| 20261209000000 | Image and video ad creatives, frequency caps, restored points outside daily caps | After its merge |
-| 20261210000000 | Intelligence | After its merge |
+| 20261204000000 | Fair rotation, search measurement, public previews | In run 45677972966 |
+| 20261205000000 | Contributions and rewards (simulated) | In run 45677972966 |
+| 20261206000000 | Governance | In run 45677972966 |
+| 20261207000000 | Governance refinements | In run 45677972966 |
+| 20261208000000 | Advertising | In run 45677972966 |
+| 20261209000000 | Image and video ad creatives, frequency caps, restored points outside daily caps | In run 45677972966 |
+| 20261210000000 | Intelligence | In run 45677972966 |
+| 20261211000000 | Unified onboarding: creator setup, invitations, advertising requests | After its merge |
+| 20261212000000 | Privacy requests, account deletion, switches | After its merge |
 
 ---
 
@@ -230,6 +253,21 @@ Allocation percentages are not shown to members until the Rewards Rules are lega
 | 48 | Money | Simulated earnings marked Simulated with a You / Fans / Splitpost bar and no percentages; Ads shown with your posts, Actual; Actual income $0.00; Support Intent, Non-binding |
 | 49 | As you, Profile, Control Center | The North Star (Weekly Active Creator-Consumer Connections) for 8 weeks, with test data and founder-dependent connections apart; every line labelled Actual, Simulated, Test data or Hypothesis; no member named |
 | 50 | Export CSV and JSON | Each row carries its kind; the figures match the page |
+
+### Journey 8. One account: onboarding, creating, advertising and privacy (after 20261211000000 and 20261212000000)
+
+| # | Do | Expect |
+|---|---|---|
+| 51 | As you, Control Center, Invitation links: create a link for the creator's username; copy it; register a new account through it | Setup asks what brings you here (optional; Continue works without an answer), then shows "You're here because of" the creator, with Follow and Not now. Nobody is followed until you choose |
+| 52 | Finish setup | The last step explains My Split in three points: points are recognized, some become redeemable after review, everything is simulated and nothing is paid. No percentages. Choosing "Share my own work" offers "Set up my creator profile" |
+| 53 | As the creator, Profile | "Share your own work": choose up to 3 posting topics (a fourth is not allowed), a link to write a first post, and "Copy my invitation link" with how many joined through it |
+| 54 | As a member whose interests match, open Discover, Creators | The creator appears with their posting topics; a member who has never posted or chosen topics does not |
+| 55 | As any member, Profile, Advertise with Splitpost: send a request | "Waiting for review"; a second request is refused while one is open |
+| 56 | As you, Advertising | The advertiser shows "Requested by @member from their account"; approve it and create a campaign as before; the member then sees the campaign and a report with groups under 10 withheld |
+| 57 | As a member, Profile, Your data and privacy: ask for a copy; then ask to delete the account (the checkbox is required) | Both listed as Open; Withdraw works |
+| 58 | As you, Control Center, Privacy requests: mark the copy done with a note; on the deletion, type a wrong username, then the right one | The wrong one is refused; the right one deletes the account, its posts and follows. My Split totals for everyone else are unchanged |
+| 59 | Control Center, Operational switches: turn advertising off with a reason; open Home as a member; turn it back on | No ads while off; the change and reason are listed; Video posts cannot be turned on yet |
+| 60 | Control Center, Registration: pause, then reopen, with a reason | Registration through links is refused while paused |
 
 ---
 
