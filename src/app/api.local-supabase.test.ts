@@ -26,6 +26,8 @@ const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
 // Newest first.
 const LATER = [
+  { version: '20261206000000', name: 'governance', file: 'supabase/migrations/20261206000000_governance.sql', rollback: 'scripts/db/staging-rollback-governance.sql', phrase: 'REMOVE THE STAGING GOVERNANCE' },
+  { version: '20261205000000', name: 'rewards', file: 'supabase/migrations/20261205000000_rewards.sql', rollback: 'scripts/db/staging-rollback-rewards.sql', phrase: 'REMOVE THE STAGING REWARDS' },
   { version: '20261204000000', name: 'previews_and_search', file: 'supabase/migrations/20261204000000_previews_and_search.sql', rollback: 'scripts/db/staging-rollback-previews.sql', phrase: 'REMOVE THE STAGING PREVIEWS' },
   { version: '20261203000000', name: 'discovery', file: 'supabase/migrations/20261203000000_discovery.sql', rollback: 'scripts/db/staging-rollback-discovery.sql', phrase: 'REMOVE THE STAGING DISCOVERY' },
   { version: '20261202000000', name: 'content', file: 'supabase/migrations/20261202000000_content.sql', rollback: 'scripts/db/staging-rollback-content.sql', phrase: 'REMOVE THE STAGING CONTENT' },

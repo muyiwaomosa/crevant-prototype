@@ -133,6 +133,33 @@ declare
     'public.app_public_previews_allowed()',
     'public.app_set_public_previews(boolean,text)'
   ];
+  -- Rewards (20261205000000), once applied.
+  rewards text[] := array[
+    'public.app_founder_close_month(date)',
+    'public.app_founder_record_sim_revenue(date,text,uuid,uuid,bigint,text)',
+    'public.app_founder_referral_queue()',
+    'public.app_founder_review_referral(bigint,boolean)',
+    'public.app_founder_rewards_overview()',
+    'public.app_founder_set_rewards(boolean,integer)',
+    'public.app_my_points()',
+    'public.app_my_points_history(bigint,integer)',
+    'public.app_my_simulated_earnings()'
+  ];
+  -- Governance (20261206000000), once applied.
+  governance text[] := array[
+    'public.app_appeal(bigint,text)',
+    'public.app_block(uuid)',
+    'public.app_mark_notices_read()',
+    'public.app_mod_appeals(text)',
+    'public.app_mod_decide_appeal(uuid,boolean,text)',
+    'public.app_mod_enforce(uuid,text,text,uuid,integer,text)',
+    'public.app_mod_lift(bigint,text)',
+    'public.app_mod_member_record(uuid)',
+    'public.app_my_blocks()',
+    'public.app_my_notices()',
+    'public.app_my_standing()',
+    'public.app_unblock(uuid)'
+  ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
   actual text[];
@@ -171,11 +198,17 @@ begin
     expected := expected || previews;
     anon_allowed := array['public.app_public_post(uuid, text)'];
   end if;
+  if to_regclass('sim.points_ledger') is not null then
+    expected := expected || rewards;
+  end if;
+  if to_regclass('social.blocks') is not null then
+    expected := expected || governance;
+  end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
   from pg_catalog.pg_proc p
   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent')
+  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent', 'sim')
     and pg_catalog.has_function_privilege('authenticated', p.oid, 'EXECUTE');
   -- Normalise argument lists to the same spelling as the allow-list (no spaces after commas).
   actual := (select coalesce(array_agg(replace(a, ', ', ',') order by 1), '{}') from unnest(actual) a);
@@ -192,7 +225,7 @@ begin
     into anon_fns
   from pg_catalog.pg_proc p
   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent')
+  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent', 'sim')
     and pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE');
   anon_fns := (select coalesce(array_agg(a), '{}') from unnest(anon_fns) a where a <> all (anon_allowed));
   if cardinality(anon_fns) > 0 then

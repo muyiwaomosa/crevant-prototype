@@ -8,7 +8,7 @@ on staging, plus the Production batch PB-1, which needs its own approval.
 
 | Layer | Status | What makes it fully functional |
 |---|---|---|
-| Staging database | **Done.** IP-1, IP-2 and IP-4 migrations applied and checked (Nov 25, 14:00 and 14:59). IP-4c follows its merge | Nothing more from you |
+| Staging database | **Done** for IP-1, IP-2 and IP-4 (applied and checked Nov 25, 14:00 and 14:59). IP-4c is merged and its apply waits for your approval (run 45645109544). IP-6 and IP-3 follow their merge | Approve each apply run |
 | Staging app (Vercel) | Not building yet: `splitpost-app` still builds only an older branch | A1 |
 | Email (registration, confirmation, password reset) | Supabase's default sender: team addresses only, about two an hour | A2 |
 | Auth (sign up through links, the account creation hook, Splitpost emails) | Not configured | A3 |
@@ -162,6 +162,26 @@ Use your two new accounts: one posts as a creator, one follows.
 | 23 | Search "budget" (or a word from a post) | People, Posts and Topics results |
 | 24 | Share one of your posts (copy link) | A note says only members can open it until you allow public previews |
 | 25 | Before opting in, open the link in a private window; then Profile, Sharing outside Splitpost: read the explanation and tick "Allow public previews of my posts"; reopen; then untick and reopen | Unavailable, then the preview, then unavailable again |
+
+### IP-6 Contributions and rewards (simulated)
+
+| # | Do | Expect |
+|---|---|---|
+| 26 | As a tester, write a thoughtful comment on someone else's post, save one and repost one; then My Split | Recognized points for each, marked Simulated; History lists them newest first |
+| 27 | Register a second tester through the first tester's referral link, confirm the email, and follow someone | As founder, My Split, "Founder: review referrals and rewards": the qualified referral waits for you; approve it |
+
+### IP-3 Governance
+
+First make yourself a moderator in the SQL Editor: `select ops.grant_moderator('<your user id>', 'founder', 'staging acceptance');`
+
+| # | Do | Expect |
+|---|---|---|
+| 28 | As tester A, open tester B's profile and choose Block; read the explanation; confirm | "You blocked …" with Unblock; as B, A's profile and posts are gone and nothing says why |
+| 29 | As A, report one of C's comments (the flag beside it) | "Thanks for letting us know" |
+| 30 | As you (moderator), Profile, Moderation, open the comment report: Hide, then Give a warning | Hidden; "Warning recorded"; the account panel shows the history |
+| 31 | As C, open Home | A banner about new notices; Notices says what was hidden and why, never who reported |
+| 32 | As C, Appeal the hidden comment; as you, Moderation, Appeals, Reverse | The comment is back; C sees "Your appeal was successful" |
+| 33 | As you, give C a restriction from the account panel; as C, try to post | Home says the account is restricted and until when; posting is refused |
 
 Report anything that doesn't match to Claude with the row number. Defects are
 fixed without reopening approved decisions.

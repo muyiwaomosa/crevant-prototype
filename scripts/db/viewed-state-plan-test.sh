@@ -126,7 +126,7 @@ check() { # label member pattern max-ms sql...
   median=$(printf '%s\n' "${times[@]}" | sort -n | sed -n "$(( (${#times[@]} + 1) / 2 ))p")
   echo "--- $label: ${median} ms server-side (runs: ${times[*]})"
   awk '/NOTICE:  duration: /{show=0} /Query Text:/{show=($0 ~ /'"$pat"'/)} show' <<<"$plan" \
-    | grep -E 'Scan|Anti|Limit|Sort |Nested Loop|rows=' | sed 's/^psql:[^ ]* NOTICE:  //; s/^/    /' | head -14
+    | grep -E 'Scan|Anti|Limit|Sort |Nested Loop|rows=' | sed -n 's/^psql:[^ ]* NOTICE:  //; s/^/    /; 1,14p'
   if awk -v m="$median" -v l="$limit" 'BEGIN { exit !(m > l) }'; then
     echo "FAIL: $label took ${median} ms server-side (limit $limit ms)" >&2; exit 1
   fi

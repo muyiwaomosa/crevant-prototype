@@ -15,6 +15,7 @@ import { PostComposer, usePhotosEnabled } from './media'
 import { ProfilePictureField } from './avatars'
 import { AudienceInsight, SupportButton } from './relationships'
 import { JoinedForPrompt, PublicPreviewsSetting, categorize } from './content'
+import { BlockButton, BlockedMembers, BlockedProfilePanel, GovernanceBanner } from './governance'
 
 /** Loads data for a page, with loading and error states and a reload function. */
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
@@ -124,6 +125,7 @@ export function FeedPage() {
   return (
     <>
       <PageHeader title="Home" subtitle="Posts from creators you follow, newest first, with new posts from your Clique at the top. Only you decide what is hidden." />
+      <GovernanceBanner />
       <JoinedForPrompt />
       <FaceView
         label="Home views"
@@ -526,7 +528,7 @@ export function MemberPage() {
 
   if (member.loading && member.data === undefined) return <Loading label="Loading profile…" />
   if (member.error !== null) return <ErrorNote error={member.error} />
-  if (!m) return <NotFoundPanel what="This member" />
+  if (!m) return <BlockedProfilePanel username={username} fallback={<NotFoundPanel what="This member" />} onUnblocked={() => void member.reload()} />
   return (
     <>
       <MemberHeader member={m} onChange={member.reload} about={<MemberAbout details={details.data} topics={topics} />} />
@@ -599,7 +601,10 @@ function MemberHeader({ member, onChange, about }: { member: Member; onChange: (
               <RelationshipButtons member={member} onChange={onChange} size="md" source="profile" postsHref={member.postCount > 0 ? '#posts' : undefined} />
               <SupportButton creator={member} />
             </div>
-            <ReportButton target="profile" targetId={member.id} name={member.displayName} />
+            <div className="flex flex-wrap items-center gap-1">
+              <ReportButton target="profile" targetId={member.id} name={member.displayName} />
+              <BlockButton memberId={member.id} name={member.displayName} onBlocked={() => void onChange()} />
+            </div>
           </div>
         )}
       </div>
@@ -693,6 +698,7 @@ function CommentItem({ comment, onDeleted }: { comment: Comment; onDeleted: () =
             </div>
           )}
         </div>
+        {!comment.isMine && <ReportButton target="comment" targetId={comment.id} name={comment.author.displayName} />}
         {comment.isMine && (
           <button
             type="button"
@@ -784,6 +790,9 @@ export function ProfilePage() {
             <Link to="/app/account" className={buttonClass('secondary', 'sm')}>
               Your account
             </Link>
+            <Link to="/app/notices" className={buttonClass('secondary', 'sm')}>
+              Notices
+            </Link>
             {moderator && (
               <Link to="/app/moderation" className={buttonClass('secondary', 'sm')}>
                 Moderation
@@ -805,6 +814,7 @@ export function ProfilePage() {
         <DetailsEditor />
       </Card>
       <PublicPreviewsSetting />
+      <BlockedMembers />
     </>
   )
 }

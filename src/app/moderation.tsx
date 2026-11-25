@@ -11,6 +11,9 @@ import {
   REPORT_REASONS,
   messageFor,
   reasonLabel,
+  type EnforcementLevel,
+  type MemberRecord,
+  type ModAppeal,
   type ModQueueItem,
   type ModReport,
   type ModerationAccess,
@@ -78,7 +81,7 @@ export function ReportButton({ target, targetId, name, className }: { target: Re
   const { available } = useModeration()
   const [open, setOpen] = useState(false)
   if (!available) return null
-  const label = target === 'post' ? `Report this post by ${name}` : `Report ${name}`
+  const label = target === 'post' ? `Report this post by ${name}` : target === 'comment' ? `Report this comment by ${name}` : `Report ${name}`
   return (
     <>
       <button
@@ -128,7 +131,7 @@ export function ReportDialog({ target, targetId, name, onClose }: { target: Repo
     }
   }
 
-  const title = target === 'post' ? 'Report this post' : `Report ${name}`
+  const title = target === 'post' ? 'Report this post' : target === 'comment' ? 'Report this comment' : `Report ${name}`
   return (
     <Modal open onClose={onClose} title={title}>
       {sent ? (
@@ -222,6 +225,7 @@ function NotModerator() {
 }
 
 const STATUS_TEXT: Record<string, string> = { open: 'Open', hidden: 'Hidden', dismissed: 'Dismissed', restored: 'Restored' }
+const TARGET_LABEL: Record<ReportTarget, string> = { post: 'Post', comment: 'Comment', profile: 'Profile' }
 
 function PriorityBadge() {
   return (
@@ -254,6 +258,9 @@ export function ModerationQueuePage() {
   return (
     <>
       <PageHeader title="Moderation" subtitle="Reports from members, safety reports first. Nothing is hidden until you decide." />
+      <Link to="/app/moderation/appeals" className={`${buttonClass('secondary', 'sm')} mb-4`}>
+        Appeals
+      </Link>
       <div role="group" aria-label="Which reports" className="mb-4 flex gap-2">
         {(['open', 'resolved'] as const).map((t) => (
           <button
@@ -285,7 +292,7 @@ export function ModerationQueuePage() {
                     {r.priority && <PriorityBadge />}
                     <span className="font-semibold text-ink-900">{reasonLabel(r.reason)}</span>
                     <span className="text-[13px] text-ink-500">
-                      {r.targetType === 'post' ? 'Post' : 'Profile'}
+                      {TARGET_LABEL[r.targetType]}
                       {r.targetUsername ? ` by @${r.targetUsername}` : ''} · <When iso={r.createdAt} />
                     </span>
                   </div>
@@ -375,7 +382,7 @@ export function ModerationReportPage() {
       <button type="button" onClick={() => navigate('/app/moderation')} className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to reports
       </button>
-      <PageHeader title={`${reasonLabel(r.reason)}: ${r.targetType === 'post' ? 'post' : 'profile'}`} subtitle={`Reported ${new Date(r.createdAt).toLocaleString()}. Status: ${STATUS_TEXT[r.status]}.`} />
+      <PageHeader title={`${reasonLabel(r.reason)}: ${TARGET_LABEL[r.targetType].toLowerCase()}`} subtitle={`Reported ${new Date(r.createdAt).toLocaleString()}. Status: ${STATUS_TEXT[r.status]}.`} />
       <Card className="space-y-4 p-5">
         {r.priority && <PriorityBadge />}
         <dl className="grid gap-3 text-sm">
@@ -398,7 +405,7 @@ export function ModerationReportPage() {
           </h2>
           {r.dataPurged ? (
             <p className="mt-1 text-sm text-ink-600">The copy was erased 90 days after the report was resolved.</p>
-          ) : r.targetType === 'post' ? (
+          ) : r.targetType !== 'profile' ? (
             <>
               <p className="mt-1 text-[13px] text-ink-500">
                 By {snap.author_display_name} (@{snap.author_username})
@@ -431,6 +438,11 @@ export function ModerationReportPage() {
         </section>
         {r.targetType === 'post' && r.currentBody !== null && r.currentBody !== snap.body && (
           <p className="text-sm text-ink-600">The post has changed since it was reported.</p>
+        )}
+        {r.targetType === 'comment' && snap.post_id && (
+          <Link to={`/app/post/${snap.post_id}`} className="text-sm font-semibold text-brand-700 underline underline-offset-2">
+            Open the post it was on
+          </Link>
         )}
         <div>
           <label htmlFor={noteId} className="block text-sm font-semibold text-ink-800">
@@ -468,6 +480,283 @@ export function ModerationReportPage() {
           Hide removes it for every member until restored. Dismiss closes the reports and changes nothing. Every action is recorded.
         </p>
       </Card>
+      {r.targetOwnerId && <MemberActionsPanel memberId={r.targetOwnerId} reportId={r.id} defaultReason={r.reason} />}
+    </>
+  )
+}
+
+const LEVEL_TEXT: Record<EnforcementLevel, string> = { warning: 'Warning', restriction: 'Restriction', suspension: 'Suspension' }
+
+/**
+ * The account behind a report: its record and the enforcement ladder
+ * (warning, then restriction, then suspension; the database refuses a skipped
+ * step except for threats, self-harm and hate). The member is notified.
+ */
+export function MemberActionsPanel({ memberId, reportId, defaultReason }: { memberId: string; reportId: string | null; defaultReason: ReportReason }) {
+  const api = useAppApi()
+  const ids = useId()
+  const [record, setRecord] = useState<MemberRecord | null | undefined>(undefined)
+  const [level, setLevel] = useState<EnforcementLevel>('warning')
+  const [reason, setReason] = useState<ReportReason>(defaultReason)
+  const [days, setDays] = useState('7')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  const [done, setDone] = useState<string | null>(null)
+  const load = useCallback(async () => {
+    try {
+      setRecord(await api.modMemberRecord(memberId))
+    } catch (e) {
+      setError(e)
+      setRecord(null)
+    }
+  }, [api, memberId])
+  useEffect(() => {
+    void load()
+  }, [load])
+  if (record === undefined) return <Spinner label="Loading the member's record…" />
+  if (record === null) return error !== null ? <Message tone="error">{messageFor(error)}</Message> : null
+
+  const dayCount = days.trim() === '' ? null : Number(days)
+  async function apply() {
+    setBusy(true)
+    setError(null)
+    setDone(null)
+    try {
+      await api.modEnforce(memberId, level, reason, reportId, level === 'warning' ? null : dayCount, note)
+      setDone(`${LEVEL_TEXT[level]} recorded. @${record!.username} has been notified.`)
+      setNote('')
+      await load()
+    } catch (e) {
+      setError(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function lift(id: number) {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.modLift(id, note)
+      setDone('Ended early. The member has been notified.')
+      await load()
+    } catch (e) {
+      setError(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Card className="mt-4 space-y-4 p-5">
+      <div data-testid="member-record">
+        <h2 className="font-display text-lg font-bold text-ink-900">
+          The account: {record.displayName} (@{record.username})
+        </h2>
+        <p className="mt-1 text-sm text-ink-700">
+          {record.standing === 'suspended' ? 'Suspended now.' : record.standing === 'restricted' ? 'Restricted now.' : 'No limits now.'} Hidden by moderators so far:{' '}
+          {record.hiddenContent}.
+        </p>
+      </div>
+      {record.enforcements.length > 0 && (
+        <ul className="divide-y divide-ink-100 text-sm" aria-label="Enforcement history">
+          {record.enforcements.map((e) => (
+            <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span className="text-ink-800">
+                <span className="font-semibold">{LEVEL_TEXT[e.level]}</span> · {reasonLabel(e.reason)} · <When iso={e.startsAt} />
+                {e.endsAt ? ` · until ${new Date(e.endsAt).toLocaleDateString()}` : e.level === 'suspension' ? ' · until lifted' : ''}
+                {e.liftedAt ? ` · ended early${e.liftedVia === 'appeal' ? ' on appeal' : ''}` : ''}
+              </span>
+              {e.active && (
+                <button type="button" disabled={busy} onClick={() => lift(e.id)} className={buttonClass('secondary', 'sm')}>
+                  End early
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <fieldset>
+        <legend className="text-sm font-semibold text-ink-800">Next step</legend>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(['warning', 'restriction', 'suspension'] as const).map((l) => (
+            <button
+              key={l}
+              type="button"
+              aria-pressed={level === l}
+              onClick={() => {
+                setLevel(l)
+                setDays(l === 'restriction' ? '7' : '')
+              }}
+              className={clsx(
+                'min-h-11 rounded-full border px-4 text-sm font-semibold',
+                level === l ? 'border-brand-700 bg-brand-700 text-white' : 'border-ink-200 bg-white text-ink-800',
+              )}
+            >
+              {LEVEL_TEXT[l]}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[13px] text-ink-500">
+          One step at a time: a warning before a restriction, a restriction before a suspension. Threats, self-harm and hate can go straight to any step.
+        </p>
+      </fieldset>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm font-semibold text-ink-800">
+          Reason
+          <select
+            value={reason}
+            onChange={(e) => setReason(e.target.value as ReportReason)}
+            className="mt-1.5 block h-11 w-full rounded-2xl border border-ink-200 bg-white px-3 text-base text-ink-900"
+          >
+            {REPORT_REASONS.map((x) => (
+              <option key={x.value} value={x.value}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {level !== 'warning' && (
+          <label htmlFor={`${ids}-days`} className="block text-sm font-semibold text-ink-800">
+            {level === 'restriction' ? 'Days (1 to 30)' : 'Days (1 to 90, or empty until lifted)'}
+            <input
+              id={`${ids}-days`}
+              inputMode="numeric"
+              value={days}
+              onChange={(e) => setDays(e.target.value.replace(/[^0-9]/g, ''))}
+              className="mt-1.5 block h-11 w-full rounded-2xl border border-ink-200 bg-white px-3 text-base text-ink-900"
+            />
+          </label>
+        )}
+      </div>
+      <label htmlFor={`${ids}-note`} className="block text-sm font-semibold text-ink-800">
+        Note for the record (optional, never shown to the member)
+        <textarea
+          id={`${ids}-note`}
+          value={note}
+          rows={2}
+          onChange={(e) => setNote(e.target.value)}
+          className="mt-1.5 block w-full resize-none rounded-2xl border border-ink-200 bg-white px-4 py-3 text-base font-normal text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+        />
+      </label>
+      {done && <Message tone="success">{done}</Message>}
+      {error !== null && <Message tone="error">{messageFor(error)}</Message>}
+      <button type="button" disabled={busy} onClick={apply} className={buttonClass(level === 'warning' ? 'secondary' : 'danger')}>
+        {busy ? 'Saving…' : `Give a ${LEVEL_TEXT[level].toLowerCase()}`}
+      </button>
+    </Card>
+  )
+}
+
+const APPEAL_KIND: Record<string, string> = {
+  content_hidden: 'Hidden content',
+  warning: 'Warning',
+  restriction: 'Restriction',
+  suspension: 'Suspension',
+}
+
+/** Appeals: oldest first. A different moderator decides appeals on your own actions whenever one exists. */
+export function ModerationAppealsPage() {
+  const api = useAppApi()
+  const { moderator } = useModeration()
+  const [tab, setTab] = useState<'open' | 'decided'>('open')
+  const [items, setItems] = useState<ModAppeal[] | null | undefined>(undefined)
+  const [error, setError] = useState<unknown>(null)
+  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState<string | null>(null)
+  const load = useCallback(async () => {
+    try {
+      setItems(await api.modAppeals(tab))
+      setError(null)
+    } catch (e) {
+      setError(e)
+    }
+  }, [api, tab])
+  useEffect(() => {
+    if (moderator) void load()
+  }, [load, moderator])
+  if (!moderator) return <NotModerator />
+
+  async function decide(a: ModAppeal, reverse: boolean) {
+    setBusy(a.id)
+    setError(null)
+    try {
+      await api.modDecideAppeal(a.id, reverse, notes[a.id])
+      await load()
+    } catch (e) {
+      setError(e)
+    } finally {
+      setBusy(null)
+    }
+  }
+  return (
+    <>
+      <Link to="/app/moderation" className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to reports
+      </Link>
+      <PageHeader title="Appeals" subtitle="Members asking us to look again. Reversing restores the content or ends the limit, and the member is told." />
+      <div role="group" aria-label="Which appeals" className="mb-4 flex gap-2">
+        {(['open', 'decided'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={tab === t}
+            onClick={() => setTab(t)}
+            className={clsx(
+              'min-h-11 rounded-full border px-4 text-sm font-semibold',
+              tab === t ? 'border-brand-700 bg-brand-700 text-white' : 'border-ink-200 bg-white text-ink-800',
+            )}
+          >
+            {t === 'open' ? 'Open' : 'Decided'}
+          </button>
+        ))}
+      </div>
+      {error !== null && <Message tone="error">{messageFor(error)}</Message>}
+      {items === undefined && error === null && <Spinner label="Loading appeals…" />}
+      {(items === null || (items && items.length === 0)) && (
+        <EmptyState icon={<ShieldCheck className="h-7 w-7" />} title={tab === 'open' ? 'No open appeals' : 'No decided appeals'} body="Appeals appear here as members send them." />
+      )}
+      {items && items.length > 0 && (
+        <ul className="space-y-3" aria-label={tab === 'open' ? 'Open appeals' : 'Decided appeals'}>
+          {items.map((a) => (
+            <li key={a.id}>
+              <Card className="space-y-2 p-4">
+                <p className="flex flex-wrap items-center gap-2 text-[13px] text-ink-500">
+                  <span className="font-semibold text-ink-900">{APPEAL_KIND[a.kind] ?? a.kind}</span>
+                  {a.reason && <span>{reasonLabel(a.reason)}</span>}
+                  <span>
+                    @{a.memberUsername ?? 'deleted account'} · <When iso={a.createdAt} />
+                  </span>
+                </p>
+                {a.excerpt && <blockquote className="border-l-4 border-ink-200 pl-3 text-[14px] text-ink-600">{a.excerpt}</blockquote>}
+                <p className="whitespace-pre-wrap text-[15px] text-ink-900">{a.body}</p>
+                {a.status === 'open' ? (
+                  <>
+                    {a.decidedOriginal && <p className="text-sm font-semibold text-[#6b4300]">You took the original action. Another moderator should decide this one.</p>}
+                    <textarea
+                      aria-label="Decision note (optional, never shown to the member)"
+                      placeholder="Decision note (optional, never shown to the member)"
+                      value={notes[a.id] ?? ''}
+                      rows={2}
+                      onChange={(e) => setNotes((n) => ({ ...n, [a.id]: e.target.value }))}
+                      className="block w-full resize-none rounded-2xl border border-ink-200 bg-white px-4 py-3 text-base text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" disabled={busy === a.id} onClick={() => decide(a, true)} className={buttonClass('primary', 'sm')}>
+                        Reverse
+                      </button>
+                      <button type="button" disabled={busy === a.id} onClick={() => decide(a, false)} className={buttonClass('secondary', 'sm')}>
+                        Keep the decision
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm font-semibold text-ink-800">{a.status === 'reversed' ? 'Reversed' : 'Decision kept'}</p>
+                )}
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   )
 }

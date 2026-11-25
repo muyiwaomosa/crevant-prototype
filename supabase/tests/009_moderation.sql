@@ -65,9 +65,11 @@ begin
     if position('social.current_moderator()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
   end loop;
   -- 5 moderation functions, plus 3 for storage cleanup once profile pictures (20261125000000) are applied,
-  -- plus 2 (the reported photo and photo storage) once photo posts (20261127000000) are.
+  -- plus 2 (the reported photo and photo storage) once photo posts (20261127000000) are,
+  -- plus 5 (enforce, lift, member record, appeals, decide appeal) once governance (20261206000000) is.
   if ((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'app\_mod\_%')
-     <> (case when to_regclass('social.avatars') is null then 5 when to_regclass('social.post_media') is null then 8 else 10 end)) then
+     <> (case when to_regclass('social.avatars') is null then 5 when to_regclass('social.post_media') is null then 8
+              when to_regclass('social.blocks') is null then 10 else 15 end)) then
     bad := bad || 'the set of app_mod_* functions'::text;
   end if;
   if position('social.current_member()' in (select prosrc from pg_proc where oid = 'social.current_moderator()'::regprocedure)) = 0

@@ -63,3 +63,4 @@ APP_URL="http://127.0.0.1:$APP_PORT" node e2e/registration-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/relationships-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/content-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/preview-journey.e2e.cjs
+APP_URL="http://127.0.0.1:$APP_PORT" node e2e/governance-journey.e2e.cjs
