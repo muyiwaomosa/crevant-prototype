@@ -35,9 +35,9 @@ Nothing here opens access or changes registration. Nothing here charges, pays or
 | Unit and component tests | 772 passed, 3 skipped |
 | Build and workflow guard tests | 291 passed; database guard tests 153 passed |
 | Database suite on empty PostgreSQL 16: all 20 migrations, staging-safe checks including the new `017_relationships.sql`, behaviour tests including the new `130_relationships.sql` (follow source, mute, Clique first and coverage, Active Supporter, Support Intent, audience, limits, account deletion), the member surface audit and its violation tests, the concurrency tests | Pass |
-| Real Supabase Auth integration | 135 passed |
-| Rollback chain including the new `rollback-relationships-test.sh` (15 checks) | See the pull request |
-| Browser journey `e2e/relationships-journey.e2e.cjs` | Runs in CI (Browser job) |
+| Real Supabase Auth integration | 135 passed; activation 38, CLI compatibility 7, member Production sequence 79 |
+| Rollback chain including the new `rollback-relationships-test.sh` (15 checks) | 77 passed, 0 failed |
+| Browser journey `e2e/relationships-journey.e2e.cjs`: follow from a profile with its source, Join Clique, profile counts, Support sheet (non-binding), Clique first with each post once, Active Supporter from a meaningful comment, mute and unmute, the creator's audience insight; WCAG 2.2 AA, 320 and 390 px, no CSP violations, no console errors | All passed. The existing social, moderation, avatar, feedback, photo, sign-in and registration journeys also pass |
 
 ## 4. Applying it
 

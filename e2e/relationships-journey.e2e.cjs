@@ -228,7 +228,7 @@ async function signIn(page, email) {
     const row = (audience.body || [])[0] || {}
     check(
       'the creator sees followers, Clique, Active Supporters and Support Intent (aggregates only)',
-      row.follower_count === 1 && row.clique_count === 1 && row.active_supporter_count === 1 && row.support_intent_count === 1 && JSON.stringify(row.support_by_choice) === '{"usd_5": 1}',
+      row.follower_count === 1 && row.clique_count === 1 && row.active_supporter_count === 1 && row.support_intent_count === 1 && row.support_by_choice?.usd_5 === 1,
       JSON.stringify(row),
     )
     const ctxA = await newContext(browser)

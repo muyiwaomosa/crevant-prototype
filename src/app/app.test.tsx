@@ -1789,6 +1789,11 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     fireEvent.click(sheet.getByRole('radio', { name: '$5 a month' }))
     fireEvent.click(record)
     expect(await sheet.findByText(/Recorded: \$5 a month/)).toBeTruthy()
+    // The confirmation stays on screen after the saved choice updates the button.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(sheet.getByText(/Recorded: \$5 a month/)).toBeTruthy()
     expect(fake.supportIntents.get(fake.key('me', 'c1'))).toBe('usd_5')
     fireEvent.click(sheet.getByRole('button', { name: 'Withdraw my support intent' }))
     expect(await sheet.findByText('Your support intent was withdrawn.')).toBeTruthy()
