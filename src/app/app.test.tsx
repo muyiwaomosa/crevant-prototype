@@ -3838,6 +3838,17 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
     expect(screen.getByTestId('split-disclosure').textContent).toMatch(/simulated.*no cash value.*nothing is paid out/i)
   })
 
+  it('My Split keeps "How My Split works" to come back to after setup, with no percentages', async () => {
+    const fake = fakeApi()
+    renderApp('/app/split', fake.api)
+    expect(await screen.findByRole('heading', { name: 'How My Split works' })).toBeTruthy()
+    const intro = screen.getByTestId('my-split-intro')
+    expect(intro.textContent).toMatch(/Connection Points/)
+    expect(intro.textContent).toMatch(/redeemable after a quick review/)
+    expect(intro.textContent).toMatch(/Points are not money and nothing is paid/)
+    expect(intro.textContent).not.toMatch(/\d+\s*%/)
+  })
+
   it('the History face lists contributions newest first, with reversals shown', async () => {
     const fake = fakeApi()
     fake.rewards.points = { recognized: 3, redeemablePending: 0, redeemableApproved: 0, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 0 }
