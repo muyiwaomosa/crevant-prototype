@@ -4,7 +4,7 @@ import { Card, PageHeader, buttonClass } from '../components/ui'
 import { FaceView } from '../components/FaceView'
 import { MySplitIcon } from '../components/MySplitIcon'
 import { Message } from '../public/auth/AuthUi'
-import { messageFor, type MyPoints, type PointsEntry, type ReferralReview, type RewardsOverview } from './api'
+import { AppApiError, messageFor, type MyPoints, type PointsEntry, type ReferralReview, type RewardsOverview } from './api'
 import { Link } from 'react-router-dom'
 import { useFeedbackAccess } from './feedback'
 import { useAppApi } from './AppApiContext'
@@ -231,6 +231,7 @@ export function RewardsReviewPage() {
           </p>
         </Card>
       )}
+      <SimulatedMonthTools onChange={load} />
       <Card className="p-5">
         <h2 className="font-display text-lg font-bold text-ink-900">Qualified referrals waiting for review</h2>
         {queue === undefined && <p className="mt-2 text-sm text-ink-600">Loading…</p>}
@@ -256,6 +257,110 @@ export function RewardsReviewPage() {
         )}
       </Card>
     </>
+  )
+}
+
+/** The first day of last month, as YYYY-MM (the month most often recorded and closed). */
+function lastMonth() {
+  const d = new Date()
+  const m = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1))
+  return m.toISOString().slice(0, 7)
+}
+
+/** Founder: record simulated revenue and close a finished month. Simulated only: nothing is collected or paid. */
+function SimulatedMonthTools({ onChange }: { onChange: () => Promise<void> }) {
+  const api = useAppApi()
+  const [month, setMonth] = useState(lastMonth())
+  const [kind, setKind] = useState<'content_ad' | 'feed_ad'>('content_ad')
+  const [creator, setCreator] = useState('')
+  const [dollars, setDollars] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  const [done, setDone] = useState<string | null>(null)
+  async function record() {
+    setBusy(true)
+    setError(null)
+    setDone(null)
+    try {
+      const cents = Math.round(Number(dollars) * 100)
+      if (!Number.isFinite(cents) || cents <= 0 || !note.trim()) throw new AppApiError('invalid_request')
+      let creatorId: string | null = null
+      if (kind === 'content_ad') {
+        const m = await api.member(creator.replace(/^@/, '').trim())
+        if (!m) throw new AppApiError('not_found')
+        creatorId = m.id
+      }
+      await api.founderRecordSimRevenue(`${month}-01`, kind, creatorId, cents, note)
+      setDone(`Recorded ${simulatedDollars(cents)} of simulated ${kind === 'content_ad' ? 'content' : 'feed'} advertising for ${month}.`)
+      setDollars('')
+      setNote('')
+      await onChange()
+    } catch (e) {
+      setError(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function close() {
+    setBusy(true)
+    setError(null)
+    setDone(null)
+    try {
+      const r = await api.founderCloseMonth(`${month}-01`)
+      setDone(`Closed ${month}: ${simulatedDollars(r.allocatedCents)} of a ${simulatedDollars(r.poolCents)} pool to ${r.members} members (${r.points} points). It reconciles to the cent.`)
+      await onChange()
+    } catch (e) {
+      setError(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const field = 'mt-1 block h-11 w-full rounded-2xl border border-ink-200 bg-white px-3 text-base text-ink-900'
+  return (
+    <Card className="mb-4 space-y-3 p-5">
+      <h2 className="font-display text-lg font-bold text-ink-900">
+        Simulated revenue and month close <SimulatedTag />
+      </h2>
+      <p className="text-[13px] text-ink-600">For the pilot model only, until advertising records revenue from campaigns. Nothing is collected or paid.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm font-semibold text-ink-800">
+          Month
+          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={field} />
+        </label>
+        <label className="block text-sm font-semibold text-ink-800">
+          Kind
+          <select aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value as 'content_ad' | 'feed_ad')} className={field}>
+            <option value="content_ad">Content advertising (shared)</option>
+            <option value="feed_ad">Feed advertising (Splitpost)</option>
+          </select>
+        </label>
+        {kind === 'content_ad' && (
+          <label className="block text-sm font-semibold text-ink-800">
+            Creator username
+            <input value={creator} onChange={(e) => setCreator(e.target.value)} className={field} />
+          </label>
+        )}
+        <label className="block text-sm font-semibold text-ink-800">
+          Net amount ($)
+          <input inputMode="decimal" value={dollars} onChange={(e) => setDollars(e.target.value.replace(/[^0-9.]/g, ''))} className={field} />
+        </label>
+        <label className="block text-sm font-semibold text-ink-800 sm:col-span-2">
+          Note
+          <input value={note} onChange={(e) => setNote(e.target.value)} className={field} />
+        </label>
+      </div>
+      {done && <Message tone="success">{done}</Message>}
+      {error !== null && <Message tone="error">{messageFor(error)}</Message>}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={record} className={buttonClass('primary', 'sm')}>
+          Record simulated revenue
+        </button>
+        <button type="button" disabled={busy} onClick={close} className={buttonClass('secondary', 'sm')}>
+          Close the month (simulated)
+        </button>
+      </div>
+    </Card>
   )
 }
 

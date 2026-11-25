@@ -26,3 +26,5 @@
 020_previews_and_search.sql 20261204000000
 021_rewards.sql 20261205000000
 022_governance.sql 20261206000000
+023_governance_refinements.sql 20261207000000
+024_advertising.sql 20261208000000

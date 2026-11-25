@@ -53,7 +53,8 @@ begin
     bad := bad || 'a hidden comment is not guaranteed to be excluded'::text;
   end if;
   -- The ladder, independent appeals, and nothing that names a reporter.
-  if (select prosrc from pg_proc where oid = 'public.app_mod_enforce(uuid, text, text, uuid, integer, text)'::regprocedure) !~ 'ladder_step_required' then
+  if (select string_agg(prosrc, ' ') from pg_proc where oid in (select p.oid from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'app_mod_enforce')) !~ 'ladder_step_required' then
     bad := bad || 'the enforcement ladder is not enforced'::text;
   end if;
   if (select prosrc from pg_proc where oid = 'public.app_mod_decide_appeal(uuid, boolean, text)'::regprocedure) !~ 'needs_another_moderator' then

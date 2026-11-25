@@ -160,6 +160,26 @@ declare
     'public.app_my_standing()',
     'public.app_unblock(uuid)'
   ];
+  -- Advertising (20261208000000), once applied.
+  advertising text[] := array[
+    'public.app_ad_categories()',
+    'public.app_ad_event(uuid,text)',
+    'public.app_ad_for(text,uuid)',
+    'public.app_clear_ad_preferences()',
+    'public.app_founder_ad_demand()',
+    'public.app_founder_ads()',
+    'public.app_founder_attribute_campaign_revenue(uuid,date,bigint)',
+    'public.app_founder_campaign_report(uuid)',
+    'public.app_founder_record_advertiser_feedback(uuid,integer,text)',
+    'public.app_founder_record_conversions(uuid,date,integer,text)',
+    'public.app_founder_review_advertiser(uuid,boolean,text)',
+    'public.app_founder_save_advertiser(jsonb)',
+    'public.app_founder_save_campaign(jsonb)',
+    'public.app_founder_set_campaign_status(uuid,text)',
+    'public.app_my_ad_exclusions()',
+    'public.app_remove_ad_exclusion(text,text)',
+    'public.app_set_ad_preference(text,text)'
+  ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
   actual text[];
@@ -204,11 +224,18 @@ begin
   if to_regclass('social.blocks') is not null then
     expected := expected || governance;
   end if;
+  if to_regclass('ads.campaigns') is not null then
+    expected := expected || advertising;
+  end if;
+  -- Governance refinements (20261207000000): app_mod_enforce gains p_immediate.
+  if to_regprocedure('ops.other_moderator_available(uuid, uuid)') is not null then
+    expected := array_replace(expected, 'public.app_mod_enforce(uuid,text,text,uuid,integer,text)', 'public.app_mod_enforce(uuid,text,text,uuid,integer,text,boolean)');
+  end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
   from pg_catalog.pg_proc p
   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent', 'sim')
+  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent', 'sim', 'ads')
     and pg_catalog.has_function_privilege('authenticated', p.oid, 'EXECUTE');
   -- Normalise argument lists to the same spelling as the allow-list (no spaces after commas).
   actual := (select coalesce(array_agg(replace(a, ', ', ',') order by 1), '{}') from unnest(actual) a);
@@ -225,7 +252,7 @@ begin
     into anon_fns
   from pg_catalog.pg_proc p
   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent', 'sim')
+  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent', 'sim', 'ads')
     and pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE');
   anon_fns := (select coalesce(array_agg(a), '{}') from unnest(anon_fns) a where a <> all (anon_allowed));
   if cardinality(anon_fns) > 0 then
@@ -419,7 +446,7 @@ declare
   r text;
   off text[];
 begin
-  foreach s in array array['ops', 'social', 'waitlist_api'] loop
+  foreach s in array array['ops', 'social', 'waitlist_api', 'ads'] loop
     if exists (select 1 from pg_catalog.pg_namespace where nspname = s) then
       foreach r in array array['anon', 'authenticated'] loop
         if pg_catalog.has_schema_privilege(r, s, 'USAGE') then
@@ -430,11 +457,11 @@ begin
   end loop;
   select coalesce(array_agg(c.oid::regclass::text), '{}') into off
   from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-  where n.nspname in ('public', 'ops', 'social') and c.relkind in ('r', 'p') and not c.relrowsecurity;
+  where n.nspname in ('public', 'ops', 'social', 'ads') and c.relkind in ('r', 'p') and not c.relrowsecurity;
   if cardinality(off) > 0 then
     raise exception 'FAIL: row level security is off on: %', off;
   end if;
-  raise notice 'PASS: ops, social and waitlist_api are closed to members and visitors; row level security is on everywhere';
+  raise notice 'PASS: ops, social, waitlist_api and ads are closed to members and visitors; row level security is on everywhere';
 end;
 $$;
 

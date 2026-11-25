@@ -108,6 +108,11 @@ declare
   rewards text[] := array['app_founder_close_month', 'app_founder_record_sim_revenue', 'app_founder_referral_queue', 'app_founder_review_referral', 'app_founder_rewards_overview', 'app_founder_set_rewards', 'app_my_points', 'app_my_points_history', 'app_my_simulated_earnings'];
   -- Governance (20261206000000), once applied: blocking, enforcement, notices and appeals.
   governance text[] := array['app_appeal', 'app_block', 'app_mark_notices_read', 'app_mod_appeals', 'app_mod_decide_appeal', 'app_mod_enforce', 'app_mod_lift', 'app_mod_member_record', 'app_my_blocks', 'app_my_notices', 'app_my_standing', 'app_unblock'];
+  -- Advertising (20261208000000), once applied: preferences, serving, measurement, founder management.
+  advertising text[] := array['app_ad_categories', 'app_ad_event', 'app_ad_for', 'app_clear_ad_preferences', 'app_founder_ad_demand', 'app_founder_ads',
+                              'app_founder_attribute_campaign_revenue', 'app_founder_campaign_report', 'app_founder_record_advertiser_feedback',
+                              'app_founder_record_conversions', 'app_founder_review_advertiser', 'app_founder_save_advertiser', 'app_founder_save_campaign',
+                              'app_founder_set_campaign_status', 'app_my_ad_exclusions', 'app_remove_ad_exclusion', 'app_set_ad_preference'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -145,6 +150,9 @@ begin
   end if;
   if to_regclass('social.blocks') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || governance) x);
+  end if;
+  if to_regclass('ads.campaigns') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || advertising) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -325,9 +333,9 @@ begin
                -- And foundation v2 (20261130000000): adult confirmations, controlled
                -- registration (settings, links, records, the shared check) and the
                -- launch settings it reads. No waitlist, invitation or admin data.
-               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators)\M', '', 'g')
+               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators|other_moderator_available)\M', '', 'g')
                   -- Relationships (20261201000000): the member's own non-binding Support Intent.
-                  ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings|reverse)\M)') then
+                  ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings|reverse|restore_hidden)\M)') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (

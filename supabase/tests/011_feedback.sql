@@ -51,7 +51,11 @@ begin
                               'app_founder_search_metrics',
                               -- 20261205000000 adds the founder's rewards functions; checked in 021.
                               'app_founder_close_month', 'app_founder_record_sim_revenue', 'app_founder_referral_queue',
-                              'app_founder_review_referral', 'app_founder_rewards_overview', 'app_founder_set_rewards'))
+                              'app_founder_review_referral', 'app_founder_rewards_overview', 'app_founder_set_rewards',
+                              -- 20261208000000 adds the founder's advertising functions; checked in 024.
+                              'app_founder_ad_demand', 'app_founder_ads', 'app_founder_attribute_campaign_revenue', 'app_founder_campaign_report',
+                              'app_founder_record_advertiser_feedback', 'app_founder_record_conversions', 'app_founder_review_advertiser',
+                              'app_founder_save_advertiser', 'app_founder_save_campaign', 'app_founder_set_campaign_status'))
      is distinct from array['app_founder_feedback', 'app_founder_feedback_add_note', 'app_founder_feedback_list', 'app_founder_feedback_set_status'] then
     bad := bad || 'the set of app_founder_* functions'::text;
   end if;

@@ -26,10 +26,18 @@ import {
   type MemberNotice,
   type MemberRecord,
   type ModAppeal,
+  type Ad,
+  type AdCategory,
+  type AdExclusion,
+  type AdsAdmin,
+  type Advertiser,
+  type Campaign,
+  type CampaignReport,
 } from './api'
 import { MemberArea } from './MemberArea'
 import { ModerationAppealsPage, ModerationQueuePage, ModerationReportPage } from './moderation'
 import { NoticesPage } from './governance'
+import { AdsManagePage } from './ads'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage, featureFor } from './feedback'
 import { fitWithin } from './photoPrep'
 
@@ -104,6 +112,8 @@ function fakeApi(
     earnings: null as null | Array<{ month: string; creatorCents: number }>,
     queue: [] as Array<{ awardId: number; referrer: string | null; referred: string | null; firstFollow: string | null; createdAt: string }>,
     reviewed: [] as Array<{ id: number; approve: boolean }>,
+    revenue: [] as Array<{ month: string; kind: string; creatorId: string | null; netCents: number; note: string }>,
+    closed: [] as string[],
     overview: null as null | { recognized: number; redeemablePending: number; redeemableApproved: number; settled: number; revenueCents: number; creatorCents: number; poolCents: number; splitpostCents: number; openPoolCents: number; paused: boolean; ruleVersion: string },
   }
   const likes = new Set<string>()
@@ -161,13 +171,31 @@ function fakeApi(
     details: string | null; snapshot: Record<string, string | null>; status: 'open' | 'hidden' | 'dismissed' | 'restored'; at: number
   }
   const reports: FakeReport[] = []
+  const ads = {
+    next: null as Ad | null,
+    calls: [] as Array<{ surface: string; postId?: string }>,
+    events: [] as Array<{ id: string; kind: string }>,
+    categories: [
+      { slug: 'software_apps', label: 'Software & apps', chosen: false, excluded: false },
+      { slug: 'travel', label: 'Travel & experiences', chosen: false, excluded: false },
+    ] as AdCategory[],
+    prefCalls: [] as Array<{ category: string; state: string }>,
+    cleared: 0,
+    exclusions: [] as AdExclusion[],
+    admin: null as AdsAdmin | null,
+    savedAdvertisers: [] as Array<Partial<Advertiser>>,
+    savedCampaigns: [] as Array<Partial<Campaign>>,
+    reviews: [] as Array<{ id: string; approve: boolean }>,
+    statuses: [] as Array<{ id: string; status: string }>,
+    report: null as CampaignReport | null,
+  }
   const governance = {
     blocks: [] as Array<{ id: string; username: string; displayName: string; blockedAt: string }>,
     blockCalls: [] as Array<{ id: string; block: boolean }>,
     standing: null as null | { standing: 'restricted' | 'suspended'; endsAt: string | null },
     notices: [] as MemberNotice[],
     appealed: [] as Array<{ noticeId: number; body: string }>,
-    enforced: [] as Array<{ memberId: string; level: string; reason: string; reportId: string | null; days: number | null }>,
+    enforced: [] as Array<{ memberId: string; level: string; reason: string; reportId: string | null; days: number | null; immediate?: boolean; note?: string }>,
     lifted: [] as number[],
     record: null as MemberRecord | null,
     appeals: [] as ModAppeal[],
@@ -771,6 +799,62 @@ function fakeApi(
     async noteSearchSelection(surface, topic) {
       searchNotes.push({ surface, selected: true, topic: topic ?? null })
     },
+    async adFor(surface, postId) {
+      ads.calls.push({ surface, postId })
+      const a = ads.next
+      return a && a.placement === surface ? a : null
+    },
+    async adEvent(id, kind) {
+      ads.events.push({ id, kind })
+    },
+    async adCategories() {
+      return ads.categories
+    },
+    async setAdPreference(category, state) {
+      ads.prefCalls.push({ category, state })
+      ads.categories = ads.categories.map((c) => (c.slug === category ? { ...c, chosen: state === 'chosen', excluded: state === 'excluded' } : c))
+    },
+    async clearAdPreferences() {
+      ads.cleared += 1
+      ads.categories = ads.categories.map((c) => ({ ...c, chosen: false, excluded: false }))
+      ads.exclusions = []
+    },
+    async myAdExclusions() {
+      return ads.exclusions
+    },
+    async removeAdExclusion(kind, target) {
+      ads.exclusions = ads.exclusions.filter((x) => !(x.kind === kind && x.target === target))
+    },
+    async founderAds() {
+      if (!isFounder.value) throw new AppApiError('not_founder')
+      return ads.admin
+    },
+    async founderSaveAdvertiser(a) {
+      ads.savedAdvertisers.push(a)
+      return 'adv-new'
+    },
+    async founderReviewAdvertiser(id, approve) {
+      ads.reviews.push({ id, approve })
+      if (ads.admin) ads.admin = { ...ads.admin, advertisers: ads.admin.advertisers.map((x) => (x.id === id ? { ...x, status: approve ? 'approved' : 'declined' } : x)) }
+    },
+    async founderSaveCampaign(c) {
+      ads.savedCampaigns.push(c)
+      return 'camp-new'
+    },
+    async founderSetCampaignStatus(id, status) {
+      ads.statuses.push({ id, status })
+      if (ads.admin) ads.admin = { ...ads.admin, campaigns: ads.admin.campaigns.map((x) => (x.id === id ? { ...x, status } : x)) }
+    },
+    async founderCampaignReport() {
+      return ads.report!
+    },
+    async founderRecordConversions() {},
+    async founderAttributeCampaignRevenue() {
+      return { contentCents: 10000, feedCents: 0 }
+    },
+    async founderAdDemand() {
+      return [{ category: 'software_apps', label: 'Software & apps', members: null }]
+    },
     async block(id) {
       governance.blockCalls.push({ id, block: true })
       const u = users.get(id)
@@ -796,9 +880,9 @@ function fakeApi(
       governance.appealed.push({ noticeId, body })
       governance.notices = governance.notices.map((n) => (n.id === noticeId ? { ...n, appealStatus: 'open', canAppeal: false } : n))
     },
-    async modEnforce(memberId, level, reason, reportId, days) {
+    async modEnforce(memberId, level, reason, reportId, days, note, immediate) {
       requireModerator()
-      governance.enforced.push({ memberId, level, reason, reportId: reportId ?? null, days: days ?? null })
+      governance.enforced.push({ memberId, level, reason, reportId: reportId ?? null, days: days ?? null, ...(immediate ? { immediate, note } : {}) })
     },
     async modLift(id) {
       requireModerator()
@@ -835,6 +919,13 @@ function fakeApi(
     },
     async founderRewardsOverview() {
       return rewards.overview
+    },
+    async founderRecordSimRevenue(month, kind, creatorId, netCents, note) {
+      rewards.revenue.push({ month, kind, creatorId, netCents, note })
+    },
+    async founderCloseMonth(month) {
+      rewards.closed.push(month)
+      return { poolCents: 2000, points: 100, members: 1, allocatedCents: 2000 }
     },
     async publicPreviewsAllowed() {
       return previews.allowed
@@ -965,7 +1056,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, searchNotes, previews, rewards, governance, commentStore: comments, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
+  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, searchNotes, previews, rewards, governance, ads, commentStore: comments, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -999,6 +1090,7 @@ function renderApp(path: string, api: AppApi) {
             <Route path="moderation/appeals" element={<ModerationAppealsPage />} />
             <Route path="moderation/:id" element={<ModerationReportPage />} />
             <Route path="notices" element={<NoticesPage />} />
+            <Route path="ads" element={<AdsManagePage />} />
             <Route path="feedback" element={<FeedbackPage />} />
             <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
             <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />
@@ -3107,13 +3199,28 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
     expect(money.getByText(/\$40\.00/)).toBeTruthy()
     expect(money.getByText(/Nothing is paid during the pilot/)).toBeTruthy()
   })
+
+  it('the founder records simulated revenue (content ads need the creator) and closes a month', async () => {
+    const f = fakeApi('me', { founder: true })
+    f.rewards.overview = { recognized: 0, redeemablePending: 0, redeemableApproved: 100, settled: 0, revenueCents: 0, creatorCents: 0, poolCents: 0, splitpostCents: 0, openPoolCents: 0, paused: false, ruleVersion: 'd6-v1' }
+    renderApp('/app/split/review', f.api)
+    fireEvent.change(await screen.findByLabelText('Creator username'), { target: { value: '@creator_1' } })
+    fireEvent.change(screen.getByLabelText('Net amount ($)'), { target: { value: '100' } })
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Test campaign' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Record simulated revenue' }))
+    await waitFor(() => expect(f.rewards.revenue[0]).toMatchObject({ kind: 'content_ad', creatorId: 'c1', netCents: 10000, note: 'Test campaign' }))
+    expect(f.rewards.revenue[0].month).toMatch(/^\d{4}-\d{2}-01$/)
+    fireEvent.click(screen.getByRole('button', { name: 'Close the month (simulated)' }))
+    expect(await screen.findByText(/It reconciles to the cent\./)).toBeTruthy()
+    expect(f.rewards.closed).toHaveLength(1)
+  })
 })
 
 // ---------------------------------------------------------------------------
 describe('governance (20261206000000): blocking, notices, appeals and the enforcement ladder', () => {
   const notice = (over: Partial<MemberNotice>): MemberNotice => ({
     id: 1, kind: 'content_hidden', targetType: 'comment', targetId: 'x', reason: 'harassment', excerpt: 'You are all terrible',
-    endsAt: null, createdAt: new Date().toISOString(), read: false, appealStatus: null, canAppeal: true, ...over,
+    endsAt: null, createdAt: new Date().toISOString(), read: false, appealStatus: null, canAppeal: true, sameModerator: false, ...over,
   })
 
   it('blocks from a profile after explaining what a block does, then shows the block with Unblock', async () => {
@@ -3209,13 +3316,157 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
     f.governance.appeals = [{
       id: 'a1', memberId: 'c1', memberUsername: 'creator_1', kind: 'content_hidden', targetType: 'post', targetId: 'p', reason: 'spam',
       excerpt: 'Buy now', body: 'This was a real recommendation.', status: 'open', createdAt: new Date().toISOString(), decidedAt: null, decisionNote: null, decidedOriginal: true,
+      anotherModeratorAvailable: true, sameModerator: false,
     }]
     renderApp('/app/moderation/appeals', f.api)
     const list = await screen.findByRole('list', { name: 'Open appeals' })
     expect(list.textContent).toMatch(/Hidden content.*Spam or scam.*@creator_1.*Buy now.*This was a real recommendation\./)
-    expect(list.textContent).toMatch(/You took the original action/)
+    expect(list.textContent).toMatch(/Another moderator should decide this one/)
+    expect((within(list).getByRole('button', { name: 'Reverse' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('the sole-moderator exception: allowed only without another moderator, needs a reason, and is disclosed', async () => {
+    const f = fakeApi('me', { moderator: true })
+    f.governance.appeals = [{
+      id: 'a1', memberId: 'c1', memberUsername: 'creator_1', kind: 'content_hidden', targetType: 'post', targetId: 'p', reason: 'spam',
+      excerpt: 'Buy now', body: 'This was a real recommendation.', status: 'open', createdAt: new Date().toISOString(), decidedAt: null, decisionNote: null, decidedOriginal: true,
+      anotherModeratorAvailable: false, sameModerator: false,
+    }]
+    renderApp('/app/moderation/appeals', f.api)
+    const list = await screen.findByRole('list', { name: 'Open appeals' })
+    expect(within(list).getByTestId('sole-moderator').textContent).toMatch(/no other moderator is available.*conflict of interest.*the member is told/)
+    fireEvent.click(within(list).getByRole('button', { name: 'Reverse' }))
+    expect(await screen.findByText('Write a note first.')).toBeTruthy()
+    expect(f.governance.decided).toEqual([])
+    fireEvent.change(within(list).getByLabelText('Decision note (optional, never shown to the member)'), { target: { value: 'On review it was fine.' } })
     fireEvent.click(within(list).getByRole('button', { name: 'Reverse' }))
     await waitFor(() => expect(f.governance.decided).toEqual([{ id: 'a1', reverse: true }]))
-    expect(await screen.findByText('No open appeals')).toBeTruthy()
+  })
+
+  it('a notice says when the same moderator reviewed your appeal', async () => {
+    const f = fakeApi()
+    f.governance.notices = [notice({ id: 9, kind: 'appeal_reversed', canAppeal: false, read: true, sameModerator: true })]
+    renderApp('/app/notices', f.api)
+    expect((await screen.findByTestId('same-moderator')).textContent).toMatch(/moderator who made the original decision reviewed your appeal/)
+  })
+
+  it('a serious violation can be acted on at once, with a required reason', async () => {
+    const f = fakeApi('me', { moderator: true })
+    const p1 = f.seedPost('c1', 'Threatening post')
+    const r = f.seedReport({ reporter: 'c3', targetType: 'post', targetId: p1, owner: 'c1', reason: 'sexual', details: null, snapshot: { body: 'x', author_username: 'creator_1', author_display_name: 'Creator 1' } })
+    f.governance.record = { username: 'creator_1', displayName: 'Creator 1', standing: null, hiddenContent: 0, enforcements: [] }
+    renderApp(`/app/moderation/${r}`, f.api)
+    await screen.findByTestId('member-record')
+    fireEvent.click(screen.getByRole('button', { name: 'Suspension' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Serious violation: act now/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Give a suspension' }))
+    expect(await screen.findByText('Write a note first.')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/Note for the record \(optional, never shown to the member\)/), { target: { value: 'Explicit images sent to a minor.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Give a suspension' }))
+    await waitFor(() => expect(f.governance.enforced[0]).toMatchObject({ level: 'suspension', immediate: true, note: 'Explicit images sent to a minor.' }))
+  })
+})
+
+// ---------------------------------------------------------------------------
+describe('advertising (20261208000000): labelled, explainable, controllable', () => {
+  const ad = (over: Partial<Ad> = {}): Ad => ({
+    impressionId: 'imp1', advertiser: 'Budgetly', headline: 'Plan your month in minutes', body: 'See where your money goes.', ctaLabel: 'Try it free',
+    landingUrl: 'https://budgetly.example/start', match: 'preference', matched: 'Software & apps', placement: 'content', ...over,
+  })
+
+  it('an ad under someone else\'s post is labelled Sponsored, explains why, opens safely, and can be hidden', async () => {
+    const f = fakeApi()
+    const post = f.seedPost('c1', 'A post about budgets')
+    f.ads.next = ad()
+    renderApp(`/app/post/${post}`, f.api)
+    const card = await screen.findByTestId('ad')
+    expect(card.textContent).toMatch(/Sponsored · Budgetly/)
+    expect(f.ads.calls).toEqual([{ surface: 'content', postId: post }])
+    fireEvent.click(within(card).getByRole('button', { name: 'Why this ad' }))
+    expect(within(card).getByTestId('why-this-ad').textContent).toMatch(/You chose "Software & apps".*never use your content interests, follows, searches/)
+    const link = within(card).getByRole('link', { name: /Try it free/ })
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer sponsored')
+    expect(link.getAttribute('target')).toBe('_blank')
+    fireEvent.click(link)
+    await waitFor(() => expect(f.ads.events.map((e) => e.kind)).toEqual(['view', 'click']))
+    fireEvent.click(within(card).getByRole('button', { name: 'Hide this ad' }))
+    await waitFor(() => expect(screen.queryByTestId('ad')).toBeNull())
+    expect(f.ads.events.at(-1)).toEqual({ id: 'imp1', kind: 'hidden' })
+  })
+
+  it('a contextual or non-personalized ad says so; no ad when nothing matches; never on your own post', async () => {
+    const f = fakeApi()
+    const post = f.seedPost('c1', 'Money talk')
+    f.ads.next = ad({ match: 'context', matched: 'Money & business' })
+    renderApp(`/app/post/${post}`, f.api)
+    fireEvent.click(within(await screen.findByTestId('ad')).getByRole('button', { name: 'Why this ad' }))
+    expect(screen.getByTestId('why-this-ad').textContent).toMatch(/Shown with Money & business posts\. Not based on anything about you\./)
+    cleanup()
+    const f2 = fakeApi()
+    const mine = await f2.api.createPost('My own post')
+    f2.ads.next = ad()
+    renderApp(`/app/post/${mine}`, f2.api)
+    await screen.findByText('My own post')
+    expect(screen.queryByTestId('ad')).toBeNull()
+    expect(f2.ads.calls).toEqual([])
+  })
+
+  it('Home shows one feed ad between sections without removing posts', async () => {
+    const f = fakeApi()
+    f.seedPost('c1', 'First post')
+    f.seedPost('c1', 'Second post')
+    f.follows.add(f.key('me', 'c1'))
+    f.ads.next = ad({ placement: 'feed', match: 'general', matched: null })
+    renderApp('/app', f.api)
+    await screen.findByText('First post')
+    expect(await screen.findByTestId('ad')).toBeTruthy()
+    expect(screen.getByText('Second post')).toBeTruthy()
+    expect(screen.getAllByTestId('ad')).toHaveLength(1)
+  })
+
+  it('ad preferences are optional, editable and removable, and explain the separation from content interests', async () => {
+    const f = fakeApi()
+    f.ads.exclusions = [{ kind: 'campaign', target: 'c9', label: 'Budgetly: Plan your month', createdAt: new Date().toISOString() }]
+    renderApp('/app/profile', f.api)
+    const box = await screen.findByTestId('ad-preferences')
+    expect(box.textContent).toMatch(/Optional.*content interests, follows\s+and searches are never used for ads.*full access/)
+    fireEvent.change(within(box).getByLabelText('Software & apps'), { target: { value: 'chosen' } })
+    await waitFor(() => expect(f.ads.prefCalls).toEqual([{ category: 'software_apps', state: 'chosen' }]))
+    fireEvent.click(within(box).getByRole('button', { name: 'Show again' }))
+    await waitFor(() => expect(within(box).queryByRole('button', { name: 'Show again' })).toBeNull())
+    fireEvent.click(within(box).getByRole('button', { name: 'Remove all ad preferences' }))
+    await waitFor(() => expect(f.ads.cleared).toBe(1))
+  })
+
+  it('the founder onboards and approves an advertiser, activates a campaign and reads an aggregate report', async () => {
+    const f = fakeApi('me', { founder: true })
+    const base = { website: 'https://b.example', offering: 'An app', problem_solved: 'p', desired_outcome: 'o', customer_needs: 'n', objective: 'traffic' as const,
+      conversion_action: 'Sign-up', eligibility_notes: null, categories: ['software_apps'], review_note: null }
+    f.ads.admin = {
+      advertisers: [{ id: 'a1', name: 'Budgetly', status: 'pending', ...base }],
+      campaigns: [{ id: 'k1', advertiser_id: 'a1', advertiser: 'Budgetly', name: 'Spring', status: 'draft', placement: 'both', categories: ['software_apps'],
+        context_topics: [], allow_general: false, starts_on: '2026-11-01', ends_on: '2026-12-31', daily_cap: 3, price_cents: 0, headline: 'H', body: 'B',
+        cta_label: 'Go', landing_url: 'https://b.example' }],
+      categories: [{ slug: 'software_apps', label: 'Software & apps' }],
+      topics: [{ slug: 'money', label: 'Money & business' }],
+    }
+    f.ads.report = { eligibleAudience: null, served: 3, impressions: 2, clicks: 1, ctr: 0.5, reach: null, relevant: 1, notRelevant: 0, hidden: 0, reported: 0,
+      byMatch: { preference: { impressions: 2, clicks: 1 }, context: { impressions: 0, clicks: 0 }, general: { impressions: 0, clicks: 0 } },
+      contentImpressions: 1, feedImpressions: 1, verifiedConversions: 0, advertiserSatisfaction: null, simulatedRevenueCents: 0 }
+    renderApp('/app/ads', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve Budgetly' }))
+    await waitFor(() => expect(f.ads.reviews).toEqual([{ id: 'a1', approve: true }]))
+    fireEvent.click(screen.getByRole('button', { name: 'Activate Spring' }))
+    await waitFor(() => expect(f.ads.statuses).toEqual([{ id: 'k1', status: 'active' }]))
+    fireEvent.click(screen.getByRole('button', { name: 'Report for Spring' }))
+    const rep = await screen.findByTestId('campaign-report')
+    expect(rep.textContent).toMatch(/Actual observations, aggregate only/)
+    expect(rep.textContent).toMatch(/Eligible audience \(chose a matching category\)fewer than 10/)
+    expect(rep.textContent).toMatch(/Click-through rate50\.0%/)
+    fireEvent.change(screen.getByLabelText('Advertiser name'), { target: { value: 'Shop Co' } })
+    fireEvent.change(screen.getByLabelText('What they sell'), { target: { value: 'Kitchen tools' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save advertiser' }))
+    await waitFor(() => expect(f.ads.savedAdvertisers[0]).toMatchObject({ name: 'Shop Co', offering: 'Kitchen tools', objective: 'traffic' }))
+    expect(screen.getByTestId('ad-demand').textContent).toMatch(/Software & appsfewer than 10/)
   })
 })

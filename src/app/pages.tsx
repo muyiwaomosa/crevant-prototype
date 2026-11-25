@@ -16,6 +16,8 @@ import { ProfilePictureField } from './avatars'
 import { AudienceInsight, SupportButton } from './relationships'
 import { JoinedForPrompt, PublicPreviewsSetting, categorize } from './content'
 import { BlockButton, BlockedMembers, BlockedProfilePanel, GovernanceBanner } from './governance'
+import { AdPreferences, AdSlot } from './ads'
+import { useFeedbackAccess } from './feedback'
 
 /** Loads data for a page, with loading and error states and a reload function. */
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
@@ -245,6 +247,8 @@ function HomeFeed({
           )}
         </section>
       )}
+      {/* A general feed ad between the sections: never removes or reorders a post. */}
+      {withComposer && feed.data && rest.length > 0 && <AdSlot surface="feed" />}
       {feed.data && rest.length > 0 && (
         <PostList
           posts={feed.data}
@@ -630,6 +634,7 @@ export function PostPage() {
     <>
       <h1 className="sr-only">Post by {p.author.displayName}</h1>
       <PostItem post={p} linkToPost={false} onDeleted={() => navigate('/app', { replace: true })} />
+      {!p.isMine && <AdSlot surface="content" postId={p.id} />}
       <section aria-labelledby="comments-title" className="mt-6">
         <h2 id="comments-title" className="mb-3 font-display text-lg font-bold text-ink-900">
           Comments
@@ -762,6 +767,7 @@ export function ProfilePage() {
   const { profile, refresh } = useMyProfile()
   const me = useLoad<Me>(() => api.me(), [api, profile.username, profile.displayName])
   const { moderator } = useModeration()
+  const { founder } = useFeedbackAccess()
   return (
     <>
       <PageHeader title="Your profile" subtitle="How people see you on Splitpost." />
@@ -798,6 +804,11 @@ export function ProfilePage() {
                 Moderation
               </Link>
             )}
+            {founder && (
+              <Link to="/app/ads" className={buttonClass('secondary', 'sm')}>
+                Advertising
+              </Link>
+            )}
           </div>
         </Card>
       )}
@@ -814,6 +825,7 @@ export function ProfilePage() {
         <DetailsEditor />
       </Card>
       <PublicPreviewsSetting />
+      <AdPreferences />
       <BlockedMembers />
     </>
   )
