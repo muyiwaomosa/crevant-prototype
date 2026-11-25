@@ -82,8 +82,11 @@ const signIn = (email, password) => call('/auth/v1/token?grant_type=password', {
 {
   const now = (await call('/auth/v1/settings')).json
   check('Auth settings are identical before and after the migration', JSON.stringify(now) === JSON.stringify(SETTINGS_BEFORE))
-  check('public sign-up is still disabled, email login on, confirmation required',
-    now.disable_signup === true && now.external?.email === true && now.mailer_autoconfirm === false)
+  // Sign-up is on at the Auth level since 20261130000000, gated by the account
+  // creation hook (section 3 proves a sign-up without a valid link is refused).
+  check('email login on, confirmation required, sign-up gated by the account creation hook',
+    now.disable_signup === false && now.external?.email === true && now.mailer_autoconfirm === false
+      && sql("select has_function_privilege('supabase_auth_admin', 'public.hook_before_user_created(jsonb)', 'EXECUTE')") === 't')
 }
 
 // 2. Backfill and the pre-migration invitee.

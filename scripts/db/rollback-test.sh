@@ -108,9 +108,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+FOUNDATION=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261130000000')")
+if [ "$FOUNDATION" = t ]; then
+  # The newest migration (foundation v2) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-member-launch-gate.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the member launch gate rollback refuses while foundation v2 is recorded" \
+    || bad "the member launch gate rollback did not refuse while foundation v2 is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-foundation-v2-test.sh; then
+    ok "foundation v2: its rollback refuses while member data or a later migration exists, and otherwise removes exactly its own objects and restores the access check"
+  else
+    bad "the foundation v2 rollback tests failed"
+  fi
+fi
 GATE=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261129000000')")
 if [ "$GATE" = t ]; then
-  # The newest migration (the member launch gate) goes first.
+  # Next newest: the member launch gate.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-photo-audience.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the photo audience rollback refuses while the member launch gate is recorded" \
@@ -389,9 +402,19 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
     # The gate is back, closed as the migration leaves it; reopened (recorded) for the local tests, its own rollback check passes.
     DB_URL="$DB_URL" scripts/db/local-open-launch-gate.sh >/dev/null || bad "could not reopen the launch gate"
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-member-launch-gate.sql 2>&1); code=$?
-    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-      && ok "after reapplying, the member launch gate rollback check passes again" \
-      || bad "member launch gate rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    if [ "$FOUNDATION" = t ]; then
+      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+        && ok "after reapplying, the member launch gate rollback refuses while foundation v2 is recorded" \
+        || bad "the member launch gate rollback did not refuse after reapply while foundation v2 is recorded (exit $code)"
+      out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-foundation-v2.sql 2>&1); code=$?
+      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+        && ok "after reapplying, the foundation v2 rollback check passes again" \
+        || bad "foundation v2 rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    else
+      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+        && ok "after reapplying, the member launch gate rollback check passes again" \
+        || bad "member launch gate rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+    fi
   fi
   if [ "$AUDIENCE" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-photo-audience.sql 2>&1); code=$?

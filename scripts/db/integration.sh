@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Integration test against a REAL local Supabase (Docker), never a hosted project.
 #
-#   1. Start local Supabase from supabase/config.toml (login settings mirror
-#      staging: public sign-up off, email login on, confirmation required).
+#   1. Start local Supabase from supabase/config.toml (sign-up on but gated by
+#      the account creation hook of 20261130000000; email login on,
+#      confirmation required).
 #   2. Reset the local database to Phase 0 only (before the PR 2 migration).
 #   3. Create identities that exist before the migration through the real
 #      Auth admin API: one confirmed, one invited and unconfirmed.
@@ -52,7 +53,13 @@ echo "Creating identities that exist before the PR 2 migration"
 admin() { curl -fsS -X POST "$API_URL/auth/v1/$1" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" -H "Content-Type: application/json" -d "$2"; }
 export PRE_CONFIRMED_ID="$(admin admin/users "{\"email\":\"pre-confirmed-$RUN_ID@example.test\",\"password\":\"Pre-Confirmed-Pass-1\",\"email_confirm\":true}" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).id))')"
 export PRE_INVITED_EMAIL="pre-invited-$RUN_ID@example.test"
+# config.toml names an account creation hook (20261130000000) that Auth calls
+# for invites. At Phase 0 that function does not exist yet, so a TEST-ONLY
+# stand-in that allows everything is installed for this one invite and
+# removed before the migrations run (the real migration creates the real hook).
+psql "$DB_URL" -v ON_ERROR_STOP=1 -q -c "create function public.hook_before_user_created(event jsonb) returns jsonb language sql as \$\$ select '{}'::jsonb \$\$; grant execute on function public.hook_before_user_created(jsonb) to supabase_auth_admin;"
 export PRE_INVITED_ID="$(admin invite "{\"email\":\"$PRE_INVITED_EMAIL\"}" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).id))')"
+psql "$DB_URL" -v ON_ERROR_STOP=1 -q -c "drop function public.hook_before_user_created(jsonb)"
 psql "$DB_URL" -v ON_ERROR_STOP=1 -qAt -c "select 'profiles table before migration: ' || (to_regclass('public.profiles') is not null)::text"
 
 echo "Applying the remaining migrations to the local database"

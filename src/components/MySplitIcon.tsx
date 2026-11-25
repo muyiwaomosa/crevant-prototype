@@ -4,7 +4,7 @@
  * stroke as the lucide icons beside it (SP-DESIGN-002, refinement 1). Takes the
  * same props the navigation passes to lucide icons. Not for use below 20 px.
  */
-export function SplitMark({ className, strokeWidth = 2 }: { className?: string; strokeWidth?: number }) {
+export function MySplitIcon({ className, strokeWidth = 2 }: { className?: string; strokeWidth?: number }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true" focusable="false">
       <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth={strokeWidth} />

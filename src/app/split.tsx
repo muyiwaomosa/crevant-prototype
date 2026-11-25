@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Check, Copy, Share2 } from 'lucide-react'
 import { Card, PageHeader, buttonClass } from '../components/ui'
 import { FaceView } from '../components/FaceView'
-import { SplitMark } from '../components/SplitMark'
+import { MySplitIcon } from '../components/MySplitIcon'
 import { Message } from '../public/auth/AuthUi'
 import { messageFor } from './api'
 import { useAppApi } from './AppApiContext'
@@ -35,7 +35,7 @@ function Overview() {
       <Card className="overflow-hidden p-0">
         <div className="bg-brand-600 p-5 text-white">
           <div className="flex items-center gap-3">
-            <SplitMark className="h-8 w-8" strokeWidth={2} />
+            <MySplitIcon className="h-8 w-8" strokeWidth={2} />
             <h2 className="font-display text-[22px] font-extrabold">Your contribution, made visible</h2>
           </div>
           <p className="mt-3 text-[15px] leading-relaxed text-[#d3def3]">

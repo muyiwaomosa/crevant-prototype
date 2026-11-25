@@ -2,7 +2,7 @@ import clsx from 'clsx'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { CheckCircle2, Compass, Home, Plus, User } from 'lucide-react'
-import { SplitMark } from '../components/SplitMark'
+import { MySplitIcon } from '../components/MySplitIcon'
 import { Wordmark } from '../components/Wordmark'
 import { buttonClass } from '../components/ui'
 import { useAuth } from '../auth/AuthProvider'
@@ -359,7 +359,7 @@ const NAV = [
   { to: '/app', label: 'Home', icon: Home, end: true },
   { to: '/app/discover', label: 'Discover', icon: Compass },
   { to: '/app/new', label: 'Create', icon: Plus, primary: true },
-  { to: '/app/split', label: 'My Split', icon: SplitMark },
+  { to: '/app/split', label: 'My Split', icon: MySplitIcon },
   { to: '/app/profile', label: 'Profile', icon: User },
 ]
 
