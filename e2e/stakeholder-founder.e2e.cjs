@@ -238,6 +238,7 @@ J.run(async (browser) => {
   const adv = fp.getByRole('list', { name: 'Advertisers' }).getByRole('listitem').filter({ hasText: business })
   await adv.waitFor()
   check('the request shows who asked, from their own account', flat(await adv.innerText()).includes(`Requested by @${user('a')} from their account`))
+  await adv.getByRole('checkbox', { name: `${business}` }).check()
   await adv.getByRole('button', { name: `Approve ${business}` }).click()
   await adv.getByText('approved').waitFor()
   await fp.getByLabel('Advertiser (approved)').selectOption({ label: business })

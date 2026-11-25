@@ -31,7 +31,10 @@ begin
   -- The approved point table (D6): only qualified referrals are redeemable; ads earn nothing.
   if (select string_agg(action || '=' || points || case when redeemable then 'R' else '' end, ',' order by action)
       from sim.point_rules where version = 'd6-v1')
-     <> 'ad_view=0,clique=0,external_share=5,follow=0,like=0,meaningful_comment=2,qualified_referral=100R,repost=5,save=2' then
+     <> 'ad_view=0,clique=0,external_share=5,follow=0,like=0,meaningful_comment=2,'
+        || (case when exists (select 1 from sim.point_rules where action = 'own_audience_referral')
+                 then 'own_audience_referral=20,' else '' end)
+        || 'qualified_referral=100R,repost=5,save=2' then
     bad := bad || 'the d6-v1 point table changed'::text;
   end if;
   -- The split is 40/20/40 for content ads and 100% Splitpost for feed ads.

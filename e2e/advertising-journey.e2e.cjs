@@ -209,6 +209,7 @@ async function signIn(page, email) {
       await page.getByLabel('Conversion action').fill('Free account sign-up')
       await page.getByRole('group', { name: 'Commercial categories', exact: true }).getByLabel('Software & apps').check()
       await page.getByRole('button', { name: 'Save advertiser' }).click()
+      await page.getByRole('checkbox', { name: `Budgetly ${RUN}` }).check()
       await page.getByRole('button', { name: `Approve Budgetly ${RUN}` }).click()
       await page.getByRole('list', { name: 'Advertisers' }).getByText('approved').first().waitFor()
       check('the onboarding is recorded with every field, and approved', sql(`select status || '|' || objective || '|' || array_to_string(categories, ',') from ads.advertisers where name = 'Budgetly ${RUN}'`) === 'approved|sign_ups|software_apps')

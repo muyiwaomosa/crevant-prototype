@@ -4345,7 +4345,10 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
       simulatedRevenueCents: 0,
     }
     renderApp('/app/ads', f.api)
-    fireEvent.click(await screen.findByRole('button', { name: 'Approve Budgetly' }))
+    // Approving needs the Advertising Policy confirmation (founder decision, Nov 25).
+    expect(((await screen.findByRole('button', { name: 'Approve Budgetly' })) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('checkbox', { name: /Meets the Advertising Policy.*Budgetly/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Budgetly' }))
     await waitFor(() => expect(f.ads.reviews).toEqual([{ id: 'a1', approve: true }]))
     fireEvent.click(screen.getByRole('button', { name: 'Activate Spring' }))
     await waitFor(() => expect(f.ads.statuses).toEqual([{ id: 'k1', status: 'active' }]))

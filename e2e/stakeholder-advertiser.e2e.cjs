@@ -78,6 +78,7 @@ J.run(async (browser) => {
   await adv.waitFor()
   const tAdv = flat(await adv.innerText())
   check('Advertising shows "Requested by @ada from their account", with her answers', tAdv.includes(`Requested by @${userA} from their account`) && tAdv.includes('Natural dog treats') && /pending/i.test(tAdv), tAdv)
+  await adv.getByRole('checkbox', { name: `${business}` }).check()
   await adv.getByRole('button', { name: `Approve ${business}` }).click()
   await adv.getByText('approved').waitFor()
   check('the request is approved and recorded with who reviewed it', sql(`select status || '|' || (reviewed_at is not null) from ads.advertisers where name = '${business}'`) === 'approved|true')
