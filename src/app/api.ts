@@ -279,7 +279,7 @@ export type OwnProfile = { id: string; createdAt: string; username: string | nul
  * Reporting and moderation (20261124000000_moderation). Reports never hide
  * anything by themselves, and no member function returns who reported.
  */
-export type ReportTarget = 'post' | 'profile'
+export type ReportTarget = 'post' | 'profile' | 'comment'
 export type ReportReason = 'spam' | 'harassment' | 'hate' | 'sexual' | 'violence' | 'self_harm' | 'impersonation' | 'other'
 export const REPORT_REASONS: Array<{ value: ReportReason; label: string }> = [
   { value: 'spam', label: 'Spam or scam' },
@@ -321,6 +321,56 @@ export interface ModReport extends Omit<ModQueueItem, 'excerpt' | 'targetUsernam
   dataPurged: boolean
   targetState: 'live' | 'hidden' | 'deleted_by_author' | 'gone'
   currentBody: string | null
+  /** Whose content it is (governance, 20261206000000); null before it or if the account is gone. */
+  targetOwnerId: string | null
+}
+
+/** Governance (20261206000000). */
+export type EnforcementLevel = 'warning' | 'restriction' | 'suspension'
+export type Standing = { standing: 'restricted' | 'suspended'; endsAt: string | null }
+export type NoticeKind = 'content_hidden' | 'content_restored' | EnforcementLevel | 'enforcement_lifted' | 'appeal_upheld' | 'appeal_reversed'
+export interface MemberNotice {
+  id: number
+  kind: NoticeKind
+  targetType: ReportTarget | null
+  targetId: string | null
+  reason: string | null
+  excerpt: string | null
+  endsAt: string | null
+  createdAt: string
+  read: boolean
+  appealStatus: 'open' | 'upheld' | 'reversed' | null
+  canAppeal: boolean
+}
+export interface BlockedMember {
+  id: string
+  username: string
+  displayName: string
+  blockedAt: string
+}
+export interface MemberRecord {
+  username: string
+  displayName: string
+  standing: 'restricted' | 'suspended' | null
+  hiddenContent: number
+  enforcements: Array<{ id: number; level: EnforcementLevel; reason: string; startsAt: string; endsAt: string | null; liftedAt: string | null; liftedVia: string | null; active: boolean }>
+}
+export interface ModAppeal {
+  id: string
+  memberId: string
+  memberUsername: string | null
+  kind: NoticeKind
+  targetType: ReportTarget | null
+  targetId: string | null
+  reason: string | null
+  excerpt: string | null
+  body: string
+  status: 'open' | 'upheld' | 'reversed'
+  createdAt: string
+  decidedAt: string | null
+  decisionNote: string | null
+  /** The caller took the original action (another moderator decides when one exists). */
+  decidedOriginal: boolean
 }
 
 /** A member's current picture: a signed link (valid for an hour) and when it changed. */
@@ -485,6 +535,22 @@ export interface AppApi {
   founderReferralQueue(): Promise<ReferralReview[]>
   founderReviewReferral(awardId: number, approve: boolean): Promise<void>
   founderRewardsOverview(): Promise<RewardsOverview | null>
+  /** Governance (20261206000000). Blocks: two way, never shown to the blocked member. */
+  block(memberId: string): Promise<void>
+  unblock(memberId: string): Promise<void>
+  /** The members the caller blocked; null before the migration. */
+  myBlocks(): Promise<BlockedMember[] | null>
+  /** The caller's own restriction or suspension (null: none, or before the migration). */
+  myStanding(): Promise<Standing | null>
+  /** The caller's moderation notices, newest first; null before the migration. */
+  myNotices(): Promise<MemberNotice[] | null>
+  markNoticesRead(): Promise<void>
+  appeal(noticeId: number, body: string): Promise<void>
+  modEnforce(memberId: string, level: EnforcementLevel, reason: ReportReason, reportId?: string | null, days?: number | null, note?: string): Promise<void>
+  modLift(enforcementId: number, note?: string): Promise<void>
+  modMemberRecord(memberId: string): Promise<MemberRecord | null>
+  modAppeals(status: 'open' | 'decided'): Promise<ModAppeal[] | null>
+  modDecideAppeal(appealId: string, reverse: boolean, note?: string): Promise<void>
   like(postId: string): Promise<void>
   unlike(postId: string): Promise<void>
   /** requestId: as for createPost. */
@@ -622,6 +688,17 @@ const MESSAGES: Record<string, string> = {
   invalid_status: 'Choose a status from the list.',
   note_required: 'Write a note first.',
   not_founder: 'Only the founder can see this.',
+  cannot_block_self: "You can't block yourself.",
+  restricted: "You can't post, comment or repost while a restriction is in place. Your notices say when it ends.",
+  suspended: 'Your account is suspended. You can still read your notices and appeal.',
+  ladder_step_required: 'Take the earlier step first: a warning before a restriction, a restriction before a suspension (threats, self-harm and hate excepted).',
+  cannot_enforce_self: "You can't take action on your own account.",
+  not_active: 'This has already ended. Nothing was changed.',
+  not_appealable: "This notice can't be appealed.",
+  appeal_window_closed: 'Appeals can be made within 30 days, and this one is older.',
+  already_appealed: "You've already appealed this. We'll let you know the decision.",
+  needs_another_moderator: 'Another moderator decides appeals on your own actions.',
+  cannot_decide_own_appeal: "You can't decide your own appeal.",
   network: "We couldn't reach Splitpost. Check your connection and try again.",
   unknown: 'Something went wrong. Please try again.',
 }
@@ -1154,6 +1231,7 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         targetState: r.target_state as ModReport['targetState'],
         currentBody: (r.current_body as string | null) ?? null,
         openReportsForTarget: num(r.open_reports_for_target as number),
+        targetOwnerId: (r.target_owner_id as string | null | undefined) ?? null,
       }
     },
     async avatarLinks(memberIds) {
@@ -1510,6 +1588,111 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         ruleVersion: String(r.rule_version),
       }
     },
+    block: (id) => rpc<void>('app_block', { p_member: id }),
+    unblock: (id) => rpc<void>('app_unblock', { p_member: id }),
+    async myBlocks() {
+      const { data, error } = await client.rpc('app_my_blocks')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_blocks')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        id: String(r.id),
+        username: String(r.username),
+        displayName: String(r.display_name),
+        blockedAt: String(r.blocked_at),
+      }))
+    },
+    async myStanding() {
+      const { data, error } = await client.rpc('app_my_standing')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_standing')) return null
+        throw toAppError(error)
+      }
+      const r = (Array.isArray(data) ? data[0] : null) as Record<string, unknown> | null
+      if (!r) return null
+      return { standing: r.standing as Standing['standing'], endsAt: (r.ends_at as string | null) ?? null }
+    },
+    async myNotices() {
+      const { data, error } = await client.rpc('app_my_notices')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_notices')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        id: num(r.id as number),
+        kind: r.kind as NoticeKind,
+        targetType: (r.target_type as ReportTarget | null) ?? null,
+        targetId: (r.target_id as string | null) ?? null,
+        reason: (r.reason as string | null) ?? null,
+        excerpt: (r.excerpt as string | null) ?? null,
+        endsAt: (r.ends_at as string | null) ?? null,
+        createdAt: String(r.created_at),
+        read: Boolean(r.read),
+        appealStatus: (r.appeal_status as MemberNotice['appealStatus']) ?? null,
+        canAppeal: Boolean(r.can_appeal),
+      }))
+    },
+    markNoticesRead: () => rpc<void>('app_mark_notices_read'),
+    appeal: async (noticeId, body) => {
+      await rpc<string>('app_appeal', { p_notice: noticeId, p_body: body.trim() })
+    },
+    modEnforce: async (memberId, level, reason, reportId, days, note) => {
+      await rpc<number>('app_mod_enforce', {
+        p_member: memberId,
+        p_level: level,
+        p_reason: reason,
+        p_report: reportId ?? null,
+        p_days: days ?? null,
+        p_note: note?.trim() || null,
+      })
+    },
+    modLift: (enforcementId, note) => rpc<void>('app_mod_lift', { p_enforcement: enforcementId, p_note: note?.trim() || null }),
+    async modMemberRecord(memberId) {
+      const r = await rpc<Record<string, unknown> | null>('app_mod_member_record', { p_member: memberId })
+      if (!r) return null
+      const list = (r.enforcements as Array<Record<string, unknown>> | null) ?? []
+      return {
+        username: String(r.username),
+        displayName: String(r.display_name),
+        standing: (r.standing as MemberRecord['standing']) ?? null,
+        hiddenContent: num(r.hidden_content as number),
+        enforcements: list.map((e) => ({
+          id: num(e.id as number),
+          level: e.level as EnforcementLevel,
+          reason: String(e.reason),
+          startsAt: String(e.starts_at),
+          endsAt: (e.ends_at as string | null) ?? null,
+          liftedAt: (e.lifted_at as string | null) ?? null,
+          liftedVia: (e.lifted_via as string | null) ?? null,
+          active: Boolean(e.active),
+        })),
+      }
+    },
+    async modAppeals(status) {
+      const { data, error } = await client.rpc('app_mod_appeals', { p_status: status })
+      if (error) {
+        if (isMissingFunction(error, 'app_mod_appeals')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        id: String(r.id),
+        memberId: String(r.member_id),
+        memberUsername: (r.member_username as string | null) ?? null,
+        kind: r.kind as NoticeKind,
+        targetType: (r.target_type as ReportTarget | null) ?? null,
+        targetId: (r.target_id as string | null) ?? null,
+        reason: (r.reason as string | null) ?? null,
+        excerpt: (r.excerpt as string | null) ?? null,
+        body: String(r.body),
+        status: r.status as ModAppeal['status'],
+        createdAt: String(r.created_at),
+        decidedAt: (r.decided_at as string | null) ?? null,
+        decisionNote: (r.decision_note as string | null) ?? null,
+        decidedOriginal: Boolean(r.decided_original),
+      }))
+    },
+    modDecideAppeal: (appealId, reverse, note) => rpc<void>('app_mod_decide_appeal', { p_appeal: appealId, p_reverse: reverse, p_note: note?.trim() || null }),
     setPublicPreviews: (allowed) => rpc<void>('app_set_public_previews', { p_allowed: allowed, p_wording_version: allowed ? PREVIEW_WORDING_VERSION : null }),
     repost: (postId) => rpc<void>('app_repost', { p_post: postId }),
     unrepost: (postId) => rpc<void>('app_unrepost', { p_post: postId }),

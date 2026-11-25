@@ -174,7 +174,7 @@ begin
   perform pg_temp.expect_error_mod($q$select public.app_report('post', '00000000-0000-4000-8000-00000000dd01', 'spam')$q$, 'already_reported', 'reporting the same post twice');
   perform pg_temp.expect_error_mod($q$select public.app_report('profile', '00000000-0000-4000-8000-000000000d02', 'spam')$q$, 'cannot_report_self', 'reporting yourself');
   perform pg_temp.expect_error_mod($q$select public.app_report('post', '00000000-0000-4000-8000-00000000dd02', 'rude')$q$, 'invalid_reason', 'an unknown reason');
-  perform pg_temp.expect_error_mod($q$select public.app_report('comment', '00000000-0000-4000-8000-00000000dd02', 'spam')$q$, 'invalid_request', 'an unknown target type');
+  perform pg_temp.expect_error_mod($q$select public.app_report('ad', '00000000-0000-4000-8000-00000000dd02', 'spam')$q$, 'invalid_request', 'an unknown target type');
   perform pg_temp.expect_error_mod($q$select public.app_report('post', '00000000-0000-4000-8000-00000000dd02', 'spam', repeat('x', 501))$q$, 'too_long', 'details over 500 characters');
   perform pg_temp.expect_error_mod($q$select public.app_report('post', gen_random_uuid(), 'spam')$q$, 'not_found', 'a post that does not exist');
   perform pg_temp.expect_error_mod($q$select public.app_report('profile', '00000000-0000-4000-8000-000000000d06', 'spam')$q$, 'not_found', 'a profile the reporter can''t see');

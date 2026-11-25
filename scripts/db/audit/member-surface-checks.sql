@@ -145,6 +145,21 @@ declare
     'public.app_my_points_history(bigint,integer)',
     'public.app_my_simulated_earnings()'
   ];
+  -- Governance (20261206000000), once applied.
+  governance text[] := array[
+    'public.app_appeal(bigint,text)',
+    'public.app_block(uuid)',
+    'public.app_mark_notices_read()',
+    'public.app_mod_appeals(text)',
+    'public.app_mod_decide_appeal(uuid,boolean,text)',
+    'public.app_mod_enforce(uuid,text,text,uuid,integer,text)',
+    'public.app_mod_lift(bigint,text)',
+    'public.app_mod_member_record(uuid)',
+    'public.app_my_blocks()',
+    'public.app_my_notices()',
+    'public.app_my_standing()',
+    'public.app_unblock(uuid)'
+  ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
   actual text[];
@@ -185,6 +200,9 @@ begin
   end if;
   if to_regclass('sim.points_ledger') is not null then
     expected := expected || rewards;
+  end if;
+  if to_regclass('social.blocks') is not null then
+    expected := expected || governance;
   end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual

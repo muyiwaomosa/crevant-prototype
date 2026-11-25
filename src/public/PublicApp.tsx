@@ -22,7 +22,8 @@ import { RequireAuth } from './auth/AuthUi'
 import { MemberArea } from '../app/MemberArea'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage, SavedPage } from '../app/pages'
 import { MySplitPage, RewardsReviewPage } from '../app/split'
-import { ModerationQueuePage, ModerationReportPage } from '../app/moderation'
+import { NoticesPage } from '../app/governance'
+import { ModerationQueuePage, ModerationAppealsPage, ModerationReportPage } from '../app/moderation'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from '../app/feedback'
 
 /**
@@ -67,7 +68,9 @@ function memberAreaRoute() {
       <Route path="catch-up/:username" element={<CatchUpPage />} />
       <Route path="profile" element={<ProfilePage />} />
       <Route path="moderation" element={<ModerationQueuePage />} />
+      <Route path="moderation/appeals" element={<ModerationAppealsPage />} />
       <Route path="moderation/:id" element={<ModerationReportPage />} />
+      <Route path="notices" element={<NoticesPage />} />
       <Route path="feedback" element={<FeedbackPage />} />
       <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
       <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />

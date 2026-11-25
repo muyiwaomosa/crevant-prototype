@@ -55,7 +55,9 @@ begin
                             -- discovery (20261203000000), once applied
                             'shares',
                             -- previews and search measurement (20261204000000), once applied
-                            'search_metrics_daily', 'preview_consents', 'preview_visits', 'preview_rate')
+                            'search_metrics_daily', 'preview_consents', 'preview_visits', 'preview_rate',
+                            -- governance (20261206000000), once applied
+                            'blocks', 'block_events')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -104,6 +106,8 @@ declare
   previews text[] := array['app_founder_search_metrics', 'app_note_search', 'app_note_search_selection', 'app_public_post', 'app_public_previews_allowed', 'app_set_public_previews'];
   -- Rewards (20261205000000), once applied: points, simulated earnings, founder review, revenue and month close.
   rewards text[] := array['app_founder_close_month', 'app_founder_record_sim_revenue', 'app_founder_referral_queue', 'app_founder_review_referral', 'app_founder_rewards_overview', 'app_founder_set_rewards', 'app_my_points', 'app_my_points_history', 'app_my_simulated_earnings'];
+  -- Governance (20261206000000), once applied: blocking, enforcement, notices and appeals.
+  governance text[] := array['app_appeal', 'app_block', 'app_mark_notices_read', 'app_mod_appeals', 'app_mod_decide_appeal', 'app_mod_enforce', 'app_mod_lift', 'app_mod_member_record', 'app_my_blocks', 'app_my_notices', 'app_my_standing', 'app_unblock'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -138,6 +142,9 @@ begin
   end if;
   if to_regclass('sim.points_ledger') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || rewards) x);
+  end if;
+  if to_regclass('social.blocks') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || governance) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -318,9 +325,9 @@ begin
                -- And foundation v2 (20261130000000): adult confirmations, controlled
                -- registration (settings, links, records, the shared check) and the
                -- launch settings it reads. No waitlist, invitation or admin data.
-               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings)\M', '', 'g')
+               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators)\M', '', 'g')
                   -- Relationships (20261201000000): the member's own non-binding Support Intent.
-                  ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings)\M)') then
+                  ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings|reverse)\M)') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (

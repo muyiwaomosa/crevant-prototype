@@ -14,13 +14,13 @@ Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 |---|---|---|---|---|---|---|
 | IP-1 Foundation | Yes | Yes, CI 6 of 6 | Yes, PR #106, Nov 25 | Database applied and checked Nov 25 14:00. Founder steps A1 to A4 pending | Pending | Production registration paused, launch gate closed |
 | IP-2 Relationships and Home | Yes | Yes, CI 6 of 6 | Yes, PR #107, Nov 25 | Database applied and checked Nov 25 14:00 | Pending | Active Supporter definition provisional until metric review (N8) |
-| IP-3 Governance core | Not started | | | | | Awaiting authorization |
-| IP-4a Content (topics, editing, saves, reposts) | Yes | Yes, CI 6 of 6 | Yes, PR #108, Nov 25 | Database apply awaiting environment approval | No | Review guide `docs/CONTENT.md` |
-| IP-4b Discovery and sharing | Yes | Yes, CI 6 of 6 | Yes, PR #108, Nov 25 | Same apply run | No | Discovery accepted by the founder in principle; review guide `docs/DISCOVERY.md` |
-| IP-4c Fair rotation, search measurement, public previews | Yes | Local: all suites and 10 browser journeys pass; CI pending | No | No | No | Previews off by default; Production activation needs its own approval. Review guide `docs/PREVIEWS.md` |
+| IP-3 Governance (blocking, comment reports, ladder, notices, appeals) | Yes | Local: database suite, rollback chain (92), 802 unit tests, all 11 browser journeys pass; CI pending | No | No | No | Builds on IP-6; review guide `docs/GOVERNANCE.md` |
+| IP-4a Content (topics, editing, saves, reposts) | Yes | Yes, CI 6 of 6 | Yes, PR #108, Nov 25 | Database applied and checked Nov 25 14:59 | No | Review guide `docs/CONTENT.md` |
+| IP-4b Discovery and sharing | Yes | Yes, CI 6 of 6 | Yes, PR #108, Nov 25 | Database applied and checked Nov 25 14:59 | No | Review guide `docs/DISCOVERY.md` |
+| IP-4c Fair rotation, search measurement, public previews | Yes | Yes, CI 6 of 6 | Yes, PR #109, Nov 25 | Database apply waiting for your approval (run 45645109544); `staging` app branch fast-forwarded | No | Previews opt-in and off by default; Production activation needs its own approval. Review guide `docs/PREVIEWS.md` |
 | IP-5 Video posts | Not started | | | | | Depends on the device test |
-| IP-6 Contributions and rewards | Not started | | | | | Depends on IP-4 |
-| IP-7 Advertising | Not started | | | | | Depends on IP-3, IP-4 |
+| IP-6 Contributions and rewards (simulated) | Yes | Yes, CI 6 of 6 (PR #110) | No, awaiting merge authorization | No | No | All simulated; review guide `docs/REWARDS.md` |
+| IP-7 Advertising with commercial matching | Next | | | | | Depends on IP-3 and IP-6 |
 | IP-8 Intelligence | Not started | | | | | Depends on IP-6, IP-7 |
 | IP-9 Brand and acquisition | Not started | | | | | |
 | IP-10 Release | Not started | | | | | |
