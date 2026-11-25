@@ -59,7 +59,9 @@ begin
                             -- governance (20261206000000), once applied
                             'blocks', 'block_events',
                             -- intelligence (20261210000000), once applied
-                            'post_opens')
+                            'post_opens',
+                            -- unified onboarding (20261211000000), once applied
+                            'creator_topics')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -117,6 +119,13 @@ declare
                               'app_founder_set_campaign_status', 'app_my_ad_exclusions', 'app_remove_ad_exclusion', 'app_set_ad_preference'];
   -- Intelligence (20261210000000), once applied.
   intelligence text[] := array['app_creator_insights', 'app_founder_overview', 'app_my_contribution_insights', 'app_note_open'];
+  -- Unified onboarding (20261211000000), once applied: creator setup, invitations, advertising requests.
+  onboarding text[] := array['app_founder_create_creator_invitation', 'app_founder_invitation_links', 'app_founder_revoke_invitation_link',
+                             'app_member_creator_topics', 'app_my_advertising', 'app_my_campaign_report', 'app_my_creator_setup', 'app_my_inviter',
+                             'app_request_advertising', 'app_set_creator_topics'];
+  -- Privacy requests and switches (20261212000000), once applied.
+  privacy text[] := array['app_features', 'app_founder_delete_member', 'app_founder_member_requests', 'app_founder_resolve_member_request',
+                          'app_founder_set_switch', 'app_founder_switches', 'app_my_member_requests', 'app_submit_member_request', 'app_withdraw_member_request'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -160,6 +169,12 @@ begin
   end if;
   if to_regclass('social.post_opens') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || intelligence) x);
+  end if;
+  if to_regclass('social.creator_topics') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || onboarding) x);
+  end if;
+  if to_regclass('ops.feature_switches') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || privacy) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -340,7 +355,7 @@ begin
                -- And foundation v2 (20261130000000): adult confirmations, controlled
                -- registration (settings, links, records, the shared check) and the
                -- launch settings it reads. No waitlist, invitation or admin data.
-               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators|other_moderator_available|connections|week_start)\M', '', 'g')
+               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators|other_moderator_available|connections|week_start|feature_switches|feature_switch_events|feature_on|member_requests|member_request_events)\M', '', 'g')
                   -- Relationships (20261201000000): the member's own non-binding Support Intent.
                   ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings|reverse|restore_hidden)\M)') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';

@@ -187,6 +187,31 @@ declare
     'public.app_my_contribution_insights()',
     'public.app_note_open(uuid)'
   ];
+  -- Unified onboarding (20261211000000), once applied.
+  onboarding text[] := array[
+    'public.app_founder_create_creator_invitation(text,integer,integer)',
+    'public.app_founder_invitation_links()',
+    'public.app_founder_revoke_invitation_link(text)',
+    'public.app_member_creator_topics(uuid)',
+    'public.app_my_advertising()',
+    'public.app_my_campaign_report(uuid)',
+    'public.app_my_creator_setup()',
+    'public.app_my_inviter()',
+    'public.app_request_advertising(jsonb)',
+    'public.app_set_creator_topics(text[])'
+  ];
+  -- Privacy requests and switches (20261212000000), once applied.
+  privacy text[] := array[
+    'public.app_features()',
+    'public.app_founder_delete_member(bigint,text)',
+    'public.app_founder_member_requests()',
+    'public.app_founder_resolve_member_request(bigint,boolean,text)',
+    'public.app_founder_set_switch(text,boolean,text)',
+    'public.app_founder_switches()',
+    'public.app_my_member_requests()',
+    'public.app_submit_member_request(text,text)',
+    'public.app_withdraw_member_request(bigint)'
+  ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
   actual text[];
@@ -237,6 +262,12 @@ begin
   if to_regclass('social.post_opens') is not null then
     expected := array_replace(expected, 'public.app_founder_record_conversions(uuid,date,integer,text)', 'public.app_founder_record_conversions(uuid,date,integer,text,integer)')
                 || intelligence;
+  end if;
+  if to_regclass('social.creator_topics') is not null then
+    expected := expected || onboarding;
+  end if;
+  if to_regclass('ops.feature_switches') is not null then
+    expected := expected || privacy;
   end if;
   -- Governance refinements (20261207000000): app_mod_enforce gains p_immediate.
   if to_regprocedure('ops.other_moderator_available(uuid, uuid)') is not null then

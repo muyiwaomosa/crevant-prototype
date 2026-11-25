@@ -270,12 +270,15 @@ begin
     raise exception 'FAIL: a revoked member must not be discoverable';
   end if;
 
-  -- Suggestions: people C doesn't follow yet, shared interests first.
+  -- Suggestions: people C doesn't follow yet. Since unified onboarding
+  -- (20261211000000) only members who publish or chose posting topics are
+  -- suggested as creators: B has posted, A has only set interests.
+  -- (Ranking by topic match is checked in 230_unified_onboarding.sql.)
   select array_agg(id order by ord) into ids
   from (select id, row_number() over () ord from public.app_suggested_creators(20)) s
   where id::text like '00000000-0000-4000-8000-000000000c0_';
-  if ids <> array['00000000-0000-4000-8000-000000000c01', '00000000-0000-4000-8000-000000000c02']::uuid[] then
-    raise exception 'FAIL: suggestions should be A then B: %', ids;
+  if ids <> array['00000000-0000-4000-8000-000000000c02']::uuid[] then
+    raise exception 'FAIL: suggestions should be only B (who has posted): %', ids;
   end if;
   -- Following reuses the existing function, and removes them from suggestions.
   perform public.app_follow('00000000-0000-4000-8000-000000000c01');
