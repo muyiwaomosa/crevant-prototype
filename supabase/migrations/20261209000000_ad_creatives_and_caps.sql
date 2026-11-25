@@ -16,6 +16,9 @@
 --    Video plays (3 seconds) and completions are measured once each, after a
 --    valid view. The bucket holds advertising creative only: no member data,
 --    and members can't write to it.
+-- 3. The approved frequency (SP-TA-001 6.1): at most 6 ads a day per member and
+--    the same campaign at most 3 times a day. A content ad says which
+--    creator's post it is shown with, and members can hide an advertiser.
 
 -- ---------------------------------------------------------------------------
 -- 1. Restorations and daily caps
@@ -93,6 +96,10 @@ alter table ads.campaigns add constraint campaigns_media_complete
   check (creative_kind = 'text' or (media_path is not null and media_alt is not null));
 comment on column ads.campaigns.media_path is 'The creative''s object path in the public ad-creatives bucket (image or video campaigns).';
 comment on column ads.campaigns.media_alt is 'The text alternative read to people who can''t see the image or video.';
+
+-- The approved per-campaign frequency: at most 3 times a day (SP-TA-001 6.1).
+alter table ads.campaigns drop constraint campaigns_daily_cap_check;
+alter table ads.campaigns add constraint campaigns_daily_cap_check check (daily_cap between 1 and 3);
 
 alter table ads.impressions add column played_at timestamptz;
 alter table ads.impressions add column completed_at timestamptz;
@@ -183,7 +190,7 @@ declare
   v_uid uuid := social.current_member();
   i ads.impressions%rowtype;
 begin
-  if p_kind is null or p_kind not in ('view', 'click', 'play', 'complete', 'relevant', 'not_relevant', 'hidden', 'reported') then
+  if p_kind is null or p_kind not in ('view', 'click', 'play', 'complete', 'relevant', 'not_relevant', 'hidden', 'hidden_advertiser', 'reported') then
     raise exception 'invalid_request' using errcode = 'P0001';
   end if;
   select * into i from ads.impressions where id = p_impression and member_id = v_uid for update;
@@ -203,6 +210,12 @@ begin
   elsif p_kind = 'complete' then
     -- Played to the end, only after a play, once.
     update ads.impressions set completed_at = pg_catalog.now() where id = i.id and played_at is not null and completed_at is null;
+  elsif p_kind = 'hidden_advertiser' then
+    -- Don't show this advertiser again (the approved Why this ad sheet).
+    update ads.impressions set feedback = 'hidden', feedback_at = pg_catalog.now() where id = i.id and feedback is null;
+    insert into ads.exclusions (member_id, kind, target)
+    select v_uid, 'advertiser', c.advertiser_id::text from ads.campaigns c where c.id = i.campaign_id
+    on conflict do nothing;
   else
     update ads.impressions set feedback = p_kind, feedback_at = pg_catalog.now() where id = i.id and feedback is null;
     if p_kind in ('hidden', 'reported') then
@@ -215,7 +228,7 @@ $$;
 drop function public.app_ad_for(text, uuid);
 create function public.app_ad_for(p_surface text, p_post uuid default null)
 returns table (impression_id uuid, advertiser text, headline text, body text, cta_label text, landing_url text,
-               match text, matched text, placement text, creative_kind text, media_path text, media_alt text)
+               match text, matched text, placement text, creative_kind text, media_path text, media_alt text, shown_with text)
 language plpgsql
 security definer
 set search_path = ''
@@ -238,8 +251,9 @@ begin
       return; -- no ad on a post the member can't see, or on their own post
     end if;
   end if;
-  -- At most 20 ads a day and one every 20 seconds for a member.
-  if (select count(*) from ads.impressions i where i.member_id = v_uid and i.served_at > pg_catalog.date_trunc('day', pg_catalog.now())) >= 20
+  -- The approved frequency (SP-TA-001 6.1): at most 6 ads a day for a member,
+  -- the same campaign at most 3 times a day, and one every 20 seconds per slot.
+  if (select count(*) from ads.impressions i where i.member_id = v_uid and i.served_at > pg_catalog.date_trunc('day', pg_catalog.now())) >= 6
      or exists (select 1 from ads.impressions i where i.member_id = v_uid and i.served_at > pg_catalog.now() - interval '20 seconds'
                 and i.surface = p_surface and i.post_id is not distinct from p_post) then
     return;
@@ -253,7 +267,8 @@ begin
   returning id into v_id;
   return query
   select v_id, a.name, c.headline, c.body, c.cta_label, c.landing_url, v_pick.match, v_pick.matched, p_surface,
-         c.creative_kind, c.media_path, c.media_alt
+         c.creative_kind, c.media_path, c.media_alt,
+         (select m.display_name from social.visible_members m where m.id = v_creator)
   from ads.campaigns c join ads.advertisers a on a.id = c.advertiser_id
   where c.id = v_pick.campaign_id;
 end;

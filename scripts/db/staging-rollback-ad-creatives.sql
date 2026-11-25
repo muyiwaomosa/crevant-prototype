@@ -356,6 +356,8 @@ drop function ads.creative_ready(uuid);
 drop function ads.creative_files();
 alter table ads.impressions drop column completed_at;
 alter table ads.impressions drop column played_at;
+alter table ads.campaigns drop constraint campaigns_daily_cap_check;
+alter table ads.campaigns add constraint campaigns_daily_cap_check check (daily_cap between 1 and 10);
 alter table ads.campaigns drop constraint campaigns_media_complete;
 alter table ads.campaigns drop column media_alt;
 alter table ads.campaigns drop column media_path;

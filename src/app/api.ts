@@ -343,8 +343,10 @@ export interface Ad {
   creativeKind: 'text' | 'image' | 'video'
   mediaUrl: string | null
   mediaAlt: string | null
+  /** For a content ad: the display name of the creator whose post it is shown with. */
+  shownWith: string | null
 }
-export type AdEventKind = 'view' | 'click' | 'play' | 'complete' | 'relevant' | 'not_relevant' | 'hidden' | 'reported'
+export type AdEventKind = 'view' | 'click' | 'play' | 'complete' | 'relevant' | 'not_relevant' | 'hidden' | 'hidden_advertiser' | 'reported'
 export interface AdCategory {
   slug: string
   label: string
@@ -1753,6 +1755,7 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         creativeKind: ((r.creative_kind as string | undefined) ?? 'text') as Ad['creativeKind'],
         mediaUrl: r.media_path ? client.storage.from('ad-creatives').getPublicUrl(String(r.media_path)).data.publicUrl : null,
         mediaAlt: (r.media_alt as string | null | undefined) ?? null,
+        shownWith: (r.shown_with as string | null | undefined) ?? null,
       }
     },
     adEvent: (impressionId, kind) => rpc<void>('app_ad_event', { p_impression: impressionId, p_kind: kind }),

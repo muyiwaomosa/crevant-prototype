@@ -84,11 +84,11 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
 
   if (!ad || gone) return null
 
-  async function send(kind: 'relevant' | 'not_relevant' | 'hidden' | 'reported') {
+  async function send(kind: 'relevant' | 'not_relevant' | 'hidden' | 'hidden_advertiser' | 'reported') {
     if (!ad) return
     await markViewed()
     await api.adEvent(ad.impressionId, kind).catch(() => undefined)
-    if (kind === 'hidden' || kind === 'reported') setGone(true)
+    if (kind === 'hidden' || kind === 'hidden_advertiser' || kind === 'reported') setGone(true)
     else setFeedback('Thanks. This helps keep ads relevant.')
   }
 
@@ -97,7 +97,7 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
       <Card className="border border-dashed border-ink-200 p-4">
         <div className="flex items-center justify-between gap-2">
           <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-ink-600">
-            <Megaphone className="h-3.5 w-3.5" aria-hidden="true" /> Sponsored · {ad.advertiser}
+            <Megaphone className="h-3.5 w-3.5" aria-hidden="true" /> Sponsored · {ad.shownWith ? `shown with ${ad.shownWith}'s post` : ad.advertiser}
           </p>
           <button
             type="button"
@@ -115,6 +115,9 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
             <p className="mt-1">
               Ads never use your content interests, follows, searches or anything sensitive. Change what you see in your ad preferences (Profile).
             </p>
+            <button type="button" onClick={() => void send('hidden_advertiser')} className="mt-2 font-semibold text-brand-700 underline underline-offset-2">
+              Don't show ads from {ad.advertiser}
+            </button>
           </div>
         )}
         {ad.creativeKind === 'image' && ad.mediaUrl && (
@@ -496,7 +499,7 @@ function CampaignForm({ admin, onSaved }: { admin: AdsAdmin; onSaved: () => Prom
         </label>
         <Text label="Starts (YYYY-MM-DD)" value={c.starts_on} onChange={up('starts_on')} />
         <Text label="Ends (YYYY-MM-DD)" value={c.ends_on} onChange={up('ends_on')} />
-        <Text label="Daily cap per member (1 to 10)" value={c.daily_cap} onChange={up('daily_cap')} />
+        <Text label="Daily cap per member (1 to 3)" value={c.daily_cap} onChange={up('daily_cap')} />
         <Text label="Simulated price ($)" value={c.price} onChange={up('price')} />
         <Text label="Headline" value={c.headline} onChange={up('headline')} />
         <Text label="Text" value={c.body} onChange={up('body')} area />

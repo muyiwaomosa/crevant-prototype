@@ -3372,7 +3372,7 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
   const ad = (over: Partial<Ad> = {}): Ad => ({
     impressionId: 'imp1', advertiser: 'Budgetly', headline: 'Plan your month in minutes', body: 'See where your money goes.', ctaLabel: 'Try it free',
     landingUrl: 'https://budgetly.example/start', match: 'preference', matched: 'Software & apps', placement: 'content',
-    creativeKind: 'text', mediaUrl: null, mediaAlt: null, ...over,
+    creativeKind: 'text', mediaUrl: null, mediaAlt: null, shownWith: null, ...over,
   })
 
   it('an ad under someone else\'s post is labelled Sponsored, explains why, opens safely, and can be hidden', async () => {
@@ -3393,6 +3393,19 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
     fireEvent.click(within(card).getByRole('button', { name: 'Hide this ad' }))
     await waitFor(() => expect(screen.queryByTestId('ad')).toBeNull())
     expect(f.ads.events.at(-1)).toEqual({ id: 'imp1', kind: 'hidden' })
+  })
+
+  it('a content ad says whose post it is shown with, and the advertiser can be hidden from Why this ad', async () => {
+    const f = fakeApi()
+    const post = f.seedPost('c1', 'A post')
+    f.ads.next = ad({ shownWith: 'Creator 1' })
+    renderApp(`/app/post/${post}`, f.api)
+    const card = await screen.findByTestId('ad')
+    expect(card.textContent).toMatch(/Sponsored · shown with Creator 1's post/)
+    fireEvent.click(within(card).getByRole('button', { name: 'Why this ad' }))
+    fireEvent.click(within(card).getByRole('button', { name: "Don't show ads from Budgetly" }))
+    await waitFor(() => expect(screen.queryByTestId('ad')).toBeNull())
+    expect(f.ads.events.at(-1)).toEqual({ id: 'imp1', kind: 'hidden_advertiser' })
   })
 
   it('an image ad shows its picture with the text alternative from Splitpost storage', async () => {

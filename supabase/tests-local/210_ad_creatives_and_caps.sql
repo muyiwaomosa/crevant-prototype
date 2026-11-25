@@ -131,3 +131,56 @@ begin
 end $$;
 commit;
 do $$ begin raise notice 'PASS: image and video campaigns need a file and a text alternative before they run; video plays and completions count once, after a view, and are reported'; end $$;
+
+-- ---------------------------------------------------------------------------
+-- 3. Approved frequency, "shown with", hiding an advertiser.
+do $$
+begin
+  perform pg_temp.expect_error($q$update ads.campaigns set daily_cap = 4 where id = current_setting('cr.v')::uuid$q$, 'daily_cap', 'a campaign cap above 3 a day');
+end $$;
+-- Five more served ads earlier today (six in all) reach the member's daily limit.
+set session_replication_role = replica;
+insert into ads.impressions (campaign_id, member_id, surface, match, served_at)
+select current_setting('cr.v')::uuid, pg_temp.g('7703'), 'feed', 'general', greatest(date_trunc('day', now()), now() - interval '1 hour') + interval '1 second' from generate_series(1, 5);
+set session_replication_role = origin;
+begin;
+select pg_temp.as_member('7703');
+set local role authenticated;
+do $$
+begin
+  if exists (select 1 from public.app_ad_for('content', pg_temp.g('7801'))) then
+    raise exception 'FAIL: a seventh ad in a day was served';
+  end if;
+end $$;
+commit;
+set session_replication_role = replica;
+delete from ads.impressions where member_id = pg_temp.g('7703') and match = 'general';
+update ads.impressions set served_at = served_at - interval '1 minute' where member_id = pg_temp.g('7703');
+set session_replication_role = origin;
+begin;
+select pg_temp.as_member('7703');
+set local role authenticated;
+do $$
+declare r record;
+begin
+  select * into r from public.app_ad_for('content', pg_temp.g('7801'));
+  if r.shown_with is distinct from 'Cr C' then raise exception 'FAIL: the content ad does not say whose post it is with: %', r.shown_with; end if;
+  perform public.app_ad_event(r.impression_id, 'view');
+  perform public.app_ad_event(r.impression_id, 'hidden_advertiser');
+  if not exists (select 1 from public.app_my_ad_exclusions() where kind = 'advertiser') then
+    raise exception 'FAIL: hiding the advertiser was not recorded';
+  end if;
+end $$;
+commit;
+set session_replication_role = replica;
+update ads.impressions set served_at = served_at - interval '1 minute' where member_id = pg_temp.g('7703');
+set session_replication_role = origin;
+begin;
+select pg_temp.as_member('7703');
+set local role authenticated;
+do $$
+begin
+  if exists (select 1 from public.app_ad_for('content', pg_temp.g('7801'))) then raise exception 'FAIL: a hidden advertiser was shown again'; end if;
+end $$;
+commit;
+do $$ begin raise notice 'PASS: at most 6 ads a day per member and 3 per campaign; content ads say whose post they are with; a hidden advertiser stays hidden'; end $$;
