@@ -27,7 +27,7 @@ Migrations: `supabase/migrations/20261206000000_governance.sql` (merged) and `20
 ### Accounting constraints (for review)
 
 * Moderation only ever reverses **recognized** (non-redeemable) points. Qualified referrals, the only redeemable points, are never reversed by moderation, so no redeemable balance and no closed settlement is affected by a hide or a restore. A restore is dated now, in the open period. If moderation ever needs to touch redeemable points, the adjustment would go into the open month the same way, with closed months left unchanged.
-* A restored entry counts like any award made that day for that day's caps (a member restored at the cap could earn slightly less for the rest of that day). Proportionate for the MVP; noted for the metric review.
+* Restored entries no longer count toward daily caps (20261209000000): a restoration corrects an earlier ledger event and is not a new contribution.
 
 ## Evidence (local)
 

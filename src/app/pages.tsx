@@ -17,6 +17,7 @@ import { AudienceInsight, SupportButton } from './relationships'
 import { JoinedForPrompt, PublicPreviewsSetting, categorize } from './content'
 import { BlockButton, BlockedMembers, BlockedProfilePanel, GovernanceBanner } from './governance'
 import { AdPreferences, AdSlot } from './ads'
+import { AttentionFace, MoneyFace, RetentionFace } from './insights'
 import { useFeedbackAccess } from './feedback'
 
 /** Loads data for a page, with loading and error states and a reload function. */
@@ -625,6 +626,10 @@ export function PostPage() {
   const { id = '' } = useParams()
   const post = useLoad(() => api.post(id), [api, id])
   const comments = useLoad(() => api.comments(id), [api, id])
+  // Opening a post is qualifying consumption for intelligence (best effort, never a reward).
+  useEffect(() => {
+    if (id) void api.noteOpen(id).catch(() => undefined)
+  }, [api, id])
 
   if (post.loading && post.data === undefined) return <Loading label="Loading post…" />
   if (post.error !== null) return <ErrorNote error={post.error} />
@@ -762,7 +767,29 @@ export { CliquePage } from './relationships'
 // ---------------------------------------------------------------------------
 // Your profile.
 
+/**
+ * Your profile and your insights (SP-DESIGN-002): four faces, Profile,
+ * Attention, Retention and Money. The insight faces are owner only: other
+ * members see only the profile itself.
+ */
 export function ProfilePage() {
+  return (
+    <>
+      <PageHeader title="Your profile" subtitle="How people see you on Splitpost, and what's happening with your work." />
+      <FaceView
+        label="Your profile and insights"
+        faces={[
+          { key: 'profile', label: 'Profile', content: <ProfileFace /> },
+          { key: 'attention', label: 'Attention', content: <AttentionFace /> },
+          { key: 'retention', label: 'Retention', content: <RetentionFace /> },
+          { key: 'money', label: 'Money', content: <MoneyFace /> },
+        ]}
+      />
+    </>
+  )
+}
+
+function ProfileFace() {
   const api = useAppApi()
   const { profile, refresh } = useMyProfile()
   const me = useLoad<Me>(() => api.me(), [api, profile.username, profile.displayName])
@@ -770,7 +797,6 @@ export function ProfilePage() {
   const { founder } = useFeedbackAccess()
   return (
     <>
-      <PageHeader title="Your profile" subtitle="How people see you on Splitpost." />
       {me.data && (
         <Card className="mb-4 p-5">
           <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
@@ -807,6 +833,11 @@ export function ProfilePage() {
             {founder && (
               <Link to="/app/ads" className={buttonClass('secondary', 'sm')}>
                 Advertising
+              </Link>
+            )}
+            {founder && (
+              <Link to="/app/control" className={buttonClass('secondary', 'sm')}>
+                Control Center
               </Link>
             )}
           </div>

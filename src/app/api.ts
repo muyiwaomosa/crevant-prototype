@@ -339,8 +339,14 @@ export interface Ad {
   match: AdMatch
   matched: string | null
   placement: AdSurface
+  /** Text, image or simple video (20261209000000), served from Splitpost's own storage. */
+  creativeKind: 'text' | 'image' | 'video'
+  mediaUrl: string | null
+  mediaAlt: string | null
+  /** For a content ad: the display name of the creator whose post it is shown with. */
+  shownWith: string | null
 }
-export type AdEventKind = 'view' | 'click' | 'relevant' | 'not_relevant' | 'hidden' | 'reported'
+export type AdEventKind = 'view' | 'click' | 'play' | 'complete' | 'relevant' | 'not_relevant' | 'hidden' | 'hidden_advertiser' | 'reported'
 export interface AdCategory {
   slug: string
   label: string
@@ -386,12 +392,17 @@ export interface Campaign {
   body: string
   cta_label: string
   landing_url: string
+  creative_kind?: 'text' | 'image' | 'video'
+  media_path?: string | null
+  media_alt?: string | null
 }
 export interface AdsAdmin {
   advertisers: Advertiser[]
   campaigns: Campaign[]
   categories: Array<{ slug: string; label: string }>
   topics: Array<{ slug: string; label: string }>
+  /** Files uploaded to the ad-creatives bucket (managed in the Supabase dashboard). */
+  creatives?: Array<{ path: string; type: string | null; bytes: number | null }>
 }
 /** A campaign report: actual observations, aggregate only; counts under 10 come back as null. */
 export interface CampaignReport {
@@ -408,9 +419,53 @@ export interface CampaignReport {
   byMatch: Record<AdMatch, { impressions: number; clicks: number }>
   contentImpressions: number
   feedImpressions: number
+  creativeKind: 'text' | 'image' | 'video'
+  videoPlays: number
+  videoCompletions: number
   verifiedConversions: number
+  /** Reported by the advertiser but not verified by Splitpost; null when none recorded. */
+  selfReportedConversions: number | null
   advertiserSatisfaction: number | null
   simulatedRevenueCents: number
+}
+
+/** Intelligence (20261210000000). Aggregates only; every figure says whether it is actual or simulated. */
+export interface CreatorInsights {
+  days: number
+  attention: {
+    followers: number
+    new_followers: number
+    new_followers_before: number
+    sources: Record<string, number>
+    reached: number
+    posts: number
+    top_posts: Array<{ id: string; excerpt: string; topic: string | null; views: number; comments: number; saves: number; reposts: number; shares: number }>
+  }
+  retention: { followers: number; active_supporters: number; clique: number; returning: number; connections_this_week: number; connections_last_week: number }
+  money: {
+    actual_income_cents: number
+    simulated_by_month: Array<{ month: string; creator_cents: number; revenue_cents: number }>
+    ads_with_your_posts: Array<{ advertiser: string; campaign: string; impressions: number; clicks: number; posts: number }>
+  }
+}
+export interface ContributionInsights {
+  connections_this_week: number
+  connections_last_week: number
+  referrals: { joined: number; waiting_review: number; approved: number; not_approved: number }
+  opportunities: Array<{ post_id: string; creator: string; username: string; excerpt: string }>
+}
+export type MetricKind = 'actual' | 'simulated' | 'test' | 'hypothesis'
+export interface FounderOverview {
+  generated_at: string
+  week_start: string
+  north_star: { kind: 'actual'; definition: string; weeks: Array<{ week_start: string; connections: number; founder_dependent: number; test: number }> }
+  members: Record<string, number | boolean | string | null> & { kind: MetricKind }
+  discovery: Record<string, number | string> & { kind: MetricKind }
+  content: Record<string, number | string> & { kind: MetricKind }
+  rewards: Record<string, number | string> & { kind: MetricKind }
+  advertising: Record<string, number | string> & { kind: MetricKind }
+  governance: Record<string, number | string | null> & { kind: MetricKind }
+  operations: Record<string, number | string | boolean> & { kind: MetricKind }
 }
 
 /** Governance (20261206000000). */
@@ -649,7 +704,13 @@ export interface AppApi {
   founderSaveCampaign(c: Partial<Campaign>): Promise<string>
   founderSetCampaignStatus(id: string, status: Campaign['status']): Promise<void>
   founderCampaignReport(id: string): Promise<CampaignReport>
-  founderRecordConversions(id: string, month: string, verified: number, note: string): Promise<void>
+  founderRecordConversions(id: string, month: string, verified: number, note: string, selfReported?: number | null): Promise<void>
+  /** Intelligence (20261210000000). Null before the migration. */
+  creatorInsights(days: number): Promise<CreatorInsights | null>
+  myContributionInsights(): Promise<ContributionInsights | null>
+  founderOverview(): Promise<FounderOverview | null>
+  /** Records that the member opened someone else's post (qualifying consumption). Best effort. */
+  noteOpen(postId: string): Promise<void>
   founderAttributeCampaignRevenue(id: string, month: string, netCents: number): Promise<{ contentCents: number; feedCents: number }>
   founderAdDemand(): Promise<Array<{ category: string; label: string; members: number | null }>>
   /** Governance (20261206000000). Blocks: two way, never shown to the blocked member. */
@@ -812,6 +873,7 @@ const MESSAGES: Record<string, string> = {
   advertiser_not_approved: 'Approve the advertiser before activating a campaign.',
   already_attributed: 'That campaign month already has its revenue recorded.',
   no_impressions: 'This campaign had no valid impressions that month.',
+  creative_missing: 'Upload the image or video to the ad-creatives bucket first (JPEG, PNG or WebP image, or MP4 video up to 8 MB).',
   restricted: "You can't post, comment or repost while a restriction is in place. Your notices say when it ends.",
   suspended: 'Your account is suspended. You can still read your notices and appeal.',
   ladder_step_required: 'Take the earlier step first: a warning before a restriction, a restriction before a suspension (threats, self-harm and hate excepted).',
@@ -1737,6 +1799,10 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         match: r.match as AdMatch,
         matched: (r.matched as string | null) ?? null,
         placement: r.placement as AdSurface,
+        creativeKind: ((r.creative_kind as string | undefined) ?? 'text') as Ad['creativeKind'],
+        mediaUrl: r.media_path ? client.storage.from('ad-creatives').getPublicUrl(String(r.media_path)).data.publicUrl : null,
+        mediaAlt: (r.media_alt as string | null | undefined) ?? null,
+        shownWith: (r.shown_with as string | null | undefined) ?? null,
       }
     },
     adEvent: (impressionId, kind) => rpc<void>('app_ad_event', { p_impression: impressionId, p_kind: kind }),
@@ -1789,13 +1855,51 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         },
         contentImpressions: Number(r.content_impressions ?? 0),
         feedImpressions: Number(r.feed_impressions ?? 0),
+        creativeKind: ((r.creative_kind as string | undefined) ?? 'text') as CampaignReport['creativeKind'],
+        videoPlays: Number(r.video_plays ?? 0),
+        videoCompletions: Number(r.video_completions ?? 0),
         verifiedConversions: Number(r.verified_conversions ?? 0),
+        selfReportedConversions: n(r.self_reported_conversions),
         advertiserSatisfaction: n(r.advertiser_satisfaction),
         simulatedRevenueCents: Number(r.simulated_revenue_cents ?? 0),
       }
     },
-    founderRecordConversions: (id, month, verified, note) =>
-      rpc<void>('app_founder_record_conversions', { p_campaign: id, p_month: month, p_verified: verified, p_note: note.trim() }),
+    founderRecordConversions: (id, month, verified, note, selfReported) =>
+      rpc<void>('app_founder_record_conversions', {
+        p_campaign: id,
+        p_month: month,
+        p_verified: verified,
+        p_note: note.trim(),
+        ...(selfReported !== undefined && selfReported !== null ? { p_self_reported: selfReported } : {}),
+      }),
+    async creatorInsights(days) {
+      const { data, error } = await client.rpc('app_creator_insights', { p_days: days })
+      if (error) {
+        if (isMissingFunction(error, 'app_creator_insights')) return null
+        throw toAppError(error)
+      }
+      return data as CreatorInsights
+    },
+    async myContributionInsights() {
+      const { data, error } = await client.rpc('app_my_contribution_insights')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_contribution_insights')) return null
+        throw toAppError(error)
+      }
+      return data as ContributionInsights
+    },
+    async founderOverview() {
+      const { data, error } = await client.rpc('app_founder_overview')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_overview')) return null
+        throw toAppError(error)
+      }
+      return data as FounderOverview
+    },
+    async noteOpen(postId) {
+      const { error } = await client.rpc('app_note_open', { p_post: postId })
+      if (error && !isMissingFunction(error, 'app_note_open')) throw toAppError(error)
+    },
     async founderAttributeCampaignRevenue(id, month, netCents) {
       const r = await rpc<Record<string, unknown>>('app_founder_attribute_campaign_revenue', { p_campaign: id, p_month: month, p_net_cents: netCents })
       return { contentCents: Number(r.content_cents ?? 0), feedCents: Number(r.feed_cents ?? 0) }

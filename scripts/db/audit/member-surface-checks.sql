@@ -180,6 +180,13 @@ declare
     'public.app_remove_ad_exclusion(text,text)',
     'public.app_set_ad_preference(text,text)'
   ];
+  -- Intelligence (20261210000000), once applied.
+  intelligence text[] := array[
+    'public.app_creator_insights(integer)',
+    'public.app_founder_overview()',
+    'public.app_my_contribution_insights()',
+    'public.app_note_open(uuid)'
+  ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
   actual text[];
@@ -226,6 +233,10 @@ begin
   end if;
   if to_regclass('ads.campaigns') is not null then
     expected := expected || advertising;
+  end if;
+  if to_regclass('social.post_opens') is not null then
+    expected := array_replace(expected, 'public.app_founder_record_conversions(uuid,date,integer,text)', 'public.app_founder_record_conversions(uuid,date,integer,text,integer)')
+                || intelligence;
   end if;
   -- Governance refinements (20261207000000): app_mod_enforce gains p_immediate.
   if to_regprocedure('ops.other_moderator_available(uuid, uuid)') is not null then
@@ -490,9 +501,13 @@ begin
       execute $q$select count(*) from storage.buckets where not (
                    (id = 'avatars' and name = 'avatars' and public is false and file_size_limit = 204800 and allowed_mime_types = array['image/jpeg'])
                    or (id = 'post-photos' and name = 'post-photos' and public is false and file_size_limit = 614400
-                       and allowed_mime_types = array['image/jpeg'] and pg_catalog.to_regclass('social.post_media') is not null))$q$ into buckets;
+                       and allowed_mime_types = array['image/jpeg'] and pg_catalog.to_regclass('social.post_media') is not null)
+                   -- Advertising creatives (20261209000000): public by design (advertising creative only, no member data, no member writes).
+                   or (id = 'ad-creatives' and name = 'ad-creatives' and public is true and file_size_limit = 8388608
+                       and allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'video/mp4']
+                       and pg_catalog.to_regprocedure('ads.creative_ready(uuid)') is not null))$q$ into buckets;
       if buckets > 0 then
-        raise exception 'FAIL: a storage bucket other than the private avatars and post-photos buckets exists, or its settings changed';
+        raise exception 'FAIL: a storage bucket other than the private avatars and post-photos buckets (and the public ad-creatives bucket) exists, or its settings changed';
       end if;
       if pg_catalog.to_regclass('social.post_media') is not null then
         execute $q$select count(*) from storage.buckets where id = 'post-photos'$q$ into buckets;

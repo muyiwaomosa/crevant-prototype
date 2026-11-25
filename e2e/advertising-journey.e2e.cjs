@@ -183,6 +183,13 @@ async function signIn(page, email) {
     const faithPost = (await rpc(tC, 'app_create_post', { p_body: `A reflection ${RUN}` })).body
     await rpc(tC, 'app_set_post_topic', { p_post: faithPost, p_topic: 'faith' })
 
+    // The founder's managed creative: an image uploaded to the ad-creatives bucket
+    // (in Supabase Storage; here through the Storage API with the local service key).
+    const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mNk+M9Qz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC', 'base64')
+    const imgPath = `journey-${RUN}.png`
+    const up = await fetch(`${API}/storage/v1/object/ad-creatives/${imgPath}`, { method: 'POST', headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'image/png' }, body: PNG })
+    check('the creative is uploaded to the ad-creatives bucket', up.ok, String(up.status))
+
     // 1. The founder onboards, approves and launches.
     {
       const ctx = await newContext(browser)
@@ -211,6 +218,9 @@ async function signIn(page, email) {
       await page.getByLabel('Button label').fill('Try it free')
       await page.getByLabel('Landing page').fill('https://budgetly.example/start')
       await page.getByLabel('Simulated price ($)').fill('100')
+      await page.getByLabel('Creative', { exact: true }).selectOption('image')
+      await page.getByLabel('File (uploaded to the ad-creatives bucket)').selectOption(imgPath)
+      await page.getByLabel('Text alternative (what the image or video shows)').fill('A phone showing a monthly budget.')
       await page.getByRole('group', { name: 'Commercial categories (from onboarding)' }).getByLabel('Software & apps').check()
       const topics = page.getByRole('group', { name: 'Content topics for contextual ads (never faith or health)' })
       check('faith and health topics cannot be chosen for contextual ads', (await topics.getByLabel('Faith & Spirituality').count()) === 0 && (await topics.getByLabel('Health & wellness').count()) === 0)
@@ -239,7 +249,10 @@ async function signIn(page, email) {
       await page.goto(`${APP}/app/post/${moneyPost}`)
       const card = page.getByTestId('ad')
       await card.waitFor()
-      check('the ad is labelled Sponsored with the advertiser', (await card.innerText()).toLowerCase().includes(`sponsored · budgetly ${RUN}`))
+      check('the ad is labelled Sponsored, shown with the creator\'s post', (await card.innerText()).toLowerCase().includes("sponsored · shown with cara creator's post"), await card.innerText())
+      const img = card.getByRole('img', { name: 'A phone showing a monthly budget.' })
+      await img.waitFor()
+      check('the image creative loads from Splitpost storage', await img.evaluate((el) => el.complete && el.naturalWidth > 0) && (await img.getAttribute('src')).includes('/storage/v1/object/public/ad-creatives/'))
       await card.getByRole('button', { name: 'Why this ad' }).click()
       check('Why this ad names the preference Max chose', (await card.getByTestId('why-this-ad').innerText()).includes('You chose "Software & apps"'))
       await screenChecks(page, 'a post with its ad')
@@ -314,7 +327,7 @@ async function signIn(page, email) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await signIn(page, email('c'))
-      await page.goto(`${APP}/app/profile`)
+      await page.goto(`${APP}/app/profile?face=money`)
       const e = page.getByTestId('simulated-earnings')
       await e.waitFor()
       check('Cara sees her simulated creator share for the campaign month ($40.00)', (await e.innerText()).includes('$40.00'), await e.innerText())

@@ -28,3 +28,5 @@
 022_governance.sql 20261206000000
 023_governance_refinements.sql 20261207000000
 024_advertising.sql 20261208000000
+025_ad_creatives_and_caps.sql 20261209000000
+026_intelligence.sql 20261210000000

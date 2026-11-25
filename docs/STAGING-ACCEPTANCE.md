@@ -8,9 +8,9 @@ Production batch PB-1, which needs its own approval, is at the end.
 
 | Layer | Status | What you do |
 |---|---|---|
-| **Database deploy waiting for you** | [Run 45652930512](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45652930512) applies 20261204000000 (previews and search), 20261205000000 (rewards) and 20261206000000 (governance), then runs every staging security and separation check | **Review deployments, staging, Approve** |
+| **Database deploy waiting for you** | [Run 45663465302](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45663465302) applies 20261204000000 (previews and search), 20261205000000 (rewards), 20261206000000 (governance), 20261207000000 (governance refinements) and 20261208000000 (advertising) in one go, then runs every staging security and separation check. It replaces run 45652930512, which was cancelled so you approve once instead of twice | **Review deployments, staging, Approve** |
 | Database already applied | Every migration up to 20261203000000 (IP-1, IP-2, IP-4a and IP-4b), checked Nov 25 at 14:00 and 14:59 | Nothing |
-| Next database deploys | 20261207000000 (governance refinements), then 20261208000000 (advertising), after their pull requests merge | Approve each run when it appears |
+| Next database deploy | 20261209000000 (ad creatives and caps) and 20261210000000 (intelligence) together, after their pull request merges | Approve the one run when it appears |
 | Staging app (Vercel) | Not building yet: `splitpost-app` builds only an older branch | Step A |
 | Email | Supabase's default sender: team addresses only, about two an hour | Step B |
 | Auth (sign up through links, the account hook, Splitpost emails) | Not configured | Step C, after the deploy above |
@@ -35,11 +35,13 @@ once the deploy above is approved and steps A to D are done.
 | 20261106000000 to 20261130000000 | Foundations through foundation v2 and the launch gate | Applied |
 | 20261201000000 | Relationships and Home | Applied |
 | 20261202000000, 20261203000000 | Content, discovery and sharing | Applied |
-| 20261204000000 | Fair rotation, search measurement, public previews | In run 45652930512 |
-| 20261205000000 | Contributions and rewards (simulated) | In run 45652930512 |
-| 20261206000000 | Governance | In run 45652930512 |
-| 20261207000000 | Governance refinements | After its merge |
-| 20261208000000 | Advertising | After its merge |
+| 20261204000000 | Fair rotation, search measurement, public previews | In run 45663465302 |
+| 20261205000000 | Contributions and rewards (simulated) | In run 45663465302 |
+| 20261206000000 | Governance | In run 45663465302 |
+| 20261207000000 | Governance refinements | In run 45663465302 |
+| 20261208000000 | Advertising | In run 45663465302 |
+| 20261209000000 | Image and video ad creatives, frequency caps, restored points outside daily caps | After its merge |
+| 20261210000000 | Intelligence | After its merge |
 
 ---
 
@@ -183,7 +185,7 @@ four accounts: **you** (founder and moderator), a **creator**, a **fan**, and a
 | 20 | As the fan, My Split, Opportunities: open your referral link privately and register the **referred** account; confirm it and follow someone | The referred account joins as a fan, attributed to you; your My Split shows 100 waiting for review |
 | 21 | As you: My Split, "Founder: review referrals and rewards"; Approve | The queue empties; the fan now has 100 redeemable points |
 | 22 | On the same page: last month, Content advertising, the creator's username, $100, a note, Record; then Feed advertising, $50 | Reconciliation: revenue $150, creators $40, fan pool $20, Splitpost $90 (always adding up) |
-| 23 | As the fan, My Split; as the creator, Profile | The fan's redeemable points valued at $20.00, Simulated; the creator's simulated share $40.00, "Nothing is paid during the pilot" |
+| 23 | As the fan, My Split; as the creator, Profile, Money | The fan's redeemable points valued at $20.00, Simulated; the creator's simulated share $40.00, "Nothing is paid during the pilot" |
 | 24 | As you, Close the month (simulated), then again | "It reconciles to the cent"; then "That month is already closed"; the fan sees the points allocated |
 
 Allocation percentages are not shown to members until the Rewards Rules are legally reviewed; the database enforces them.
@@ -212,6 +214,22 @@ Allocation percentages are not shown to members until the Rewards Rules are lega
 | 37 | Click the ad's button; then Not relevant on another; then Hide this ad | The site opens in a new tab; "Thanks…"; the hidden ad goes and is listed under Ads you hid, with Show again |
 | 38 | As you, Advertising, Report | Aggregate counts only; audience and reach under 10 show "fewer than 10"; no names |
 | 39 | Record verified conversions; at the start of next month, Attribute simulated revenue for this month | Content share to creators, feed share to Splitpost; the creator's simulated share rises; a second attribution is refused |
+| 40 | (after 20261209000000) In Supabase Storage, upload a JPEG or PNG to the `ad-creatives` bucket; in the campaign form choose Image, pick the file and write a text alternative; Activate. Then try activating a campaign whose file you haven't uploaded | The ad under the post shows the image with its text alternative and "Sponsored · shown with {creator}'s post"; the second campaign is refused because the file is missing |
+| 41 | (after 20261209000000) Repeat with a short MP4 and Video | It plays only when tapped, muted, with controls; the report shows video plays and completions |
+| 42 | (after 20261209000000) As the fan, Why this ad, "Don't show ads from …" | No more ads from that advertiser; listed under Ads you hid |
+| 43 | (after 20261210000000) As you, record verified conversions, then a self-reported figure; Export report | Two separate rows, self-reported clearly marked; the CSV has no member names |
+
+### Journey 7. Intelligence: what happened, what it means, what to do next (after 20261210000000)
+
+| # | Do | Expect |
+|---|---|---|
+| 44 | As the fan, open one of the creator's posts, save it; then My Split | "Your week" says you connected with 1 creator, in three steps; points marked as not redeemable; simulated values labelled Simulated |
+| 45 | As the creator, Profile: swipe or tap through Profile, Attention, Retention, Money | Four faces, each with the three steps; the tabs work with a keyboard and a screen reader |
+| 46 | Attention | New followers against the previous period, where they came from (for example Search), people reached, top posts |
+| 47 | Retention | Active supporters, Clique, returning fans, and this week's connections against last week's (1 this week) |
+| 48 | Money | Simulated earnings marked Simulated with a You / Fans / Splitpost bar and no percentages; Ads shown with your posts, Actual; Actual income $0.00; Support Intent, Non-binding |
+| 49 | As you, Profile, Control Center | The North Star (Weekly Active Creator-Consumer Connections) for 8 weeks, with test data and founder-dependent connections apart; every line labelled Actual, Simulated, Test data or Hypothesis; no member named |
+| 50 | Export CSV and JSON | Each row carries its kind; the figures match the page |
 
 ---
 

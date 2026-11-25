@@ -327,7 +327,7 @@ async function signIn(page, email) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await signIn(page, email('c'))
-      await page.goto(`${APP}/app/profile`)
+      await page.goto(`${APP}/app/profile?face=money`)
       const e = page.getByTestId('simulated-earnings')
       await e.waitFor()
       const t = await e.innerText()
