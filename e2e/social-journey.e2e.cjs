@@ -266,17 +266,18 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   check('B\'s feed is empty before following anyone', (await pageB.getByTestId('post').count()) === 0)
   check('a new member sees the three first steps on Home', await pageB.getByText('Choose your Clique').isVisible())
   await pageB.getByRole('link', { name: 'Discover people' }).click()
-  await pageB.getByLabel('Search people by name or username').fill(userA)
-  await pageB.getByRole('button', { name: 'Search' }).click()
+  await pageB.getByLabel('Search people, posts and topics').fill(userA)
+  await pageB.getByRole('button', { name: 'Search', exact: true }).click()
   {
-    const card = pageB.getByRole('listitem').filter({ hasText: 'Aye Teacher' })
+    const card = pageB.getByRole('region', { name: 'People' }).getByRole('listitem').filter({ hasText: 'Aye Teacher' })
+    await card.getByText('Maths teacher making fractions fun.').waitFor()
     check("Discover shows A's bio, why to follow, identity and interests", (await card.getByText('Maths teacher making fractions fun.').count()) === 1
       && (await card.getByText('One five-minute maths trick every week').count()) === 1
       && (await card.getByText(/Creator ·/).count()) === 1
       && (await card.getByRole('list', { name: 'Interests' }).getByText('Learning').count()) === 1)
     // Interest-based discovery: by topic, without searching.
-    await pageB.getByLabel('Search people by name or username').fill('')
-    await pageB.getByRole('button', { name: 'Search' }).click()
+    await pageB.getByRole('button', { name: 'Clear search' }).click()
+    await pageB.getByRole('tab', { name: 'Creators' }).click()
     const interest = pageB.getByLabel('Browse by interest')
     await interest.selectOption({ label: 'Learning' })
     await pageB.getByRole('link', { name: 'Aye Teacher', exact: true }).waitFor()
@@ -497,7 +498,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     check('no sideways scrolling on a phone', extra <= 0, `${extra}px`)
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 740 })
-      await page.goto(`${APP}/app/discover`)
+      await page.goto(`${APP}/app/discover?face=creators`)
       await page.getByRole('search').waitFor()
       await page.getByRole('listitem').first().waitFor()
       const discoverSideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)

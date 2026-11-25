@@ -6,6 +6,8 @@
 //  3. A follower saves it (the private Saved list) and reposts it.
 //  4. Someone who follows the reposter, but not the creator, sees it on Home
 //     as "Reposted by", once.
+//  5. Discovery: that person finds it in For you with a reason, finds it by
+//     search, and shares it (recorded once; the search itself is not stored).
 // Every screen: WCAG 2.2 AA, 320 and 390 px, no CSP violations, no console errors.
 // Run by scripts/e2e/auth-journey.sh.
 const { chromium } = require('playwright')
@@ -192,6 +194,25 @@ async function signIn(page, email) {
     check('the repost shows who reposted it', /Reposted by\s+Fola Follower/.test(by), by)
     check('the reposted post appears once', (await pageV.getByText(`${text}, updated`).count()) === 1)
     await screenChecks(pageV, 'Home with a repost')
+
+    // 5. Discovery (20261203000000): For you with a focus, search, share.
+    await pageV.goto(`${APP}/app/discover`)
+    await pageV.getByRole('tab', { name: 'For you' }).waitFor()
+    await pageV.getByRole('button', { name: 'Money & business' }).click()
+    await pageV.getByText(`${text}, updated`).waitFor()
+    check('For you with a focus shows the post from someone not followed, with its reason', /In Money & business, the topic you chose/.test(await pageV.getByTestId('discover-reason').first().innerText()))
+    await screenChecks(pageV, 'Discover, For you')
+    await pageV.getByLabel('Search people, posts and topics').fill('budget')
+    await pageV.getByRole('button', { name: 'Search', exact: true }).click()
+    await pageV.getByRole('region', { name: 'Posts' }).getByText(`${text}, updated`).waitFor()
+    check('search finds the post by its words', true)
+    await screenChecks(pageV, 'Discover search results')
+    await ctxV.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await pageV.getByRole('region', { name: 'Posts' }).getByRole('button', { name: 'Share' }).first().click()
+    for (let i = 0; i < 20 && sql(`select count(*) from social.shares where member_id = '${v}'`) === '0'; i++) await new Promise((r) => setTimeout(r, 250))
+    check('the share is recorded once, as one event', sql(`select count(*) from social.shares where member_id = '${v}'`) === '1'
+      && sql(`select count(*) from analytics.events where name = 'post_shared' and actor_id = '${v}'`) === '1')
+    check('nothing about the search was stored', sql(`select count(*) from analytics.events where actor_id = '${v}' and props::text ilike '%budget%'`) === '0')
     await ctxV.close()
 
     check('no Content Security Policy violations', csp.length === 0, csp.slice(0, 2).join(' | '))

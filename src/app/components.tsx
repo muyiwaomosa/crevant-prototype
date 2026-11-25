@@ -11,7 +11,7 @@ import { useTrackView } from './ViewTracker'
 import { ReportButton } from './moderation'
 import { PictureAvatar } from './avatars'
 import { PostPhoto } from './media'
-import { EditPost, PostMetaLine, SaveRepostButtons } from './content'
+import { EditPost, PostMetaLine, SaveRepostButtons, ShareButton } from './content'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
   return <PictureAvatar id={member.id} name={member.displayName} size={size} />
@@ -150,6 +150,7 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
             </span>
           )}
           <SaveRepostButtons post={post} />
+          <ShareButton post={post} />
           {!post.isMine && <ReportButton target="post" targetId={post.id} name={post.author.displayName} className="ml-auto" />}
           {post.isMine && onDeleted && (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2 has-[.post-editor]:w-full">

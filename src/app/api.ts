@@ -42,6 +42,8 @@ export interface Post {
   activityAt?: string
   /** Who reposted it to this member, when it reached Home as a repost. */
   repostedBy?: MemberSummary | null
+  /** Discovery (20261203000000): why this post was suggested. */
+  reason?: string
 }
 
 /** Card details (20261202000000), fetched for many posts at once. */
@@ -422,6 +424,12 @@ export interface AppApi {
   savedPosts(before?: PostCursor): Promise<Post[] | null>
   repost(postId: string): Promise<void>
   unrepost(postId: string): Promise<void>
+  /** Discovery (20261203000000): posts in the member's interests (or one topic) from people they don't follow; null before it. */
+  discoverPosts(topic?: string): Promise<Post[] | null>
+  /** Posts matching words or a topic name; null before the migration. Nothing about a search is stored. */
+  searchPosts(query: string): Promise<Post[] | null>
+  /** Records a share (copy link or share sheet). Best effort: sharing still works if this fails. */
+  recordShare(postId: string, channel: 'copy_link' | 'share_sheet'): Promise<void>
   like(postId: string): Promise<void>
   unlike(postId: string): Promise<void>
   /** requestId: as for createPost. */
@@ -509,6 +517,7 @@ const MESSAGES: Record<string, string> = {
   not_in_clique: 'That creator is no longer in your Clique. Nothing was changed.',
   already_in_clique: 'That creator is already in your Clique. Nothing was changed.',
   cannot_repost_own: "You can't repost your own post.",
+  invalid_query: 'Type at least two letters to search.',
   rate_limited: "You're going a little fast. Please wait a moment and try again.",
   too_many: 'Something went wrong. Please try again.',
   invalid_request: 'Something went wrong. Please try again.',
@@ -597,6 +606,7 @@ type PostRow = {
   is_mine: boolean
   media?: unknown
   activity_at?: string
+  reason?: string | null
   reposted_by_id?: string | null
   reposted_by_username?: string | null
   reposted_by_display_name?: string | null
@@ -617,6 +627,7 @@ export function toPost(r: PostRow): Post {
     isMine: r.is_mine,
     media: toMedia(r.media),
     ...(r.activity_at ? { activityAt: r.activity_at } : {}),
+    ...(r.reason ? { reason: r.reason } : {}),
     ...(r.reposted_by_id
       ? { repostedBy: { id: r.reposted_by_id, username: String(r.reposted_by_username), displayName: String(r.reposted_by_display_name) } }
       : {}),
@@ -1337,6 +1348,23 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       // Paged on (saved time, id): the cursor carries the saved time.
       return ((data ?? []) as Array<PostRow & { saved_at: string }>).map((r) => ({ ...toPost(r), activityAt: r.saved_at }))
     },
+    async discoverPosts(topic) {
+      const { data, error } = await client.rpc('app_discover_content', { p_topic: topic ?? null, p_limit: 30 })
+      if (error) {
+        if (isMissingFunction(error, 'app_discover_content')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as PostRow[]).map(toPost)
+    },
+    async searchPosts(query) {
+      const { data, error } = await client.rpc('app_search_posts', { p_query: query, p_limit: 30 })
+      if (error) {
+        if (isMissingFunction(error, 'app_search_posts')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as PostRow[]).map(toPost)
+    },
+    recordShare: (postId, channel) => rpc<void>('app_record_share', { p_post: postId, p_channel: channel }),
     repost: (postId) => rpc<void>('app_repost', { p_post: postId }),
     unrepost: (postId) => rpc<void>('app_unrepost', { p_post: postId }),
     unfollow: (id) => rpc<void>('app_unfollow', { p_creator: id }),

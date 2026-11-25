@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { Bookmark, Pencil, Repeat2 } from 'lucide-react'
+import { Bookmark, Check, Pencil, Repeat2, Share2 } from 'lucide-react'
 import { buttonClass } from '../components/ui'
 import { AppApiError, LIMITS, type Post, type PostMeta, type Topic } from './api'
 import { useAppApi } from './AppApiContext'
@@ -287,5 +287,52 @@ export function EditPost({ post, onEdited }: { post: Post; onEdited: (body: stri
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * Share (20261203000000): the device share sheet where there is one, else
+ * copy the link. The link opens the post for signed-in members (public
+ * previews for visitors are a separate founder decision). The share is
+ * recorded once per post and channel an hour; sharing works even if
+ * recording fails.
+ */
+export function ShareButton({ post }: { post: Post }) {
+  const api = useAppApi()
+  const { available } = usePostMeta(post.id)
+  const [copied, setCopied] = useState(false)
+  if (!available) return null
+  async function share() {
+    const url = `${window.location.origin}/app/post/${post.id}`
+    let channel: 'copy_link' | 'share_sheet' | null = null
+    const nav: Navigator | undefined = typeof navigator === 'undefined' ? undefined : navigator
+    if (nav && typeof nav.share === 'function') {
+      try {
+        await nav.share({ title: `A post by ${post.author.displayName} on Splitpost`, url })
+        channel = 'share_sheet'
+      } catch {
+        return // cancelled
+      }
+    } else {
+      try {
+        await nav?.clipboard.writeText(url)
+        channel = 'copy_link'
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 2500)
+      } catch {
+        return
+      }
+    }
+    void api.recordShare(post.id, channel).catch(() => undefined)
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void share()}
+      aria-label={copied ? 'Link copied' : 'Share'}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-ink-600 transition hover:bg-ink-100"
+    >
+      {copied ? <Check className="h-[18px] w-[18px] text-brand-700" aria-hidden="true" /> : <Share2 className="h-[18px] w-[18px]" aria-hidden="true" />}
+    </button>
   )
 }

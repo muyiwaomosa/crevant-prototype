@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bookmark, Check, Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, Compass, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import { LIMITS, cursorOf, type Comment, type FeedFilter, type Member, type Me, type Post, type PostCursor } from './api'
@@ -9,7 +9,7 @@ import { useAppApi, useMyProfile } from './AppApiContext'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
 import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
-import { DetailsEditor, MemberAbout, PersonSummary, SuggestedPeople, useTopics } from './profileDetails'
+import { DetailsEditor, MemberAbout, SuggestedPeople, useTopics } from './profileDetails'
 import { ReportButton, useModeration } from './moderation'
 import { PostComposer, usePhotosEnabled } from './media'
 import { ProfilePictureField } from './avatars'
@@ -503,105 +503,7 @@ export function ComposePage() {
 // ---------------------------------------------------------------------------
 // Discover people.
 
-export function DiscoverPage() {
-  const api = useAppApi()
-  const [query, setQuery] = useState('')
-  const [submitted, setSubmitted] = useState('')
-  const [topic, setTopic] = useState('')
-  const { topics } = useTopics()
-  const list = useLoad(() => api.discover(submitted, topic || undefined), [api, submitted, topic])
-  const mine = useLoad(async () => (await api.myDetails().catch(() => null))?.topics ?? [], [api])
-  const topicLabel = topics?.find((t) => t.slug === topic)?.label
-
-  function search(e: FormEvent) {
-    e.preventDefault()
-    setSubmitted(query.trim())
-  }
-
-  return (
-    <>
-      <PageHeader title="Discover" subtitle="Find people to follow. People who share your interests come first, then the most recently active." />
-      <form onSubmit={search} role="search" className="mb-4 flex gap-2">
-        <label htmlFor="discover-search" className="sr-only">
-          Search people by name or username
-        </label>
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true" />
-          <input
-            id="discover-search"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name or username"
-            className="block h-12 w-full rounded-2xl border border-ink-200 bg-white pl-10 pr-4 text-base text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-          />
-        </div>
-        <button type="submit" className={buttonClass('secondary')}>
-          Search
-        </button>
-      </form>
-      {topics && topics.length > 0 && (
-        <div className="mb-4">
-          <label htmlFor="discover-topic" className="mb-1.5 block text-sm font-semibold text-ink-700">
-            Browse by interest
-          </label>
-          <select
-            id="discover-topic"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            className="block h-12 w-full rounded-2xl border border-ink-200 bg-white px-4 text-base text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-          >
-            <option value="">Everyone</option>
-            {topics.map((t) => (
-              <option key={t.slug} value={t.slug}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      {list.loading && !list.data && <Loading label="Finding people…" />}
-      {list.error !== null && <ErrorNote error={list.error} />}
-      {list.data && list.data.length === 0 && (
-        <EmptyState
-          icon={<Search className="h-7 w-7" />}
-          title="Nobody found"
-          body={
-            submitted
-              ? `No one matches "${submitted}"${topicLabel ? ` in ${topicLabel}` : ''}. Try a different name or username.`
-              : topicLabel
-                ? `Nobody has chosen ${topicLabel} yet. Try another interest.`
-                : 'No other members yet. Invited members will appear here.'
-          }
-          action={
-            submitted || topic ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery('')
-                  setSubmitted('')
-                  setTopic('')
-                }}
-                className={buttonClass('secondary')}
-              >
-                Show everyone
-              </button>
-            ) : undefined
-          }
-        />
-      )}
-      {list.data && list.data.length > 0 && (
-        <ul className="space-y-3">
-          {list.data.map((m) => (
-            <li key={m.id}>
-              <PersonSummary member={m} topics={topics} myTopics={mine.data} onChange={list.reload} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  )
-}
+export { DiscoverPage } from './discover'
 
 // ---------------------------------------------------------------------------
 // A member's page.

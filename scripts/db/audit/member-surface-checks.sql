@@ -118,6 +118,12 @@ declare
     'public.app_unrepost(uuid)',
     'public.app_unsave(uuid)'
   ];
+  -- Discovery (20261203000000), once applied.
+  discovery text[] := array[
+    'public.app_discover_content(text,integer)',
+    'public.app_record_share(uuid,text)',
+    'public.app_search_posts(text,integer)'
+  ];
   actual text[];
   extra text[];
   missing text[];
@@ -146,6 +152,9 @@ begin
   end if;
   if to_regclass('social.saves') is not null then
     expected := expected || content;
+  end if;
+  if to_regclass('social.shares') is not null then
+    expected := expected || discovery;
   end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
