@@ -212,6 +212,16 @@ declare
     'public.app_submit_member_request(text,text)',
     'public.app_withdraw_member_request(bigint)'
   ];
+  -- Video posts (20261213000000), once applied.
+  video text[] := array[
+    'public.app_founder_record_device_test(text,boolean,text)',
+    'public.app_founder_set_video_cap(integer)',
+    'public.app_founder_video_status()',
+    'public.app_post_videos(uuid[])',
+    'public.app_video_status()',
+    'public.app_video_upload_begin(integer,integer,text)',
+    'public.app_video_upload_paths(uuid)'
+  ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
   actual text[];
@@ -268,6 +278,9 @@ begin
   end if;
   if to_regclass('ops.feature_switches') is not null then
     expected := expected || privacy;
+  end if;
+  if to_regclass('ops.video_device_tests') is not null then
+    expected := expected || video;
   end if;
   -- Governance refinements (20261207000000): app_mod_enforce gains p_immediate.
   if to_regprocedure('ops.other_moderator_available(uuid, uuid)') is not null then
@@ -536,9 +549,18 @@ begin
                    -- Advertising creatives (20261209000000): public by design (advertising creative only, no member data, no member writes).
                    or (id = 'ad-creatives' and name = 'ad-creatives' and public is true and file_size_limit = 8388608
                        and allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'video/mp4']
-                       and pg_catalog.to_regprocedure('ads.creative_ready(uuid)') is not null))$q$ into buckets;
+                       and pg_catalog.to_regprocedure('ads.creative_ready(uuid)') is not null)
+                   -- Video posts (20261213000000): the private post-videos bucket, MP4 videos and JPEG posters, at most 110 MB.
+                   or (id = 'post-videos' and name = 'post-videos' and public is false and file_size_limit = 115343360
+                       and allowed_mime_types = array['video/mp4', 'image/jpeg'] and pg_catalog.to_regclass('ops.video_device_tests') is not null))$q$ into buckets;
       if buckets > 0 then
-        raise exception 'FAIL: a storage bucket other than the private avatars and post-photos buckets (and the public ad-creatives bucket) exists, or its settings changed';
+        raise exception 'FAIL: a storage bucket other than the private avatars, post-photos and post-videos buckets (and the public ad-creatives bucket) exists, or its settings changed';
+      end if;
+      if pg_catalog.to_regclass('ops.video_device_tests') is not null then
+        execute $q$select count(*) from storage.buckets where id = 'post-videos'$q$ into buckets;
+        if buckets <> 1 then
+          raise exception 'FAIL: the private post-videos bucket is missing';
+        end if;
       end if;
       if pg_catalog.to_regclass('social.post_media') is not null then
         execute $q$select count(*) from storage.buckets where id = 'post-photos'$q$ into buckets;

@@ -62,7 +62,9 @@ begin
                               'app_founder_create_creator_invitation', 'app_founder_invitation_links', 'app_founder_revoke_invitation_link',
                               -- 20261212000000 adds privacy requests and switches; checked in 028.
                               'app_founder_delete_member', 'app_founder_member_requests', 'app_founder_resolve_member_request',
-                              'app_founder_set_switch', 'app_founder_switches'))
+                              'app_founder_set_switch', 'app_founder_switches',
+                              -- 20261213000000 adds video device tests, the video cap and status; checked in 029.
+                              'app_founder_record_device_test', 'app_founder_set_video_cap', 'app_founder_video_status'))
      is distinct from array['app_founder_feedback', 'app_founder_feedback_add_note', 'app_founder_feedback_list', 'app_founder_feedback_set_status'] then
     bad := bad || 'the set of app_founder_* functions'::text;
   end if;
