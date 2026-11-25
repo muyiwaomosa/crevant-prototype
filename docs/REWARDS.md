@@ -16,6 +16,7 @@ Migration: `supabase/migrations/20261205000000_rewards.sql` (merged, PR #110). E
 | My Split | Overview: recognized, redeemable (approved and waiting), estimated value marked Simulated, the disclosure. History: newest first, with reversals. Opportunities: the referral link | RWD-10 |
 | Creator earnings | The creator's simulated share by month on their profile (Money, marked Simulated) | RWD-11 |
 | Founder | My Split, "Founder: review referrals and rewards": approve or reject qualified referrals, the simulated reconciliation, record simulated revenue for a month (content advertising names the creator; feed advertising is Splitpost's), and close a finished month | GOV-C07, GOV-C08 |
+| Restorations and caps (20261209000000) | A restoration corrects an earlier entry and is not a new contribution, so restored entries don't count toward daily caps. Duplicate prevention, the monthly redeemable budget and the append-only ledger are unchanged | Founder decision |
 | Moderation and rewards | Points earned on hidden content are reversed; when the content is restored (by a moderator or a successful appeal) the legitimate points come back as compensating entries, once (`docs/GOVERNANCE.md`) | RWD-12 |
 
 The allocation percentages are kept out of member-facing text by the existing claims guard (`src/public/landing/claims.test.ts`) until the Rewards Rules are legally reviewed; screens say "creator share" and "fan rewards pool".

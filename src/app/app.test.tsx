@@ -3371,7 +3371,8 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
 describe('advertising (20261208000000): labelled, explainable, controllable', () => {
   const ad = (over: Partial<Ad> = {}): Ad => ({
     impressionId: 'imp1', advertiser: 'Budgetly', headline: 'Plan your month in minutes', body: 'See where your money goes.', ctaLabel: 'Try it free',
-    landingUrl: 'https://budgetly.example/start', match: 'preference', matched: 'Software & apps', placement: 'content', ...over,
+    landingUrl: 'https://budgetly.example/start', match: 'preference', matched: 'Software & apps', placement: 'content',
+    creativeKind: 'text', mediaUrl: null, mediaAlt: null, ...over,
   })
 
   it('an ad under someone else\'s post is labelled Sponsored, explains why, opens safely, and can be hidden', async () => {
@@ -3392,6 +3393,15 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
     fireEvent.click(within(card).getByRole('button', { name: 'Hide this ad' }))
     await waitFor(() => expect(screen.queryByTestId('ad')).toBeNull())
     expect(f.ads.events.at(-1)).toEqual({ id: 'imp1', kind: 'hidden' })
+  })
+
+  it('an image ad shows its picture with the text alternative from Splitpost storage', async () => {
+    const f = fakeApi()
+    const post = f.seedPost('c1', 'A post')
+    f.ads.next = ad({ creativeKind: 'image', mediaUrl: 'https://kpudeppgokpjhvaqrprn.supabase.co/storage/v1/object/public/ad-creatives/a.jpg', mediaAlt: 'A phone showing a monthly budget.' })
+    renderApp(`/app/post/${post}`, f.api)
+    const img = within(await screen.findByTestId('ad')).getByRole('img', { name: 'A phone showing a monthly budget.' })
+    expect(img.getAttribute('src')).toMatch(/\/storage\/v1\/object\/public\/ad-creatives\/a\.jpg$/)
   })
 
   it('a contextual or non-personalized ad says so; no ad when nothing matches; never on your own post', async () => {
@@ -3452,7 +3462,7 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
     }
     f.ads.report = { eligibleAudience: null, served: 3, impressions: 2, clicks: 1, ctr: 0.5, reach: null, relevant: 1, notRelevant: 0, hidden: 0, reported: 0,
       byMatch: { preference: { impressions: 2, clicks: 1 }, context: { impressions: 0, clicks: 0 }, general: { impressions: 0, clicks: 0 } },
-      contentImpressions: 1, feedImpressions: 1, verifiedConversions: 0, advertiserSatisfaction: null, simulatedRevenueCents: 0 }
+      contentImpressions: 1, feedImpressions: 1, creativeKind: 'text', videoPlays: 0, videoCompletions: 0, verifiedConversions: 0, advertiserSatisfaction: null, simulatedRevenueCents: 0 }
     renderApp('/app/ads', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Approve Budgetly' }))
     await waitFor(() => expect(f.ads.reviews).toEqual([{ id: 'a1', approve: true }]))

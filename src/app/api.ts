@@ -339,8 +339,12 @@ export interface Ad {
   match: AdMatch
   matched: string | null
   placement: AdSurface
+  /** Text, image or simple video (20261209000000), served from Splitpost's own storage. */
+  creativeKind: 'text' | 'image' | 'video'
+  mediaUrl: string | null
+  mediaAlt: string | null
 }
-export type AdEventKind = 'view' | 'click' | 'relevant' | 'not_relevant' | 'hidden' | 'reported'
+export type AdEventKind = 'view' | 'click' | 'play' | 'complete' | 'relevant' | 'not_relevant' | 'hidden' | 'reported'
 export interface AdCategory {
   slug: string
   label: string
@@ -386,12 +390,17 @@ export interface Campaign {
   body: string
   cta_label: string
   landing_url: string
+  creative_kind?: 'text' | 'image' | 'video'
+  media_path?: string | null
+  media_alt?: string | null
 }
 export interface AdsAdmin {
   advertisers: Advertiser[]
   campaigns: Campaign[]
   categories: Array<{ slug: string; label: string }>
   topics: Array<{ slug: string; label: string }>
+  /** Files uploaded to the ad-creatives bucket (managed in the Supabase dashboard). */
+  creatives?: Array<{ path: string; type: string | null; bytes: number | null }>
 }
 /** A campaign report: actual observations, aggregate only; counts under 10 come back as null. */
 export interface CampaignReport {
@@ -408,6 +417,9 @@ export interface CampaignReport {
   byMatch: Record<AdMatch, { impressions: number; clicks: number }>
   contentImpressions: number
   feedImpressions: number
+  creativeKind: 'text' | 'image' | 'video'
+  videoPlays: number
+  videoCompletions: number
   verifiedConversions: number
   advertiserSatisfaction: number | null
   simulatedRevenueCents: number
@@ -812,6 +824,7 @@ const MESSAGES: Record<string, string> = {
   advertiser_not_approved: 'Approve the advertiser before activating a campaign.',
   already_attributed: 'That campaign month already has its revenue recorded.',
   no_impressions: 'This campaign had no valid impressions that month.',
+  creative_missing: 'Upload the image or video to the ad-creatives bucket first (JPEG, PNG or WebP image, or MP4 video up to 8 MB).',
   restricted: "You can't post, comment or repost while a restriction is in place. Your notices say when it ends.",
   suspended: 'Your account is suspended. You can still read your notices and appeal.',
   ladder_step_required: 'Take the earlier step first: a warning before a restriction, a restriction before a suspension (threats, self-harm and hate excepted).',
@@ -1737,6 +1750,9 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         match: r.match as AdMatch,
         matched: (r.matched as string | null) ?? null,
         placement: r.placement as AdSurface,
+        creativeKind: ((r.creative_kind as string | undefined) ?? 'text') as Ad['creativeKind'],
+        mediaUrl: r.media_path ? client.storage.from('ad-creatives').getPublicUrl(String(r.media_path)).data.publicUrl : null,
+        mediaAlt: (r.media_alt as string | null | undefined) ?? null,
       }
     },
     adEvent: (impressionId, kind) => rpc<void>('app_ad_event', { p_impression: impressionId, p_kind: kind }),
@@ -1789,6 +1805,9 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         },
         contentImpressions: Number(r.content_impressions ?? 0),
         feedImpressions: Number(r.feed_impressions ?? 0),
+        creativeKind: ((r.creative_kind as string | undefined) ?? 'text') as CampaignReport['creativeKind'],
+        videoPlays: Number(r.video_plays ?? 0),
+        videoCompletions: Number(r.video_completions ?? 0),
         verifiedConversions: Number(r.verified_conversions ?? 0),
         advertiserSatisfaction: n(r.advertiser_satisfaction),
         simulatedRevenueCents: Number(r.simulated_revenue_cents ?? 0),

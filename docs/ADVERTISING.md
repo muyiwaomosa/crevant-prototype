@@ -1,6 +1,6 @@
 # Advertising (IP-7): review guide
 
-Migration: `supabase/migrations/20261208000000_advertising.sql` (checksum recorded; merging approves it, D7). The objective: connect members with businesses offering relevant solutions to commercial needs the members chose to express. **Everything an advertiser pays is simulated during the pilot.** Campaign observations (impressions, clicks, feedback, verified conversions) are actual and kept in the `ads` schema, apart from the simulated money in `sim`.
+Migrations: `supabase/migrations/20261208000000_advertising.sql` (merged, PR #111) and `20261209000000_ad_creatives_and_caps.sql` (image and video creatives; checksum recorded, merging approves it, D7). The objective: connect members with businesses offering relevant solutions to commercial needs the members chose to express. **Everything an advertiser pays is simulated during the pilot.** Campaign observations (impressions, clicks, feedback, verified conversions) are actual and kept in the `ads` schema, apart from the simulated money in `sim`.
 
 | Capability | How | Requirements |
 |---|---|---|
@@ -14,7 +14,8 @@ Migration: `supabase/migrations/20261208000000_advertising.sql` (checksum record
 | Measurement | One row per served ad: a valid view (half visible for a second), an outbound click (only after a view) and one piece of feedback each count once; rows can't be rewritten. Verified conversions are reconciled manually per campaign and month | ADV-09 to ADV-11 |
 | Reporting | Aggregate only: eligible audience, reach, impressions, clicks, CTR, verified conversions, relevance and negative feedback, delivery by preference, context and non-personalized, content versus feed, advertiser satisfaction, simulated revenue. Groups under 10 are withheld. Nothing identifies a member | ADV-13, INT-06 |
 | Commercial demand | Founder: how many members chose each category (under 10 withheld) | Refinement (basic) |
-| Economics | Founder attributes a campaign's simulated net revenue for a finished, open month: the content share to creators by their valid content views (whole cents, into 40/20/40), the feed share to Splitpost. Once per campaign and month; refused for an open or closed month | ADV-12, ADV-14 |
+| Economics | Founder attributes a campaign's simulated eligible net revenue for a finished, open month. It is split between content-associated and general feed delivery in proportion to valid ad impressions; the content share goes to creators in proportion to **valid impressions of the ad served with their posts** (never organic post views), in whole cents, into 40/20/40; the general feed share is Splitpost's. Once per campaign and month; refused for an open or closed month | ADV-12, ADV-14 |
+| Image and simple video creatives (20261209000000) | Managed: the founder uploads the file to the public `ad-creatives` bucket in Supabase (JPEG, PNG or WebP, or MP4, up to 8 MB), picks it in the campaign form and writes a text alternative. A campaign can't be activated until its file exists with the right type. Images load from Splitpost's own storage (already allowed by the security headers); video is fetched into a local blob link and plays inline, muted, with controls, never autoplaying, so no Production header change is needed. Plays (3 seconds) and completions count once, after a valid view, and are reported | ADV-06, ADV-09 |
 | No rewards for ads | Viewing or clicking ads earns no Connection Points (`ad_view` is 0 and ad events never touch the ledger) | Founder decision |
 
 ## Hypotheses and metrics (for IP-8)
@@ -33,7 +34,7 @@ No claim of superiority over other advertising is made from these until there is
 
 ## Deferred (post-MVP roadmap)
 
-Aggregated commercial demand intelligence beyond counts, temporary purchase intent, automated audience mapping, demand-led advertiser acquisition, image and video creatives (text creatives only in the MVP), and self-serve advertiser accounts.
+Aggregated commercial demand intelligence beyond counts, temporary purchase intent, automated audience mapping, demand-led advertiser acquisition, in-app creative upload and editing tools, and self-serve advertiser accounts.
 
 ## Evidence (local)
 

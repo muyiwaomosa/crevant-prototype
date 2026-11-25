@@ -490,9 +490,13 @@ begin
       execute $q$select count(*) from storage.buckets where not (
                    (id = 'avatars' and name = 'avatars' and public is false and file_size_limit = 204800 and allowed_mime_types = array['image/jpeg'])
                    or (id = 'post-photos' and name = 'post-photos' and public is false and file_size_limit = 614400
-                       and allowed_mime_types = array['image/jpeg'] and pg_catalog.to_regclass('social.post_media') is not null))$q$ into buckets;
+                       and allowed_mime_types = array['image/jpeg'] and pg_catalog.to_regclass('social.post_media') is not null)
+                   -- Advertising creatives (20261209000000): public by design (advertising creative only, no member data, no member writes).
+                   or (id = 'ad-creatives' and name = 'ad-creatives' and public is true and file_size_limit = 8388608
+                       and allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'video/mp4']
+                       and pg_catalog.to_regprocedure('ads.creative_ready(uuid)') is not null))$q$ into buckets;
       if buckets > 0 then
-        raise exception 'FAIL: a storage bucket other than the private avatars and post-photos buckets exists, or its settings changed';
+        raise exception 'FAIL: a storage bucket other than the private avatars and post-photos buckets (and the public ad-creatives bucket) exists, or its settings changed';
       end if;
       if pg_catalog.to_regclass('social.post_media') is not null then
         execute $q$select count(*) from storage.buckets where id = 'post-photos'$q$ into buckets;

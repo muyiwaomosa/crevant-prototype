@@ -112,8 +112,21 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
         {why && (
           <div id={whyId} className="mt-2 rounded-xl bg-paper px-3 py-2 text-[13px] text-ink-700" data-testid="why-this-ad">
             <p>{whyText(ad)}</p>
-            <p className="mt-1">Ads never use your content interests, follows, searches or anything sensitive. Change what you see in your ad preferences (Profile).</p>
+            <p className="mt-1">
+              Ads never use your content interests, follows, searches or anything sensitive. Change what you see in your ad preferences (Profile).
+            </p>
           </div>
+        )}
+        {ad.creativeKind === 'image' && ad.mediaUrl && (
+          <img src={ad.mediaUrl} alt={ad.mediaAlt ?? ''} loading="lazy" className="mt-3 max-h-80 w-full rounded-2xl bg-ink-100 object-cover" />
+        )}
+        {ad.creativeKind === 'video' && ad.mediaUrl && (
+          <AdVideo
+            url={ad.mediaUrl}
+            label={ad.mediaAlt ?? ''}
+            onPlayed={() => void markViewed().then(() => api.adEvent(ad.impressionId, 'play').catch(() => undefined))}
+            onEnded={() => void api.adEvent(ad.impressionId, 'complete').catch(() => undefined)}
+          />
         )}
         <p className="mt-2 font-display text-[17px] font-bold text-ink-900">{ad.headline}</p>
         <p className="mt-1 text-[15px] text-ink-700">{ad.body}</p>
@@ -154,6 +167,64 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
   )
 }
 
+/**
+ * A simple video ad: never autoplays, starts muted, with controls. Loaded into
+ * a local blob link (the security headers allow media only from the app and
+ * blob links), so it plays without a Production header change. A play counts
+ * after 3 seconds of playback; the end counts once.
+ */
+function AdVideo({ url, label, onPlayed, onEnded }: { url: string; label: string; onPlayed: () => void; onEnded: () => void }) {
+  const [src, setSrc] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  const played = useRef(false)
+  const ended = useRef(false)
+  useEffect(() => {
+    let live = true
+    let made: string | null = null
+    fetch(url)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('not ok'))))
+      .then((b) => {
+        if (!live) return
+        made = URL.createObjectURL(b)
+        setSrc(made)
+      })
+      .catch(() => live && setFailed(true))
+    return () => {
+      live = false
+      if (made) URL.revokeObjectURL(made)
+    }
+  }, [url])
+  if (failed) return null
+  if (!src) return <div className="mt-3 aspect-video w-full rounded-2xl bg-ink-100" aria-hidden="true" />
+  return (
+    <video
+      src={src}
+      controls
+      muted
+      playsInline
+      preload="metadata"
+      aria-label={label}
+      className="mt-3 aspect-video w-full rounded-2xl bg-ink-900"
+      onTimeUpdate={(e) => {
+        if (!played.current && e.currentTarget.currentTime >= 3) {
+          played.current = true
+          onPlayed()
+        }
+      }}
+      onEnded={() => {
+        if (!played.current) {
+          played.current = true
+          onPlayed()
+        }
+        if (!ended.current) {
+          ended.current = true
+          onEnded()
+        }
+      }}
+    />
+  )
+}
+
 /** Profile: optional commercial preferences, separate from content interests. */
 export function AdPreferences() {
   const api = useAppApi()
@@ -187,8 +258,8 @@ export function AdPreferences() {
       <Card className="mt-4 p-5">
         <h2 className="font-display text-lg font-bold text-ink-900">Ads and your preferences</h2>
         <p className="mt-1 text-sm text-ink-700">
-          Optional. Tell us what you'd like to see offers for, or never see. Without choices, ads are not personalized. Your content interests, follows
-          and searches are never used for ads, and you keep full access whatever you choose.
+          Optional. Tell us what you'd like to see offers for, or never see. Without choices, ads are not personalized. Your content interests, follows and
+          searches are never used for ads, and you keep full access whatever you choose.
         </p>
         {error !== null && <Message tone="error">{messageFor(error)}</Message>}
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -271,7 +342,17 @@ function Text({ label, value, onChange, area }: { label: string; value: string; 
   )
 }
 
-function Picks({ legend, options, value, onChange }: { legend: string; options: Array<{ slug: string; label: string }>; value: string[]; onChange: (v: string[]) => void }) {
+function Picks({
+  legend,
+  options,
+  value,
+  onChange,
+}: {
+  legend: string
+  options: Array<{ slug: string; label: string }>
+  value: string[]
+  onChange: (v: string[]) => void
+}) {
   return (
     <fieldset>
       <legend className="text-sm font-semibold text-ink-800">{legend}</legend>
@@ -294,7 +375,18 @@ function Picks({ legend, options, value, onChange }: { legend: string; options: 
 
 function AdvertiserForm({ admin, onSaved }: { admin: AdsAdmin; onSaved: () => Promise<void> }) {
   const api = useAppApi()
-  const empty = { name: '', website: 'https://', offering: '', problem_solved: '', desired_outcome: '', customer_needs: '', objective: 'traffic', conversion_action: '', eligibility_notes: '', categories: [] as string[] }
+  const empty = {
+    name: '',
+    website: 'https://',
+    offering: '',
+    problem_solved: '',
+    desired_outcome: '',
+    customer_needs: '',
+    objective: 'traffic',
+    conversion_action: '',
+    eligibility_notes: '',
+    categories: [] as string[],
+  }
   const [a, setA] = useState(empty)
   const [error, setError] = useState<unknown>(null)
   const up = (k: keyof typeof empty) => (v: string) => setA((x) => ({ ...x, [k]: v }))
@@ -346,8 +438,23 @@ function CampaignForm({ admin, onSaved }: { admin: AdsAdmin; onSaved: () => Prom
   const later = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
   const approved = admin.advertisers.filter((x) => x.status === 'approved')
   const empty = {
-    advertiser_id: approved[0]?.id ?? '', name: '', placement: 'both', categories: [] as string[], context_topics: [] as string[], allow_general: false,
-    starts_on: today, ends_on: later, daily_cap: '3', price: '', headline: '', body: '', cta_label: 'Learn more', landing_url: 'https://',
+    advertiser_id: approved[0]?.id ?? '',
+    name: '',
+    placement: 'both',
+    categories: [] as string[],
+    context_topics: [] as string[],
+    allow_general: false,
+    starts_on: today,
+    ends_on: later,
+    daily_cap: '3',
+    price: '',
+    headline: '',
+    body: '',
+    cta_label: 'Learn more',
+    landing_url: 'https://',
+    creative_kind: 'text',
+    media_path: '',
+    media_alt: '',
   }
   const [c, setC] = useState(empty)
   const [error, setError] = useState<unknown>(null)
@@ -395,11 +502,63 @@ function CampaignForm({ admin, onSaved }: { admin: AdsAdmin; onSaved: () => Prom
         <Text label="Text" value={c.body} onChange={up('body')} area />
         <Text label="Button label" value={c.cta_label} onChange={up('cta_label')} />
         <Text label="Landing page" value={c.landing_url} onChange={up('landing_url')} />
+        <label className="block text-sm font-semibold text-ink-800">
+          Creative
+          <select aria-label="Creative" value={c.creative_kind} onChange={(e) => up('creative_kind')(e.target.value)} className={field}>
+            <option value="text">Text only</option>
+            <option value="image">Image</option>
+            <option value="video">Simple video (MP4)</option>
+          </select>
+        </label>
+        {c.creative_kind !== 'text' && (
+          <>
+            <label className="block text-sm font-semibold text-ink-800">
+              File (uploaded to the ad-creatives bucket)
+              <select
+                aria-label="File (uploaded to the ad-creatives bucket)"
+                value={c.media_path}
+                onChange={(e) => up('media_path')(e.target.value)}
+                className={field}
+              >
+                <option value="">Choose a file</option>
+                {(admin.creatives ?? [])
+                  .filter((f) => (c.creative_kind === 'video' ? f.type === 'video/mp4' : (f.type ?? '').startsWith('image/')))
+                  .map((f) => (
+                    <option key={f.path} value={f.path}>
+                      {f.path}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <Text label="Text alternative (what the image or video shows)" value={c.media_alt} onChange={up('media_alt')} />
+          </>
+        )}
       </div>
-      <Picks legend="Commercial categories (from onboarding)" options={admin.categories} value={c.categories} onChange={(v) => setC((x) => ({ ...x, categories: v }))} />
-      <Picks legend="Content topics for contextual ads (never faith or health)" options={admin.topics} value={c.context_topics} onChange={(v) => setC((x) => ({ ...x, context_topics: v }))} />
+      {c.creative_kind !== 'text' && (
+        <p className="text-[13px] text-ink-600">
+          Upload the file in Supabase, Storage, ad-creatives (JPEG, PNG or WebP, or MP4 up to 8 MB), then choose it here. A campaign can't be activated until
+          its file is there.
+        </p>
+      )}
+      <Picks
+        legend="Commercial categories (from onboarding)"
+        options={admin.categories}
+        value={c.categories}
+        onChange={(v) => setC((x) => ({ ...x, categories: v }))}
+      />
+      <Picks
+        legend="Content topics for contextual ads (never faith or health)"
+        options={admin.topics}
+        value={c.context_topics}
+        onChange={(v) => setC((x) => ({ ...x, context_topics: v }))}
+      />
       <label className="flex items-center gap-2 text-sm text-ink-800">
-        <input type="checkbox" checked={c.allow_general} onChange={(e) => setC((x) => ({ ...x, allow_general: e.target.checked }))} className="h-4 w-4 accent-brand-600" />
+        <input
+          type="checkbox"
+          checked={c.allow_general}
+          onChange={(e) => setC((x) => ({ ...x, allow_general: e.target.checked }))}
+          className="h-4 w-4 accent-brand-600"
+        />
         Allow a non-personalized fallback when nothing matches
       </label>
       {error !== null && <Message tone="error">{messageFor(error)}</Message>}
@@ -442,6 +601,7 @@ function ReportView({ campaign }: { campaign: Campaign }) {
     ['By context (impressions, clicks)', `${r.byMatch.context.impressions}, ${r.byMatch.context.clicks}`],
     ['Not personalized (impressions, clicks)', `${r.byMatch.general.impressions}, ${r.byMatch.general.clicks}`],
     ['With creators’ posts / in the feed', `${r.contentImpressions} / ${r.feedImpressions}`],
+    ...(r.creativeKind === 'video' ? ([['Video plays (3 s) / completions', `${r.videoPlays} / ${r.videoCompletions}`]] as Array<[string, string]>) : []),
     ['Advertiser satisfaction', r.advertiserSatisfaction === null ? 'not recorded' : `${r.advertiserSatisfaction} of 5`],
   ]
   async function act(f: () => Promise<string>) {
@@ -554,10 +714,18 @@ export function AdsManagePage() {
               </p>
               {a.status === 'pending' && (
                 <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={() => act(() => api.founderReviewAdvertiser(a.id, true, 'Meets the Advertising Policy'))} className={buttonClass('primary', 'sm')}>
+                  <button
+                    type="button"
+                    onClick={() => act(() => api.founderReviewAdvertiser(a.id, true, 'Meets the Advertising Policy'))}
+                    className={buttonClass('primary', 'sm')}
+                  >
                     Approve<span className="sr-only">{` ${a.name}`}</span>
                   </button>
-                  <button type="button" onClick={() => act(() => api.founderReviewAdvertiser(a.id, false, 'Does not meet the Advertising Policy'))} className={buttonClass('secondary', 'sm')}>
+                  <button
+                    type="button"
+                    onClick={() => act(() => api.founderReviewAdvertiser(a.id, false, 'Does not meet the Advertising Policy'))}
+                    className={buttonClass('secondary', 'sm')}
+                  >
                     Decline<span className="sr-only">{` ${a.name}`}</span>
                   </button>
                 </div>
@@ -576,7 +744,8 @@ export function AdsManagePage() {
                 {c.name} · {c.advertiser} <span className="ml-1 text-[12px] font-bold uppercase text-ink-600">{c.status}</span>
               </p>
               <p className="mt-1 text-ink-700">
-                {c.headline} · {c.placement === 'both' ? 'posts and feed' : c.placement === 'content' ? "creators' posts" : 'feed'} · {c.starts_on} to {c.ends_on}
+                {c.headline} · {c.placement === 'both' ? 'posts and feed' : c.placement === 'content' ? "creators' posts" : 'feed'} · {c.starts_on} to{' '}
+                {c.ends_on}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {c.status !== 'active' && c.status !== 'completed' && (
@@ -589,7 +758,12 @@ export function AdsManagePage() {
                     Pause<span className="sr-only">{` ${c.name}`}</span>
                   </button>
                 )}
-                <button type="button" aria-expanded={open === c.id} onClick={() => setOpen(open === c.id ? null : c.id)} className={buttonClass('secondary', 'sm')}>
+                <button
+                  type="button"
+                  aria-expanded={open === c.id}
+                  onClick={() => setOpen(open === c.id ? null : c.id)}
+                  className={buttonClass('secondary', 'sm')}
+                >
                   Report<span className="sr-only">{` for ${c.name}`}</span>
                 </button>
               </div>
