@@ -248,13 +248,13 @@ async function signIn(page, email) {
     await pageC.getByRole('heading', { name: 'People you might like' }).waitFor()
     const card = pageC.getByTestId('suggested-people').getByRole('listitem').filter({ hasText: A.displayName })
     await card.getByRole('button', { name: `Follow ${A.displayName}` }).click()
-    await card.getByTestId('follow-confirmation').getByRole('button', { name: `Add to Clique (${A.displayName})` }).click()
+    await card.getByTestId('follow-confirmation').getByRole('button', { name: `Join Clique (${A.displayName})` }).click()
     await card.getByRole('button', { name: `In your Clique (${A.displayName}, tap to remove)` }).waitFor()
     check('on "People you might like", adding to the Clique says "Added to your Clique!" and shows "In your Clique"',
       ((await card.getByTestId('relationship-notice').innerText()) || '').includes('Added to your Clique!'))
     await pageC.waitForTimeout(800)
-    check('the card keeps "In your Clique" (no stale "Add to Clique")',
-      (await card.getByRole('button', { name: `Add to Clique (${A.displayName})` }).count()) === 0
+    check('the card keeps "In your Clique" (no stale "Join Clique")',
+      (await card.getByRole('button', { name: `Join Clique (${A.displayName})` }).count()) === 0
         && (await card.getByRole('button', { name: `In your Clique (${A.displayName}, tap to remove)` }).count()) === 1)
     check('the Clique membership is stored once', sql(`select count(*) from social.clique_members where fan_id = '${C.id}' and creator_id = '${A.id}' and removed_at is null`) === '1')
     {

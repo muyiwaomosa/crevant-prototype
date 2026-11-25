@@ -47,7 +47,9 @@ begin
                             -- profile pictures (20261125000000), once applied
                             'avatars', 'avatar_uploads', 'avatar_events',
                             -- photo posts (20261127000000), once applied
-                            'media_uploads', 'post_media')
+                            'media_uploads', 'post_media',
+                            -- relationships (20261201000000), once applied
+                            'mutes', 'mute_events')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -84,6 +86,9 @@ declare
   -- Foundation v2 (20261130000000), once applied: adult confirmation, link
   -- registration, referral links, founder registration settings, keyset paging.
   foundation text[] := array['app_attest_adult', 'app_claim_access', 'app_feed_page', 'app_founder_create_invitation_link', 'app_founder_registration', 'app_founder_set_registration', 'app_member_posts_page', 'app_my_referral_link'];
+  -- Relationships (20261201000000), once applied: mute, Clique first Home,
+  -- Support Intent, relationship lists and audience insight.
+  relationships text[] := array['app_home_priority', 'app_mute', 'app_my_audience', 'app_my_relationships', 'app_record_support_intent', 'app_support_intent', 'app_unmute'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -103,6 +108,9 @@ begin
   end if;
   if to_regclass('ops.registrations') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || foundation) x);
+  end if;
+  if to_regclass('social.mutes') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || relationships) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -166,7 +174,10 @@ begin
           when to_regclass('social.post_media') is null
           then array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_views_are_permanent', 'rate_check']
           -- Photo posts (20261127000000) add the media helper.
-          else array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_media_json', 'post_views_are_permanent', 'rate_check']
+          when to_regclass('social.mutes') is null
+          then array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_member', 'post_media_json', 'post_views_are_permanent', 'rate_check']
+          -- Relationships (20261201000000) add Active Supporter, meaningful activity and the mute history guard.
+          else array['avatar_lock', 'avatar_rate_check', 'clique_members_guard', 'current_access', 'current_founder', 'current_member', 'current_moderator', 'history_is_append_only', 'is_active_supporter', 'is_member', 'meaningful_comment', 'mute_history_is_append_only', 'post_media_json', 'post_views_are_permanent', 'rate_check']
         end) then
     raise exception 'FAIL: the social helper and trigger functions are not the approved set (found %)', n;
   end if;
@@ -194,9 +205,17 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'follows_not_self' and conrelid = 'social.follows'::regclass) then
     raise exception 'FAIL: members could follow themselves';
   end if;
+  -- The Clique holds at most 25 until relationships (20261201000000), which
+  -- removes the limit (CON-02); a follow stays required either way.
   if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                 where n.nspname = 'social' and p.proname = 'clique_members_guard' and p.prosrc ~ '>= 25') then
-    raise exception 'FAIL: the Inner Clique limit is not 25';
+                 where n.nspname = 'social' and p.proname = 'clique_members_guard'
+                   and p.prosrc ~ 'not_following'
+                   and (p.prosrc ~ '>= 25') = (to_regclass('social.mutes') is null)) then
+    raise exception 'FAIL: the Clique guard is not as approved (follow required; at most 25 before 20261201000000, no limit after)';
+  end if;
+  if to_regclass('social.mutes') is not null and not exists (select 1 from pg_trigger where tgname = 'mute_events_append_only'
+                 and tgrelid = to_regclass('social.mute_events') and tgenabled <> 'D') then
+    raise exception 'FAIL: mute history is not append-only';
   end if;
   if (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'public' and p.proname in ('app_clique_add', 'app_clique_remove')
@@ -265,7 +284,9 @@ begin
                -- And foundation v2 (20261130000000): adult confirmations, controlled
                -- registration (settings, links, records, the shared check) and the
                -- launch settings it reads. No waitlist, invitation or admin data.
-               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
+               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion)\M', '', 'g')
+                  -- Relationships (20261201000000): the member's own non-binding Support Intent.
+                  ~* '\m(ops|waitlist_api|sim|analytics)\.|\mintent\.(?!support_intents\M)') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (

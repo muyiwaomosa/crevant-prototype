@@ -16,9 +16,11 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: the member launch gate (20261129000000,
-# scripts/db/rollback-member-launch-gate-test.sh, the newest, so it goes
-# first), the photo audience (20261128000000,
+# Later migrations follow the waitlist: relationships (20261201000000,
+# scripts/db/rollback-relationships-test.sh, the newest, so it goes first),
+# foundation v2 (20261130000000, scripts/db/rollback-foundation-v2-test.sh),
+# the member launch gate (20261129000000,
+# scripts/db/rollback-member-launch-gate-test.sh), the photo audience (20261128000000,
 # scripts/db/rollback-photo-audience-test.sh),
 # photo posts (20261127000000, scripts/db/rollback-post-photos-test.sh),
 # feedback (20261126000000, scripts/db/rollback-feedback-test.sh),
@@ -108,9 +110,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+RELATIONSHIPS=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261201000000')")
+if [ "$RELATIONSHIPS" = t ]; then
+  # The newest migration (relationships) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-foundation-v2.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the foundation v2 rollback refuses while relationships is recorded" \
+    || bad "the foundation v2 rollback did not refuse while relationships is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-relationships-test.sh; then
+    ok "relationships: its rollback refuses while member data, a Clique above 25 or a later migration exists, and otherwise removes exactly its own objects and restores every replaced function"
+  else
+    bad "the relationships rollback tests failed"
+  fi
+fi
 FOUNDATION=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261130000000')")
 if [ "$FOUNDATION" = t ]; then
-  # The newest migration (foundation v2) goes first.
+  # Then foundation v2.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-member-launch-gate.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the member launch gate rollback refuses while foundation v2 is recorded" \
@@ -407,9 +422,19 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
         && ok "after reapplying, the member launch gate rollback refuses while foundation v2 is recorded" \
         || bad "the member launch gate rollback did not refuse after reapply while foundation v2 is recorded (exit $code)"
       out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-foundation-v2.sql 2>&1); code=$?
-      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-        && ok "after reapplying, the foundation v2 rollback check passes again" \
-        || bad "foundation v2 rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+      if [ "$RELATIONSHIPS" = t ]; then
+        [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+          && ok "after reapplying, the foundation v2 rollback refuses while relationships is recorded" \
+          || bad "the foundation v2 rollback did not refuse after reapply while relationships is recorded (exit $code)"
+        out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-relationships.sql 2>&1); code=$?
+        [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+          && ok "after reapplying, the relationships rollback check passes again" \
+          || bad "relationships rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+      else
+        [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+          && ok "after reapplying, the foundation v2 rollback check passes again" \
+          || bad "foundation v2 rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+      fi
     else
       [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
         && ok "after reapplying, the member launch gate rollback check passes again" \
@@ -523,8 +548,9 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
       && ok "after reapplying, the Inner Clique rollback check passes again" \
       || bad "Inner Clique rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
     fi
-    [ "$("${PSQL[@]}" -c "select prosrc ~ '>= 25' from pg_proc where oid = 'social.clique_members_guard()'::regprocedure")" = t ] \
-      && ok "after reapplying, the Inner Clique holds 25 again" || bad "after reapplying, the guard is not at 25"
+    # Relationships (20261201000000) removes the limit again once it is reapplied.
+    [ "$("${PSQL[@]}" -c "select prosrc ~ '>= 25' from pg_proc where oid = 'social.clique_members_guard()'::regprocedure")" = "$([ "$RELATIONSHIPS" = t ] && echo f || echo t)" ] \
+      && ok "after reapplying, the Clique guard is as the newest migration defines it" || bad "after reapplying, the Clique guard is not as the newest migration defines it"
   fi
   if [ "$REQUESTS" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-publishing-requests.sql 2>&1); code=$?
@@ -553,7 +579,9 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
   if [ "$SOCIAL_APPLIED" = t ]; then
     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-social.sql 2>&1); code=$?
     if [ "$PLATFORM" = t ]; then
-      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+      # With relationships recorded, app_follow(uuid) has a second argument, so the
+      # social core rollback refuses even earlier: its inventory no longer matches.
+      [ $code -ne 0 ] && grep -Eq "later migration$([ "$RELATIONSHIPS" = t ] && echo '|expected objects are missing')" <<<"$out" \
         && ok "after reapplying, the social core rollback refuses while platform function access is recorded" \
         || bad "the social core rollback did not refuse after reapply while platform function access is recorded (exit $code)"
     else

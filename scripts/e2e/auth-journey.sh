@@ -60,3 +60,4 @@ APP_URL="http://127.0.0.1:$APP_PORT" node e2e/feedback-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/photo-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/auth-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/registration-journey.e2e.cjs
+APP_URL="http://127.0.0.1:$APP_PORT" node e2e/relationships-journey.e2e.cjs

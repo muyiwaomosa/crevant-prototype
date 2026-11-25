@@ -24,6 +24,8 @@ SQL
 }
 db() { psql "$DATABASE_URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
 
+# Relationships (20261201000000) removes the 25 limit; the other invariants stay.
+UNLIMITED=$(db "select to_regclass('social.mutes') is not null")
 open_count() { db "select count(*) from social.clique_members where fan_id = '$FAN' and removed_at is null"; }
 is_open() { db "select count(*) from social.clique_members where fan_id = '$FAN' and creator_id = '$(c "$1")' and removed_at is null"; }
 check_invariants() { # label
@@ -31,7 +33,7 @@ check_invariants() { # label
   n=$(open_count)
   dup=$(db "select count(*) from (select creator_id from social.clique_members where fan_id = '$FAN' and removed_at is null group by 1 having count(*) > 1) d")
   orphan=$(db "select count(*) from social.clique_members m where m.removed_at is null and not exists (select 1 from social.follows f where f.follower_id = m.fan_id and f.creator_id = m.creator_id)")
-  if [ "$n" -gt 25 ] || [ "$dup" != 0 ] || [ "$orphan" != 0 ]; then
+  if { [ "$UNLIMITED" = f ] && [ "$n" -gt 25 ]; } || [ "$dup" != 0 ] || [ "$orphan" != 0 ]; then
     echo "FAIL: $1: $n open, $dup duplicated, $orphan without a follow" >&2
     exit 1
   fi
@@ -80,10 +82,18 @@ echo "PASS: two simultaneous replacements bringing in the same creator: one appl
 # 4. An add racing a replacement at full capacity: the add is refused, still 25.
 race "select public.app_clique_replace('$(c 809)', '$(c 807)')" "select public.app_clique_add('$(c 806)')"
 check_invariants "an add racing a replacement"
-if grep -q ERROR <<<"$FIRST" || ! grep -q clique_full <<<"$SECOND" || [ "$(open_count)" != 25 ]; then
-  echo "FAIL: an add racing a replacement: first '$FIRST', second '$SECOND', $(open_count) open" >&2; exit 1
+if [ "$UNLIMITED" = f ]; then
+  if grep -q ERROR <<<"$FIRST" || ! grep -q clique_full <<<"$SECOND" || [ "$(open_count)" != 25 ]; then
+    echo "FAIL: an add racing a replacement: first '$FIRST', second '$SECOND', $(open_count) open" >&2; exit 1
+  fi
+  echo "PASS: an add racing a replacement at 25 is refused (clique_full), still 25"
+else
+  if grep -q ERROR <<<"$FIRST$SECOND" || [ "$(open_count)" != 26 ] || [ "$(is_open 806)" != 1 ]; then
+    echo "FAIL: an add racing a replacement (no limit): first '$FIRST', second '$SECOND', $(open_count) open" >&2; exit 1
+  fi
+  as_fan "select public.app_clique_remove('$(c 806)')" > /dev/null
+  echo "PASS: an add racing a replacement both apply with no Clique limit (26), with no duplicate or orphan"
 fi
-echo "PASS: an add racing a replacement at 25 is refused (clique_full), still 25"
 
 # 5. An unfollow racing a replacement that brings that creator in: no membership is left without a follow.
 race "select public.app_clique_replace('$(c 810)', '$(c 809)')" "select public.app_unfollow('$(c 809)')"

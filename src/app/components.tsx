@@ -1,11 +1,11 @@
 import clsx from 'clsx'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Heart, MessageCircle, Trash2, Users } from 'lucide-react'
+import { Check, Heart, MessageCircle, Sparkles, Trash2, Users } from 'lucide-react'
 import { Card, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
-import { AppApiError, LIMITS, messageFor, newRequestId, type MemberSummary, type Post } from './api'
+import { LIMITS, messageFor, newRequestId, type FollowSource, type MemberSummary, type Post } from './api'
 import { useAppApi } from './AppApiContext'
 import { useTrackView } from './ViewTracker'
 import { ReportButton } from './moderation'
@@ -267,6 +267,7 @@ export function RelationshipButtons({
   onChange,
   size = 'sm',
   postsHref,
+  source = 'other',
 }: {
   member: { id: string; displayName: string; followedByMe: boolean; inMyClique: boolean }
   /** Called after a change succeeds, with the new state (lists may refresh, or keep it locally). */
@@ -274,6 +275,8 @@ export function RelationshipButtons({
   size?: 'sm' | 'md'
   /** Where "See their posts" goes: a route (`/app/u/name#posts`) or an in-page anchor (`#posts`). Omit to hide it. */
   postsHref?: string
+  /** Where a follow from here starts (recorded with the follow; never a stage). */
+  source?: FollowSource
 }) {
   const api = useAppApi()
   // The state this control shows. It follows the member it is given, but a
@@ -322,7 +325,7 @@ export function RelationshipButtons({
       onClick={() => run(() => api.cliqueAdd(member.id), { followedByMe: true, inMyClique: true }, 'Added to your Clique!')}
       className={className}
     >
-      <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique<span className="sr-only">{` (${name})`}</span>
+      <Sparkles className="h-4 w-4" aria-hidden="true" /> Join Clique<span className="sr-only">{` (${name})`}</span>
     </button>
   )
   const prompt = justFollowed && state.followedByMe && !state.inMyClique
@@ -343,7 +346,7 @@ export function RelationshipButtons({
           <button
             type="button"
             disabled={busy}
-            onClick={() => run(() => api.follow(member.id), { followedByMe: true, inMyClique: false }, null, true)}
+            onClick={() => run(() => api.follow(member.id, source), { followedByMe: true, inMyClique: false }, null, true)}
             className={buttonClass('primary', size)}
           >
             Follow<span className="sr-only">{` ${name}`}</span>
@@ -383,7 +386,7 @@ export function RelationshipButtons({
             <p className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
-                You're following <strong>{name}</strong>. Their new posts will appear on Home, newest first. Add them to your Clique to keep them close.
+                You're following <strong>{name}</strong>. Their new posts will appear on Home, newest first. Join their Clique to keep them close.
               </span>
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -406,11 +409,6 @@ export function RelationshipButtons({
         )}
       </div>
       {error !== null && <ErrorNote error={error} />}
-      {error instanceof AppApiError && error.code === 'clique_full' && (
-        <Link to={`/app/clique?add=${encodeURIComponent(member.id)}`} className="inline-block text-sm font-semibold text-brand-700 underline">
-          Choose who to replace
-        </Link>
-      )}
     </div>
   )
 }
