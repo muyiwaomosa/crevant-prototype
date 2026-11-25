@@ -141,7 +141,7 @@ declare
 begin
   foreach t in array new.categories loop
     if not exists (select 1 from ads.categories c where c.slug = t) then
-      raise exception 'invalid_category' using errcode = 'P0001', detail = 'Choose commercial categories from the list.';
+      raise exception 'invalid_ad_category' using errcode = 'P0001', detail = 'Choose commercial categories from the list.';
     end if;
   end loop;
   if tg_table_name = 'campaigns' then

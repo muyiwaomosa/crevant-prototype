@@ -325,6 +325,94 @@ export interface ModReport extends Omit<ModQueueItem, 'excerpt' | 'targetUsernam
   targetOwnerId: string | null
 }
 
+/** Advertising (20261208000000). */
+export type AdSurface = 'content' | 'feed'
+export type AdMatch = 'preference' | 'context' | 'general'
+export interface Ad {
+  impressionId: string
+  advertiser: string
+  headline: string
+  body: string
+  ctaLabel: string
+  landingUrl: string
+  /** Why this ad: a commercial preference the member chose, the non-sensitive topic of the post, or not personalized. */
+  match: AdMatch
+  matched: string | null
+  placement: AdSurface
+}
+export type AdEventKind = 'view' | 'click' | 'relevant' | 'not_relevant' | 'hidden' | 'reported'
+export interface AdCategory {
+  slug: string
+  label: string
+  chosen: boolean
+  excluded: boolean
+}
+export interface AdExclusion {
+  kind: 'campaign' | 'advertiser'
+  target: string
+  label: string | null
+  createdAt: string
+}
+export interface Advertiser {
+  id: string
+  name: string
+  website: string
+  offering: string
+  problem_solved: string
+  desired_outcome: string
+  customer_needs: string
+  objective: 'awareness' | 'traffic' | 'sign_ups' | 'sales'
+  conversion_action: string
+  eligibility_notes: string | null
+  categories: string[]
+  status: 'pending' | 'approved' | 'declined'
+  review_note: string | null
+}
+export interface Campaign {
+  id: string
+  advertiser_id: string
+  advertiser: string
+  name: string
+  status: 'draft' | 'active' | 'paused' | 'completed'
+  placement: 'content' | 'feed' | 'both'
+  categories: string[]
+  context_topics: string[]
+  allow_general: boolean
+  starts_on: string
+  ends_on: string
+  daily_cap: number
+  price_cents: number
+  headline: string
+  body: string
+  cta_label: string
+  landing_url: string
+}
+export interface AdsAdmin {
+  advertisers: Advertiser[]
+  campaigns: Campaign[]
+  categories: Array<{ slug: string; label: string }>
+  topics: Array<{ slug: string; label: string }>
+}
+/** A campaign report: actual observations, aggregate only; counts under 10 come back as null. */
+export interface CampaignReport {
+  eligibleAudience: number | null
+  served: number
+  impressions: number
+  clicks: number
+  ctr: number | null
+  reach: number | null
+  relevant: number
+  notRelevant: number
+  hidden: number
+  reported: number
+  byMatch: Record<AdMatch, { impressions: number; clicks: number }>
+  contentImpressions: number
+  feedImpressions: number
+  verifiedConversions: number
+  advertiserSatisfaction: number | null
+  simulatedRevenueCents: number
+}
+
 /** Governance (20261206000000). */
 export type EnforcementLevel = 'warning' | 'restriction' | 'suspension'
 export type Standing = { standing: 'restricted' | 'suspended'; endsAt: string | null }
@@ -545,6 +633,25 @@ export interface AppApi {
   founderRecordSimRevenue(month: string, kind: 'content_ad' | 'feed_ad', creatorId: string | null, netCents: number, note: string): Promise<void>
   /** Founder: the SIMULATED close of a finished month; refuses unless it reconciles to the cent. */
   founderCloseMonth(month: string): Promise<{ poolCents: number; points: number; members: number; allocatedCents: number }>
+  /** Advertising (20261208000000). One ad for a surface, or null (no match, a cap, or before the migration). */
+  adFor(surface: AdSurface, postId?: string): Promise<Ad | null>
+  adEvent(impressionId: string, kind: AdEventKind): Promise<void>
+  /** The commercial categories with the member's choices; null before the migration. */
+  adCategories(): Promise<AdCategory[] | null>
+  setAdPreference(category: string, state: 'chosen' | 'excluded' | 'none'): Promise<void>
+  clearAdPreferences(): Promise<void>
+  myAdExclusions(): Promise<AdExclusion[]>
+  removeAdExclusion(kind: AdExclusion['kind'], target: string): Promise<void>
+  /** Founder: managed advertising. */
+  founderAds(): Promise<AdsAdmin | null>
+  founderSaveAdvertiser(a: Partial<Advertiser>): Promise<string>
+  founderReviewAdvertiser(id: string, approve: boolean, note?: string): Promise<void>
+  founderSaveCampaign(c: Partial<Campaign>): Promise<string>
+  founderSetCampaignStatus(id: string, status: Campaign['status']): Promise<void>
+  founderCampaignReport(id: string): Promise<CampaignReport>
+  founderRecordConversions(id: string, month: string, verified: number, note: string): Promise<void>
+  founderAttributeCampaignRevenue(id: string, month: string, netCents: number): Promise<{ contentCents: number; feedCents: number }>
+  founderAdDemand(): Promise<Array<{ category: string; label: string; members: number | null }>>
   /** Governance (20261206000000). Blocks: two way, never shown to the blocked member. */
   block(memberId: string): Promise<void>
   unblock(memberId: string): Promise<void>
@@ -700,6 +807,11 @@ const MESSAGES: Record<string, string> = {
   note_required: 'Write a note first.',
   not_founder: 'Only the founder can see this.',
   cannot_block_self: "You can't block yourself.",
+  invalid_ad_category: 'Choose commercial categories from the list.',
+  invalid_topic: 'Faith and health content is never used for ads.',
+  advertiser_not_approved: 'Approve the advertiser before activating a campaign.',
+  already_attributed: 'That campaign month already has its revenue recorded.',
+  no_impressions: 'This campaign had no valid impressions that month.',
   restricted: "You can't post, comment or repost while a restriction is in place. Your notices say when it ends.",
   suspended: 'Your account is suspended. You can still read your notices and appeal.',
   ladder_step_required: 'Take the earlier step first: a warning before a restriction, a restriction before a suspension (threats, self-harm and hate excepted).',
@@ -1606,6 +1718,91 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       const rows = await rpc<Array<Record<string, unknown>>>('app_founder_close_month', { p_month: month })
       const r = rows[0] ?? {}
       return { poolCents: num(r.pool_cents as number), points: num(r.points as number), members: num(r.members as number), allocatedCents: num(r.allocated_cents as number) }
+    },
+    async adFor(surface, postId) {
+      const { data, error } = await client.rpc('app_ad_for', { p_surface: surface, p_post: postId ?? null })
+      if (error) {
+        if (isMissingFunction(error, 'app_ad_for')) return null
+        throw toAppError(error)
+      }
+      const r = (Array.isArray(data) ? data[0] : null) as Record<string, unknown> | null
+      if (!r) return null
+      return {
+        impressionId: String(r.impression_id),
+        advertiser: String(r.advertiser),
+        headline: String(r.headline),
+        body: String(r.body),
+        ctaLabel: String(r.cta_label),
+        landingUrl: String(r.landing_url),
+        match: r.match as AdMatch,
+        matched: (r.matched as string | null) ?? null,
+        placement: r.placement as AdSurface,
+      }
+    },
+    adEvent: (impressionId, kind) => rpc<void>('app_ad_event', { p_impression: impressionId, p_kind: kind }),
+    async adCategories() {
+      const { data, error } = await client.rpc('app_ad_categories')
+      if (error) {
+        if (isMissingFunction(error, 'app_ad_categories')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({ slug: String(r.slug), label: String(r.label), chosen: Boolean(r.chosen), excluded: Boolean(r.excluded) }))
+    },
+    setAdPreference: (category, state) => rpc<void>('app_set_ad_preference', { p_category: category, p_state: state }),
+    clearAdPreferences: () => rpc<void>('app_clear_ad_preferences'),
+    async myAdExclusions() {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_my_ad_exclusions')
+      return rows.map((r) => ({ kind: r.kind as AdExclusion['kind'], target: String(r.target), label: (r.label as string | null) ?? null, createdAt: String(r.created_at) }))
+    },
+    removeAdExclusion: (kind, target) => rpc<void>('app_remove_ad_exclusion', { p_kind: kind, p_target: target }),
+    async founderAds() {
+      const { data, error } = await client.rpc('app_founder_ads')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_ads')) return null
+        throw toAppError(error)
+      }
+      return data as AdsAdmin
+    },
+    founderSaveAdvertiser: (a) => rpc<string>('app_founder_save_advertiser', { p: a }),
+    founderReviewAdvertiser: (id, approve, note) => rpc<void>('app_founder_review_advertiser', { p_advertiser: id, p_approve: approve, p_note: note?.trim() || null }),
+    founderSaveCampaign: (c) => rpc<string>('app_founder_save_campaign', { p: c }),
+    founderSetCampaignStatus: (id, status) => rpc<void>('app_founder_set_campaign_status', { p_campaign: id, p_status: status }),
+    async founderCampaignReport(id) {
+      const r = await rpc<Record<string, unknown>>('app_founder_campaign_report', { p_campaign: id })
+      const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
+      const m = (r.by_match ?? {}) as Record<string, { impressions: number; clicks: number }>
+      return {
+        eligibleAudience: n(r.eligible_audience),
+        served: Number(r.served ?? 0),
+        impressions: Number(r.impressions ?? 0),
+        clicks: Number(r.clicks ?? 0),
+        ctr: n(r.ctr),
+        reach: n(r.reach),
+        relevant: Number(r.relevant ?? 0),
+        notRelevant: Number(r.not_relevant ?? 0),
+        hidden: Number(r.hidden ?? 0),
+        reported: Number(r.reported ?? 0),
+        byMatch: {
+          preference: m.preference ?? { impressions: 0, clicks: 0 },
+          context: m.context ?? { impressions: 0, clicks: 0 },
+          general: m.general ?? { impressions: 0, clicks: 0 },
+        },
+        contentImpressions: Number(r.content_impressions ?? 0),
+        feedImpressions: Number(r.feed_impressions ?? 0),
+        verifiedConversions: Number(r.verified_conversions ?? 0),
+        advertiserSatisfaction: n(r.advertiser_satisfaction),
+        simulatedRevenueCents: Number(r.simulated_revenue_cents ?? 0),
+      }
+    },
+    founderRecordConversions: (id, month, verified, note) =>
+      rpc<void>('app_founder_record_conversions', { p_campaign: id, p_month: month, p_verified: verified, p_note: note.trim() }),
+    async founderAttributeCampaignRevenue(id, month, netCents) {
+      const r = await rpc<Record<string, unknown>>('app_founder_attribute_campaign_revenue', { p_campaign: id, p_month: month, p_net_cents: netCents })
+      return { contentCents: Number(r.content_cents ?? 0), feedCents: Number(r.feed_cents ?? 0) }
+    },
+    async founderAdDemand() {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_founder_ad_demand')
+      return rows.map((r) => ({ category: String(r.category), label: String(r.label), members: r.members === null ? null : Number(r.members) }))
     },
     block: (id) => rpc<void>('app_block', { p_member: id }),
     unblock: (id) => rpc<void>('app_unblock', { p_member: id }),
