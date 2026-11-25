@@ -33,3 +33,28 @@ Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 | PB-2 Migrations and functions | Dec 16 | Not started |
 | PB-3 Release candidate fixes | Dec 20 | Not started |
 | PB-4 Open external access | Dec 23 | Not started |
+
+## Remaining approved scope (mapped Nov 25, checked against the code)
+
+Sizes: S under a day, M one to two days, L more.
+
+| Area | Requirement | State | Size | Needs |
+|---|---|---|---|---|
+| Acquisition | BRD-07 Control Center: issue invitation links, set limits, pause registration | Database functions exist (20261130000000); no screen calls them | S-M | |
+| Acquisition | Creator invitation links that name the inviting creator at registration, and show them first in setup (ACQUISITION Phase 2 and 3) | Column exists; no creator parameter, banner or suggestion | S | |
+| Acquisition | BRD-03 "Apply as a creator" path | `/join/creator` redirects to the waitlist | M | Founder: new form or waitlist variant |
+| Acquisition | BRD-05 Advertiser inquiry ("talk to us") | Missing | M | Founder: where inquiries go |
+| Acquisition | BRD-08 one funnel from visit to registration to activation; `interests_selected` and suggestion counts | Registration and activation counted; visits sit in the waitlist project | M | |
+| Onboarding | Explain My Split and points (simulated; recognized versus redeemable) during first run (SP-TA-001 §9) | Missing | S | |
+| Onboarding | DSC-04 creator setup: up to 3 posting topics (needed for creator discovery), first post prompt | Missing; "Creator" changes only a badge | M | |
+| Brand | BRD-09 landing: the signature line, "Find your path" (creators, members, advertisers), registration wording, one disclosure band (BRD-10) | Missing or scattered | S-M | |
+| Brand | BRD-09 "See Splitpost" with real screenshots; sharing image on the Splitpost domain | Missing | S | Screenshots after the Dec 7 build; domain after the Production site approval |
+| Brand | BRD-10 retire `/tour` (old sample economy) | Still served | S-M | |
+| Brand | BRD-01 one financial card component that forces a Simulated, Non-binding or Actual label | Labels applied screen by screen | M | |
+| Journeys | REL-03 four end-to-end stakeholder journeys (consumer, creator, advertiser, founder) on staging | 14 feature journeys pass; no cross-stakeholder ones yet | M-L | Working staging (steps A to D) |
+| Governance | GOV-C12 account deletion request and audited deletion; GOV-C11 privacy request procedure | Missing | M | Legal wording (N11) |
+| Release | REL-12 switches for ads, sharing and video (registration, rewards and previews have them); rewards switch in the UI | Partial | S-M | |
+| Release | REL-08 dedicated cent-exact reconciliation suite | Checks live inside the rewards and ads tests | M | |
+| Release | REL-05 to REL-07 device, usability (4 of 5 finish setup in under 4 minutes), keyboard and screen reader, security review | Not run (axe runs in every journey) | M | Testers |
+| Release | REL-11 restore drill; REL-13 cohort plan and holiday rota; GOV-C15 evidence pack index | Not done | S each | N10 cohort plan |
+| IP-5 | Video posts (720p conversion, resumable upload, limits, player) | Not started; posts accept photos only | L | N6 device test |
