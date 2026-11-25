@@ -14,6 +14,7 @@ import {
   type MyDetails,
   type ProfileDetails,
   type Topic,
+  type FollowSource,
 } from './api'
 import { useAppApi } from './AppApiContext'
 import { MemberAvatar, MemberLink, RelationshipButtons } from './components'
@@ -515,11 +516,14 @@ export function PersonSummary({
   topics,
   onChange,
   myTopics,
+  source = 'discover',
 }: {
   member: DiscoverMember
   topics: Topic[] | null | undefined
   onChange: (next: { followedByMe: boolean; inMyClique: boolean }) => void | Promise<void>
   myTopics?: string[]
+  /** Where a follow from this card starts (20261204000000 adds 'search'). */
+  source?: FollowSource
 }) {
   const profile = `/app/u/${member.username}`
   const d = member.details
@@ -556,7 +560,7 @@ export function PersonSummary({
         </div>
       )}
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <RelationshipButtons member={member} onChange={onChange} source="discover" postsHref={member.postCount > 0 ? `${profile}#posts` : undefined} />
+        <RelationshipButtons member={member} onChange={onChange} source={source} postsHref={member.postCount > 0 ? `${profile}#posts` : undefined} />
         {member.postCount > 0 && (
           <Link to={`${profile}#posts`} aria-label={`See posts by ${member.displayName}`} className="text-sm font-semibold text-brand-700 underline sm:mt-1.5">
             See posts

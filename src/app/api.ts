@@ -104,9 +104,11 @@ export interface Member extends MemberSummary {
 }
 
 /** Where a follow started: a journey source, never a relationship stage. */
-export type FollowSource = 'profile' | 'discover' | 'post' | 'catch_up' | 'comment' | 'other'
+export type FollowSource = 'profile' | 'discover' | 'post' | 'catch_up' | 'comment' | 'search' | 'other'
 /** A non-binding Support Intent: what a member says they would be willing to support each month. Never a payment. */
 export type SupportChoice = 'usd_3' | 'usd_5' | 'usd_10' | 'not_sure'
+/** The wording a member agrees to when allowing public previews (recorded with their choice). */
+export const PREVIEW_WORDING_VERSION = 'previews-v1'
 export const SUPPORT_CHOICES: Array<{ value: SupportChoice; label: string }> = [
   { value: 'usd_3', label: '$3 a month' },
   { value: 'usd_5', label: '$5 a month' },
@@ -430,6 +432,12 @@ export interface AppApi {
   searchPosts(query: string): Promise<Post[] | null>
   /** Records a share (copy link or share sheet). Best effort: sharing still works if this fails. */
   recordShare(postId: string, channel: 'copy_link' | 'share_sheet'): Promise<void>
+  /** Search measurement (20261204000000): daily counts only, never the words or the member. Best effort. */
+  noteSearch(surface: 'search' | 'focus', hadResults: boolean, topic?: string): Promise<void>
+  noteSearchSelection(surface: 'search' | 'focus', topic?: string): Promise<void>
+  /** Whether the member has opted in to public previews of their posts (off until they choose); null before 20261204000000. */
+  publicPreviewsAllowed(): Promise<boolean | null>
+  setPublicPreviews(allowed: boolean): Promise<void>
   like(postId: string): Promise<void>
   unlike(postId: string): Promise<void>
   /** requestId: as for createPost. */
@@ -1365,6 +1373,23 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       return ((data ?? []) as PostRow[]).map(toPost)
     },
     recordShare: (postId, channel) => rpc<void>('app_record_share', { p_post: postId, p_channel: channel }),
+    async noteSearch(surface, hadResults, topic) {
+      const { error } = await client.rpc('app_note_search', { p_surface: surface, p_had_results: hadResults, p_topic: topic ?? null })
+      if (error && !isMissingFunction(error, 'app_note_search')) throw toAppError(error)
+    },
+    async noteSearchSelection(surface, topic) {
+      const { error } = await client.rpc('app_note_search_selection', { p_surface: surface, p_topic: topic ?? null })
+      if (error && !isMissingFunction(error, 'app_note_search_selection')) throw toAppError(error)
+    },
+    async publicPreviewsAllowed() {
+      const { data, error } = await client.rpc('app_public_previews_allowed')
+      if (error) {
+        if (isMissingFunction(error, 'app_public_previews_allowed')) return null
+        throw toAppError(error)
+      }
+      return data === true
+    },
+    setPublicPreviews: (allowed) => rpc<void>('app_set_public_previews', { p_allowed: allowed, p_wording_version: allowed ? PREVIEW_WORDING_VERSION : null }),
     repost: (postId) => rpc<void>('app_repost', { p_post: postId }),
     unrepost: (postId) => rpc<void>('app_unrepost', { p_post: postId }),
     unfollow: (id) => rpc<void>('app_unfollow', { p_creator: id }),

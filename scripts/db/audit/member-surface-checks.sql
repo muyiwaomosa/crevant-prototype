@@ -124,6 +124,17 @@ declare
     'public.app_record_share(uuid,text)',
     'public.app_search_posts(text,integer)'
   ];
+  -- Previews and search measurement (20261204000000), once applied.
+  previews text[] := array[
+    'public.app_founder_search_metrics(integer)',
+    'public.app_note_search(text,boolean,text)',
+    'public.app_note_search_selection(text,text)',
+    'public.app_public_post(uuid,text)',
+    'public.app_public_previews_allowed()',
+    'public.app_set_public_previews(boolean,text)'
+  ];
+  -- The one function visitors may call, once previews exist.
+  anon_allowed text[] := '{}';
   actual text[];
   extra text[];
   missing text[];
@@ -156,6 +167,10 @@ begin
   if to_regclass('social.shares') is not null then
     expected := expected || discovery;
   end if;
+  if to_regclass('social.preview_consents') is not null then
+    expected := expected || previews;
+    anon_allowed := array['public.app_public_post(uuid, text)'];
+  end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
   from pg_catalog.pg_proc p
@@ -179,6 +194,7 @@ begin
   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
   where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent')
     and pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE');
+  anon_fns := (select coalesce(array_agg(a), '{}') from unnest(anon_fns) a where a <> all (anon_allowed));
   if cardinality(anon_fns) > 0 then
     raise exception 'FAIL: anonymous visitors can run functions: %', anon_fns;
   end if;
@@ -230,6 +246,11 @@ begin
       -- Moderators only: membership AND an active moderator row.
       if position('social.current_moderator()' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': does not check social.current_moderator()');
+      end if;
+    elsif r.proname = 'app_public_post' then
+      -- Public previews (20261204000000): visitors, but only eligible posts, only while on, rate limited.
+      if position('ops.public_preview_settings' in r.prosrc) = 0 or position('social.visible_members' in r.prosrc) = 0 or position('s.deleted_at is null' in r.prosrc) = 0 or position('social.preview_consents' in r.prosrc) = 0 or position('ops.content_reports' in r.prosrc) = 0 or position('rate_limited' in r.prosrc) = 0 then
+        bad := bad || (r.proname || ': public preview without its eligibility, switch or limits');
       end if;
     elsif r.proname like 'app\_founder\_%' then
       -- The founder only (20261126000000): membership AND the founder cohort.

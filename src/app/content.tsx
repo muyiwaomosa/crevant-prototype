@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
+import { Link } from 'react-router-dom'
 import { Bookmark, Check, Pencil, Repeat2, Share2 } from 'lucide-react'
-import { buttonClass } from '../components/ui'
+import { Card, buttonClass } from '../components/ui'
 import { AppApiError, LIMITS, type Post, type PostMeta, type Topic } from './api'
 import { useAppApi } from './AppApiContext'
 import { ErrorNote } from './components'
@@ -292,8 +293,9 @@ export function EditPost({ post, onEdited }: { post: Post; onEdited: (body: stri
 
 /**
  * Share (20261203000000): the device share sheet where there is one, else
- * copy the link. The link opens the post for signed-in members (public
- * previews for visitors are a separate founder decision). The share is
+ * copy the link. The link is the public preview (/p/<id>, 20261204000000)
+ * with the sharer's referral link; visitors see it only while previews are
+ * on, members are taken to the post. The share is
  * recorded once per post and channel an hour; sharing works even if
  * recording fails.
  */
@@ -301,9 +303,27 @@ export function ShareButton({ post }: { post: Post }) {
   const api = useAppApi()
   const { available } = usePostMeta(post.id)
   const [copied, setCopied] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   if (!available) return null
   async function share() {
-    const url = `${window.location.origin}/app/post/${post.id}`
+    setNotice(null)
+    if (post.isMine) {
+      try {
+        if ((await api.publicPreviewsAllowed()) === false)
+          setNotice("Only members can open this link. To let anyone see a preview, allow public previews in your profile.")
+      } catch {
+        // The share still works.
+      }
+    }
+    // The public preview address (20261204000000), carrying the sharer's
+    // referral link so a visitor who joins is attributed to them.
+    let code: string | null = null
+    try {
+      code = await api.myReferralCode()
+    } catch {
+      code = null
+    }
+    const url = `${window.location.origin}/p/${post.id}${code ? `?r=${code}` : ''}`
     let channel: 'copy_link' | 'share_sheet' | null = null
     const nav: Navigator | undefined = typeof navigator === 'undefined' ? undefined : navigator
     if (nav && typeof nav.share === 'function') {
@@ -326,6 +346,7 @@ export function ShareButton({ post }: { post: Post }) {
     void api.recordShare(post.id, channel).catch(() => undefined)
   }
   return (
+    <>
     <button
       type="button"
       onClick={() => void share()}
@@ -334,5 +355,107 @@ export function ShareButton({ post }: { post: Post }) {
     >
       {copied ? <Check className="h-[18px] w-[18px] text-brand-700" aria-hidden="true" /> : <Share2 className="h-[18px] w-[18px]" aria-hidden="true" />}
     </button>
+    {notice && (
+      <p role="status" className="basis-full rounded-2xl bg-ink-100/70 px-3 py-2 text-[13px] text-ink-700" data-testid="share-notice">
+        {notice}{' '}
+        <Link to="/app/profile" className="font-semibold text-brand-700 underline">
+          Profile
+        </Link>
+      </p>
+    )}
+    </>
+  )
+}
+
+/** Profile setting: allow public previews of my posts (20261204000000). Hidden before the migration. */
+export function PublicPreviewsSetting() {
+  const api = useAppApi()
+  const [allowed, setAllowed] = useState<boolean | null | undefined>(undefined)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  const id = useId()
+  useEffect(() => {
+    let live = true
+    api.publicPreviewsAllowed().then(
+      (a) => live && setAllowed(a),
+      () => live && setAllowed(null),
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
+  if (allowed === undefined || allowed === null) return null
+  async function change(next: boolean) {
+    // Shown at once; put back if saving fails.
+    const before = allowed
+    setAllowed(next)
+    setBusy(true)
+    setError(null)
+    try {
+      await api.setPublicPreviews(next)
+    } catch (e) {
+      setAllowed(before)
+      setError(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section data-testid="public-previews-setting">
+    <Card className="mt-4 p-5">
+      <h2 className="font-display text-lg font-bold text-ink-900">Sharing outside Splitpost</h2>
+      <p className="mt-2 text-[14px] leading-relaxed text-ink-700">
+        When you or someone else shares one of your posts outside Splitpost, people who aren't members can open the link. If you allow it, they see a public preview:
+        the post's text, when it was posted, its topic and your name and username. They never see photos, comments, likes or anything about other members.
+        You can change your mind at any time, and previews stop straight away.
+      </p>
+      <label htmlFor={id} className="mt-3 flex items-start gap-3 text-[15px] font-semibold text-ink-900">
+        <input id={id} type="checkbox" checked={allowed} disabled={busy} onChange={(e) => void change(e.target.checked)} className="mt-1 h-4 w-4 accent-brand-600" />
+        <span>Allow public previews of my posts</span>
+      </label>
+      <p className="mt-1 pl-7 text-[13px] text-ink-600">{allowed ? 'On: shared links to your posts show a public preview.' : 'Off: only members can open links to your posts.'}</p>
+      {error !== null && <ErrorNote error={error} />}
+    </Card>
+    </section>
+  )
+}
+
+/** After joining from a preview, offer to follow the creator the member came for (never automatic). */
+export function JoinedForPrompt() {
+  const [who, setWho] = useState<{ username: string; displayName: string } | null>(null)
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem('splitpost.join_for')
+      const v = raw ? (JSON.parse(raw) as { username?: unknown; displayName?: unknown; at?: unknown }) : null
+      if (v && typeof v.username === 'string' && typeof v.displayName === 'string' && typeof v.at === 'number' && Date.now() - v.at < 7 * 86400000) {
+        setWho({ username: v.username, displayName: v.displayName })
+      }
+    } catch {
+      setWho(null)
+    }
+  }, [])
+  if (!who) return null
+  const dismiss = () => {
+    try {
+      window.localStorage.removeItem('splitpost.join_for')
+    } catch {
+      // ignore
+    }
+    setWho(null)
+  }
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-brand-50 px-4 py-3 ring-1 ring-brand-100" data-testid="joined-for">
+      <p className="text-[14px] text-brand-900">
+        You came to Splitpost for <strong>{who.displayName}</strong>. Follow them to see their posts on Home.
+      </p>
+      <div className="flex gap-2">
+        <Link to={`/app/u/${who.username}`} onClick={dismiss} className={buttonClass('primary', 'sm')}>
+          See {who.displayName}
+        </Link>
+        <button type="button" onClick={dismiss} className={buttonClass('ghost', 'sm')}>
+          Not now
+        </button>
+      </div>
+    </div>
   )
 }

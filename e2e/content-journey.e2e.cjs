@@ -199,8 +199,10 @@ async function signIn(page, email) {
     await pageV.goto(`${APP}/app/discover`)
     await pageV.getByRole('tab', { name: 'For you' }).waitFor()
     await pageV.getByRole('button', { name: 'Money & business' }).click()
-    await pageV.getByText(`${text}, updated`).waitFor()
-    check('For you with a focus shows the post from someone not followed, with its reason', /In Money & business, the topic you chose/.test(await pageV.getByTestId('discover-reason').first().innerText()))
+    // Wait for the focused list itself (the same post can be in the unfocused list too).
+    const focused = pageV.getByRole('listitem').filter({ hasText: `${text}, updated` }).filter({ hasText: 'In Money & business, the topic you chose' })
+    await focused.first().waitFor()
+    check('For you with a focus shows the post from someone not followed, with its reason', (await focused.count()) === 1)
     await screenChecks(pageV, 'Discover, For you')
     await pageV.getByLabel('Search people, posts and topics').fill('budget')
     await pageV.getByRole('button', { name: 'Search', exact: true }).click()

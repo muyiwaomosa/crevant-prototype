@@ -20,7 +20,9 @@ begin
     and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
     and has_schema_privilege(r, n.oid, 'USAGE')
     and has_function_privilege(r, p.oid, 'EXECUTE')
-    and not (r = 'authenticated' and n.nspname = 'public' and p.proname like 'app\_%');
+    and not (r = 'authenticated' and n.nspname = 'public' and p.proname like 'app\_%')
+    -- The one function visitors may call (20261204000000): the read-only public preview.
+    and not (r = 'anon' and p.oid = coalesce(to_regprocedure('public.app_public_post(uuid, text)'), 0::oid));
   if bad is not null then
     raise exception 'FAIL: members can run functions they should not: %', bad;
   end if;

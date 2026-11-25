@@ -53,7 +53,9 @@ begin
                             -- content (20261202000000), once applied
                             'post_edits', 'saves', 'reposts', 'content_actions',
                             -- discovery (20261203000000), once applied
-                            'shares')
+                            'shares',
+                            -- previews and search measurement (20261204000000), once applied
+                            'search_metrics_daily', 'preview_consents', 'preview_visits', 'preview_rate')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -97,6 +99,9 @@ declare
   content text[] := array['app_edit_post', 'app_feed_items_page', 'app_post_edits', 'app_post_meta', 'app_repost', 'app_save', 'app_saved_page', 'app_set_post_topic', 'app_unrepost', 'app_unsave'];
   -- Discovery (20261203000000), once applied: content discovery, post search, sharing.
   discovery text[] := array['app_discover_content', 'app_record_share', 'app_search_posts'];
+  -- Previews and search measurement (20261204000000), once applied. app_public_post is
+  -- the one function visitors may call (checked below and in 006).
+  previews text[] := array['app_founder_search_metrics', 'app_note_search', 'app_note_search_selection', 'app_public_post', 'app_public_previews_allowed', 'app_set_public_previews'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -126,6 +131,9 @@ begin
   if to_regclass('social.shares') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || discovery) x);
   end if;
+  if to_regclass('social.preview_consents') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || previews) x);
+  end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname like 'app\_%';
@@ -143,7 +151,8 @@ begin
     if not ('search_path=""' = any (coalesce(f.proconfig, '{}')) or 'search_path=' = any (coalesce(f.proconfig, '{}'))) then
       raise exception 'FAIL: public.% does not pin an empty search_path (%)', f.proname, f.proconfig;
     end if;
-    if has_function_privilege('anon', f.oid, 'EXECUTE') then
+    -- The single exception (20261204000000): the read-only public preview.
+    if has_function_privilege('anon', f.oid, 'EXECUTE') and f.oid <> coalesce(to_regprocedure('public.app_public_post(uuid, text)'), 0::oid) then
       raise exception 'FAIL: anonymous visitors can call public.%', f.proname;
     end if;
     if not has_function_privilege('authenticated', f.oid, 'EXECUTE') then
@@ -304,7 +313,7 @@ begin
                -- And foundation v2 (20261130000000): adult confirmations, controlled
                -- registration (settings, links, records, the shared check) and the
                -- launch settings it reads. No waitlist, invitation or admin data.
-               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion)\M', '', 'g')
+               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings)\M', '', 'g')
                   -- Relationships (20261201000000): the member's own non-binding Support Intent.
                   ~* '\m(ops|waitlist_api|sim|analytics)\.|\mintent\.(?!support_intents\M)') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
