@@ -254,6 +254,8 @@ describe('signed-in pages', () => {
     renderAt('/app', client)
     expect(await screen.findByRole('heading', { name: "Your pilot access isn't active" })).toBeTruthy()
     expect(client.rpc).toHaveBeenCalledWith('app_access_state')
+    // Foundation v2: an account with no membership tries to claim it through its registration link.
+    expect(client.rpc).toHaveBeenCalledWith('app_claim_access', { p_code: null, p_adult_attested: false, p_wording_version: 'adult-v1' })
     expect(client.from).not.toHaveBeenCalled()
   })
 
@@ -289,9 +291,9 @@ describe('signed-in pages', () => {
   })
 })
 
-describe('there is no way to register', () => {
-  it('has no sign-up route', async () => {
-    for (const path of ['/sign-up', '/signup', '/register']) {
+describe('there is no open registration', () => {
+  it('has no open sign-up route (registration is only through a link, at /register/<code>)', async () => {
+    for (const path of ['/sign-up', '/signup']) {
       renderAt(path, makeClient())
       expect(await screen.findByText('Page not found')).toBeTruthy()
       cleanup()
@@ -304,5 +306,95 @@ describe('there is no way to register', () => {
     expect(container.querySelector('form, input, textarea, select, [type="password"]')).toBeNull()
     expect(client.auth.signUp).not.toHaveBeenCalled()
     cleanup()
+  })
+})
+
+describe('controlled registration through a link (/register/<code>, 20261130000000)', () => {
+  const CODE = '0123456789abcdef'
+  beforeEach(() => {
+    try {
+      window.localStorage.clear()
+    } catch {
+      // ignore
+    }
+  })
+
+  function fill(email = 'new@example.test', password = 'a-long-password-1', adult = true) {
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: email } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } })
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: password } })
+    if (adult) fireEvent.click(screen.getByLabelText('I confirm that I am 18 or older.'))
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
+  }
+
+  it('without a link, explains that an invitation is needed and shows no form', async () => {
+    const client = makeClient()
+    const { container } = renderAt('/register', client)
+    expect(await screen.findByRole('heading', { name: 'You need an invitation link' })).toBeTruthy()
+    expect(container.querySelector('form')).toBeNull()
+  })
+
+  it('signs up with the link code and the 18+ confirmation, then asks to confirm the email', async () => {
+    const client = makeClient()
+    ;(client.auth.signUp as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {}, error: null })
+    renderAt(`/register/${CODE}`, client)
+    await screen.findByTestId('register-form')
+    expect(screen.getByTestId('policies-pending')).toBeTruthy()
+    fill()
+    await screen.findByTestId('register-sent')
+    expect(client.auth.signUp).toHaveBeenCalledWith({
+      email: 'new@example.test',
+      password: 'a-long-password-1',
+      options: { emailRedirectTo: `${window.location.origin}/auth/confirm`, data: { registration_code: CODE, adult_attested: true } },
+    })
+  })
+
+  it('refuses to send anything without the 18+ confirmation', async () => {
+    const client = makeClient()
+    renderAt(`/register/${CODE}`, client)
+    await screen.findByTestId('register-form')
+    fill('new@example.test', 'a-long-password-1', false)
+    expect(await screen.findByText('The Splitpost pilot is for people aged 18 or older.')).toBeTruthy()
+    expect(client.auth.signUp).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['Registration is paused right now. Please join the waitlist.', 'Registration is paused right now. Please try again later, or join the waitlist.'],
+    ['The pilot is full for now. Please join the waitlist.', 'The pilot is full for now. Please try again later, or join the waitlist.'],
+    ['This invitation or referral link is not valid.', "This invitation or referral link isn't valid. Ask the person who shared it for a new one."],
+    ['Please use a permanent email address.', 'Please use a permanent email address.'],
+  ])('explains the account creation hook refusing: %s', async (hookMessage, shown) => {
+    const client = makeClient()
+    ;(client.auth.signUp as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {}, error: { status: 403, message: hookMessage } })
+    renderAt(`/register/${CODE}`, client)
+    await screen.findByTestId('register-form')
+    fill()
+    expect(await screen.findByText(shown)).toBeTruthy()
+  })
+
+  it('an existing address gets the same reply as a new one', async () => {
+    const client = makeClient()
+    ;(client.auth.signUp as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {}, error: { status: 422, code: 'user_already_exists', message: 'User already registered' } })
+    renderAt(`/register/${CODE}`, client)
+    await screen.findByTestId('register-form')
+    fill()
+    expect(await screen.findByTestId('register-sent')).toBeTruthy()
+  })
+
+  it('first touch: a later link does not replace the first one this browser opened', async () => {
+    const client = makeClient()
+    ;(client.auth.signUp as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {}, error: null })
+    renderAt(`/register/${CODE}`, client)
+    await screen.findByTestId('register-form')
+    cleanup()
+    renderAt('/register/fedcba9876543210', client)
+    await screen.findByTestId('register-form')
+    fill()
+    await screen.findByTestId('register-sent')
+    expect((client.auth.signUp as ReturnType<typeof vi.fn>).mock.calls[0][0].options.data.registration_code).toBe(CODE)
+  })
+
+  it('accepts sign-up confirmation links (type email) as well as invitations and resets', () => {
+    expect(readEmailLink(`#token_hash=${TOKEN}&type=email`)?.type).toBe('email')
   })
 })

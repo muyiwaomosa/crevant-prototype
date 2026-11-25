@@ -44,7 +44,9 @@ declare
 begin
   if (select array_agg(p.proname::text order by p.proname collate "C")
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname = 'public' and p.proname like 'app\_founder\_%')
+      where n.nspname = 'public' and p.proname like 'app\_founder\_%'
+        -- Foundation v2 (20261130000000) adds the founder's registration functions; checked in 016.
+        and p.proname not in ('app_founder_create_invitation_link', 'app_founder_registration', 'app_founder_set_registration'))
      is distinct from array['app_founder_feedback', 'app_founder_feedback_add_note', 'app_founder_feedback_list', 'app_founder_feedback_set_status'] then
     bad := bad || 'the set of app_founder_* functions'::text;
   end if;

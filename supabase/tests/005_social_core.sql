@@ -81,6 +81,9 @@ declare
   photos text[] := array['app_create_post', 'app_mod_media_status', 'app_mod_report_media', 'app_photo_status', 'app_photo_upload_begin', 'app_post_photos'];
   -- Feedback (20261126000000), once applied.
   feedback text[] := array['app_feedback_submit', 'app_founder_feedback', 'app_founder_feedback_add_note', 'app_founder_feedback_list', 'app_founder_feedback_set_status', 'app_is_founder'];
+  -- Foundation v2 (20261130000000), once applied: adult confirmation, link
+  -- registration, referral links, founder registration settings, keyset paging.
+  foundation text[] := array['app_attest_adult', 'app_claim_access', 'app_feed_page', 'app_founder_create_invitation_link', 'app_founder_registration', 'app_founder_set_registration', 'app_member_posts_page', 'app_my_referral_link'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -97,6 +100,9 @@ begin
   end if;
   if to_regclass('social.post_media') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || photos) x);
+  end if;
+  if to_regclass('ops.registrations') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || foundation) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -256,7 +262,10 @@ begin
              where (n.nspname = 'social' or (n.nspname = 'public' and p.proname like 'app\_%'))
                -- Also allowed: the moderation objects of 20261124000000 (reports, the
                -- audit trail, moderators, the retention purge, the note check).
-               and regexp_replace(p.prosrc, 'ops\.(member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
+               -- And foundation v2 (20261130000000): adult confirmations, controlled
+               -- registration (settings, links, records, the shared check) and the
+               -- launch settings it reads. No waitlist, invitation or admin data.
+               and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion)\M', '', 'g') ~* '\m(ops|waitlist_api|intent|sim|analytics)\.') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (

@@ -28,7 +28,6 @@ svg{display:block;flex:none}
 .faces span{flex:1;text-align:center;font:600 13.5px var(--body);color:var(--muted);padding:8px 0;border-radius:999px;position:relative;z-index:1;white-space:nowrap}
 .faces span.on{background:var(--primary);color:#fff;box-shadow:0 4px 12px -4px rgba(36,71,166,.6)}
 .faces.dark{background:rgba(255,255,255,.12)}.faces.dark span{color:var(--muted-dark)}.faces.dark span.on{background:#fff;color:var(--primary)}
-.lock{display:inline-flex;vertical-align:-2px;margin-left:3px;opacity:.7}
 /* nav */
 .nav{height:86px;flex:none;background:rgba(250,247,241,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:flex-start;padding:10px 8px 0}
 .nav a{display:flex;flex-direction:column;align-items:center;gap:4px;font:600 10.5px var(--body);color:var(--muted);width:64px}
@@ -219,6 +218,83 @@ svg{display:block;flex:none}
 .q b{font:800 24px var(--display);font-stretch:105%;display:block}
 .q span{font:500 13px var(--body);color:var(--muted)}
 .q .go{margin-left:auto;color:var(--primary)}
+/* profile actions */
+.pacts{display:flex;gap:8px}.pacts .btn{flex:1;padding:10px 8px;font-size:13.5px;gap:5px}
+/* intelligence framework: What happened, What it means, What to do next */
+.step{display:flex;align-items:center;gap:7px;padding:0 20px 7px;font:700 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--apricot-text)}
+.step i{font:800 10.5px var(--body);font-style:normal;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--apricot-tint);border:1px solid #fbd9bd;letter-spacing:0}
+.means{margin:0 12px 12px;background:#fff;border-radius:20px;padding:12px 16px;font:500 13.5px/1.45 var(--body);box-shadow:0 1px 0 var(--line)}
+.means b{font-weight:700}
+.iq{margin:0 12px 12px;background:#fff;border-radius:22px;padding:6px 16px;box-shadow:0 1px 0 var(--line)}
+.iq .s{display:flex;gap:11px;padding:8px 0;border-bottom:1px solid #f1ece3}.iq .s:last-child{border:0}
+.iq .s>span:first-child{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;flex:none}
+.iq .s small{display:block;font:700 10.5px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--apricot-text);margin-bottom:2px}
+.iq .s div{font:500 13px/1.4 var(--body)}
+.iq .s b{font-weight:700}
+/* catch-up */
+.cu{display:flex;align-items:center;gap:11px;padding:6px 18px 14px}
+.cu img{width:44px;height:44px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2.5px var(--ivory),0 0 0 5px var(--apricot)}
+.cu b{font:850 17px var(--display);font-stretch:104%;display:block;white-space:nowrap}
+.cu small{font:600 12.5px var(--body);color:var(--primary)}
+.cu .x{margin-left:auto}
+.ord{display:flex;justify-content:space-between;align-items:center;padding:0 18px 6px;font:600 12px var(--body);color:var(--muted)}
+.of{display:flex;align-items:center;gap:8px;padding:0 22px 8px;font:600 12px var(--body);color:var(--muted)}
+.of b{color:var(--primary)}
+.done{margin:0 12px 16px;display:flex;gap:12px;align-items:center;text-align:left;padding:12px 16px;border-radius:22px;border:1.5px dashed #c5e6de;background:var(--seafoam-tint);color:#1f5e52}
+.done .c{width:40px;height:40px;border-radius:50%;background:var(--seafoam);color:#12312b;display:grid;place-items:center;flex:none}
+.done b{font:850 18px var(--display);font-stretch:106%;display:block;color:var(--ink)}
+.done span{font:500 12.5px/1.45 var(--body)}
+/* bottom sheets */
+.dim{position:absolute;inset:0;background:rgba(13,22,48,.48);z-index:10}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--ivory);border-radius:30px 30px 0 0;padding:10px 20px 30px;z-index:11;box-shadow:0 -20px 40px -20px rgba(0,0,0,.4)}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:#d6cfc1;margin:0 auto 16px}
+.sheet h3{font:850 23px/1.15 var(--display);font-stretch:106%;letter-spacing:-.02em}
+.sheet .sub{font:500 14px/1.5 var(--body);color:var(--muted);margin:6px 0 14px}
+.sheet .hd{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.sheet .hd .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;flex:none}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.opt{display:flex;align-items:center;gap:9px;background:#fff;border-radius:16px;padding:13px 14px;font:700 14.5px var(--body);box-shadow:inset 0 0 0 1.5px var(--line)}
+.opt i{width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 2px #c9c1b2;flex:none}
+.opt.on{box-shadow:inset 0 0 0 2px var(--primary);color:var(--primary)}.opt.on i{box-shadow:inset 0 0 0 5px var(--primary)}
+.nbbox{display:flex;gap:10px;margin:14px 0 16px;padding:12px 14px;border-radius:16px;background:var(--seafoam-tint);border:1px solid #c5e6de;font:500 13px/1.45 var(--body);color:#1f4d44}
+.nbbox b{color:var(--ink)}
+.sheet .btn.full{display:flex;width:100%;padding:15px;font-size:15.5px}
+.sheet .later{text-align:center;font:600 14px var(--body);color:var(--muted);margin-top:12px}
+.wl{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid #f1ece3;font:500 13.5px/1.45 var(--body)}
+.wl:last-of-type{border:0}
+.wl>span:first-child{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex:none;background:var(--blue-50);color:var(--primary)}
+.wl b{display:block;font-weight:700}
+/* sponsored (advertising) */
+.ad{margin:0 12px 16px;background:#fff;border-radius:20px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--line)}
+.ad .ah{display:flex;align-items:center;gap:9px;padding:11px 14px}
+.ad .bm{width:30px;height:30px;border-radius:8px;background:#f1ece3;color:var(--muted);display:grid;place-items:center;flex:none}
+.ad .ah b{font:700 13.5px var(--body);display:block}
+.ad .ah .tag{font-size:10.5px;padding:2px 8px}
+.ad .ah .more{margin-left:auto;color:var(--muted)}
+.ad .cr{position:relative;height:150px}
+.ad .cr img{width:100%;height:100%;object-fit:cover}
+.ad .cr .play{width:48px;height:48px}
+.ad .al{display:flex;align-items:center;gap:10px;padding:11px 14px 12px}
+.ad .al p{flex:1;font:500 13px/1.4 var(--body)}
+.ad .al .btn{padding:8px 14px;font-size:13px;background:var(--ink);color:#fff}
+.ad .wy{display:flex;align-items:center;gap:5px;padding:0 14px 12px;font:600 12px var(--body);color:var(--primary)}
+.post.withad{margin-bottom:0;border-radius:26px 26px 0 0}
+.adlink{margin:0 12px 16px;background:var(--apricot-tint);border-radius:0 0 22px 22px;padding:9px 9px 9px;box-shadow:0 12px 30px -18px rgba(27,36,48,.35)}
+.adlink .lk{display:flex;align-items:center;gap:6px;padding:0 6px 8px;font:600 11.5px var(--body);color:var(--apricot-text)}
+.adlink .ad{margin:0;border-radius:16px;box-shadow:inset 0 0 0 1px #fbd9bd}
+.adlink .ad .cr{height:104px}
+/* icon comparison */
+.cmp{background:#fff;border-radius:24px;padding:26px 28px;box-shadow:0 1px 0 var(--line);display:inline-block}
+.cmp h3{font:850 22px var(--display);font-stretch:106%;margin-bottom:4px}
+.cmp>p{font:500 14px var(--body);color:var(--muted);margin-bottom:20px;max-width:1150px}
+.cmpg{display:grid;grid-template-columns:auto 390px 390px 1fr;gap:20px 30px;align-items:center}
+.cmpg .rl{font:700 13px var(--body);color:var(--muted);width:120px}
+.cmpg .ch{font:800 15px var(--body)}
+.cmpg .navbox{width:390px;border-radius:18px;overflow:hidden;box-shadow:0 0 0 1px var(--line)}
+.cmpg .navbox .nav{height:76px}
+.big3{display:flex;gap:22px;align-items:center}
+.big3 div{display:flex;flex-direction:column;align-items:center;gap:8px;font:600 12px var(--body);color:var(--muted)}
+.big3 .t{width:104px;height:104px;border-radius:24px;background:var(--ivory);display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--line)}
 
 .site{width:1440px;background:var(--ivory)}
 .sh{background:var(--primary);color:#fff;position:relative;overflow:hidden}
@@ -235,7 +311,6 @@ svg{display:block;flex:none}
 .cta{display:flex;gap:12px;margin:26px 0 16px}
 .cta .btn{padding:15px 26px;font-size:16.5px}
 .small{font:500 13.5px/1.55 var(--body);color:var(--muted-dark);max-width:600px}
-.new{background:#fff;color:var(--apricot-text);font:800 11px var(--body);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px;margin-right:8px;vertical-align:2px}
 .sec2{padding:90px 168px}
 .eyebrow{font:800 12.5px var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--apricot-text)}
 .sec2 h2{font:900 52px/1 var(--display);font-stretch:106%;letter-spacing:-.025em;margin:12px 0 14px;max-width:760px}
@@ -256,45 +331,43 @@ svg{display:block;flex:none}
 .disc ul{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:14px 28px}
 .disc li{display:flex;gap:10px;font:500 15px/1.5 var(--body);color:var(--muted-dark)}
 .disc li svg{color:var(--seafoam);margin-top:2px}
-.kept{padding:28px 168px;background:var(--seafoam-tint);font:600 14px var(--body);color:#1f5e52;display:flex;gap:10px;align-items:center}
 </style></head><body><div class="site">
 <section class="sh"><div class="hdr"><div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="40" height="40" role="img" aria-label="Splitpost">
   
   <defs>
-    <clipPath id="sp-logo-top-403uep"><polygon points="16,17.5 40,17.5 40,22.45 16,26.5"/></clipPath>
-    <clipPath id="sp-logo-bottom-40ncnx"><polygon points="16,33.55 40,29.5 40,38.5 16,38.5"/></clipPath>
+    <clipPath id="sp-logo-top-406sdu"><polygon points="16,17.5 40,17.5 40,22.45 16,26.5"/></clipPath>
+    <clipPath id="sp-logo-bottom-40jhi5"><polygon points="16,33.55 40,29.5 40,38.5 16,38.5"/></clipPath>
   </defs>
   <circle cx="28" cy="28" r="28" fill="#faf7f1"/>
   <circle cx="28" cy="28" r="24" fill="#2447a6"/>
   <rect x="13" y="26.5" width="30" height="3" rx="1.5" fill="#f6b888" transform="rotate(-14 28 28)"/>
-  <path clip-path="url(#sp-logo-top-409kgy)" fill="#faf7f1" d="M16 26.5V20.5a3 3 0 0 1 3-3h18a3 3 0 0 1 3 3V26.5Z"/>
-  <path clip-path="url(#sp-logo-bottom-40i3hr)" fill="#a8d9cf" d="M16 29.5H40V35.5a3 3 0 0 1-3 3H19a3 3 0 0 1-3-3Z"/>
+  <path clip-path="url(#sp-logo-top-40100h)" fill="#faf7f1" d="M16 26.5V20.5a3 3 0 0 1 3-3h18a3 3 0 0 1 3 3V26.5Z"/>
+  <path clip-path="url(#sp-logo-bottom-40a19w)" fill="#a8d9cf" d="M16 29.5H40V35.5a3 3 0 0 1-3 3H19a3 3 0 0 1-3-3Z"/>
 </svg>
 <span class="wm" style="color:#fff;font-size:25px">splitpost</span></div><nav><span>For creators</span><span>For members</span><span>For advertisers</span><span>Sign In</span><span class="btn" style="padding:11px 20px">Join the Waitlist</span></nav></div>
 <div class="hero"><div><h1>You Create The Post.<span>You Deserve a Split.</span></h1>
 <div class="sig"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="30" height="30" role="img" aria-label="Splitpost">
   
   <defs>
-    <clipPath id="sp-logo-top-30qwf9"><polygon points="16,17.5 40,17.5 40,22.45 16,26.5"/></clipPath>
-    <clipPath id="sp-logo-bottom-307c5n"><polygon points="16,33.55 40,29.5 40,38.5 16,38.5"/></clipPath>
+    <clipPath id="sp-logo-top-30a9fg"><polygon points="16,17.5 40,17.5 40,22.45 16,26.5"/></clipPath>
+    <clipPath id="sp-logo-bottom-30xjr6"><polygon points="16,33.55 40,29.5 40,38.5 16,38.5"/></clipPath>
   </defs>
   <circle cx="28" cy="28" r="28" fill="#faf7f1"/>
   <circle cx="28" cy="28" r="24" fill="#2447a6"/>
   <rect x="13" y="26.5" width="30" height="3" rx="1.5" fill="#f6b888" transform="rotate(-14 28 28)"/>
-  <path clip-path="url(#sp-logo-top-30500f)" fill="#faf7f1" d="M16 26.5V20.5a3 3 0 0 1 3-3h18a3 3 0 0 1 3 3V26.5Z"/>
-  <path clip-path="url(#sp-logo-bottom-302mvh)" fill="#a8d9cf" d="M16 29.5H40V35.5a3 3 0 0 1-3 3H19a3 3 0 0 1-3-3Z"/>
+  <path clip-path="url(#sp-logo-top-30sp1l)" fill="#faf7f1" d="M16 26.5V20.5a3 3 0 0 1 3-3h18a3 3 0 0 1 3 3V26.5Z"/>
+  <path clip-path="url(#sp-logo-bottom-30lyo5)" fill="#a8d9cf" d="M16 29.5H40V35.5a3 3 0 0 1-3 3H19a3 3 0 0 1-3-3Z"/>
 </svg>
 Don't just post. Get your split.</div>
 <p>You put in the work. You grow your followers. But the money doesn't always follow.</p>
 <p style="margin-top:12px"><b>We're building a social platform where your content can help you earn, and your followers can become a real community.</b></p>
 <div class="cta"><span class="btn">Join the Waitlist <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-right" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span><span class="btn ghost">I have an invitation link</span></div>
-<div class="small"><span class="new">Updated</span>A controlled pilot for adults 18+. Join with an invitation or a member's referral link, or join the waitlist. No guaranteed reach, views or earnings. Rewards and earnings are simulated during the pilot.</div></div>
+<div class="small">A controlled pilot for adults 18+. Join with an invitation or a member's referral link, or join the waitlist. No guaranteed reach, views or earnings. Rewards and earnings are simulated during the pilot.</div></div>
 <img src="site-hero-illustration.png" alt="" style="width:540px;-webkit-mask-image:radial-gradient(ellipse 72% 70% at 52% 50%,#000 78%,transparent 100%);mask-image:radial-gradient(ellipse 72% 70% at 52% 50%,#000 78%,transparent 100%)"></div></section>
-<div class="kept"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-check lucide-check-circle-2" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m16 9-5.5 5.5L8 12"></path></svg>Unchanged, in the approved order: The problem (Why) · Who we're building for (Who) · What we're building and A better split (How) · Our bigger vision (Where) · The invitation. New sections below are inserted after "What we're building".</div>
-<section class="sec2"><div class="eyebrow"><span class="new">New</span>See Splitpost</div><h2>Your people first. Your contribution counted.</h2>
-<p class="lead">Design previews of the Splitpost app, with sample people and sample numbers. They will be replaced by real screenshots from the working app before the page is published.</p>
+<section class="sec2"><div class="eyebrow">See Splitpost</div><h2>Your people first. Your contribution counted.</h2>
+<p class="lead">Product previews with sample people and numbers.</p>
 <div class="shots"><div class="shot"><img src="previews/screen-home.png" alt=""><h4>Your Clique comes first</h4><p>Everything you post is available to everyone who follows you, in order. Who watches is always their choice.</p></div><div class="shot"><img src="previews/screen-split.png" alt=""><h4>See your split</h4><p>Connection Points recognize how you help creators grow. Which points are redemption eligible, and what they are estimated to be worth, is always shown, and always labelled as simulated in the pilot.</p></div><div class="shot"><img src="previews/screen-attention.png" alt=""><h4>Know what works</h4><p>Creators see who their posts were available to, who actually saw them, and where new followers came from.</p></div></div></section>
-<section class="sec2" style="padding-top:0"><div class="eyebrow"><span class="new">New</span>Find your path</div><h2>Three ways to be part of the pilot.</h2>
+<section class="sec2" style="padding-top:0"><div class="eyebrow">Find your path</div><h2>Three ways to be part of the pilot.</h2>
 <div class="paths">
 <div class="path"><img src="../../../public/media/landing/photos/creator-editing-1200.webp" alt=""><div class="c"><span class="tag act">Creators</span><h4>Build an audience you can reach</h4><p>Your posts are available to everyone who follows you, and you see 40% of ad revenue from ads shown with your posts. That share is simulated during the pilot.</p><span class="btn blue">Apply as a creator</span></div></div>
 <div class="path"><img src="../../../public/media/landing/photos/filmmaker-960.webp" alt="" style="object-position:center 30%"><div class="c"><span class="tag sea">Members</span><h4>Support the creators you value</h4><p>Follow people, choose your Clique, and earn Connection Points for helping them grow. Points have no cash value during the pilot.</p><span class="btn blue">Join the waitlist</span></div></div>

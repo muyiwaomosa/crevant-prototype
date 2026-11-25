@@ -21,4 +21,24 @@ begin
     execute \$q\$select ops.set_external_access('local-tests', true, 'APPROVE EXTERNAL MEMBER ACCESS')\$q\$;
     raise notice 'launch gate opened for local tests (recorded)';
   end if;
+  -- Since 20261130000000 members need their own 18+ confirmation. Test
+  -- accounts get a 'test' one as they are granted (local databases only).
+  if to_regclass('ops.age_attestations') is not null then
+    create schema if not exists test_support;
+    revoke all on schema test_support from public, anon, authenticated;
+    create or replace function test_support.auto_attest() returns trigger
+      language plpgsql security definer set search_path = '' as \$f\$
+      begin
+        insert into ops.age_attestations (user_id, wording_version, source)
+        values (new.user_id, 'test', 'test') on conflict (user_id) do nothing;
+        return new;
+      end \$f\$;
+    revoke all on function test_support.auto_attest() from public, anon, authenticated;
+    drop trigger if exists zz_test_auto_attest on ops.member_access;
+    create trigger zz_test_auto_attest after insert or update on ops.member_access
+      for each row execute function test_support.auto_attest();
+    insert into ops.age_attestations (user_id, wording_version, source)
+      select a.user_id, 'test', 'test' from ops.member_access a on conflict (user_id) do nothing;
+    raise notice 'test accounts get a test adult confirmation (local only)';
+  end if;
 end \$\$" 2>&1 | sed 's/^psql:.*NOTICE: *//'

@@ -29,7 +29,7 @@ export const MEMBER_APP_HOSTS = ['app.splitpost.ca']
  * (/auth/confirm#token_hash=...) is one of them, so its fragment is never
  * touched by a redirect.
  */
-const MEMBER_APP_PATHS = [/^\/app(\/.*)?$/, /^\/sign-in\/?$/, /^\/forgot-password\/?$/, /^\/auth\/confirm\/?$/, /^\/auth\/set-password\/?$/, /^\/privacy\/?$/]
+const MEMBER_APP_PATHS = [/^\/app(\/.*)?$/, /^\/sign-in\/?$/, /^\/register(\/[0-9A-Za-z]{1,64})?\/?$/, /^\/forgot-password\/?$/, /^\/auth\/confirm\/?$/, /^\/auth\/set-password\/?$/, /^\/privacy\/?$/]
 
 /** Where everything else on the member app address goes. */
 export const MEMBER_APP_HOME = '/app'

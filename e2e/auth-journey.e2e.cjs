@@ -150,17 +150,19 @@ async function shows(locator, timeout = 5000) {
       check('signed-out visitors to /app are sent to sign in, with a way back', true)
       const text = await page.locator('main').innerText()
       check('sign-in page has no sign-up option', !/sign up|create (an )?account|register/i.test(text) && text.includes("no public sign-up"))
-      for (const p of ['/sign-up', '/register']) {
-        await page.goto(`${APP}${p}`)
-        check(`${p} does not exist`, await shows(page.getByText('Page not found')))
-      }
-      const r = await fetch(`${API}/auth/v1/signup`, { method: 'POST', headers: { apikey: PUB, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `walk-in-${RUN}@example.test`, password: PASSWORD }) }).then((x) => x.json())
-      check('Supabase refuses direct sign-up', r.error_code === 'signup_disabled', r.error_code)
+      await page.goto(`${APP}/sign-up`)
+      check('/sign-up does not exist', await shows(page.getByText('Page not found')))
+      await page.goto(`${APP}/register`)
+      check('/register without a link explains that an invitation is needed, with no form', await shows(page.getByRole('heading', { name: 'You need an invitation link' })) && (await page.locator('form').count()) === 0)
+      const r = await fetch(`${API}/auth/v1/signup`, { method: 'POST', headers: { apikey: PUB, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `walk-in-${RUN}@example.test`, password: PASSWORD }) })
+      const rj = await r.json()
+      check('Supabase refuses a direct sign-up without a registration link (account creation hook)', r.status === 403 && sql(`select count(*) from auth.users where email = 'walk-in-${RUN}@example.test'`) === '0', `${r.status} ${rj.msg}`)
       await collectCsp(page)
       await ctx.close()
     }
 
     // 2. Invitation email points at our Continue page.
+    sql(`insert into ops.invitations (email, source, campaign, expires_at) values ('${emailA}', 'founder', 'journey', now() + interval '7 days')`)
     await admin('/auth/v1/invite', { email: emailA })
     const inviteLink = await emailLink(emailA, 'invite')
     check('invitation link carries the one-time code after # (never sent to the web server)', inviteLink.startsWith(`${APP}/auth/confirm#token_hash=`) && inviteLink.includes('type=invite') && !inviteLink.includes('?'), inviteLink.replace(/token_hash=[^&]+/, 'token_hash=…'))
@@ -327,6 +329,7 @@ async function shows(locator, timeout = 5000) {
     // 10. An expired invitation link is refused and creates no profile.
     {
       const emailC = `expired-${RUN}@example.test`
+      sql(`insert into ops.invitations (email, source, campaign, expires_at) values ('${emailC}', 'founder', 'journey', now() + interval '7 days')`)
       await admin('/auth/v1/invite', { email: emailC })
       const link = await emailLink(emailC, 'invite')
       sql(`update auth.users set confirmation_sent_at = now() - interval '2 hours', invited_at = now() - interval '2 hours' where email = '${emailC}'`)

@@ -132,15 +132,16 @@ begin
   if st.status <> 'none' or st.expires_at is not null then
     raise exception 'FAIL: N''s access state is %', st;
   end if;
-  n := pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']);
-  if n <> 56 then
-    raise exception 'FAIL: expected 56 member functions to refuse, checked %', n;
+  -- app_claim_access is how membership is obtained (20261130000000), so it answers instead of refusing.
+  n := pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state', 'app_claim_access']);
+  if n <> 63 then
+    raise exception 'FAIL: expected 63 member functions to refuse, checked %', n;
   end if;
   perform pg_temp.expect_error('select count(*) from social.posts', 'permission denied', 'N reading social.posts directly');
   perform pg_temp.expect_error('select count(*) from ops.member_access', 'permission denied', 'N reading memberships');
   perform pg_temp.expect_error('select count(*) from social.visible_members', 'permission denied', 'N reading the visible member list');
   perform pg_temp.expect_error('update public.profiles set display_name = ''x'' where id = auth.uid()', 'permission denied', 'N writing their profile directly');
-  raise notice 'PASS: signed in without pilot membership, all 56 member functions refuse (no_pilot_access) and no table is reachable';
+  raise notice 'PASS: signed in without pilot membership, all 63 member functions refuse (no_pilot_access) and no table is reachable';
 end $$;
 commit;
 
@@ -150,7 +151,7 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000
 set local role authenticated;
 do $$
 begin
-  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 56 then
+  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state', 'app_claim_access']) <> 63 then
     raise exception 'FAIL: not every member function was checked';
   end if;
   raise notice 'PASS: an account with no profile and no membership is refused by every member function';
@@ -163,10 +164,10 @@ set local role anon;
 do $$
 begin
   perform pg_temp.expect_error('select * from public.app_access_state()', 'permission denied', 'anon reading an access state');
-  if pg_temp.every_member_function_refuses('permission denied', array[]::text[]) <> 57 then
+  if pg_temp.every_member_function_refuses('permission denied', array[]::text[]) <> 65 then
     raise exception 'FAIL: not every member function was checked for anon';
   end if;
-  raise notice 'PASS: anonymous visitors can call none of the 57 member functions';
+  raise notice 'PASS: anonymous visitors can call none of the 65 member functions';
 end $$;
 commit;
 
@@ -328,7 +329,7 @@ begin
   if (select status from public.app_access_state()) <> 'revoked' then
     raise exception 'FAIL: N''s state is not revoked';
   end if;
-  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 56 then
+  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state', 'app_claim_access']) <> 63 then
     raise exception 'FAIL: not every member function was checked after revocation';
   end if;
   raise notice 'PASS: revocation takes effect on the next request, for all 56 member functions';
@@ -365,7 +366,7 @@ begin
   if st.status <> 'expired' then
     raise exception 'FAIL: B''s state is % after expiry', st;
   end if;
-  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state']) <> 56 then
+  if pg_temp.every_member_function_refuses('no_pilot_access', array['app_access_state', 'app_claim_access']) <> 63 then
     raise exception 'FAIL: not every member function was checked after expiry';
   end if;
   raise notice 'PASS: an expired membership is refused by all 56 member functions, and the account sees "expired"';

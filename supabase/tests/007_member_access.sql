@@ -107,6 +107,13 @@ begin
       if position('ops.member_access a on a.user_id = v_uid' in r.prosrc) = 0 then bad := bad || r.proname; end if;
     elsif r.proname in ('app_me', 'app_set_profile') then
       if position('social.current_access()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
+    elsif r.proname = 'app_attest_adult' then
+      -- Foundation v2 (20261130000000): the caller's own confirmation, active membership required.
+      if position('auth.uid()' in r.prosrc) = 0 or position('ops.member_access_active(v_uid)' in r.prosrc) = 0 then bad := bad || r.proname; end if;
+    elsif r.proname = 'app_claim_access' then
+      -- Foundation v2: membership is obtained here, only through the registration check and the launch gate.
+      if position('auth.uid()' in r.prosrc) = 0 or position('ops.registration_check(v_code)' in r.prosrc) = 0
+         or position('email_confirmed_at is null' in r.prosrc) = 0 or position('p_adult_attested is not true' in r.prosrc) = 0 then bad := bad || r.proname; end if;
     elsif r.proname like 'app\_mod\_%' then
       -- Moderation (20261124000000): membership AND moderator, through social.current_moderator().
       if position('social.current_moderator()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
@@ -122,6 +129,11 @@ begin
   end if;
   if position('ops.member_access_active(v_uid)' in (select prosrc from pg_proc where oid = 'social.current_access()'::regprocedure)) = 0 then
     bad := bad || 'social.current_access'::text;
+  end if;
+  -- Foundation v2: access also requires the adult confirmation.
+  if to_regclass('ops.age_attestations') is not null
+     and position('ops.adult_attested(v_uid)' in (select prosrc from pg_proc where oid = 'social.current_access()'::regprocedure)) = 0 then
+    bad := bad || 'social.current_access (adult confirmation)'::text;
   end if;
   if to_regprocedure('social.current_moderator()') is not null
      and (position('social.current_member()' in (select prosrc from pg_proc where oid = to_regprocedure('social.current_moderator()'))) = 0

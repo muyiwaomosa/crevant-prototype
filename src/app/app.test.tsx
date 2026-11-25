@@ -42,6 +42,7 @@ vi.mock('./photoPrep', async (importOriginal) => {
 })
 import { clampOffset, coverScale, sourceRect } from './avatars'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
+import { MySplitPage } from './split'
 
 afterEach(cleanup)
 
@@ -168,7 +169,10 @@ function fakeApi(
   const storage = { unused: 0, bytes: 0, plans: new Map<string, string>() }
   const shared = (id: string) => detailsOf(id).topics.filter((t) => detailsOf(meId).topics.includes(t)).length
   // Pilot membership (20261122000000): active unless a test says otherwise.
-  const access: { status: 'active' | 'none' | 'revoked' | 'expired'; expiresAt: string | null } = { status: 'active', expiresAt: null }
+  const access: { status: 'active' | 'none' | 'revoked' | 'expired' | 'attestation_required'; expiresAt: string | null } = { status: 'active', expiresAt: null }
+  // Pages on (time, id), newest first, like app_feed_page (20261130000000).
+  const newestFirst = (a: { at: number; id: string }, b: { at: number; id: string }) => b.at - a.at || (b.id < a.id ? -1 : b.id > a.id ? 1 : 0)
+  const afterCursor = (p: { at: number; id: string }, c?: { createdAt: string; id: string }) => !c || p.at < Date.parse(c.createdAt) || (p.at === Date.parse(c.createdAt) && p.id < c.id)
   const maybeFail = (name: keyof AppApi) => {
     if (failures[name]) throw failures[name]
   }
@@ -177,6 +181,14 @@ function fakeApi(
     async accessState() {
       maybeFail('accessState')
       return { status: access.status, expiresAt: access.expiresAt }
+    },
+    async attestAdult() {
+      maybeFail('attestAdult')
+      if (access.status === 'attestation_required') access.status = 'active'
+    },
+    async myReferralCode() {
+      maybeFail('myReferralCode')
+      return '0123456789abcdef'
     },
     async ownProfile(): Promise<OwnProfile | null> {
       const u = users.get(meId)
@@ -201,11 +213,11 @@ function fakeApi(
         postCount: posts.filter((p) => p.author === meId && !p.deleted).length,
       }
     },
-    async feed(before) {
+    async feed(before, filter = 'all') {
       complete()
       return posts
-        .filter((p) => !p.deleted && (p.author === meId || follows.has(key(meId, p.author))) && (!before || p.at < Date.parse(before)))
-        .sort((a, b) => b.at - a.at)
+        .filter((p) => !p.deleted && (filter === 'clique' ? clique.has(key(meId, p.author)) : p.author === meId || follows.has(key(meId, p.author))) && afterCursor(p, before))
+        .sort(newestFirst)
         .slice(0, 20)
         .map(toP)
     },
@@ -226,8 +238,8 @@ function fakeApi(
     async memberPosts(id, before) {
       complete()
       return posts
-        .filter((p) => !p.deleted && p.author === id && (!before || p.at < Date.parse(before)))
-        .sort((a, b) => b.at - a.at)
+        .filter((p) => !p.deleted && p.author === id && afterCursor(p, before))
+        .sort(newestFirst)
         .map(toP)
     },
     async post(id) {
@@ -698,6 +710,7 @@ function renderApp(path: string, api: AppApi) {
             <Route path="post/:id" element={<PostPage />} />
             <Route path="u/:username" element={<MemberPage />} />
             <Route path="clique" element={<CliquePage />} />
+            <Route path="split" element={<MySplitPage />} />
             <Route path="catch-up/:username" element={<CatchUpPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="moderation" element={<ModerationQueuePage />} />
@@ -1821,7 +1834,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     expect(screen.queryByText('Your feed is quiet')).toBeNull()
   })
 
-  it('the Home feed stays chronological, with no filters or extra tabs', async () => {
+  it('Home has three faces (Clique first, My Clique, Following), each strictly chronological, never reordered', async () => {
     const { api, seedPost, follows, clique, key } = fakeApi()
     follows.add(key('me', 'c1'))
     follows.add(key('me', 'c2'))
@@ -1830,11 +1843,25 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     seedPost('c1', 'Newer, from someone I follow')
     renderApp('/app', api)
     await screen.findByText('Newer, from someone I follow')
-    const bodies = screen.getAllByTestId('post').map((p) => p.textContent ?? '')
-    expect(bodies[0]).toMatch(/Newer, from someone I follow/)
-    expect(bodies[1]).toMatch(/Older, from my Clique/)
-    expect(screen.queryByRole('tablist')).toBeNull()
-    expect(screen.queryByRole('button', { name: /Everyone|filter/i })).toBeNull()
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
+    expect(tabs).toEqual(['Clique first', 'My Clique', 'Following'])
+    expect(screen.getByRole('tab', { name: 'Clique first' }).getAttribute('aria-selected')).toBe('true')
+    const panel = () => screen.getByRole('tabpanel')
+    const bodies = () => within(panel()).getAllByTestId('post').map((p) => p.textContent ?? '')
+    // Clique first: everyone followed, newest first (nothing is reordered for you).
+    expect(bodies()[0]).toMatch(/Newer, from someone I follow/)
+    expect(bodies()[1]).toMatch(/Older, from my Clique/)
+    // My Clique: only Clique creators.
+    fireEvent.click(screen.getByRole('tab', { name: 'My Clique' }))
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'My Clique' }).getAttribute('aria-selected')).toBe('true'))
+    await waitFor(() => expect(bodies()).toHaveLength(1))
+    expect(bodies()[0]).toMatch(/Older, from my Clique/)
+    expect(within(panel()).getByRole('link', { name: 'Manage Clique' })).toBeTruthy()
+    // Following, by keyboard: everyone followed, newest first.
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Following' }).getAttribute('aria-selected')).toBe('true'))
+    await waitFor(() => expect(bodies()).toHaveLength(2))
+    expect(bodies()[0]).toMatch(/Newer, from someone I follow/)
   })
 
   it('a search with no matches offers to show everyone again', async () => {
@@ -2175,13 +2202,49 @@ describe('posts, comments and profiles', () => {
   })
 })
 
+describe('adult confirmation and My Split (foundation v2)', () => {
+  it('a member without an 18+ confirmation sees only the confirmation, which needs the box ticked', async () => {
+    const { api, access } = fakeApi()
+    access.status = 'attestation_required'
+    renderApp('/app', api)
+    expect(await screen.findByRole('heading', { name: 'One quick check' })).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findByText('Please confirm that you are 18 or older to continue.')).toBeTruthy()
+    expect(access.status).toBe('attestation_required')
+    fireEvent.click(screen.getByLabelText('I confirm that I am 18 or older.'))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
+    expect(access.status).toBe('active')
+  })
+
+  it('My Split has Overview, History and Opportunities; the simulated disclosure is always shown', async () => {
+    const { api } = fakeApi()
+    renderApp('/app/split', api)
+    expect(await screen.findByRole('heading', { name: 'My Split' })).toBeTruthy()
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'History', 'Opportunities'])
+    expect(screen.getByTestId('split-disclosure').textContent).toMatch(/simulated.*no cash value.*nothing is paid out/i)
+    // No balances or amounts are shown before Connection Points exist.
+    expect(screen.getByRole('tabpanel').textContent).not.toMatch(/\$\d|\d+ points/)
+  })
+
+  it('Opportunities shows the member\'s personal referral link', async () => {
+    const { api } = fakeApi()
+    renderApp('/app/split?face=opportunities', api)
+    expect((await screen.findByTestId('referral-link')).textContent).toBe(`${window.location.origin}/register/0123456789abcdef`)
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy()
+  })
+})
+
 describe('the members area', () => {
   it('has the main navigation and a way to reach the account page', async () => {
     const { api } = fakeApi()
     renderApp('/app', api)
     await screen.findByRole('heading', { name: 'Home' })
     const nav = screen.getAllByRole('navigation', { name: 'Main' })[0]
-    for (const label of ['Home', 'Discover', 'Clique', 'Profile']) expect(within(nav).getByTitle(label)).toBeTruthy()
+    // Five destinations (SP-SCOPE-001): Clique management moved into Home.
+    for (const label of ['Home', 'Discover', 'Create', 'My Split', 'Profile']) expect(within(nav).getByTitle(label)).toBeTruthy()
+    expect(within(nav).queryByTitle('Clique')).toBeNull()
     expect(screen.getAllByRole('link', { name: 'Your account' })[0].getAttribute('href')).toBe('/app/account')
   })
 

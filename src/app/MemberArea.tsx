@@ -1,14 +1,15 @@
 import clsx from 'clsx'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { CheckCircle2, Compass, Home, Plus, User, Users } from 'lucide-react'
+import { CheckCircle2, Compass, Home, Plus, User } from 'lucide-react'
+import { SplitMark } from '../components/SplitMark'
 import { Wordmark } from '../components/Wordmark'
 import { buttonClass } from '../components/ui'
 import { useAuth } from '../auth/AuthProvider'
 import { AuthCard, Field, Message, Spinner } from '../public/auth/AuthUi'
 import { AppApiProvider, ProfileProvider, useAppApi, useProfileGate } from './AppApiContext'
 import { ViewTrackerProvider } from './ViewTracker'
-import { displayNameProblem, messageFor, usernameProblem, type AppApi, type MyDetails } from './api'
+import { displayNameProblem, messageFor, usernameProblem, type AppApi, type MyDetails, type RegistrationOutcome } from './api'
 import { DetailsSetup, SETUP_STEPS, SetupProgress } from './profileDetails'
 import { ModerationProvider } from './moderation'
 import { FeedbackProvider, SendFeedbackLink } from './feedback'
@@ -38,7 +39,11 @@ function Gate() {
       </Frame>
     )
   }
-  if (status.kind === 'no_access') return <NoPilotAccess status={status.access.status} />
+  if (status.kind === 'no_access' && status.access.status === 'attestation_required') return <ConfirmAdult onConfirmed={reload} />
+  if (status.kind === 'no_access') {
+    const s = status.access.status
+    return <NoPilotAccess status={s === 'attestation_required' ? 'none' : s} registration={status.access.registration} onRetry={reload} />
+  }
   if (status.kind === 'access_error') {
     return (
       <Frame>
@@ -116,12 +121,44 @@ function FirstTimeSetup({ children }: { children: ReactNode }) {
  * expired). The database refuses every member function for this account, so
  * nothing else is loaded; this only explains it.
  */
-export function NoPilotAccess({ status }: { status: 'none' | 'revoked' | 'expired' | 'active' }) {
+export const REGISTRATION_MESSAGES: Record<RegistrationOutcome, string> = {
+  link_required: "Your account hasn't been approved for the Splitpost pilot yet. You can join with an invitation or referral link, or join the waitlist.",
+  not_confirmed: 'Confirm your email address first, using the link we sent you.',
+  invalid: "The invitation or referral link you used isn't valid any more. Ask for a new link, or join the waitlist.",
+  paused: 'Registration is paused right now. Please try again later, or join the waitlist.',
+  closed: "The Splitpost pilot isn't open to new members yet. Please check back soon.",
+  full: 'The pilot is full for now. Please try again later, or join the waitlist.',
+  referrer_limit: 'This link has been used a lot today. Please try again tomorrow.',
+  retry: "We couldn't set up your access just now. Please try again.",
+}
+
+export function NoPilotAccess({
+  status,
+  registration,
+  onRetry,
+}: {
+  status: 'none' | 'revoked' | 'expired' | 'active'
+  registration?: RegistrationOutcome
+  onRetry?: () => Promise<void>
+}) {
   const { session, client } = useAuth()
   const navigate = useNavigate()
   const [signingOut, setSigningOut] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   // Revoked and expired read the same, so the screen never says why access ended.
-  const detail = status === 'none' ? "Your account hasn't been approved for the Splitpost pilot yet." : 'Your pilot access has ended.'
+  const detail =
+    status !== 'none'
+      ? 'Your pilot access has ended.'
+      : registration
+        ? REGISTRATION_MESSAGES[registration]
+        : "Your account hasn't been approved for the Splitpost pilot yet."
+  const canRetry = status === 'none' && !!onRetry && !!registration && ['retry', 'paused', 'full', 'referrer_limit', 'closed'].includes(registration)
+  async function retry() {
+    if (!onRetry || retrying) return
+    setRetrying(true)
+    await onRetry()
+    setRetrying(false)
+  }
   async function signOut() {
     if (!client || signingOut) return
     setSigningOut(true)
@@ -138,12 +175,67 @@ export function NoPilotAccess({ status }: { status: 'none' | 'revoked' | 'expire
           </p>
         }
       >
-        <div className="space-y-5" data-testid="no-pilot-access" data-status={status}>
+        <div className="space-y-5" data-testid="no-pilot-access" data-status={status} data-registration={registration ?? ''}>
           <Message tone="info">{detail}</Message>
+          {canRetry && (
+            <button type="button" onClick={retry} disabled={retrying} className={`${buttonClass('secondary')} w-full`}>
+              {retrying ? 'Checking…' : 'Try again'}
+            </button>
+          )}
           <button type="button" onClick={signOut} disabled={signingOut} className={`${buttonClass('primary')} w-full`}>
             {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
+      </AuthCard>
+    </main>
+  )
+}
+
+/**
+ * Active membership, but no 18+ confirmation yet (members granted before
+ * 20261130000000, or invited by the founder). The database refuses every
+ * member function until the member confirms; this records it.
+ */
+export function ConfirmAdult({ onConfirmed }: { onConfirmed: () => Promise<void> }) {
+  const api = useAppApi()
+  const { session } = useAuth()
+  const [checked, setChecked] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (busy) return
+    if (!checked) return setError('Please confirm that you are 18 or older to continue.')
+    setBusy(true)
+    setError(null)
+    try {
+      await api.attestAdult()
+      await onConfirmed()
+    } catch (err) {
+      setError(messageFor(err))
+      setBusy(false)
+    }
+  }
+  return (
+    <main id="main" className="px-4 py-12 sm:py-16">
+      <AuthCard
+        title="One quick check"
+        intro={
+          <p>
+            Signed in as <strong className="font-semibold text-ink-900">{session?.user.email}</strong>. The Splitpost pilot is for adults only.
+          </p>
+        }
+      >
+        <form onSubmit={onSubmit} className="space-y-5" data-testid="confirm-adult" noValidate>
+          {error && <Message tone="error">{error}</Message>}
+          <label className="flex items-start gap-3 text-sm text-ink-800">
+            <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-1 h-4 w-4" />
+            <span>I confirm that I am 18 or older.</span>
+          </label>
+          <button type="submit" disabled={busy} className={`${buttonClass('primary')} w-full`}>
+            {busy ? 'Saving…' : 'Continue'}
+          </button>
+        </form>
       </AuthCard>
     </main>
   )
@@ -267,7 +359,7 @@ const NAV = [
   { to: '/app', label: 'Home', icon: Home, end: true },
   { to: '/app/discover', label: 'Discover', icon: Compass },
   { to: '/app/new', label: 'Create', icon: Plus, primary: true },
-  { to: '/app/clique', label: 'Clique', icon: Users },
+  { to: '/app/split', label: 'My Split', icon: SplitMark },
   { to: '/app/profile', label: 'Profile', icon: User },
 ]
 

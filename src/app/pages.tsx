@@ -3,7 +3,8 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { ArrowLeft, Check, Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, Modal, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
-import { LIMITS, type Comment, type FollowedCreator, type Member, type Me, type Post } from './api'
+import { LIMITS, type Comment, type FeedFilter, type FollowedCreator, type Member, type Me, type Post, type PostCursor } from './api'
+import { FaceView } from '../components/FaceView'
 import { useAppApi, useMyProfile } from './AppApiContext'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
 import { useViewsSent } from './ViewTracker'
@@ -47,7 +48,7 @@ function Loading({ label }: { label: string }) {
 }
 
 /** Posts with "Show older posts", newest first. */
-function PostList({ posts, loadOlder, onDeleted }: { posts: Post[]; loadOlder: (before: string) => Promise<Post[]>; onDeleted: (id: string) => void }) {
+function PostList({ posts, loadOlder, onDeleted }: { posts: Post[]; loadOlder: (before: PostCursor) => Promise<Post[]>; onDeleted: (id: string) => void }) {
   const [older, setOlder] = useState<Post[]>([])
   const [done, setDone] = useState(posts.length < 20)
   const [busy, setBusy] = useState(false)
@@ -64,8 +65,12 @@ function PostList({ posts, loadOlder, onDeleted }: { posts: Post[]; loadOlder: (
     setBusy(true)
     setError(null)
     try {
-      const next = await loadOlder(last.createdAt)
-      setOlder((o) => [...o, ...next])
+      // The next page starts strictly after the last post shown (time, then id), so none is skipped.
+      const next = await loadOlder({ createdAt: last.createdAt, id: last.id })
+      setOlder((o) => {
+        const seen = new Set([...posts, ...o].map((x) => x.id))
+        return [...o, ...next.filter((x) => !seen.has(x.id))]
+      })
       if (next.length < 20) setDone(true)
     } catch (e) {
       setError(e)
@@ -102,27 +107,64 @@ function PostList({ posts, loadOlder, onDeleted }: { posts: Post[]; loadOlder: (
 // Home: the Following feed, newest first.
 
 export function FeedPage() {
+  return (
+    <>
+      <PageHeader title="Home" subtitle="Posts from creators you follow, newest first. Nothing is hidden or reordered for you." />
+      <FaceView
+        label="Home views"
+        faces={[
+          { key: 'clique-first', label: 'Clique first', content: <HomeFeed filter="all" withStrip withComposer /> },
+          { key: 'clique', label: 'My Clique', content: <HomeFeed filter="clique" /> },
+          { key: 'following', label: 'Following', content: <HomeFeed filter="all" /> },
+        ]}
+      />
+    </>
+  )
+}
+
+/** One Home face: the whole followed feed, or only My Clique (20261130000000), chronological either way. */
+function HomeFeed({ filter, withStrip = false, withComposer = false }: { filter: FeedFilter; withStrip?: boolean; withComposer?: boolean }) {
   const api = useAppApi()
-  const feed = useLoad(() => api.feed(), [api])
+  const feed = useLoad(() => api.feed(undefined, filter), [api, filter])
   // Only to choose the right empty state: new member, or following people who haven't posted yet.
   const me = useLoad(async () => (feed.data && feed.data.length === 0 ? api.me() : null), [api, feed.data?.length === 0])
   return (
     <>
-      <PageHeader title="Home" subtitle="Posts from people you follow, newest first." />
-      <UnseenStrip />
-      <Card className="mb-4 p-4 sm:p-5">
-        <PostComposer
-          label="Write a post"
-          placeholder="Share something with the people who follow you…"
-          onPost={async ({ text, requestId, photo }) => {
-            await (photo ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description) : api.createPost(text, requestId))
-            await feed.reload()
-          }}
-        />
-      </Card>
+      {withStrip && <UnseenStrip />}
+      {filter === 'clique' && (
+        <div className="mb-3 flex justify-end">
+          <Link to="/app/clique" className="text-[13px] font-semibold text-brand-700 underline underline-offset-2">
+            Manage Clique
+          </Link>
+        </div>
+      )}
+      {withComposer && (
+        <Card className="mb-4 p-4 sm:p-5">
+          <PostComposer
+            label="Write a post"
+            placeholder="Share something with the people who follow you…"
+            onPost={async ({ text, requestId, photo }) => {
+              await (photo ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description) : api.createPost(text, requestId))
+              await feed.reload()
+            }}
+          />
+        </Card>
+      )}
       {feed.loading && !feed.data && <Loading label="Loading your feed…" />}
       {feed.error !== null && <ErrorNote error={feed.error} />}
-      {feed.data && feed.data.length === 0 && me.data && me.data.followingCount > 0 && (
+      {filter === 'clique' && feed.data && feed.data.length === 0 && (
+        <EmptyState
+          icon={<Users className="h-7 w-7" />}
+          title="Your Clique is quiet"
+          body="My Clique shows posts from the creators you chose for your Clique, newest first. Add creators you follow to see them here."
+          action={
+            <Link to="/app/clique" className={buttonClass('primary')}>
+              Choose your Clique
+            </Link>
+          }
+        />
+      )}
+      {filter === 'all' && feed.data && feed.data.length === 0 && me.data && me.data.followingCount > 0 && (
         <EmptyState
           icon={<Compass className="h-7 w-7" />}
           title="Nothing new yet"
@@ -139,8 +181,8 @@ export function FeedPage() {
           }
         />
       )}
-      {feed.data && feed.data.length === 0 && me.data && me.data.followingCount === 0 && <GettingStarted />}
-      {feed.data && feed.data.length === 0 && me.error !== null && (
+      {filter === 'all' && feed.data && feed.data.length === 0 && me.data && me.data.followingCount === 0 && <GettingStarted />}
+      {filter === 'all' && feed.data && feed.data.length === 0 && me.error !== null && (
         <EmptyState
           icon={<Compass className="h-7 w-7" />}
           title="Your feed is quiet"
@@ -155,7 +197,7 @@ export function FeedPage() {
       {feed.data && feed.data.length > 0 && (
         <PostList
           posts={feed.data}
-          loadOlder={(before) => api.feed(before)}
+          loadOlder={(before) => api.feed(before, filter)}
           onDeleted={(id) => feed.setData((d) => d?.filter((p) => p.id !== id))}
         />
       )}

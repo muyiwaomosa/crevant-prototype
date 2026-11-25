@@ -138,15 +138,44 @@ describe('pilot membership (20261122000000)', () => {
       { data: [{ status: 'active', expires_at: '2026-12-31T00:00:00Z' }] },
       { data: [{ status: 'revoked', expires_at: null }] },
       { data: [{ status: 'expired', expires_at: '2026-11-01T00:00:00Z' }] },
+      { data: [{ status: 'attestation_required', expires_at: null }] },
       { data: [{ status: 'something-new' }] },
+      { data: 'link_required' },
       { data: [] },
+      { data: 'link_required' },
     ])
     expect(await api.accessState()).toEqual({ status: 'active', expiresAt: '2026-12-31T00:00:00Z' })
     expect(await api.accessState()).toEqual({ status: 'revoked', expiresAt: null })
     expect(await api.accessState()).toEqual({ status: 'expired', expiresAt: null })
-    expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null })
-    expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null })
-    expect(calls.every((c) => c.fn === 'app_access_state')).toBe(true)
+    expect(await api.accessState()).toEqual({ status: 'attestation_required', expiresAt: null })
+    expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null, registration: 'link_required' })
+    expect(await api.accessState()).toEqual({ status: 'none', expiresAt: null, registration: 'link_required' })
+    // Only a 'none' state tries to claim membership through a registration link.
+    expect(calls.map((c) => c.fn)).toEqual(['app_access_state', 'app_access_state', 'app_access_state', 'app_access_state', 'app_access_state', 'app_claim_access', 'app_access_state', 'app_claim_access'])
+  })
+
+  it('claims membership through the registration link (20261130000000) and explains every outcome', async () => {
+    const none = { data: [{ status: 'none', expires_at: null }] }
+    const outcomes = ['not_confirmed', 'invalid', 'paused', 'closed', 'full', 'referrer_limit', 'link_required'] as const
+    for (const o of outcomes) {
+      const { api } = fakeClient([none, { data: o }])
+      expect(await api.accessState(), o).toEqual({ status: 'none', expiresAt: null, registration: o })
+    }
+    const granted = fakeClient([none, { data: 'active' }])
+    expect(await granted.api.accessState()).toEqual({ status: 'active', expiresAt: null })
+    expect(granted.calls[1]).toEqual({ fn: 'app_claim_access', args: { p_code: null, p_adult_attested: false, p_wording_version: 'adult-v1' } })
+    const revoked = fakeClient([none, { data: 'revoked' }])
+    expect(await revoked.api.accessState()).toEqual({ status: 'revoked', expiresAt: null })
+    // An unexpected answer is never access.
+    for (const data of ['ACTIVE', 'admin', null, 7]) {
+      const { api } = fakeClient([none, { data }])
+      expect((await api.accessState()).status, String(data)).toBe('none')
+    }
+    // A failed claim asks to retry; before the migration there is nothing to claim.
+    const failed = fakeClient([none, { error: { code: 'XX000', message: 'boom' } }])
+    expect(await failed.api.accessState()).toEqual({ status: 'none', expiresAt: null, registration: 'retry' })
+    const missing = fakeClient([none, { error: { code: 'PGRST202', message: 'Could not find the function public.app_claim_access(p_adult_attested, p_code, p_wording_version) in the schema cache' } }])
+    expect(await missing.api.accessState()).toEqual({ status: 'none', expiresAt: null })
   })
 
   it('saves the profile through app_set_profile (never a direct table update), trimmed', async () => {
@@ -215,7 +244,7 @@ describe('before the membership migration (compatibility, never a bypass)', () =
 
   it('an unexpected reply is never access', async () => {
     for (const data of [null, {}, 'active', [{}], [{ status: 'ACTIVE' }], [{ status: true }], [{ status: 'admin' }]]) {
-      const { api } = fakeClient([{ data }])
+      const { api } = fakeClient([{ data }, { data: 'link_required' }])
       expect((await api.accessState()).status, JSON.stringify(data)).toBe('none')
     }
     const { api } = fakeClient([{ data: [{ status: 'active', expires_at: 12345 }] }])
@@ -367,5 +396,49 @@ describe('profile pictures when the avatar function is unavailable', () => {
       const rm = pictureClient(answer)
       await expect(rm.api.removeAvatar()).rejects.toMatchObject({ code })
     }
+  })
+})
+
+describe('foundation v2 (20261130000000): complete paging, adult confirmation, referral links', () => {
+  const row = (id: string, at: string, inClique = false) => ({
+    id, author_id: 'c1', author_username: 'c1', author_display_name: 'C1', body: 'x', created_at: at,
+    like_count: 0, comment_count: 0, liked_by_me: false, author_in_my_clique: inClique, is_mine: false, media: null,
+  })
+  const MISSING = (fn: string) => ({ code: 'PGRST202', message: `Could not find the function public.${fn}(p_before_at, p_before_id, p_filter, p_limit) in the schema cache` })
+
+  it('pages Home on (created_at, id) with the face filter', async () => {
+    const { api, calls } = fakeClient([{ data: [row('p2', '2026-11-30T12:00:00Z')] }])
+    const posts = await api.feed({ createdAt: '2026-11-30T12:00:00Z', id: 'p3' }, 'clique')
+    expect(posts.map((p) => p.id)).toEqual(['p2'])
+    expect(calls).toEqual([{ fn: 'app_feed_page', args: { p_before_at: '2026-11-30T12:00:00Z', p_before_id: 'p3', p_limit: 20, p_filter: 'clique' } }])
+  })
+
+  it('before the migration, falls back to time-only paging and filters My Clique in the app', async () => {
+    const { api, calls } = fakeClient([{ error: MISSING('app_feed_page') }, { data: [row('a', '2026-11-30T12:00:00Z', true), row('b', '2026-11-30T11:00:00Z', false)] }])
+    const posts = await api.feed(undefined, 'clique')
+    expect(posts.map((p) => p.id)).toEqual(['a'])
+    expect(calls[1]).toEqual({ fn: 'app_feed', args: { p_before: null, p_limit: 20 } })
+  })
+
+  it('any other paging error is reported, never silently downgraded', async () => {
+    const { api } = fakeClient([{ error: { code: 'P0001', message: 'invalid_cursor' } }])
+    await expect(api.feed({ createdAt: 'x', id: 'y' })).rejects.toBeInstanceOf(AppApiError)
+  })
+
+  it('pages a member\'s posts on (created_at, id)', async () => {
+    const { api, calls } = fakeClient([{ data: [] }])
+    await api.memberPosts('m1', { createdAt: '2026-11-30T12:00:00Z', id: 'p1' })
+    expect(calls).toEqual([{ fn: 'app_member_posts_page', args: { p_member: 'm1', p_before_at: '2026-11-30T12:00:00Z', p_before_id: 'p1', p_limit: 20 } }])
+  })
+
+  it('records the adult confirmation with the wording version', async () => {
+    const { api, calls } = fakeClient([{ data: '2026-11-30T12:00:00Z' }])
+    await api.attestAdult()
+    expect(calls).toEqual([{ fn: 'app_attest_adult', args: { p_wording_version: 'adult-v1' } }])
+  })
+
+  it('reads the personal referral code, or nothing before the migration', async () => {
+    expect(await fakeClient([{ data: '0123456789abcdef' }]).api.myReferralCode()).toBe('0123456789abcdef')
+    expect(await fakeClient([{ error: { code: 'PGRST202', message: 'Could not find the function public.app_my_referral_link without parameters in the schema cache' } }]).api.myReferralCode()).toBeNull()
   })
 })

@@ -186,7 +186,12 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = false  # mirrors staging: public sign-up disabled
+# Foundation v2 (20261130000000): sign-up is on at the Auth level, but the
+# account creation hook below refuses every sign-up without a valid invitation
+# or referral link and the 18+ confirmation (controlled registration, D2).
+# Staging and Production get the same two settings only through the founder's
+# approved configuration batch (docs/FOUNDATION-V2.md).
+enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -290,6 +295,11 @@ max_frequency = "5s"
 # inactivity_timeout = "8h"
 
 # This hook runs before a new user is created and allows developers to reject the request based on the incoming user object.
+# Foundation v2: controlled registration (public.hook_before_user_created).
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/public/hook_before_user_created"
+# (template:)
 # [auth.hook.before_user_created]
 # enabled = true
 # uri = "pg-functions://postgres/auth/before-user-created-hook"
@@ -431,12 +441,18 @@ enabled = true
 # validated locally in Phase 1A). Local only; staging email templates are a
 # separate Supabase settings change that needs the founder's approval.
 [auth.email.template.invite]
-subject = "You're invited to Crevant"
+subject = "You're invited to Splitpost"
 content_path = "./supabase/templates/invite.html"
 
 [auth.email.template.recovery]
-subject = "Reset your Crevant password"
+subject = "Reset your Splitpost password"
 content_path = "./supabase/templates/recovery.html"
+
+# Confirming a link registration (foundation v2): the token comes back to the
+# scanner-safe /auth/confirm page as type=email.
+[auth.email.template.confirmation]
+subject = "Confirm your email for Splitpost"
+content_path = "./supabase/templates/confirmation.html"
 
 # Profile pictures (Build 5.2b). The gateway's JWT check is off: staging signs
 # sessions with ES256 keys, so the function verifies every caller itself with

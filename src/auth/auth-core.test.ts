@@ -65,13 +65,21 @@ describe('after sign-in, only pages on this site', () => {
 describe('browser code never registers users or holds secrets', () => {
   const sources = import.meta.glob(['../**/*.{ts,tsx}', '!../**/*.test.{ts,tsx}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
+  it('signs up in exactly one place, always with a registration code and the adult confirmation', () => {
+    const files = Object.entries(sources).filter(([, code]) => /\.signUp\s*\(/.test(code))
+    expect(files.map(([f]) => f.split('/').pop())).toEqual(['RegisterPage.tsx'])
+    expect(files[0][1]).toMatch(/registration_code: code, adult_attested: true/)
+  })
+
   it('scans the app source', () => {
     expect(Object.keys(sources).length).toBeGreaterThan(20)
   })
 
-  it('never calls sign-up or one-time-code sign-in', () => {
+  it('never calls sign-up or one-time-code sign-in (except link registration)', () => {
     for (const [file, code] of Object.entries(sources)) {
-      expect(code, file).not.toMatch(/\.signUp\s*\(/)
+      // Controlled registration (20261130000000) signs up only through a link;
+      // Supabase Auth's account creation hook refuses anything else.
+      if (!file.endsWith('/public/auth/RegisterPage.tsx')) expect(code, file).not.toMatch(/\.signUp\s*\(/)
       expect(code, file).not.toMatch(/\.signInWithOtp\s*\(/)
       expect(code, file).not.toMatch(/\.signInAnonymously\s*\(/)
       expect(code, file).not.toMatch(/\.admin\./)

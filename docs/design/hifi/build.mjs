@@ -18,6 +18,14 @@ const icon = (name, size = 22, stroke = 2, cls = '') => {
   if (!L[name]) throw new Error('missing icon ' + name)
   return renderToStaticMarkup(React.createElement(L[name], { size, strokeWidth: stroke, className: cls, 'aria-hidden': true }))
 }
+// My Split nav icon: a monochrome (currentColor) simplification of the official split-post symbol, drawn on
+// lucide's 24 px grid. Circle outline with the post in two filled pieces split by the logo's -14 degree gap.
+// Active: the same drawing in cobalt with a heavier stroke, like the other lucide nav icons, so it never reads as
+// a second copy of the full-colour logo.
+const SP_TOP = 'M6.5 12.5V8.6A1.6 1.6 0 0 1 8.1 7H15.9A1.6 1.6 0 0 1 17.5 8.6V9.75Z'
+const SP_BOT = 'M6.5 15L17.5 12.25V15.4A1.6 1.6 0 0 1 15.9 17H8.1A1.6 1.6 0 0 1 6.5 15.4Z'
+const splitMark = (size = 25, stroke = 2) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="${stroke}"/><path fill="currentColor" d="${SP_TOP}${SP_BOT}"/></svg>`
+const splitIcon = (size, active, kind = 'brand') => kind === 'gem' ? icon('Gem', size, active ? 2.4 : 1.9) : splitMark(size, active ? 2.4 : 1.9)
 const logoSvg = readFileSync(join(here, '../../../src/logo/splitpost-logo.svg'), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 const logo = (s = 30) => logoSvg.replace('width="56" height="56"', `width="${s}" height="${s}"`).replace(/sp-logo-(top|bottom)/g, (m) => m + '-' + s + Math.random().toString(36).slice(2, 6))
 const M = '../../../public/media'
@@ -53,7 +61,6 @@ svg{display:block;flex:none}
 .faces span{flex:1;text-align:center;font:600 13.5px var(--body);color:var(--muted);padding:8px 0;border-radius:999px;position:relative;z-index:1;white-space:nowrap}
 .faces span.on{background:var(--primary);color:#fff;box-shadow:0 4px 12px -4px rgba(36,71,166,.6)}
 .faces.dark{background:rgba(255,255,255,.12)}.faces.dark span{color:var(--muted-dark)}.faces.dark span.on{background:#fff;color:var(--primary)}
-.lock{display:inline-flex;vertical-align:-2px;margin-left:3px;opacity:.7}
 /* nav */
 .nav{height:86px;flex:none;background:rgba(250,247,241,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:flex-start;padding:10px 8px 0}
 .nav a{display:flex;flex-direction:column;align-items:center;gap:4px;font:600 10.5px var(--body);color:var(--muted);width:64px}
@@ -244,17 +251,94 @@ svg{display:block;flex:none}
 .q b{font:800 24px var(--display);font-stretch:105%;display:block}
 .q span{font:500 13px var(--body);color:var(--muted)}
 .q .go{margin-left:auto;color:var(--primary)}
+/* profile actions */
+.pacts{display:flex;gap:8px}.pacts .btn{flex:1;padding:10px 8px;font-size:13.5px;gap:5px}
+/* intelligence framework: What happened, What it means, What to do next */
+.step{display:flex;align-items:center;gap:7px;padding:0 20px 7px;font:700 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--apricot-text)}
+.step i{font:800 10.5px var(--body);font-style:normal;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--apricot-tint);border:1px solid #fbd9bd;letter-spacing:0}
+.means{margin:0 12px 12px;background:#fff;border-radius:20px;padding:12px 16px;font:500 13.5px/1.45 var(--body);box-shadow:0 1px 0 var(--line)}
+.means b{font-weight:700}
+.iq{margin:0 12px 12px;background:#fff;border-radius:22px;padding:6px 16px;box-shadow:0 1px 0 var(--line)}
+.iq .s{display:flex;gap:11px;padding:8px 0;border-bottom:1px solid #f1ece3}.iq .s:last-child{border:0}
+.iq .s>span:first-child{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;flex:none}
+.iq .s small{display:block;font:700 10.5px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--apricot-text);margin-bottom:2px}
+.iq .s div{font:500 13px/1.4 var(--body)}
+.iq .s b{font-weight:700}
+/* catch-up */
+.cu{display:flex;align-items:center;gap:11px;padding:6px 18px 14px}
+.cu img{width:44px;height:44px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2.5px var(--ivory),0 0 0 5px var(--apricot)}
+.cu b{font:850 17px var(--display);font-stretch:104%;display:block;white-space:nowrap}
+.cu small{font:600 12.5px var(--body);color:var(--primary)}
+.cu .x{margin-left:auto}
+.ord{display:flex;justify-content:space-between;align-items:center;padding:0 18px 6px;font:600 12px var(--body);color:var(--muted)}
+.of{display:flex;align-items:center;gap:8px;padding:0 22px 8px;font:600 12px var(--body);color:var(--muted)}
+.of b{color:var(--primary)}
+.done{margin:0 12px 16px;display:flex;gap:12px;align-items:center;text-align:left;padding:12px 16px;border-radius:22px;border:1.5px dashed #c5e6de;background:var(--seafoam-tint);color:#1f5e52}
+.done .c{width:40px;height:40px;border-radius:50%;background:var(--seafoam);color:#12312b;display:grid;place-items:center;flex:none}
+.done b{font:850 18px var(--display);font-stretch:106%;display:block;color:var(--ink)}
+.done span{font:500 12.5px/1.45 var(--body)}
+/* bottom sheets */
+.dim{position:absolute;inset:0;background:rgba(13,22,48,.48);z-index:10}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--ivory);border-radius:30px 30px 0 0;padding:10px 20px 30px;z-index:11;box-shadow:0 -20px 40px -20px rgba(0,0,0,.4)}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:#d6cfc1;margin:0 auto 16px}
+.sheet h3{font:850 23px/1.15 var(--display);font-stretch:106%;letter-spacing:-.02em}
+.sheet .sub{font:500 14px/1.5 var(--body);color:var(--muted);margin:6px 0 14px}
+.sheet .hd{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.sheet .hd .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;flex:none}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.opt{display:flex;align-items:center;gap:9px;background:#fff;border-radius:16px;padding:13px 14px;font:700 14.5px var(--body);box-shadow:inset 0 0 0 1.5px var(--line)}
+.opt i{width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 2px #c9c1b2;flex:none}
+.opt.on{box-shadow:inset 0 0 0 2px var(--primary);color:var(--primary)}.opt.on i{box-shadow:inset 0 0 0 5px var(--primary)}
+.nbbox{display:flex;gap:10px;margin:14px 0 16px;padding:12px 14px;border-radius:16px;background:var(--seafoam-tint);border:1px solid #c5e6de;font:500 13px/1.45 var(--body);color:#1f4d44}
+.nbbox b{color:var(--ink)}
+.sheet .btn.full{display:flex;width:100%;padding:15px;font-size:15.5px}
+.sheet .later{text-align:center;font:600 14px var(--body);color:var(--muted);margin-top:12px}
+.wl{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid #f1ece3;font:500 13.5px/1.45 var(--body)}
+.wl:last-of-type{border:0}
+.wl>span:first-child{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex:none;background:var(--blue-50);color:var(--primary)}
+.wl b{display:block;font-weight:700}
+/* sponsored (advertising) */
+.ad{margin:0 12px 16px;background:#fff;border-radius:20px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--line)}
+.ad .ah{display:flex;align-items:center;gap:9px;padding:11px 14px}
+.ad .bm{width:30px;height:30px;border-radius:8px;background:#f1ece3;color:var(--muted);display:grid;place-items:center;flex:none}
+.ad .ah b{font:700 13.5px var(--body);display:block}
+.ad .ah .tag{font-size:10.5px;padding:2px 8px}
+.ad .ah .more{margin-left:auto;color:var(--muted)}
+.ad .cr{position:relative;height:150px}
+.ad .cr img{width:100%;height:100%;object-fit:cover}
+.ad .cr .play{width:48px;height:48px}
+.ad .al{display:flex;align-items:center;gap:10px;padding:11px 14px 12px}
+.ad .al p{flex:1;font:500 13px/1.4 var(--body)}
+.ad .al .btn{padding:8px 14px;font-size:13px;background:var(--ink);color:#fff}
+.ad .wy{display:flex;align-items:center;gap:5px;padding:0 14px 12px;font:600 12px var(--body);color:var(--primary)}
+.post.withad{margin-bottom:0;border-radius:26px 26px 0 0}
+.adlink{margin:0 12px 16px;background:var(--apricot-tint);border-radius:0 0 22px 22px;padding:9px 9px 9px;box-shadow:0 12px 30px -18px rgba(27,36,48,.35)}
+.adlink .lk{display:flex;align-items:center;gap:6px;padding:0 6px 8px;font:600 11.5px var(--body);color:var(--apricot-text)}
+.adlink .ad{margin:0;border-radius:16px;box-shadow:inset 0 0 0 1px #fbd9bd}
+.adlink .ad .cr{height:104px}
+/* icon comparison */
+.cmp{background:#fff;border-radius:24px;padding:26px 28px;box-shadow:0 1px 0 var(--line);display:inline-block}
+.cmp h3{font:850 22px var(--display);font-stretch:106%;margin-bottom:4px}
+.cmp>p{font:500 14px var(--body);color:var(--muted);margin-bottom:20px;max-width:1150px}
+.cmpg{display:grid;grid-template-columns:auto 390px 390px 1fr;gap:20px 30px;align-items:center}
+.cmpg .rl{font:700 13px var(--body);color:var(--muted);width:120px}
+.cmpg .ch{font:800 15px var(--body)}
+.cmpg .navbox{width:390px;border-radius:18px;overflow:hidden;box-shadow:0 0 0 1px var(--line)}
+.cmpg .navbox .nav{height:76px}
+.big3{display:flex;gap:22px;align-items:center}
+.big3 div{display:flex;flex-direction:column;align-items:center;gap:8px;font:600 12px var(--body);color:var(--muted)}
+.big3 .t{width:104px;height:104px;border-radius:24px;background:var(--ivory);display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--line)}
 `
 
 // ---------- shared components ----------
 const status = (dark = false) => `<div class="status${dark ? ' dark' : ''}"><span>9:41</span><span class="r">${icon('Signal', 16, 2.4)}${icon('Wifi', 16, 2.4)}${icon('BatteryFull', 22, 1.8)}</span></div>`
-const nav = (on) => `<nav class="nav">
+const nav = (on, kind = 'brand') => `<nav class="nav">
   <a class="${on === 'home' ? 'on' : ''}">${icon('House', 25, on === 'home' ? 2.4 : 1.9)}Home</a>
   <a class="${on === 'discover' ? 'on' : ''}">${icon('Compass', 25, on === 'discover' ? 2.4 : 1.9)}Discover</a>
   <a class="create ${on === 'create' ? 'on' : ''}"><span class="plus">${icon('Plus', 26, 2.6)}</span></a>
-  <a class="${on === 'split' ? 'on' : ''}">${icon('Gem', 25, on === 'split' ? 2.4 : 1.9)}My Split</a>
+  <a class="${on === 'split' ? 'on' : ''}">${splitIcon(25, on === 'split', kind)}My Split</a>
   <a class="${on === 'profile' ? 'on' : ''}"><img class="me" src="${P('sam')}" alt="">Profile</a></nav>`
-const faces = (list, on, dark = false, locks = []) => `<div class="faces${dark ? ' dark' : ''}" role="tablist">${list.map((f, i) => `<span class="${i === on ? 'on' : ''}">${f}${locks.includes(i) ? `<span class="lock">${icon('Lock', 11, 2.4)}</span>` : ''}</span>`).join('')}</div>`
+const faces = (list, on, dark = false) => `<div class="faces${dark ? ' dark' : ''}" role="tablist">${list.map((f, i) => `<span class="${i === on ? 'on' : ''}">${f}</span>`).join('')}</div>`
 const appbar = () => `<div class="bar"><div class="brand">${logo(32)}<span class="wm">splitpost</span></div><span class="iconbtn">${icon('MessageSquareHeart', 19)}</span></div>`
 const acts = (likes, comments, liked = false, saved = false) => `<div class="acts"><span class="${liked ? 'liked' : ''}">${icon('Heart', 21, 2)}${likes}</span><span>${icon('MessageCircle', 21)}${comments}</span><span>${icon('Repeat2', 22)}</span><span>${icon('Send', 20)}</span><span class="sp"></span><span>${icon(saved ? 'BookmarkCheck' : 'Bookmark', 21)}</span></div>`
 const videoPost = (o) => `<article class="post"><div class="media${o.short ? ' short' : ''}"><img src="${o.img}" alt=""><div class="shade"></div>
@@ -266,8 +350,8 @@ const textPost = (o) => `<article class="post">${o.repost ? `<div class="repost"
 // ---------- home faces (shared by screens and the transition demo) ----------
 const homeFace = (k) => {
   if (k === 0) return `
-  <div class="sec"><h3>New from your Clique</h3><span>3 creators</span></div>
-  <div class="strip">${[['amara', 'Amara', 4], ['kofi', 'Kofi', 2], ['hana', 'Hana', 1], ['theo', 'Theo', 0], ['lena', 'Lena', 0]].map(([p, n, c]) => `<div class="p"><div class="ring${c ? '' : ' seen'}"><img src="${P(p)}" alt="">${c ? `<span class="n">${c}</span>` : ''}</div>${n}</div>`).join('')}</div>
+  <div class="sec"><h3>New from your Clique</h3><span>4 creators</span></div>
+  <div class="strip">${[['amara', 'Amara', 4], ['kofi', 'Kofi', 2], ['lena', 'Lena', 12], ['hana', 'Hana', 1], ['theo', 'Theo', 0]].map(([p, n, c]) => `<div class="p"><div class="ring${c ? '' : ' seen'}"><img src="${P(p)}" alt="">${c ? `<span class="n">${c > 9 ? '9+' : c}</span>` : ''}</div>${n}</div>`).join('')}</div>
   ${videoPost({ img: `${M}/landing/photos/creator-editing-1200.webp`, p: 'amara', name: 'Amara Obi', meta: '12 min · Money & business', clique: true, video: '3:42', text: '<b>Amara</b> The 50/30/20 budget, rebuilt for a first paycheque. Full breakdown in the video.', likes: '248', comments: '36', liked: true })}
   ${videoPost({ img: `${M}/tour/posts/kofi-harvest.jpg`, p: 'kofi', name: 'Kofi Mensah', meta: '1 h · Food & cooking', clique: true, text: '<b>Kofi</b> Harvest day. Three recipes from one basket coming this week.', likes: '91', comments: '14', short: true })}`
   if (k === 1) return `
@@ -304,50 +388,109 @@ const create = `<div class="phone">${status()}<div class="ctop"><span class="ico
 <div class="note">${icon('Info', 16)}<span>Videos up to 5 minutes. MP4 or MOV files recorded in H.264 are supported. If a file can't be used, we'll explain why before you post.</span></div>
 <div class="tools"><span>${icon('Image', 24)}Photo</span><span>${icon('Clapperboard', 24)}Video</span><span>${icon('Hash', 24)}Topic</span><span>${icon('Smile', 24)}Emoji</span></div></div>${nav('create')}</div>`
 
+const iq = (rows) => `<div class="iq">${rows.map(([ic, bg, c, k, t]) => `<div class="s"><span style="background:${bg};color:${c}">${icon(ic, 17)}</span><div><small>${k}</small>${t}</div></div>`).join('')}</div>`
 const mysplit = `<div class="phone"><div class="hero-blue">${status(true)}<div class="hb-top"><h2>My Split</h2><span class="tag sim" style="background:rgba(168,217,207,.18);color:#cfeee7;border-color:rgba(168,217,207,.4)">Pilot · simulated</span></div>
 ${faces(['Overview', 'History', 'Opportunities'], 0, true)}
 <div class="pts"><div class="k">Your Connection Points</div><div class="v">1,240<small>total</small></div><div class="splitbar"><i></i><i></i></div>
 <div class="legend"><div><b><i style="background:var(--seafoam)"></i>1,040</b><span>Recognized points. Your contribution, not redeemable.</span></div><div><b><i style="background:var(--apricot)"></i>200</b><span>Redemption-eligible points, from 2 qualified referrals.</span></div></div></div></div>
-<div class="scroll" style="padding-top:14px"><div class="simcard"><div class="k">Estimated value of your eligible points<span class="tag sim">Simulated</span></div><div class="v">$3.20</div><p>What your 200 eligible points would be worth from today's simulated fan pool. It moves as the pool and points change. Nothing is paid during the pilot.</p></div>
-<div class="lst"><div class="li"><span class="ic" style="background:var(--apricot-tint);color:var(--apricot-text)">${icon('UserRoundPlus', 20)}</span><span class="t">Qualified referral<small>Jordan joined and followed Kofi</small></span><span class="n" style="color:var(--apricot-text)">+100</span></div>
-<div class="li"><span class="ic" style="background:var(--seafoam-tint);color:#1f5e52">${icon('Repeat2', 20)}</span><span class="t">Reposted Amara's budget video<small>Recognized · today</small></span><span class="n">+5</span></div>
-<div class="li"><span class="ic" style="background:var(--blue-50);color:var(--primary)">${icon('Users', 20)}</span><span class="t">Creators you've helped<small>2 in your Clique</small></span><span class="stack">${['amara', 'kofi', 'hana'].map((p) => `<img src="${P(p)}" alt="">`).join('')}</span></div></div></div>${nav('split')}</div>`
+<div class="scroll" style="padding-top:14px"><div class="simcard" style="padding:13px 16px"><div class="k">Estimated value of your eligible points<span class="tag sim">Simulated</span></div><div class="v">$3.20</div><p>What your 200 eligible points would be worth from today's simulated fan pool. Nothing is paid during the pilot.</p></div>
+${iq([
+  ['UserRoundPlus', 'var(--apricot-tint)', 'var(--apricot-text)', 'What happened', 'Your <b>two referrals qualified</b> (+200 eligible points).'],
+  ['Users', 'var(--seafoam-tint)', '#1f5e52', 'What it means', '<b>Kofi gained 2 followers through you.</b>'],
+  ['Send', 'var(--blue-50)', 'var(--primary)', 'What to do next', "Share Kofi's new harvest post with someone who'd value it."]])}</div>${nav('split')}</div>`
 
-const profile = `<div class="phone"><div class="cover"><img class="bg" src="${M}/studio-light.jpg" alt="">${status(true)}<img class="pav" src="${P('amara')}" alt=""><div class="top"><span>${icon('ChevronLeft', 20)}</span><span>${icon('Ellipsis', 20)}</span></div></div>
+const profileScreen = (overlay = '') => `<div class="phone"><div class="cover"><img class="bg" src="${M}/studio-light.jpg" alt="">${status(true)}<img class="pav" src="${P('amara')}" alt=""><div class="top"><span>${icon('ChevronLeft', 20)}</span><span>${icon('Ellipsis', 20)}</span></div></div>
 <div class="scroll"><div class="pf"><h2>Amara Obi</h2><div class="h">@amaraobi · Money &amp; business</div>
 <p>Money talk for first-generation earners. A new budget breakdown every Tuesday.</p>
 <div class="stats"><div><b>1,284</b><span>Followers</span></div><div><b>96</b><span>Clique</span></div><div><b>41</b><span>Active Supporters</span></div></div>
-<div style="display:flex;gap:8px"><span class="btn blue" style="flex:1">${icon('Check', 16, 2.6)}Following</span><span class="btn" style="flex:1;background:var(--apricot);color:#4a2109">${icon('Sparkle', 15, 2.4)}Join Clique</span><span class="iconbtn" style="width:42px;height:42px">${icon('HandHeart', 19)}</span></div></div>
+<div class="pacts"><span class="btn blue">${icon('Check', 16, 2.6)}Following</span><span class="btn" style="background:var(--apricot);color:#4a2109">${icon('Sparkle', 15, 2.4)}Join Clique</span><span class="btn line">${icon('HandHeart', 16, 2.2)}Support</span></div></div>
 <div class="pgrid" style="margin-top:16px"><div><img src="${M}/landing/photos/creator-editing-640.webp" alt=""><span class="pl">${icon('Play', 12, 3)}3:42</span></div><div class="tx">The one budget rule I'd keep if I had to drop the rest.</div><div><img src="${M}/landing/photos/teacher-recording-640.webp" alt=""><span class="pl">${icon('Play', 12, 3)}4:12</span></div>
 <div><img src="${M}/landing/photos/metalworker-640.webp" alt=""></div><div><img src="${M}/landing/photos/filmmaker-600.webp" alt=""></div><div class="tx">Ask me anything: first salary edition.</div></div></div>
-${nav('none')}</div>`
+${nav('none')}${overlay}</div>`
+const profile = profileScreen()
 
-const ring = (outer, inner) => `<svg width="128" height="128" viewBox="0 0 128 128"><circle cx="64" cy="64" r="56" fill="none" stroke="#e7f4f1" stroke-width="14"/><circle cx="64" cy="64" r="56" fill="none" stroke="var(--seafoam)" stroke-width="14" stroke-dasharray="${351.9 * outer} 352" transform="rotate(-90 64 64)" stroke-linecap="round"/><circle cx="64" cy="64" r="36" fill="none" stroke="#eef2fb" stroke-width="14"/><circle cx="64" cy="64" r="36" fill="none" stroke="var(--primary)" stroke-width="14" stroke-dasharray="${226.2 * inner} 227" transform="rotate(-90 64 64)" stroke-linecap="round"/><text x="64" y="70" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="19" fill="#1b2430">61%</text></svg>`
+const ring = (outer, inner, sz = 128) => `<svg width="${sz}" height="${sz}" viewBox="0 0 128 128"><circle cx="64" cy="64" r="56" fill="none" stroke="#e7f4f1" stroke-width="14"/><circle cx="64" cy="64" r="56" fill="none" stroke="var(--seafoam)" stroke-width="14" stroke-dasharray="${351.9 * outer} 352" transform="rotate(-90 64 64)" stroke-linecap="round"/><circle cx="64" cy="64" r="36" fill="none" stroke="#eef2fb" stroke-width="14"/><circle cx="64" cy="64" r="36" fill="none" stroke="var(--primary)" stroke-width="14" stroke-dasharray="${226.2 * inner} 227" transform="rotate(-90 64 64)" stroke-linecap="round"/><text x="64" y="70" text-anchor="middle" font-family="Archivo" font-weight="900" font-size="19" fill="#1b2430">61%</text></svg>`
+const step = (n, t) => `<div class="step"><i>${n}</i>${t}</div>`
 const attention = `<div class="phone">${status()}<div class="bar"><div class="brand"><img src="${P('amara')}" style="width:34px;height:34px;border-radius:50%;object-fit:cover" alt=""><b class="d" style="font-size:19px;font-weight:850">Your insights</b></div><span class="tag act">Last 7 days</span></div>
-${faces(['Profile', 'Attention', 'Retention', 'Money'], 1, false, [1, 2, 3])}
-<div class="scroll"><div class="story"><div class="eyebrow">Attention</div><h3>Every post was available to all <em>1,284 followers</em>. 784 of them saw at least one.</h3></div>
-<div class="rings">${ring(1, 0.61)}<div class="lg"><div><i style="background:var(--seafoam)"></i><span><b>100%</b>Available. Your posts were in every follower's Home.</span></div><div><i style="background:var(--primary)"></i><span><b>61%</b>Reached. Followers who actually viewed a post.</span></div></div></div>
-<div class="src"><div class="h">Where your 27 new followers came from</div>
-${[['Compass', 'Discover', 14, 'var(--primary)'], ['Send', 'Shared links', 9, 'var(--apricot)'], ['User', 'Your profile', 4, 'var(--seafoam)']].map(([ic, n, v, c]) => `<div class="srow">${icon(ic, 17)}<span style="width:92px">${n}</span><span class="sbar"><i style="width:${v * 6.5}%;background:${c}"></i></span><b>${v}</b></div>`).join('')}</div>
-<div class="insight">${icon('Lightbulb', 22)}<span><b>Your Clique talks back</b>Clique members comment 3× more than other followers. Ask them a question in your next post.</span></div></div>${nav('profile')}</div>`
+${faces(['Profile', 'Attention', 'Retention', 'Money'], 1)}
+<div class="scroll">${step(1, 'What happened')}<div class="story" style="padding-top:0;padding-bottom:10px"><h3 style="font-size:21px;margin:0">Every post was available to all <em>1,284 followers</em>. 784 of them saw at least one.</h3></div>
+<div class="rings" style="padding:14px 16px;margin-bottom:10px">${ring(1, 0.61, 104)}<div class="lg"><div><i style="background:var(--seafoam)"></i><span><b>100%</b>Available. Your posts were in every follower's Home.</span></div><div><i style="background:var(--primary)"></i><span><b>61%</b>Reached. Followers who actually viewed a post.</span></div></div></div>
+<div class="src" style="padding:12px 16px;margin-bottom:12px"><div class="h" style="margin-bottom:4px">Where your 27 new followers came from</div>
+${[['Compass', 'Discover', 14, 'var(--primary)'], ['Send', 'Shared links', 9, 'var(--apricot)'], ['User', 'Your profile', 4, 'var(--seafoam)']].map(([ic, n, v, c]) => `<div class="srow" style="margin:6px 0">${icon(ic, 17)}<span style="width:92px">${n}</span><span class="sbar"><i style="width:${v * 6.5}%;background:${c}"></i></span><b>${v}</b></div>`).join('')}</div>
+${step(2, 'What it means')}<div class="means">Discover brings new people; <b>your Clique comments 3× more</b> than other followers.</div>
+${step(3, 'What to do next')}<div class="insight">${icon('Lightbulb', 22)}<span><b>Ask your Clique a question</b>End your next post with one.</span></div></div>${nav('profile')}</div>`
 
 const money = `<div class="phone">${status()}<div class="bar"><div class="brand"><img src="${P('amara')}" style="width:34px;height:34px;border-radius:50%;object-fit:cover" alt=""><b class="d" style="font-size:19px;font-weight:850">Your insights</b></div><span class="tag act">November</span></div>
-${faces(['Profile', 'Attention', 'Retention', 'Money'], 3, false, [1, 2, 3])}
-<div class="scroll"><div class="story"><div class="eyebrow">Money</div><h3>Ads shown with your posts would earn you <em>$41.60</em> this month.</h3><div style="margin-top:8px"><span class="tag sim">Simulated · not paid during the pilot</span></div></div>
-<div class="src"><div class="h">How $104.00 of simulated ad revenue splits</div>
-<div class="split3"><div style="flex:40;background:var(--primary);color:#fff">You 40%</div><div style="flex:20;background:var(--seafoam);color:#173f37">Fans 20%</div><div style="flex:40;background:#e9e4da;color:var(--muted)">Splitpost 40%</div></div>
+${faces(['Profile', 'Attention', 'Retention', 'Money'], 3)}
+<div class="scroll">${step(1, 'What happened')}<div class="story" style="padding-top:0;padding-bottom:10px"><h3 style="font-size:21px;margin:0">Ads shown with your posts would earn you <em>$41.60</em> this month.</h3><div style="margin-top:7px"><span class="tag sim">Simulated · not paid during the pilot</span></div></div>
+<div class="src" style="padding:12px 16px;margin-bottom:10px"><div class="h" style="margin-bottom:0">How $104.00 of simulated ad revenue splits</div>
+<div class="split3" style="height:40px;margin:10px 0 7px"><div style="flex:40;background:var(--primary);color:#fff">You 40%</div><div style="flex:20;background:var(--seafoam);color:#173f37">Fans 20%</div><div style="flex:40;background:#e9e4da;color:var(--muted)">Splitpost 40%</div></div>
 <div style="font:500 12px/1.45 var(--body);color:var(--muted)">From ads placed with your posts. Ads elsewhere in the app aren't part of creator splits.</div></div>
-<div class="lst" style="margin-bottom:12px"><div class="li"><span class="ic" style="background:var(--blue-50);color:var(--primary);font:800 13px var(--display)">KB</span><span class="t">Kitchen brand campaign<small>3 posts · 2,140 impressions</small></span><span class="n">$28.00</span></div>
-<div class="li"><span class="ic" style="background:var(--seafoam-tint);color:#1f5e52;font:800 13px var(--display)">GA</span><span class="t">Grocery app campaign<small>1 post · 960 impressions</small></span><span class="n">$13.60</span></div></div>
-<div class="insight" style="background:#fff;border-color:var(--line)">${icon('HandHeart', 22)}<span><b>12 people would support you</b>Support Intent is non-binding: not a payment and not revenue. It shows who values your work.</span><span class="tag nb" style="align-self:flex-start">Non-binding</span></div></div>${nav('profile')}</div>`
+<div class="lst" style="margin-bottom:12px;padding:2px 16px"><div class="li" style="padding:9px 0"><span class="ic" style="background:var(--blue-50);color:var(--primary);font:800 13px var(--display)">KB</span><span class="t">Kitchen brand campaign<small>3 posts · 2,140 impressions</small></span><span class="n">$28.00</span></div>
+<div class="li" style="padding:9px 0"><span class="ic" style="background:var(--seafoam-tint);color:#1f5e52;font:800 13px var(--display)">GA</span><span class="t">Grocery app campaign<small>1 post · 960 impressions</small></span><span class="n">$13.60</span></div></div>
+${step(2, 'What it means')}<div class="means">Tuesday budget posts carried <b>two thirds</b>. <b>12 people</b> would support you <span class="tag nb" style="padding:1px 7px">Non-binding</span></div>
+${step(3, 'What to do next')}<div class="insight">${icon('Lightbulb', 22)}<span><b>Keep the Tuesday breakdowns going</b>Thank your 12 supporters in your next post.</span></div></div>${nav('profile')}</div>`
+
+// ---------- refinements after approval ----------
+// Clique catch-up: tapping an avatar in the Clique strip opens that creator's unseen posts, oldest first.
+const catchup = `<div class="phone">${status()}<div class="cu"><span class="iconbtn">${icon('ChevronLeft', 20)}</span><img src="${P('amara')}" alt=""><div><b>Catch up with Amara</b><small>4 new since you last looked</small></div><span class="iconbtn x">${icon('Ellipsis', 19)}</span></div>
+<div class="ord"><span>Oldest unseen first</span><span>Scrolled to the end</span></div>
+<div class="scroll"><div class="of"><b>3 of 4</b>· Yesterday</div>
+${textPost({ p: 'amara', name: 'Amara Obi', meta: '1 day · Money & business', clique: true, text: 'Ask me anything: first salary edition.', likes: '64', comments: '48' })}
+<div class="of"><b>4 of 4</b>· 12 min ago</div>
+${videoPost({ img: `${M}/landing/photos/creator-editing-1200.webp`, p: 'amara', name: 'Amara Obi', meta: '12 min · Money & business', clique: true, video: '3:42', text: '<b>Amara</b> The 50/30/20 budget, rebuilt.', likes: '248', comments: '36', short: true }).replace('class="media short"', 'class="media short" style="height:190px"')}
+<div class="done"><div class="c">${icon('Check', 22, 2.8)}</div><div><b>All caught up</b><span>You've seen everything new from Amara.</span></div></div></div>${nav('home')}</div>`
+
+// Support Intent sheet: non-binding, nothing charged.
+const supportSheet = `<div class="dim"></div><div class="sheet"><div class="grab"></div>
+<div class="hd"><span class="ic" style="background:var(--seafoam-tint);color:#1f5e52">${icon('HandHeart', 24)}</span><h3>Show Amara you'd support her</h3></div>
+<p class="sub">How much would you be willing to support Amara's work?</p>
+<div class="opts">${[['$3 a month', 0], ['$5 a month', 1], ['$10 a month', 0], ['Not sure yet', 0]].map(([t, on]) => `<span class="opt${on ? ' on' : ''}"><i></i>${t}</span>`).join('')}</div>
+<div class="nbbox">${icon('ShieldCheck', 20)}<span><b>Non-binding.</b> Nothing is charged, now or later. This tells Amara and Splitpost what people would be willing to support.</span></div>
+<span class="btn blue full">Record my support intent</span><div class="later">Not now</div></div>`
+const support = profileScreen(supportSheet)
+
+// Advertising: clearly labelled, never styled as a creator post, and smaller than posts.
+const adCard = (o) => `<div class="ad"><div class="ah"><span class="bm">${icon('Store', 17)}</span><div><b>${o.brand}</b><span class="tag spon">${o.label}</span></div><span class="more">${icon('Ellipsis', 20)}</span></div>
+<div class="cr"><img src="${o.img}" alt="" style="${o.pos || ''}">${o.video ? `<span class="play">${icon('Play', 22, 2.2)}</span><span class="dur">${o.video}</span>` : ''}</div>
+<div class="al"><p>${o.line}</p><span class="btn">Learn more</span></div><div class="wy">${icon('Info', 14, 2.2)}Why this ad?</div></div>`
+const kofiPost = videoPost({ img: `${M}/tour/posts/kofi-harvest.jpg`, p: 'kofi', name: 'Kofi Mensah', meta: '1 h · Food & cooking', clique: true, text: '<b>Kofi</b> Harvest day. Three recipes from one basket coming this week.', likes: '91', comments: '14', short: true })
+const adContentScreen = (overlay = '') => `<div class="phone">${status()}${appbar()}${faces(['Clique first', 'My Clique', 'Following'], 0)}<div class="scroll">
+${kofiPost.replace('class="post"', 'class="post withad"').replace('class="media short"', 'class="media short" style="height:190px"')}
+<div class="adlink"><div class="lk">${icon('Link2', 14, 2.2)}Sponsored · shown with Kofi's post</div>${adCard({ brand: 'Ironleaf Cookware', label: 'Sponsored', img: `${M}/landing/photos/metalworker-640.webp`, line: 'Hand-forged pans for one-basket cooking.' })}</div>
+${textPost({ p: 'hana', name: 'Hana Sato', meta: '3 h · Books & writing', clique: true, text: 'What is one book that changed how you work?', likes: '57', comments: '112' })}
+</div>${nav('home')}${overlay}</div>`
+const adContent = adContentScreen()
+const adFeed = `<div class="phone">${status()}${appbar()}${faces(['Clique first', 'My Clique', 'Following'], 2)}<div class="scroll">
+${textPost({ repost: 'Sam reposted · original by Theo Laurent', p: 'theo', name: 'Theo Laurent', meta: '2 h · Travel', text: 'Four days, one backpack, zero plans. Here is the route.', likes: '64', comments: '9' })}
+${adCard({ brand: 'Brightframe Cameras', label: 'Sponsored', img: `${M}/landing/photos/filmmaker-600.webp`, pos: 'object-position:center 30%', video: '0:20', line: 'Shoot steady travel video on a phone budget.' })}
+${videoPost({ img: `${M}/tour/posts/theo-trail.jpg`, p: 'theo', name: 'Theo Laurent', meta: '2 h · Travel', video: '4:58', text: '<b>Theo</b> The full ridge trail, start to summit.', likes: '133', comments: '21', short: true })}
+</div>${nav('home')}</div>`
+const whyAdSheet = `<div class="dim"></div><div class="sheet"><div class="grab"></div>
+<div class="hd"><span class="ic" style="background:var(--apricot-tint);color:var(--apricot-text)">${icon('Info', 24)}</span><h3>Why this ad?</h3></div>
+<p class="sub">Ironleaf Cookware · Sponsored, shown with Kofi's post</p>
+<div class="wl"><span>${icon('Tag', 17)}</span><span><b>Matched to the post or your choice</b>Shown because Kofi's post is about Food &amp; cooking, or because you chose <b style="display:inline">Cooking gear</b> as an optional commercial preference.</span></div>
+<div class="wl"><span>${icon('ShieldCheck', 17)}</span><span><b>Never sensitive interests</b>Ads never use health, religion, politics, sexuality or other sensitive interests.</span></div>
+<div class="wl"><span>${icon('EyeOff', 17)}</span><span><b>Hide ads from this advertiser</b>You won't see Ironleaf Cookware ads again.</span></div>
+<span class="btn line full" style="margin-top:14px">${icon('SlidersHorizontal', 16)}Manage ad preferences</span><div class="later">Done</div></div>`
+const whyAd = adContentScreen(whyAdSheet)
+
+// Icon comparison for My Split: brand symbol versus gem.
+const navBox = (on, kind) => `<div class="navbox">${nav(on, kind)}</div>`
+const bigIcon = (kind) => `<div class="big3"><div><span class="t" style="color:var(--muted)">${splitIcon(76, false, kind)}</span>Inactive</div><div><span class="t" style="color:var(--primary)">${splitIcon(76, true, kind)}</span>Active</div></div>`
+const iconCompare = `<div class="cmp"><h3>My Split icon: brand symbol or gem</h3><p>The brand symbol is a single-colour simplification of the Splitpost logo, drawn on the same 24 px grid and stroke as the other navigation icons. Shown at 1x (25 px) in the bottom navigation and enlarged, inactive and active.</p>
+<div class="cmpg"><span></span><span class="ch">Brand symbol (recommended)</span><span class="ch">Gem (approved draft)</span><span class="ch">Next to the Home header logo</span>
+<span class="rl">1x · My Split active</span>${navBox('split', 'brand')}${navBox('split', 'gem')}<div style="display:flex;align-items:center;gap:18px">${logo(32)}<span style="color:var(--primary)">${splitMark(25, 2.4)}</span><span style="color:var(--muted)">${splitMark(25, 1.9)}</span><span style="font:500 12.5px/1.4 var(--body);color:var(--muted);max-width:200px">Full-colour logo, then the nav symbol active and inactive</span></div>
+<span class="rl">1x · My Split inactive</span>${navBox('home', 'brand')}${navBox('home', 'gem')}<span></span>
+<span class="rl">Enlarged (76 px)</span>${bigIcon('brand')}${bigIcon('gem')}<span></span></div></div>`
 
 // ---------- desktop ----------
 const deskRail = (on) => `<aside class="rail"><div class="brand">${logo(34)}<span class="wm">splitpost</span></div>
-${[['House', 'Home', 'home'], ['Compass', 'Discover', 'discover'], ['Gem', 'My Split', 'split'], ['User', 'Profile', 'profile']].map(([ic, n, k]) => `<a class="${on === k ? 'on' : ''}">${icon(ic, 22, on === k ? 2.4 : 1.9)}${n}</a>`).join('')}
+${[['House', 'Home', 'home'], ['Compass', 'Discover', 'discover'], ['split', 'My Split', 'split'], ['User', 'Profile', 'profile']].map(([ic, n, k]) => `<a class="${on === k ? 'on' : ''}">${ic === 'split' ? splitIcon(22, on === k) : icon(ic, 22, on === k ? 2.4 : 1.9)}${n}</a>`).join('')}
 <a class="cr">${icon('Plus', 20, 2.6)}Create</a><div class="sp"></div><a>${icon('MessageSquareHeart', 20)}Send feedback</a><a><img src="${P('sam')}" style="width:28px;height:28px;border-radius:50%;object-fit:cover" alt="">Sam Rivera</a></aside>`
 const deskHome = `<div class="desk">${deskRail('home')}<main style="flex:1;display:flex;gap:28px;overflow:hidden;padding-left:40px">
 <div class="dcol" style="margin:0">${faces(['Clique first', 'My Clique', 'Following'], 0).replace('class="faces"', 'class="faces" style="margin:0 12px 16px;max-width:420px"')}${homeFace(0)}</div>
-<div class="dright"><div class="panel"><h4>Your Clique</h4>${[['amara', 'Amara Obi', '4 new posts'], ['kofi', 'Kofi Mensah', '2 new posts'], ['hana', 'Hana Sato', '1 new post'], ['theo', 'Theo Laurent', 'All caught up']].map(([p, n, s]) => `<div class="li" style="padding:9px 0"><img src="${P(p)}" style="width:40px;height:40px;border-radius:50%;object-fit:cover" alt=""><span class="t">${n}<small>${s}</small></span></div>`).join('')}<div style="font:600 13px var(--body);color:var(--primary);margin-top:8px">Manage Clique</div></div>
+<div class="dright"><div class="panel"><h4>Your Clique</h4>${[['amara', 'Amara Obi', '4 new posts'], ['kofi', 'Kofi Mensah', '2 new posts'], ['lena', 'Lena Novak', '12 new posts'], ['hana', 'Hana Sato', '1 new post'], ['theo', 'Theo Laurent', 'All caught up']].map(([p, n, s]) => `<div class="li" style="padding:9px 0"><img src="${P(p)}" style="width:40px;height:40px;border-radius:50%;object-fit:cover" alt=""><span class="t">${n}<small>${s}</small></span></div>`).join('')}<div style="font:600 13px var(--body);color:var(--primary);margin-top:8px">Manage Clique</div></div>
 <div class="panel" style="background:var(--primary);color:#fff"><div style="font:600 13px var(--body);color:var(--muted-dark)">My Split</div><div class="d" style="font-size:34px;font-weight:900;margin:4px 0">1,240 <span style="font:600 14px var(--body)">points</span></div><div class="splitbar" style="height:10px"><i></i><i></i></div><div style="font:500 12px/1.4 var(--body);color:var(--muted-dark);margin-top:8px">1,040 recognized · 200 redemption eligible · rewards simulated in the pilot</div></div></div></main></div>`
 
 const spark = `<svg width="100%" height="58" viewBox="0 0 300 58" preserveAspectRatio="none"><path d="M0 48 L40 44 L80 46 L120 34 L160 36 L200 22 L240 24 L300 8" fill="none" stroke="#a8d9cf" stroke-width="3" stroke-linecap="round"/><path d="M0 48 L40 44 L80 46 L120 34 L160 36 L200 22 L240 24 L300 8 L300 58 L0 58Z" fill="rgba(168,217,207,.15)"/></svg>`
@@ -359,11 +502,15 @@ ${[['LayoutDashboard', 'Overview', '', 1], ['Users', 'Members & access', ''], ['
 <div class="kpi"><div class="k">Registration${icon('DoorOpen', 17)}</div><div class="v">142<span style="font:600 16px var(--body);color:var(--muted)"> / 200</span></div><div class="s">pilot cap · 9 today of 25</div><div class="pbar" style="margin-top:10px"><i style="width:71%"></i></div></div>
 <div class="kpi"><div class="k">Fan pool${icon('Scale', 17)}</div><div class="v">$62.40</div><div class="s"><span class="tag sim">Simulated</span> reconciled to the cent</div></div></div>
 <div class="queues">${[['Flag', 'Reports to review', '4', 'oldest 3 h', '#fdecea', 'var(--heart)'], ['UserRoundCheck', 'Referrals flagged', '2', 'oldest 1 day', 'var(--apricot-tint)', 'var(--apricot-text)'], ['Megaphone', 'Campaign awaiting approval', '1', 'Kitchen brand · 5 h', 'var(--blue-50)', 'var(--primary)'], ['Scale', 'Appeals', '1', 'due in 6 days', 'var(--blue-50)', 'var(--primary)'], ['ShieldCheck', 'Data quality checks', '0', 'all passing · 06:00', 'var(--seafoam-tint)', '#1f5e52'], ['Activity', 'Service health', 'OK', 'email, media, database', 'var(--seafoam-tint)', '#1f5e52']].map(([ic, n, v, s, bg, c]) => `<div class="q"><span class="ic" style="background:${bg};color:${c}">${icon(ic, 22)}</span><div><b>${v}</b><span>${n}<br>${s}</span></div><span class="go">${icon('ChevronRight', 22)}</span></div>`).join('')}</div>
-<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-top:16px">
+<div style="display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:16px;margin-top:16px">
 <div class="kpi"><div class="k">Content-associated ad revenue, December<span class="tag sim">Simulated settlement</span></div>
 <div style="display:flex;gap:28px;margin:12px 0 10px;font:500 12.5px var(--body);color:var(--muted)"><div><b class="d" style="display:block;font-size:24px;font-weight:900;color:var(--ink)">$1,400</b>Agreed campaign value <span class="tag act">Actual commitment</span></div><div><b class="d" style="display:block;font-size:24px;font-weight:900;color:var(--ink)">$312</b>Eligible net revenue to date</div></div>
-<div class="split3" style="height:40px"><div style="flex:40;background:var(--primary);color:#fff">Creators $124.80</div><div style="flex:20;background:var(--seafoam);color:#173f37">Fan pool $62.40</div><div style="flex:40;background:#e9e4da;color:var(--muted)">Splitpost $124.80</div></div>
+<div class="split3" style="height:40px"><div style="flex:40;background:var(--primary);color:#fff">Creators $124.80</div><div style="flex:20;background:var(--seafoam);color:#173f37">Fans $62.40</div><div style="flex:40;background:#e9e4da;color:var(--muted)">Splitpost $124.80</div></div>
 <div style="font:500 12px var(--body);color:var(--muted)">Ledger, pool and allocations reconcile to the cent · last check 06:00 ${icon('CircleCheck', 13, 2.4, 'inline')}</div></div>
+<div class="kpi" style="padding-bottom:8px"><div class="k">Founder insight · this week<span class="tag act">Actual</span></div>${iq([
+  ['TrendingUp', 'var(--blue-50)', 'var(--primary)', 'What happened', 'Connections rose <b>18% to 312</b>; 41 came from founder activity.'],
+  ['Lightbulb', 'var(--apricot-tint)', 'var(--apricot-text)', 'What it means', 'Growth still leans on you: <b>13%</b> needs your posts or invites.'],
+  ['UserPlus', 'var(--seafoam-tint)', '#1f5e52', 'What to do next', 'Invite 3 waitlisted creators to post before Friday.']]).replace('class="iq"', 'class="iq" style="margin:4px 0 0;padding:0;box-shadow:none"')}</div>
 <div class="kpi"><div class="k">Recent administrative actions<span style="color:var(--primary);font-weight:600">Audit log</span></div>
 ${[['EyeOff', 'Post hidden · harassment report', 'Moderator · 14:02'], ['UserRoundCheck', 'Referral approved after review', 'Founder · 11:40'], ['SlidersHorizontal', 'Daily registration limit 20 → 25', 'Founder · Mon'], ['Megaphone', 'Campaign approved · Grocery app', 'Founder · Sun']].map(([ic, t, s]) => `<div class="li" style="padding:9px 0"><span class="ic" style="background:var(--blue-50);color:var(--primary);width:34px;height:34px">${icon(ic, 17)}</span><span class="t">${t}<small>${s}</small></span></div>`).join('')}</div></div></main></div>`
 
@@ -378,9 +525,19 @@ writeFileSync(join(here, 'screens.html'), page('Splitpost Visual Design', `<div 
 <section id="mobile-b"><div class="row">
 <div><div class="label"><b>My Split</b> · Overview</div><div id="scr-split">${mysplit}</div></div>
 <div><div class="label"><b>Profile</b> · as a member sees it</div><div id="scr-profile">${profile}</div></div>
-<div><div class="label"><b>Creator insights</b> · Attention (owner only)</div><div id="scr-attention">${attention}</div></div>
-<div><div class="label"><b>Creator insights</b> · Money (owner only)</div><div id="scr-money">${money}</div></div>
+<div><div class="label"><b>Creator insights</b> · Attention (owner only, not shown to members)</div><div id="scr-attention">${attention}</div></div>
+<div><div class="label"><b>Creator insights</b> · Money (owner only, not shown to members)</div><div id="scr-money">${money}</div></div>
 </div></section>
+<section id="mobile-c"><div class="row">
+<div><div class="label"><b>Content-associated ad</b> · attached to Kofi's post</div><div id="scr-ad-content">${adContent}</div></div>
+<div><div class="label"><b>General feed ad</b> · between two posts in Home</div><div id="scr-ad-feed">${adFeed}</div></div>
+<div><div class="label"><b>Why this ad?</b> · bottom sheet</div><div id="scr-why-ad">${whyAd}</div></div>
+</div></section>
+<section id="mobile-d"><div class="row">
+<div><div class="label"><b>Clique catch-up</b> · after tapping Amara in the Clique strip</div><div id="scr-catchup">${catchup}</div></div>
+<div><div class="label"><b>Support Intent</b> · from the Support button on a profile</div><div id="scr-support">${support}</div></div>
+</div></section>
+<section id="icon-compare">${iconCompare}</section>
 <section id="desktop-home"><div class="label"><b>Desktop Home</b> · connection only; discovery stays in Discover</div>${deskHome}</section>
 <section id="control"><div class="label"><b>Control Center</b> · founder and authorised operators</div>${control}</section>
 </div>`))
@@ -429,7 +586,6 @@ const lcss = `
 .cta{display:flex;gap:12px;margin:26px 0 16px}
 .cta .btn{padding:15px 26px;font-size:16.5px}
 .small{font:500 13.5px/1.55 var(--body);color:var(--muted-dark);max-width:600px}
-.new{background:#fff;color:var(--apricot-text);font:800 11px var(--body);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px;margin-right:8px;vertical-align:2px}
 .sec2{padding:90px 168px}
 .eyebrow{font:800 12.5px var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--apricot-text)}
 .sec2 h2{font:900 52px/1 var(--display);font-stretch:106%;letter-spacing:-.025em;margin:12px 0 14px;max-width:760px}
@@ -450,7 +606,6 @@ const lcss = `
 .disc ul{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:14px 28px}
 .disc li{display:flex;gap:10px;font:500 15px/1.5 var(--body);color:var(--muted-dark)}
 .disc li svg{color:var(--seafoam);margin-top:2px}
-.kept{padding:28px 168px;background:var(--seafoam-tint);font:600 14px var(--body);color:#1f5e52;display:flex;gap:10px;align-items:center}
 `
 const shot = (src, t, d) => `<div class="shot"><img src="previews/${src}.png" alt=""><h4>${t}</h4><p>${d}</p></div>`
 writeFileSync(join(here, 'landing.html'), page('Splitpost Landing Evolution', `<div class="site">
@@ -460,13 +615,12 @@ writeFileSync(join(here, 'landing.html'), page('Splitpost Landing Evolution', `<
 <p>You put in the work. You grow your followers. But the money doesn't always follow.</p>
 <p style="margin-top:12px"><b>We're building a social platform where your content can help you earn, and your followers can become a real community.</b></p>
 <div class="cta"><span class="btn">Join the Waitlist ${icon('ArrowRight', 18, 2.4)}</span><span class="btn ghost">I have an invitation link</span></div>
-<div class="small"><span class="new">Updated</span>A controlled pilot for adults 18+. Join with an invitation or a member's referral link, or join the waitlist. No guaranteed reach, views or earnings. Rewards and earnings are simulated during the pilot.</div></div>
+<div class="small">A controlled pilot for adults 18+. Join with an invitation or a member's referral link, or join the waitlist. No guaranteed reach, views or earnings. Rewards and earnings are simulated during the pilot.</div></div>
 <img src="site-hero-illustration.png" alt="" style="width:540px;-webkit-mask-image:radial-gradient(ellipse 72% 70% at 52% 50%,#000 78%,transparent 100%);mask-image:radial-gradient(ellipse 72% 70% at 52% 50%,#000 78%,transparent 100%)"></div></section>
-<div class="kept">${icon('CircleCheck', 18, 2.4)}Unchanged, in the approved order: The problem (Why) · Who we're building for (Who) · What we're building and A better split (How) · Our bigger vision (Where) · The invitation. New sections below are inserted after "What we're building".</div>
-<section class="sec2"><div class="eyebrow"><span class="new">New</span>See Splitpost</div><h2>Your people first. Your contribution counted.</h2>
-<p class="lead">Design previews of the Splitpost app, with sample people and sample numbers. They will be replaced by real screenshots from the working app before the page is published.</p>
+<section class="sec2"><div class="eyebrow">See Splitpost</div><h2>Your people first. Your contribution counted.</h2>
+<p class="lead">Product previews with sample people and numbers.</p>
 <div class="shots">${shot('screen-home', 'Your Clique comes first', "Everything you post is available to everyone who follows you, in order. Who watches is always their choice.")}${shot('screen-split', 'See your split', 'Connection Points recognize how you help creators grow. Which points are redemption eligible, and what they are estimated to be worth, is always shown, and always labelled as simulated in the pilot.')}${shot('screen-attention', 'Know what works', 'Creators see who their posts were available to, who actually saw them, and where new followers came from.')}</div></section>
-<section class="sec2" style="padding-top:0"><div class="eyebrow"><span class="new">New</span>Find your path</div><h2>Three ways to be part of the pilot.</h2>
+<section class="sec2" style="padding-top:0"><div class="eyebrow">Find your path</div><h2>Three ways to be part of the pilot.</h2>
 <div class="paths">
 <div class="path"><img src="${M}/landing/photos/creator-editing-1200.webp" alt=""><div class="c"><span class="tag act">Creators</span><h4>Build an audience you can reach</h4><p>Your posts are available to everyone who follows you, and you see 40% of ad revenue from ads shown with your posts. That share is simulated during the pilot.</p><span class="btn blue">Apply as a creator</span></div></div>
 <div class="path"><img src="${M}/landing/photos/filmmaker-960.webp" alt="" style="object-position:center 30%"><div class="c"><span class="tag sea">Members</span><h4>Support the creators you value</h4><p>Follow people, choose your Clique, and earn Connection Points for helping them grow. Points have no cash value during the pilot.</p><span class="btn blue">Join the waitlist</span></div></div>

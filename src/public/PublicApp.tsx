@@ -12,6 +12,7 @@ import { PublicNotFound } from './PublicNotFound'
 import { PrivacyPage } from './PrivacyPage'
 import { PilotAccessPage } from './PilotAccessPage'
 import { SignInPage } from './auth/SignInPage'
+import { RegisterPage } from './auth/RegisterPage'
 import { ForgotPasswordPage } from './auth/ForgotPasswordPage'
 import { ConfirmPage } from './auth/ConfirmPage'
 import { SetPasswordPage } from './auth/SetPasswordPage'
@@ -19,6 +20,7 @@ import { AccountPage } from './auth/AccountPage'
 import { RequireAuth } from './auth/AuthUi'
 import { MemberArea } from '../app/MemberArea'
 import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from '../app/pages'
+import { MySplitPage } from '../app/split'
 import { ModerationQueuePage, ModerationReportPage } from '../app/moderation'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from '../app/feedback'
 
@@ -58,6 +60,7 @@ function memberAreaRoute() {
       <Route path="post/:id" element={<PostPage />} />
       <Route path="u/:username" element={<MemberPage />} />
       <Route path="clique" element={<CliquePage />} />
+      <Route path="split" element={<MySplitPage />} />
       <Route path="catch-up/:username" element={<CatchUpPage />} />
       <Route path="profile" element={<ProfilePage />} />
       <Route path="moderation" element={<ModerationQueuePage />} />
@@ -84,6 +87,7 @@ function AllRoutes() {
         <Route path="join/creator" element={<Navigate to="/join" replace />} />
         <Route path="join/supporter" element={<Navigate to="/join" replace />} />
         <Route path="sign-in" element={<SignInPage />} />
+        <Route path="register/:code?" element={<RegisterPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />
         <Route path="auth/set-password" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />
@@ -108,6 +112,7 @@ function MemberHostRoutes() {
     <Routes>
       <Route element={<MemberHostLayout account={<AccountNavLink />} />}>
         <Route path="sign-in" element={<SignInPage />} />
+        <Route path="register/:code?" element={<RegisterPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="auth/confirm" element={<ConfirmPage />} />
         <Route path="auth/set-password" element={<RequireAuth><SetPasswordPage /></RequireAuth>} />
