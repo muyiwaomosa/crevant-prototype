@@ -93,7 +93,7 @@ function fakeApi(
   const reposts = new Set<string>()
   const shares: Array<{ id: string; channel: string }> = []
   const searchNotes: Array<Record<string, unknown>> = []
-  const previews = { allowed: true }
+  const previews = { allowed: false }
   const likes = new Set<string>()
   const comments: Array<{ id: string; post: string; author: string; body: string; at: number; deleted: boolean }> = []
   let clock = Date.parse('2026-11-17T12:00:00Z')
@@ -2923,13 +2923,26 @@ describe('previews and search measurement (20261204000000)', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/p/${id}?r=0123456789abcdef`))
   })
 
-  it('members can turn public previews of their posts off and on from their profile', async () => {
+  it('public previews are opt-in: off until the creator reads what is shown and chooses to allow them', async () => {
     const fake = fakeApi()
     renderApp('/app/profile', fake.api)
-    const box = within(await screen.findByTestId('public-previews-setting')).getByRole('checkbox') as HTMLInputElement
-    expect(box.checked).toBe(true)
+    const setting = within(await screen.findByTestId('public-previews-setting'))
+    const box = setting.getByRole('checkbox', { name: 'Allow public previews of my posts' }) as HTMLInputElement
+    expect(box.checked).toBe(false)
+    expect(setting.getByText(/They never see photos, comments, likes or anything about other members/)).toBeTruthy()
+    expect(setting.getByText('Off: only members can open links to your posts.')).toBeTruthy()
     fireEvent.click(box)
-    await waitFor(() => expect(fake.previews.allowed).toBe(false))
+    await waitFor(() => expect(fake.previews.allowed).toBe(true))
+    expect(await setting.findByText('On: shared links to your posts show a public preview.')).toBeTruthy()
+  })
+
+  it('sharing your own post before opting in says only members can open the link', async () => {
+    const fake = fakeApi()
+    const id = fake.seedPost('me', 'My own thoughts')
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn(async () => undefined) }, configurable: true })
+    renderApp(`/app/post/${id}`, fake.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
+    expect((await screen.findByTestId('share-notice')).textContent).toMatch(/Only members can open this link/)
   })
 
   it('after joining from a preview, Home offers to see the creator they came for (never an automatic follow)', async () => {

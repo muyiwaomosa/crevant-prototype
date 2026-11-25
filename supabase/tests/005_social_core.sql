@@ -55,7 +55,7 @@ begin
                             -- discovery (20261203000000), once applied
                             'shares',
                             -- previews and search measurement (20261204000000), once applied
-                            'search_metrics_daily', 'preview_optouts', 'preview_visits', 'preview_rate')
+                            'search_metrics_daily', 'preview_consents', 'preview_visits', 'preview_rate')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
@@ -131,7 +131,7 @@ begin
   if to_regclass('social.shares') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || discovery) x);
   end if;
-  if to_regclass('social.preview_optouts') is not null then
+  if to_regclass('social.preview_consents') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || previews) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found

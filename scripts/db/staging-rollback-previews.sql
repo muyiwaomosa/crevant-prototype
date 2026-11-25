@@ -7,7 +7,7 @@
 --
 -- Removes exactly the migration's objects and record and restores discovery
 -- and following as 20261203000000 and 20261201000000 defined them. Refuses,
--- changing nothing, while search counts, preview visits, opt-outs, follows
+-- changing nothing, while search counts, preview visits, consents, follows
 -- from search, or preview switch history exist, or previews are on; or if
 -- the record or an expected object is missing, or a later migration exists.
 
@@ -44,28 +44,28 @@ begin
   end if;
 end $$;
 
-lock table social.search_metrics_daily, social.preview_visits, social.preview_optouts, social.follow_events, ops.public_preview_settings, ops.public_preview_events in share row exclusive mode;
+lock table social.search_metrics_daily, social.preview_visits, social.preview_consents, social.follow_events, ops.public_preview_settings, ops.public_preview_events in share row exclusive mode;
 
 do $$
 declare
   n bigint;
 begin
   n := (select count(*) from social.search_metrics_daily) + (select count(*) from social.preview_visits)
-       + (select count(*) from social.preview_optouts) + (select count(*) from social.follow_events where source = 'search')
+       + (select count(*) from social.preview_consents) + (select count(*) from social.follow_events where source = 'search')
        + (select count(*) from ops.public_preview_events);
   if n > 0 or (select enabled from ops.public_preview_settings where id) then
-    raise exception 'refused, nothing changed: % rows of data exist (search counts, preview visits, opt-outs, follows from search or switch history), or previews are on. Fix forward instead.', n;
+    raise exception 'refused, nothing changed: % rows of data exist (search counts, preview visits, consents, follows from search or switch history), or previews are on. Fix forward instead.', n;
   end if;
 end $$;
 
 \echo 'Checks passed. Removing previews and search measurement and the migration record.'
 
 drop function public.app_public_previews_allowed();
-drop function public.app_set_public_previews(boolean);
+drop function public.app_set_public_previews(boolean, text);
 drop function public.app_public_post(uuid, text);
 drop table social.preview_rate;
 drop table social.preview_visits;
-drop table social.preview_optouts;
+drop table social.preview_consents;
 drop function ops.set_public_previews(text, boolean, text);
 drop trigger public_preview_events_no_update on ops.public_preview_events;
 drop table ops.public_preview_events;

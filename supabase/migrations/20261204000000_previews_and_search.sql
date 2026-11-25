@@ -21,7 +21,9 @@
 --    and display name. Only when previews are switched on
 --    (ops.public_preview_settings, OFF by default on every database), the
 --    post is live and not hidden, has no open report, its creator is an
---    active member who hasn't turned previews off, and it has text. Rate
+--    active member who has explicitly chosen to allow previews (opt-in,
+--    after reading what a preview shows; nothing is public by default), and
+--    it has text. Rate
 --    limited overall and per post. Visits are counted per day, post and
 --    referral link (no visitor identity), preserving referral attribution
 --    for the contribution work. Nothing else is opened to visitors.
@@ -273,14 +275,16 @@ $$;
 revoke all on function ops.set_public_previews(text, boolean, text) from public, anon, authenticated;
 comment on function ops.set_public_previews(text, boolean, text) is 'Turns public previews on or off for this database (owner only), recorded.';
 
--- A creator can turn previews of their posts off.
-create table social.preview_optouts (
-  member_id  uuid primary key references auth.users (id) on delete cascade,
-  opted_at   timestamptz not null default pg_catalog.now()
+-- Opt-in: a creator's posts can be previewed only after they chose it, with
+-- the wording they were shown. Withdrawing removes the row at once.
+create table social.preview_consents (
+  member_id       uuid primary key references auth.users (id) on delete cascade,
+  consented_at    timestamptz not null default pg_catalog.now(),
+  wording_version text not null check (wording_version ~ '^[a-z0-9][a-z0-9._-]{0,31}$')
 );
-comment on table social.preview_optouts is 'Members who don''t want public previews of their posts. Previews are on for everyone else.';
-alter table social.preview_optouts enable row level security;
-revoke all on table social.preview_optouts from public, anon, authenticated;
+comment on table social.preview_consents is 'Members who explicitly allowed public previews of their posts, and the wording they agreed to. Nobody is previewed without a row here.';
+alter table social.preview_consents enable row level security;
+revoke all on table social.preview_consents from public, anon, authenticated;
 
 -- Visits, counted per day, post and referral link: no visitor identity.
 create table social.preview_visits (
@@ -345,7 +349,7 @@ begin
     where s.id = p_post
       and s.deleted_at is null
       and s.body <> ''
-      and not exists (select 1 from social.preview_optouts o where o.member_id = s.author_id)
+      and exists (select 1 from social.preview_consents pc where pc.member_id = s.author_id)
       and not exists (select 1 from ops.content_reports r where r.target_type = 'post' and r.target_id = s.id and r.status = 'open')
   ) then
     raise exception 'not_found' using errcode = 'P0001';
@@ -361,11 +365,11 @@ begin
   where s.id = p_post;
 end;
 $$;
-comment on function public.app_public_post(uuid, text) is 'The one function visitors may call: a read-only preview of one eligible post (text, time, topic, creator name; never the photo, counts, comments or anything about other members). Only while previews are on; rate limited; visits counted per day, post and referral link.';
+comment on function public.app_public_post(uuid, text) is 'The one function visitors may call: a read-only preview of one eligible post (text, time, topic, creator name; never the photo, counts, comments or anything about other members). Only while previews are on and only for creators who opted in; rate limited; visits counted per day, post and referral link.';
 revoke all on function public.app_public_post(uuid, text) from public;
 grant execute on function public.app_public_post(uuid, text) to anon, authenticated;
 
-create function public.app_set_public_previews(p_allowed boolean)
+create function public.app_set_public_previews(p_allowed boolean, p_wording_version text default null)
 returns void
 language plpgsql
 security definer
@@ -378,15 +382,20 @@ begin
     raise exception 'invalid_request' using errcode = 'P0001';
   end if;
   if p_allowed then
-    delete from social.preview_optouts o where o.member_id = v_uid;
+    -- Consent needs the wording the member was shown.
+    if p_wording_version is null or p_wording_version !~ '^[a-z0-9][a-z0-9._-]{0,31}$' then
+      raise exception 'invalid_request' using errcode = 'P0001';
+    end if;
+    insert into social.preview_consents (member_id, wording_version) values (v_uid, p_wording_version)
+    on conflict (member_id) do update set consented_at = pg_catalog.now(), wording_version = excluded.wording_version;
   else
-    insert into social.preview_optouts (member_id) values (v_uid) on conflict do nothing;
+    delete from social.preview_consents pc where pc.member_id = v_uid;
   end if;
 end;
 $$;
-comment on function public.app_set_public_previews(boolean) is 'Lets a member allow or stop public previews of their posts.';
-revoke all on function public.app_set_public_previews(boolean) from public, anon;
-grant execute on function public.app_set_public_previews(boolean) to authenticated;
+comment on function public.app_set_public_previews(boolean, text) is 'Lets a member explicitly allow public previews of their posts (recording the wording shown) or withdraw that choice at once.';
+revoke all on function public.app_set_public_previews(boolean, text) from public, anon;
+grant execute on function public.app_set_public_previews(boolean, text) to authenticated;
 
 create function public.app_public_previews_allowed()
 returns boolean
@@ -398,7 +407,7 @@ as $$
 declare
   v_uid uuid := social.current_member();
 begin
-  return not exists (select 1 from social.preview_optouts o where o.member_id = v_uid);
+  return exists (select 1 from social.preview_consents pc where pc.member_id = v_uid);
 end;
 $$;
 revoke all on function public.app_public_previews_allowed() from public, anon;

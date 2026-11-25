@@ -107,6 +107,8 @@ export interface Member extends MemberSummary {
 export type FollowSource = 'profile' | 'discover' | 'post' | 'catch_up' | 'comment' | 'search' | 'other'
 /** A non-binding Support Intent: what a member says they would be willing to support each month. Never a payment. */
 export type SupportChoice = 'usd_3' | 'usd_5' | 'usd_10' | 'not_sure'
+/** The wording a member agrees to when allowing public previews (recorded with their choice). */
+export const PREVIEW_WORDING_VERSION = 'previews-v1'
 export const SUPPORT_CHOICES: Array<{ value: SupportChoice; label: string }> = [
   { value: 'usd_3', label: '$3 a month' },
   { value: 'usd_5', label: '$5 a month' },
@@ -433,7 +435,7 @@ export interface AppApi {
   /** Search measurement (20261204000000): daily counts only, never the words or the member. Best effort. */
   noteSearch(surface: 'search' | 'focus', hadResults: boolean, topic?: string): Promise<void>
   noteSearchSelection(surface: 'search' | 'focus', topic?: string): Promise<void>
-  /** Public previews of the member's own posts; null before 20261204000000. */
+  /** Whether the member has opted in to public previews of their posts (off until they choose); null before 20261204000000. */
   publicPreviewsAllowed(): Promise<boolean | null>
   setPublicPreviews(allowed: boolean): Promise<void>
   like(postId: string): Promise<void>
@@ -1387,7 +1389,7 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       }
       return data === true
     },
-    setPublicPreviews: (allowed) => rpc<void>('app_set_public_previews', { p_allowed: allowed }),
+    setPublicPreviews: (allowed) => rpc<void>('app_set_public_previews', { p_allowed: allowed, p_wording_version: allowed ? PREVIEW_WORDING_VERSION : null }),
     repost: (postId) => rpc<void>('app_repost', { p_post: postId }),
     unrepost: (postId) => rpc<void>('app_unrepost', { p_post: postId }),
     unfollow: (id) => rpc<void>('app_unfollow', { p_creator: id }),

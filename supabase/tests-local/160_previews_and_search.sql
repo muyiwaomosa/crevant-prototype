@@ -108,6 +108,25 @@ begin
 end $$;
 commit;
 select ops.set_public_previews('test', true, 'preview tests');
+-- Opt-in: nothing of a creator who hasn't chosen previews.
+begin;
+set local role anon;
+do $$
+begin
+  perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5201''), null)', 'not_found', 'a preview of a creator who has not opted in');
+  raise notice 'PASS: opt-in: a creator who has not chosen previews is never previewed, even with previews on';
+end $$;
+commit;
+begin;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-fdfdfd005102","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+begin
+  perform pg_temp.expect_error('select public.app_set_public_previews(true, null)', 'invalid_request', 'consent without the wording shown');
+  perform public.app_set_public_previews(true, 'previews-v1');
+end $$;
+commit;
+insert into social.preview_consents (member_id, wording_version) values (pg_temp.p('5103'), 'previews-v1');
 begin;
 set local role anon;
 do $$
@@ -140,19 +159,19 @@ begin
   raise notice 'PASS: preview visits are counted per day, post and referral link, with no visitor identity';
 end $$;
 
--- Removal, moderation, opt-out and photo-only posts are never previewed.
+-- Removal, moderation and withdrawn consent: never previewed.
 update social.posts set deleted_at = now() where id = pg_temp.p('5202');
 insert into ops.content_reports (reporter_id, target_type, target_id, target_owner_id, reason, priority)
 values (pg_temp.p('5101'), 'post', pg_temp.p('5203'), pg_temp.p('5102'), 'spam', false);
-insert into social.preview_optouts (member_id) values (pg_temp.p('5103'));
+delete from social.preview_consents where member_id = pg_temp.p('5103'); -- Y withdrew
 begin;
 set local role anon;
 do $$
 begin
   perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5202''), null)', 'not_found', 'a deleted post');
   perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5203''), null)', 'not_found', 'a post with an open report');
-  perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5204''), null)', 'not_found', 'a post whose creator turned previews off');
-  raise notice 'PASS: deleted, reported and opted-out posts are never previewed';
+  perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5204''), null)', 'not_found', 'a post whose creator withdrew consent');
+  raise notice 'PASS: deleted and reported posts, and creators who withdrew, are never previewed';
 end $$;
 commit;
 -- A member whose access was revoked is no longer previewed.
@@ -179,16 +198,18 @@ begin
 end $$;
 commit;
 
--- Members manage their own opt-out; the switch history is append-only.
+-- Members give or withdraw their own consent (with the wording shown); the switch history is append-only.
 begin;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-fdfdfd005103","role":"authenticated"}', true);
 set local role authenticated;
 do $$
 begin
-  if public.app_public_previews_allowed() then raise exception 'FAIL: Y opted out'; end if;
-  perform public.app_set_public_previews(true);
-  if not public.app_public_previews_allowed() then raise exception 'FAIL: Y opted back in'; end if;
-  raise notice 'PASS: members can turn previews of their posts off and on';
+  if public.app_public_previews_allowed() then raise exception 'FAIL: Y withdrew'; end if;
+  perform public.app_set_public_previews(true, 'previews-v1');
+  if not public.app_public_previews_allowed() then raise exception 'FAIL: Y opted in again'; end if;
+  perform public.app_set_public_previews(false);
+  if public.app_public_previews_allowed() then raise exception 'FAIL: Y withdrew again'; end if;
+  raise notice 'PASS: members opt in (recording the wording shown) and withdraw at any time';
 end $$;
 commit;
 select ops.set_public_previews('test', false, 'preview tests done');

@@ -131,7 +131,7 @@ declare
     'public.app_note_search_selection(text,text)',
     'public.app_public_post(uuid,text)',
     'public.app_public_previews_allowed()',
-    'public.app_set_public_previews(boolean)'
+    'public.app_set_public_previews(boolean,text)'
   ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
@@ -167,7 +167,7 @@ begin
   if to_regclass('social.shares') is not null then
     expected := expected || discovery;
   end if;
-  if to_regclass('social.preview_optouts') is not null then
+  if to_regclass('social.preview_consents') is not null then
     expected := expected || previews;
     anon_allowed := array['public.app_public_post(uuid, text)'];
   end if;
@@ -249,7 +249,7 @@ begin
       end if;
     elsif r.proname = 'app_public_post' then
       -- Public previews (20261204000000): visitors, but only eligible posts, only while on, rate limited.
-      if position('ops.public_preview_settings' in r.prosrc) = 0 or position('social.visible_members' in r.prosrc) = 0 or position('s.deleted_at is null' in r.prosrc) = 0 or position('social.preview_optouts' in r.prosrc) = 0 or position('ops.content_reports' in r.prosrc) = 0 or position('rate_limited' in r.prosrc) = 0 then
+      if position('ops.public_preview_settings' in r.prosrc) = 0 or position('social.visible_members' in r.prosrc) = 0 or position('s.deleted_at is null' in r.prosrc) = 0 or position('social.preview_consents' in r.prosrc) = 0 or position('ops.content_reports' in r.prosrc) = 0 or position('rate_limited' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': public preview without its eligibility, switch or limits');
       end if;
     elsif r.proname like 'app\_founder\_%' then

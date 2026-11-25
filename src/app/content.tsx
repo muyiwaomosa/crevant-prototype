@@ -303,8 +303,18 @@ export function ShareButton({ post }: { post: Post }) {
   const api = useAppApi()
   const { available } = usePostMeta(post.id)
   const [copied, setCopied] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   if (!available) return null
   async function share() {
+    setNotice(null)
+    if (post.isMine) {
+      try {
+        if ((await api.publicPreviewsAllowed()) === false)
+          setNotice("Only members can open this link. To let anyone see a preview, allow public previews in your profile.")
+      } catch {
+        // The share still works.
+      }
+    }
     // The public preview address (20261204000000), carrying the sharer's
     // referral link so a visitor who joins is attributed to them.
     let code: string | null = null
@@ -336,6 +346,7 @@ export function ShareButton({ post }: { post: Post }) {
     void api.recordShare(post.id, channel).catch(() => undefined)
   }
   return (
+    <>
     <button
       type="button"
       onClick={() => void share()}
@@ -344,6 +355,15 @@ export function ShareButton({ post }: { post: Post }) {
     >
       {copied ? <Check className="h-[18px] w-[18px] text-brand-700" aria-hidden="true" /> : <Share2 className="h-[18px] w-[18px]" aria-hidden="true" />}
     </button>
+    {notice && (
+      <p role="status" className="basis-full rounded-2xl bg-ink-100/70 px-3 py-2 text-[13px] text-ink-700" data-testid="share-notice">
+        {notice}{' '}
+        <Link to="/app/profile" className="font-semibold text-brand-700 underline">
+          Profile
+        </Link>
+      </p>
+    )}
+    </>
   )
 }
 
@@ -366,12 +386,15 @@ export function PublicPreviewsSetting() {
   }, [api])
   if (allowed === undefined || allowed === null) return null
   async function change(next: boolean) {
+    // Shown at once; put back if saving fails.
+    const before = allowed
+    setAllowed(next)
     setBusy(true)
     setError(null)
     try {
       await api.setPublicPreviews(next)
-      setAllowed(next)
     } catch (e) {
+      setAllowed(before)
       setError(e)
     } finally {
       setBusy(false)
@@ -381,13 +404,16 @@ export function PublicPreviewsSetting() {
     <section data-testid="public-previews-setting">
     <Card className="mt-4 p-5">
       <h2 className="font-display text-lg font-bold text-ink-900">Sharing outside Splitpost</h2>
-      <label htmlFor={id} className="mt-3 flex items-start gap-3 text-[15px] text-ink-800">
+      <p className="mt-2 text-[14px] leading-relaxed text-ink-700">
+        When you or someone else shares one of your posts outside Splitpost, people who aren't members can open the link. If you allow it, they see a public preview:
+        the post's text, when it was posted, its topic and your name and username. They never see photos, comments, likes or anything about other members.
+        You can change your mind at any time, and previews stop straight away.
+      </p>
+      <label htmlFor={id} className="mt-3 flex items-start gap-3 text-[15px] font-semibold text-ink-900">
         <input id={id} type="checkbox" checked={allowed} disabled={busy} onChange={(e) => void change(e.target.checked)} className="mt-1 h-4 w-4 accent-brand-600" />
-        <span>
-          Let people who aren't members see a preview of my posts when someone shares them.
-          <span className="mt-1 block text-[13px] text-ink-600">A preview shows the post's text, time and topic and your name, never photos, comments or anything else. Turn this off to keep your posts for members only.</span>
-        </span>
+        <span>Allow public previews of my posts</span>
       </label>
+      <p className="mt-1 pl-7 text-[13px] text-ink-600">{allowed ? 'On: shared links to your posts show a public preview.' : 'Off: only members can open links to your posts.'}</p>
       {error !== null && <ErrorNote error={error} />}
     </Card>
     </section>

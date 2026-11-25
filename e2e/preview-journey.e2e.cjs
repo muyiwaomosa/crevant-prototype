@@ -5,7 +5,8 @@
 //  2. once on, sees only the shared post (text, topic, creator), with a way to
 //     join through the sharer's referral link or sign in and follow;
 //  3. is counted per referral link, with no visitor identity;
-//  4. never sees a deleted post, or a post whose creator turned previews off;
+//  4. never sees anything of a creator who hasn't opted in, a deleted post, or a
+//     post whose creator withdrew;
 //  5. can reach nothing else: the member pages still ask them to sign in.
 // WCAG 2.2 AA, 320 and 390 px, no CSP violations. Run by scripts/e2e/auth-journey.sh.
 const { chromium } = require('playwright')
@@ -148,8 +149,26 @@ async function signIn(page, email) {
     await page.getByRole('heading', { name: "This post isn't available" }).waitFor()
     check('while previews are off, a visitor sees nothing of the post', (await page.getByText(`A preview worth sharing ${RUN}`).count()) === 0)
 
-    // 2. On: the preview, attribution and the way in.
+    // 2. On, but the creator hasn't opted in: still nothing.
     sql("select ops.set_public_previews('preview-journey', true, 'journey: on')")
+    await page.goto(`${APP}/p/${postId}?r=${ref}`)
+    await page.getByRole('heading', { name: "This post isn't available" }).waitFor()
+    check('opt-in: a creator who has not chosen previews is never previewed', true)
+    // The creator opts in from their profile, after reading what a preview shows.
+    {
+      const ctxC = await newContext(browser)
+      const pageC = await ctxC.newPage()
+      await signIn(pageC, `pv-c-${RUN}@example.test`)
+      await pageC.goto(`${APP}/app/profile`)
+      const box = pageC.getByRole('checkbox', { name: 'Allow public previews of my posts' })
+      await box.waitFor()
+      check('previews start off for every creator', !(await box.isChecked()))
+      await screenChecks(pageC, 'the public preview setting')
+      await box.check()
+      await pageC.getByText('On: shared links to your posts show a public preview.').waitFor()
+      check('the consent records the wording shown', sql(`select wording_version from social.preview_consents where member_id = '${c}'`) === 'previews-v1')
+      await ctxC.close()
+    }
     await page.goto(`${APP}/p/${postId}?r=${ref}`)
     await page.getByTestId('public-post').waitFor()
     const text = await page.getByTestId('public-post').innerText()
@@ -170,8 +189,7 @@ async function signIn(page, email) {
     await rpc(tokenC, 'app_set_public_previews', { p_allowed: false })
     await page.goto(`${APP}/p/${postId}`)
     await page.getByRole('heading', { name: "This post isn't available" }).waitFor()
-    check('a creator who turned previews off is not previewed', true)
-    await rpc(tokenC, 'app_set_public_previews', { p_allowed: true })
+    check('a creator who withdrew is no longer previewed, straight away', true)
 
     // 5. Nothing else is open to the visitor.
     const anon = await rpc(PUB, 'app_feed_page', {})

@@ -17,7 +17,7 @@ declare
   pub regprocedure := to_regprocedure('public.app_public_post(uuid, text)');
   anon_fns text;
 begin
-  foreach t in array array['social.search_metrics_daily', 'social.preview_visits', 'social.preview_optouts', 'social.preview_rate',
+  foreach t in array array['social.search_metrics_daily', 'social.preview_visits', 'social.preview_consents', 'social.preview_rate',
                            'ops.public_preview_settings', 'ops.public_preview_events'] loop
     if to_regclass(t) is null then bad := bad || (t || ' missing'); continue; end if;
     if not (select relrowsecurity from pg_class where oid = to_regclass(t)) then bad := bad || (t || ' without row level security'); end if;

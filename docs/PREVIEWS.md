@@ -27,11 +27,11 @@ No words, member, results or session are stored; a staging check fails if such a
 ## 3. Public previews (a narrow exception to "visitors can call nothing")
 
 * **One function** visitors may call: `public.app_public_post(post, referral)`. Every other function still refuses visitors, checked by `005`, `006`, `020`, the member surface audit and `070`.
-* **Eligible content only:** previews switched on for the environment; the post is live (not deleted or hidden), has text and no open report; its creator is an active member and hasn't turned previews off (Profile, "Sharing outside Splitpost", on by default).
+* **Eligible content only:** previews switched on for the environment; the post is live (not deleted or hidden), has text and no open report; its creator is an active member who has **explicitly opted in** (Profile, "Sharing outside Splitpost": a plain explanation of exactly what a preview shows, then "Allow public previews of my posts", off until ticked; the wording version is recorded with the choice, and withdrawing stops previews at once). Sharing your own post before opting in says only members can open the link.
 * **What a visitor sees:** the text, time, topic, "Edited", whether it has a photo (never the photo), and the creator's name and username. No counts, comments or other members.
 * **Attribution and the way in:** shared links are `/p/<post>?r=<sharer's referral link>`. The page offers "Join with this invitation" (that referral link, so registration is attributed as today) or "I'm a member: sign in and follow" (straight to the creator). After joining, Home offers to see the creator they came for; nothing is followed automatically.
 * **Abuse prevention:** 600 previews a minute overall and 60 per post; visits are counted per day, post and referral link with no visitor identity.
-* **Activation:** off by default on every database. Staging: `select ops.set_public_previews('founder', true, 'staging acceptance');`. Production: only after the founder's legal, security and pilot readiness approval (PB-4 or earlier by decision). Every change is recorded in `ops.public_preview_events`.
+* **Activation:** off by default on every database, and off for every creator until they opt in. Staging: `select ops.set_public_previews('founder', true, 'staging acceptance');`. Production: only after the founder's legal, security and pilot readiness approval (PB-4 or earlier by decision). Every change is recorded in `ops.public_preview_events`.
 
 ## Evidence (local)
 

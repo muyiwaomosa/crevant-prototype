@@ -1,8 +1,21 @@
 # Staging acceptance: IP-1, IP-2 and IP-4
 
-One guide for everything the founder does to test IP-1 (Foundation) and IP-2
-(Relationships and Home) on staging, plus the Production batch PB-1, which
-needs its own approval.
+One sequential guide for everything the founder does to test IP-1
+(Foundation), IP-2 (Relationships and Home) and IP-4 (Content and discovery)
+on staging, plus the Production batch PB-1, which needs its own approval.
+
+## Where staging stands
+
+| Layer | Status | What makes it fully functional |
+|---|---|---|
+| Staging database | **Done.** IP-1, IP-2 and IP-4 migrations applied and checked (Nov 25, 14:00 and 14:59). IP-4c follows its merge | Nothing more from you |
+| Staging app (Vercel) | Not building yet: `splitpost-app` still builds only an older branch | A1 |
+| Email (registration, confirmation, password reset) | Supabase's default sender: team addresses only, about two an hour | A2 |
+| Auth (sign up through links, the account creation hook, Splitpost emails) | Not configured | A3 |
+| Testers can register; previews for shared links | Closed | A4 |
+
+The database being deployed is not the same as a working staging app: it is
+fully functional once A1 to A4 are done.
 
 * **Staging app:** https://splitpost-app-git-staging-crevant.vercel.app
   (behind your Vercel login; built only from the `staging` branch, which Claude
@@ -147,8 +160,8 @@ Use your two new accounts: one posts as a creator, one follows.
 | 21 | Repost it; sign in as someone who follows you but not its creator | Home shows it once, "Reposted by" you |
 | 22 | Discover | Opens on For you: posts in your interests from people you don't follow, each with its reason; try "What are you here for today?" |
 | 23 | Search "budget" (or a word from a post) | People, Posts and Topics results |
-| 24 | Share a post (copy link), open the link in a private window | The public preview: text, topic, creator, "Join with this invitation" |
-| 25 | Profile, Sharing outside Splitpost: turn previews off; reopen the link | "This post isn't available" |
+| 24 | Share one of your posts (copy link) | A note says only members can open it until you allow public previews |
+| 25 | Before opting in, open the link in a private window; then Profile, Sharing outside Splitpost: read the explanation and tick "Allow public previews of my posts"; reopen; then untick and reopen | Unavailable, then the preview, then unavailable again |
 
 Report anything that doesn't match to Claude with the row number. Defects are
 fixed without reopening approved decisions.

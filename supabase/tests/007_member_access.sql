@@ -119,7 +119,7 @@ begin
       if position('social.current_moderator()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
     elsif r.proname = 'app_public_post' then
       -- Public previews (20261204000000): no membership (visitors), but only eligible posts, only while on, rate limited.
-      if position('ops.public_preview_settings' in r.prosrc) = 0 or position('social.visible_members' in r.prosrc) = 0 or position('s.deleted_at is null' in r.prosrc) = 0 or position('social.preview_optouts' in r.prosrc) = 0 or position('ops.content_reports' in r.prosrc) = 0 or position('rate_limited' in r.prosrc) = 0 then bad := bad || r.proname; end if;
+      if position('ops.public_preview_settings' in r.prosrc) = 0 or position('social.visible_members' in r.prosrc) = 0 or position('s.deleted_at is null' in r.prosrc) = 0 or position('social.preview_consents' in r.prosrc) = 0 or position('ops.content_reports' in r.prosrc) = 0 or position('rate_limited' in r.prosrc) = 0 then bad := bad || r.proname; end if;
     elsif r.proname like 'app\_founder\_%' then
       -- Feedback (20261126000000): membership AND the founder cohort, through social.current_founder().
       if position('social.current_founder()' in r.prosrc) = 0 then bad := bad || r.proname; end if;
