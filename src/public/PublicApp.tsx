@@ -24,6 +24,7 @@ import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPa
 import { MySplitPage, RewardsReviewPage } from '../app/split'
 import { NoticesPage } from '../app/governance'
 import { AdsManagePage } from '../app/ads'
+import { ControlCenterPage } from '../app/insights'
 import { ModerationQueuePage, ModerationAppealsPage, ModerationReportPage } from '../app/moderation'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from '../app/feedback'
 
@@ -73,6 +74,7 @@ function memberAreaRoute() {
       <Route path="moderation/:id" element={<ModerationReportPage />} />
       <Route path="notices" element={<NoticesPage />} />
       <Route path="ads" element={<AdsManagePage />} />
+      <Route path="control" element={<ControlCenterPage />} />
       <Route path="feedback" element={<FeedbackPage />} />
       <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
       <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />

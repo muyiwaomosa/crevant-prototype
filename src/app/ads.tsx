@@ -17,6 +17,7 @@ import {
 import { useAppApi } from './AppApiContext'
 import { useFeedbackAccess } from './feedback'
 import { simulatedDollars } from './split'
+import { Steps, type Story } from './insights'
 
 /**
  * Advertising (IP-7, 20261208000000). Ads are matched by simple rules the
@@ -574,6 +575,35 @@ function CampaignForm({ admin, onSaved }: { admin: AdsAdmin; onSaved: () => Prom
 
 const few = (n: number | null) => (n === null ? 'fewer than 10' : String(n))
 
+/** Advertiser intelligence: what happened, what it means, what to do next (aggregate only). */
+export function campaignStory(r: CampaignReport): Story {
+  const ctr = (n: { impressions: number; clicks: number }) => (n.impressions > 0 ? n.clicks / n.impressions : null)
+  const happened =
+    r.impressions === 0
+      ? 'No valid impressions yet.'
+      : `${r.impressions} valid impressions and ${r.clicks} outbound clicks${r.ctr === null ? '' : ` (${(r.ctr * 100).toFixed(1)}% click-through)`}; ${r.verifiedConversions} verified conversions.`
+  const pref = ctr(r.byMatch.preference)
+  const gen = ctr(r.byMatch.general)
+  const negative = r.notRelevant + r.hidden + r.reported
+  let means: string
+  if (r.byMatch.preference.impressions < 100 || (r.byMatch.general.impressions < 100 && r.byMatch.context.impressions < 100))
+    means = 'Too few impressions yet to compare preference-based and other delivery; treat differences as noise.'
+  else if (pref !== null && gen !== null)
+    means = `Preference-based delivery clicked at ${(pref * 100).toFixed(1)}% against ${(gen * 100).toFixed(1)}% when not personalized.`
+  else means = 'Delivery is mostly one kind so far.'
+  if (r.impressions > 0 && negative / r.impressions > 0.05)
+    means += ` ${negative} members found it not relevant, hid it or reported it: more than 5% of impressions.`
+  const next =
+    r.impressions > 0 && negative / r.impressions > 0.05
+      ? 'Review the creative and categories with the advertiser before extending the campaign.'
+      : r.verifiedConversions === 0 && r.clicks > 0
+        ? 'Ask the advertiser for their conversion report so it can be verified.'
+        : r.eligibleAudience === null
+          ? 'The audience who chose these categories is still small; consider contextual topics or a non-personalized fallback.'
+          : 'Keep the campaign running and compare again next week.'
+  return { happened, means, next }
+}
+
 function ReportView({ campaign }: { campaign: Campaign }) {
   const api = useAppApi()
   const [r, setR] = useState<CampaignReport | null>(null)
@@ -582,6 +612,7 @@ function ReportView({ campaign }: { campaign: Campaign }) {
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 7)
   })
   const [conv, setConv] = useState('')
+  const [selfConv, setSelfConv] = useState('')
   const [note, setNote] = useState('')
   const [net, setNet] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
@@ -598,6 +629,7 @@ function ReportView({ campaign }: { campaign: Campaign }) {
     ['Outbound clicks', String(r.clicks)],
     ['Click-through rate', r.ctr === null ? 'n/a' : `${(r.ctr * 100).toFixed(1)}%`],
     ['Verified conversions', String(r.verifiedConversions)],
+    ['Self-reported conversions (not verified)', r.selfReportedConversions === null ? 'none recorded' : String(r.selfReportedConversions)],
     ['Relevant / not relevant', `${r.relevant} / ${r.notRelevant}`],
     ['Hidden / reported', `${r.hidden} / ${r.reported}`],
     ['By preference (impressions, clicks)', `${r.byMatch.preference.impressions}, ${r.byMatch.preference.clicks}`],
@@ -620,6 +652,26 @@ function ReportView({ campaign }: { campaign: Campaign }) {
   return (
     <div className="mt-3 space-y-3 rounded-2xl bg-paper p-4" data-testid="campaign-report">
       <p className="text-[13px] font-semibold text-ink-700">Actual observations, aggregate only. Groups under 10 are withheld; nothing identifies a member.</p>
+      <Steps story={campaignStory(r)} />
+      <button
+        type="button"
+        className={buttonClass('secondary', 'sm')}
+        onClick={() => {
+          const body = [
+            'metric,value',
+            ...rows.map(([k, v]) => `"${k}","${v}"`),
+            `"Revenue recorded (simulated)","${simulatedDollars(r.simulatedRevenueCents)}"`,
+          ].join('\n')
+          const url = URL.createObjectURL(new Blob([body], { type: 'text/csv' }))
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `campaign-${campaign.name}.csv`
+          a.click()
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        }}
+      >
+        Export report (CSV)
+      </button>
       <dl className="grid gap-2 text-[14px] sm:grid-cols-2">
         {rows.map(([k, v]) => (
           <div key={k}>
@@ -639,11 +691,19 @@ function ReportView({ campaign }: { campaign: Campaign }) {
         </label>
         <Text label="Verified conversions" value={conv} onChange={setConv} />
         <Text label="How they were verified" value={note} onChange={setNote} />
+        <Text label="Self-reported by the advertiser (optional)" value={selfConv} onChange={setSelfConv} />
       </div>
       <button
         type="button"
         className={buttonClass('secondary', 'sm')}
-        onClick={() => act(async () => (await api.founderRecordConversions(campaign.id, `${month}-01`, Number(conv), note), 'Conversions recorded.'))}
+        onClick={() =>
+          act(
+            async () => (
+              await api.founderRecordConversions(campaign.id, `${month}-01`, Number(conv), note, selfConv.trim() === '' ? null : Number(selfConv)),
+              'Conversions recorded.'
+            ),
+          )
+        }
       >
         Record verified conversions
       </button>

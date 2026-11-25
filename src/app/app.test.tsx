@@ -33,11 +33,15 @@ import {
   type Advertiser,
   type Campaign,
   type CampaignReport,
+  type ContributionInsights,
+  type CreatorInsights,
+  type FounderOverview,
 } from './api'
 import { MemberArea } from './MemberArea'
 import { ModerationAppealsPage, ModerationQueuePage, ModerationReportPage } from './moderation'
 import { NoticesPage } from './governance'
-import { AdsManagePage } from './ads'
+import { AdsManagePage, campaignStory } from './ads'
+import { ControlCenterPage, attentionStory, contributionStory, founderStory, moneyStory, overviewCsv, retentionStory } from './insights'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage, featureFor } from './feedback'
 import { fitWithin } from './photoPrep'
 
@@ -188,6 +192,12 @@ function fakeApi(
     reviews: [] as Array<{ id: string; approve: boolean }>,
     statuses: [] as Array<{ id: string; status: string }>,
     report: null as CampaignReport | null,
+  }
+  const intel = {
+    creator: null as CreatorInsights | null,
+    contribution: null as ContributionInsights | null,
+    overview: null as FounderOverview | null,
+    opens: [] as string[],
   }
   const governance = {
     blocks: [] as Array<{ id: string; username: string; displayName: string; blockedAt: string }>,
@@ -799,6 +809,19 @@ function fakeApi(
     async noteSearchSelection(surface, topic) {
       searchNotes.push({ surface, selected: true, topic: topic ?? null })
     },
+    async creatorInsights() {
+      return intel.creator
+    },
+    async myContributionInsights() {
+      return intel.contribution
+    },
+    async founderOverview() {
+      if (!isFounder.value) throw new AppApiError('not_founder')
+      return intel.overview
+    },
+    async noteOpen(postId) {
+      intel.opens.push(postId)
+    },
     async adFor(surface, postId) {
       ads.calls.push({ surface, postId })
       const a = ads.next
@@ -1056,7 +1079,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, searchNotes, previews, rewards, governance, ads, commentStore: comments, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
+  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, searchNotes, previews, rewards, governance, ads, intel, commentStore: comments, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -1091,6 +1114,7 @@ function renderApp(path: string, api: AppApi) {
             <Route path="moderation/:id" element={<ModerationReportPage />} />
             <Route path="notices" element={<NoticesPage />} />
             <Route path="ads" element={<AdsManagePage />} />
+            <Route path="control" element={<ControlCenterPage />} />
             <Route path="feedback" element={<FeedbackPage />} />
             <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
             <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />
@@ -3192,11 +3216,11 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
 
   it('creators see their simulated 40% share, marked simulated', async () => {
     const fake = fakeApi()
-    fake.rewards.earnings = [{ month: '2026-10-01', creatorCents: 4000 }]
-    renderApp('/app/profile', fake.api)
+    fake.intel.creator = creatorInsightsFixture()
+    renderApp('/app/profile?face=money', fake.api)
     const money = within(await screen.findByTestId('simulated-earnings'))
-    expect(money.getByText('Simulated')).toBeTruthy()
-    expect(money.getByText(/\$40\.00/)).toBeTruthy()
+    expect(within(screen.getByTestId('money-face')).getAllByText('Simulated').length).toBeGreaterThan(0)
+    expect(money.getAllByText(/\$40\.00/).length).toBeGreaterThan(0)
     expect(money.getByText(/Nothing is paid during the pilot/)).toBeTruthy()
   })
 
@@ -3475,7 +3499,7 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
     }
     f.ads.report = { eligibleAudience: null, served: 3, impressions: 2, clicks: 1, ctr: 0.5, reach: null, relevant: 1, notRelevant: 0, hidden: 0, reported: 0,
       byMatch: { preference: { impressions: 2, clicks: 1 }, context: { impressions: 0, clicks: 0 }, general: { impressions: 0, clicks: 0 } },
-      contentImpressions: 1, feedImpressions: 1, creativeKind: 'text', videoPlays: 0, videoCompletions: 0, verifiedConversions: 0, advertiserSatisfaction: null, simulatedRevenueCents: 0 }
+      contentImpressions: 1, feedImpressions: 1, creativeKind: 'text', videoPlays: 0, videoCompletions: 0, verifiedConversions: 0, selfReportedConversions: null, advertiserSatisfaction: null, simulatedRevenueCents: 0 }
     renderApp('/app/ads', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Approve Budgetly' }))
     await waitFor(() => expect(f.ads.reviews).toEqual([{ id: 'a1', approve: true }]))
@@ -3491,5 +3515,127 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
     fireEvent.click(screen.getByRole('button', { name: 'Save advertiser' }))
     await waitFor(() => expect(f.ads.savedAdvertisers[0]).toMatchObject({ name: 'Shop Co', offering: 'Kitchen tools', objective: 'traffic' }))
     expect(screen.getByTestId('ad-demand').textContent).toMatch(/Software & appsfewer than 10/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+function creatorInsightsFixture(over: Partial<CreatorInsights> = {}): CreatorInsights {
+  return {
+    days: 7,
+    attention: {
+      followers: 10, new_followers: 4, new_followers_before: 2, sources: { discover: 3, search: 1 }, reached: 6, posts: 2,
+      top_posts: [{ id: 'p1', excerpt: 'Budget tips', topic: 'money', views: 6, comments: 2, saves: 1, reposts: 0, shares: 1 }],
+    },
+    retention: { followers: 10, active_supporters: 3, clique: 2, returning: 4, connections_this_week: 5, connections_last_week: 3 },
+    money: {
+      actual_income_cents: 0,
+      simulated_by_month: [{ month: '2026-10-01', creator_cents: 4000, revenue_cents: 10000 }],
+      ads_with_your_posts: [{ advertiser: 'Budgetly', campaign: 'Spring', impressions: 120, clicks: 6, posts: 2 }],
+    },
+    ...over,
+  }
+}
+function overviewFixture(): FounderOverview {
+  const weeks = Array.from({ length: 8 }, (_, i) => ({ week_start: `2026-10-${String(5 + i * 7).padStart(2, '0')}T04:00:00Z`, connections: 10 + i, founder_dependent: 2, test: 1 }))
+  return {
+    generated_at: '2026-11-25T18:00:00Z', week_start: '2026-11-23T05:00:00Z',
+    north_star: { kind: 'actual', definition: 'Unique (consumer, creator) pairs…', weeks },
+    members: { kind: 'actual', active_members: 40, test_members: 3, registrations_this_week: 5, registration_cap: 200, registration_paused: false, by_referral: 7, activation_eligible: 10, activated: 6, retained: 8 },
+    discovery: { kind: 'actual', searches_7d: 30, searches_with_results_7d: 25, follows_7d: 12, follows_from_search_7d: 4, follows_from_discover_7d: 5 },
+    content: { kind: 'actual', posts_7d: 22, creators_posting_7d: 6, meaningful_comments_7d: 14 },
+    rewards: { kind: 'simulated', recognized_points: 300, referrals_waiting: 2, open_pool_cents: 6240, revenue_cents: 31200 },
+    advertising: { kind: 'actual', active_campaigns: 1, impressions_7d: 210, clicks_7d: 9, hidden_or_reported_7d: 1, members_with_preferences: 12 },
+    governance: { kind: 'actual', open_reports: 0, oldest_open_report_hours: null, open_appeals: 1, blocks_7d: 0, active_limits: 0 },
+    operations: { kind: 'actual', external_access_approved: false },
+  }
+}
+
+describe('intelligence (20261210000000): what happened, what it means, what to do next', () => {
+  it('the creator story rules follow the data', () => {
+    const i = creatorInsightsFixture()
+    const a = attentionStory(i)
+    expect(a.happened).toBe('Every post was available to all 10 followers. 6 of them saw at least one.')
+    expect(a.means).toMatch(/growing: 4 new followers, up from 2.*Most came from Discover\. 60% of followers saw something/)
+    expect(attentionStory(creatorInsightsFixture({ attention: { ...i.attention, posts: 0 } })).next).toMatch(/Post something this week/)
+    expect(retentionStory(i).happened).toMatch(/^5 followers connected.*up 2 on last week/)
+    const m = moneyStory(i, null)
+    expect(m.happened).toMatch(/would earn you \$40\.00 for October 2026/)
+    expect(m.means).toMatch(/Spring \(Budgetly\) carried most of it: 120 impressions/)
+    expect(contributionStory({ connections_this_week: 2, connections_last_week: 1, referrals: { joined: 1, waiting_review: 1, approved: 0, not_approved: 0 }, opportunities: [{ post_id: 'p', creator: 'Kofi', username: 'kofi', excerpt: 'x' }] }).next).toBe("Share Kofi's new post with someone who'd value it.")
+  })
+
+  it('the Profile has four faces; Attention shows availability versus reach and where followers came from', async () => {
+    const f = fakeApi()
+    f.intel.creator = creatorInsightsFixture()
+    renderApp('/app/profile?face=attention', f.api)
+    const face = await screen.findByTestId('attention-face')
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Profile', 'Attention', 'Retention', 'Money'])
+    expect(face.textContent).toMatch(/What happened.*What it means.*What to do next/)
+    expect(face.textContent).toMatch(/Available\. Your posts were in every follower's Home\..*Reached\. Followers who actually viewed a post/)
+    expect(face.textContent).toMatch(/Where your 4 new followers came from.*Discover.*3.*Search.*1/)
+  })
+
+  it('the Money face keeps simulated earnings, actual income and non-binding Support Intent apart, without percentages', async () => {
+    const f = fakeApi()
+    f.intel.creator = creatorInsightsFixture()
+    renderApp('/app/profile?face=money', f.api)
+    const face = await screen.findByTestId('money-face')
+    expect(face.textContent).toMatch(/Simulated.*Not paid during the pilot/)
+    expect(face.textContent).toMatch(/Ads shown with your posts.*Actual.*Spring · Budgetly.*120 impressions · 6 clicks/)
+    expect(face.textContent).toMatch(/Actual income.*\$0\.00/)
+    expect(face.textContent).not.toMatch(/\d+\s*%/)
+  })
+
+  it("My Split shows the member's week, their referrals and opportunities", async () => {
+    const f = fakeApi()
+    f.intel.contribution = { connections_this_week: 2, connections_last_week: 1, referrals: { joined: 2, waiting_review: 1, approved: 1, not_approved: 0 }, opportunities: [{ post_id: 'p9', creator: 'Kofi', username: 'kofi', excerpt: 'Weekly budget' }] }
+    renderApp('/app/split', f.api)
+    const panel = await screen.findByTestId('contribution-insight')
+    expect(panel.textContent).toMatch(/You connected with 2 creators this week \(last week: 1\)/)
+    expect(panel.textContent).toMatch(/2 people joined through your link: 1 qualified, 1 waiting for review/)
+    expect(within(panel).getByRole('link', { name: 'Kofi: Weekly budget' }).getAttribute('href')).toBe('/app/post/p9')
+  })
+
+  it('opening a post records qualifying consumption', async () => {
+    const f = fakeApi()
+    const post = f.seedPost('c1', 'Opened post')
+    renderApp(`/app/post/${post}`, f.api)
+    await screen.findByText('Opened post')
+    await waitFor(() => expect(f.intel.opens).toEqual([post]))
+  })
+
+  it('the Control Center shows the North Star with test data excluded, labels every figure, and exports', async () => {
+    const f = fakeApi('me', { founder: true })
+    f.intel.overview = overviewFixture()
+    renderApp('/app/control', f.api)
+    expect((await screen.findByTestId('north-star')).textContent).toBe('17')
+    const cc = screen.getByTestId('control-center')
+    expect(cc.textContent).toMatch(/North Star · Actual.*2 from founder-dependent activity · 1 test-data connections excluded/)
+    expect(cc.textContent).toMatch(/Fan pool.*Simulated.*\$62\.40/)
+    expect(cc.textContent).toMatch(/Test accounts.*Test data.*3/)
+    expect(document.body.textContent).toMatch(/Business hypotheses.*Hypothesis.*Not validated\. Simulated money is never evidence of commercial success/)
+    const csv = overviewCsv(f.intel.overview)
+    expect(csv.split('\n')[0]).toBe('section,metric,value,kind')
+    expect(csv).toMatch(/rewards,open_pool_cents,6240,simulated/)
+    expect(csv).toMatch(/members,test_members,3,test/)
+    expect(csv).toMatch(/hypothesis$/m)
+    expect(founderStory(f.intel.overview).happened).toMatch(/^17 creator-consumer connections this week, up 6% on last week; 2 involve you\./)
+  })
+
+  it('members cannot open the Control Center', async () => {
+    const f = fakeApi()
+    renderApp('/app/control', f.api)
+    expect(await screen.findByText('Only the founder can see this.')).toBeTruthy()
+  })
+
+  it('advertiser observations: small samples are called noise; high negative feedback leads to a review', () => {
+    const base: CampaignReport = { eligibleAudience: 12, served: 300, impressions: 250, clicks: 10, ctr: 0.04, reach: 40, relevant: 5, notRelevant: 10, hidden: 4, reported: 1,
+      byMatch: { preference: { impressions: 150, clicks: 8 }, context: { impressions: 0, clicks: 0 }, general: { impressions: 100, clicks: 2 } },
+      contentImpressions: 200, feedImpressions: 50, creativeKind: 'text', videoPlays: 0, videoCompletions: 0, verifiedConversions: 1, selfReportedConversions: 4,
+      advertiserSatisfaction: null, simulatedRevenueCents: 0 }
+    const s = campaignStory(base)
+    expect(s.means).toMatch(/Preference-based delivery clicked at 5\.3% against 2\.0% when not personalized\. 15 members found it not relevant/)
+    expect(s.next).toMatch(/Review the creative and categories/)
+    expect(campaignStory({ ...base, byMatch: { ...base.byMatch, preference: { impressions: 20, clicks: 1 } } }).means).toMatch(/Too few impressions yet/)
   })
 })

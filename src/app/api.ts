@@ -423,8 +423,49 @@ export interface CampaignReport {
   videoPlays: number
   videoCompletions: number
   verifiedConversions: number
+  /** Reported by the advertiser but not verified by Splitpost; null when none recorded. */
+  selfReportedConversions: number | null
   advertiserSatisfaction: number | null
   simulatedRevenueCents: number
+}
+
+/** Intelligence (20261210000000). Aggregates only; every figure says whether it is actual or simulated. */
+export interface CreatorInsights {
+  days: number
+  attention: {
+    followers: number
+    new_followers: number
+    new_followers_before: number
+    sources: Record<string, number>
+    reached: number
+    posts: number
+    top_posts: Array<{ id: string; excerpt: string; topic: string | null; views: number; comments: number; saves: number; reposts: number; shares: number }>
+  }
+  retention: { followers: number; active_supporters: number; clique: number; returning: number; connections_this_week: number; connections_last_week: number }
+  money: {
+    actual_income_cents: number
+    simulated_by_month: Array<{ month: string; creator_cents: number; revenue_cents: number }>
+    ads_with_your_posts: Array<{ advertiser: string; campaign: string; impressions: number; clicks: number; posts: number }>
+  }
+}
+export interface ContributionInsights {
+  connections_this_week: number
+  connections_last_week: number
+  referrals: { joined: number; waiting_review: number; approved: number; not_approved: number }
+  opportunities: Array<{ post_id: string; creator: string; username: string; excerpt: string }>
+}
+export type MetricKind = 'actual' | 'simulated' | 'test' | 'hypothesis'
+export interface FounderOverview {
+  generated_at: string
+  week_start: string
+  north_star: { kind: 'actual'; definition: string; weeks: Array<{ week_start: string; connections: number; founder_dependent: number; test: number }> }
+  members: Record<string, number | boolean | string | null> & { kind: MetricKind }
+  discovery: Record<string, number | string> & { kind: MetricKind }
+  content: Record<string, number | string> & { kind: MetricKind }
+  rewards: Record<string, number | string> & { kind: MetricKind }
+  advertising: Record<string, number | string> & { kind: MetricKind }
+  governance: Record<string, number | string | null> & { kind: MetricKind }
+  operations: Record<string, number | string | boolean> & { kind: MetricKind }
 }
 
 /** Governance (20261206000000). */
@@ -663,7 +704,13 @@ export interface AppApi {
   founderSaveCampaign(c: Partial<Campaign>): Promise<string>
   founderSetCampaignStatus(id: string, status: Campaign['status']): Promise<void>
   founderCampaignReport(id: string): Promise<CampaignReport>
-  founderRecordConversions(id: string, month: string, verified: number, note: string): Promise<void>
+  founderRecordConversions(id: string, month: string, verified: number, note: string, selfReported?: number | null): Promise<void>
+  /** Intelligence (20261210000000). Null before the migration. */
+  creatorInsights(days: number): Promise<CreatorInsights | null>
+  myContributionInsights(): Promise<ContributionInsights | null>
+  founderOverview(): Promise<FounderOverview | null>
+  /** Records that the member opened someone else's post (qualifying consumption). Best effort. */
+  noteOpen(postId: string): Promise<void>
   founderAttributeCampaignRevenue(id: string, month: string, netCents: number): Promise<{ contentCents: number; feedCents: number }>
   founderAdDemand(): Promise<Array<{ category: string; label: string; members: number | null }>>
   /** Governance (20261206000000). Blocks: two way, never shown to the blocked member. */
@@ -1812,12 +1859,47 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         videoPlays: Number(r.video_plays ?? 0),
         videoCompletions: Number(r.video_completions ?? 0),
         verifiedConversions: Number(r.verified_conversions ?? 0),
+        selfReportedConversions: n(r.self_reported_conversions),
         advertiserSatisfaction: n(r.advertiser_satisfaction),
         simulatedRevenueCents: Number(r.simulated_revenue_cents ?? 0),
       }
     },
-    founderRecordConversions: (id, month, verified, note) =>
-      rpc<void>('app_founder_record_conversions', { p_campaign: id, p_month: month, p_verified: verified, p_note: note.trim() }),
+    founderRecordConversions: (id, month, verified, note, selfReported) =>
+      rpc<void>('app_founder_record_conversions', {
+        p_campaign: id,
+        p_month: month,
+        p_verified: verified,
+        p_note: note.trim(),
+        ...(selfReported !== undefined && selfReported !== null ? { p_self_reported: selfReported } : {}),
+      }),
+    async creatorInsights(days) {
+      const { data, error } = await client.rpc('app_creator_insights', { p_days: days })
+      if (error) {
+        if (isMissingFunction(error, 'app_creator_insights')) return null
+        throw toAppError(error)
+      }
+      return data as CreatorInsights
+    },
+    async myContributionInsights() {
+      const { data, error } = await client.rpc('app_my_contribution_insights')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_contribution_insights')) return null
+        throw toAppError(error)
+      }
+      return data as ContributionInsights
+    },
+    async founderOverview() {
+      const { data, error } = await client.rpc('app_founder_overview')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_overview')) return null
+        throw toAppError(error)
+      }
+      return data as FounderOverview
+    },
+    async noteOpen(postId) {
+      const { error } = await client.rpc('app_note_open', { p_post: postId })
+      if (error && !isMissingFunction(error, 'app_note_open')) throw toAppError(error)
+    },
     async founderAttributeCampaignRevenue(id, month, netCents) {
       const r = await rpc<Record<string, unknown>>('app_founder_attribute_campaign_revenue', { p_campaign: id, p_month: month, p_net_cents: netCents })
       return { contentCents: Number(r.content_cents ?? 0), feedCents: Number(r.feed_cents ?? 0) }

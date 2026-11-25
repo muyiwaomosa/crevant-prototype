@@ -438,16 +438,11 @@ export function audienceStory(a: Audience): {
 export function AudienceInsight() {
   const api = useAppApi()
   const [a, setA] = useState<Audience | null | undefined>(undefined)
-  const [earnings, setEarnings] = useState<Array<{ month: string; creatorCents: number }> | null>(null)
   useEffect(() => {
     let live = true
     api.audience().then(
       (x) => live && setA(x),
       () => live && setA(null),
-    )
-    api.mySimulatedEarnings().then(
-      (e) => live && setEarnings(e),
-      () => live && setEarnings(null),
     )
     return () => {
       live = false
@@ -486,18 +481,6 @@ export function AudienceInsight() {
             <p className="text-ink-900">{story.next}</p>
           </li>
         </ol>
-        {earnings && earnings.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-dashed border-[#a8d9cf] px-3 py-2 text-[13px] text-ink-800" data-testid="simulated-earnings">
-          <p className="font-semibold text-ink-900">
-            Money <span className="ml-1.5 rounded-full bg-[#e7f4f1] px-2 py-0.5 text-[11px] font-bold text-[#1f5e52]">Simulated</span>
-          </p>
-          <p className="mt-1">
-            Your creator share of simulated advertising on your posts:{' '}
-            {earnings.map((e) => `${new Date(e.month + 'T00:00:00Z').toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' })} $${(e.creatorCents / 100).toFixed(2)}`).join(', ')}.
-            Nothing is paid during the pilot.
-          </p>
-        </div>
-      )}
       {a.supportIntentCount > 0 && (
           <p className="mt-4 rounded-2xl border border-dashed border-[#a8d9cf] px-3 py-2 text-[13px] text-ink-800">
             <span className="mr-1.5 rounded-full bg-[#e7f4f1] px-2 py-0.5 text-[11px] font-bold text-[#1f5e52]">Non-binding</span>

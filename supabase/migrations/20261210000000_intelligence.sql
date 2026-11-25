@@ -146,9 +146,13 @@ begin
                     select coalesce(e.source, 'other') as src, count(*) as n from social.follow_events e
                     where e.creator_id = v_uid and e.action = 'followed' and e.occurred_at >= v_from group by 1) x), '{}'::jsonb),
       -- Available: every post is in every follower's Home (coverage 100%). Reached: followers who viewed at least one post in the period.
-      'reached', (select count(distinct v.viewer_id) from social.post_views v join social.posts s on s.id = v.post_id
-                  where s.author_id = v_uid and v.viewed_at >= v_from
-                    and exists (select 1 from social.follows f where f.follower_id = v.viewer_id and f.creator_id = v_uid)),
+      'reached', (select count(distinct x.viewer_id) from (
+                    select v.viewer_id from social.post_views v join social.posts s on s.id = v.post_id
+                    where s.author_id = v_uid and v.viewed_at >= v_from
+                    union
+                    select o.viewer_id from social.post_opens o join social.posts s on s.id = o.post_id
+                    where s.author_id = v_uid and o.opened_at >= v_from) x
+                  where exists (select 1 from social.follows f where f.follower_id = x.viewer_id and f.creator_id = v_uid)),
       'posts', (select count(*) from social.posts s where s.author_id = v_uid and s.deleted_at is null and s.created_at >= v_from),
       'top_posts', coalesce((select pg_catalog.jsonb_agg(t order by t.views desc, t.created_at desc) from (
                       select s.id, pg_catalog.left(s.body, 80) as excerpt, s.topic, s.created_at,

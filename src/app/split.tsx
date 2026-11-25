@@ -8,6 +8,7 @@ import { AppApiError, messageFor, type MyPoints, type PointsEntry, type Referral
 import { Link } from 'react-router-dom'
 import { useFeedbackAccess } from './feedback'
 import { useAppApi } from './AppApiContext'
+import { ContributionInsight } from './insights'
 
 /**
  * My Split (SP-DESIGN-002). IP-1 delivers the destination, its three faces and
@@ -56,6 +57,7 @@ function Overview() {
   }, [api])
   return (
     <div className="space-y-4">
+      <ContributionInsight />
       <Card className="overflow-hidden p-0">
         <div className="bg-brand-600 p-5 text-white">
           <div className="flex items-center gap-3">
