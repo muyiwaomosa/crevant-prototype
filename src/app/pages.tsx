@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
-import { Card, EmptyState, Modal, PageHeader, buttonClass } from '../components/ui'
+import { Card, EmptyState, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
-import { LIMITS, type Comment, type FeedFilter, type FollowedCreator, type Member, type Me, type Post, type PostCursor } from './api'
+import { LIMITS, type Comment, type FeedFilter, type Member, type Me, type Post, type PostCursor } from './api'
 import { FaceView } from '../components/FaceView'
 import { useAppApi, useMyProfile } from './AppApiContext'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
@@ -13,6 +13,7 @@ import { DetailsEditor, MemberAbout, PersonSummary, SuggestedPeople, useTopics }
 import { ReportButton, useModeration } from './moderation'
 import { PostComposer, usePhotosEnabled } from './media'
 import { ProfilePictureField } from './avatars'
+import { AudienceInsight, SupportButton } from './relationships'
 
 /** Loads data for a page, with loading and error states and a reload function. */
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
@@ -48,12 +49,24 @@ function Loading({ label }: { label: string }) {
 }
 
 /** Posts with "Show older posts", newest first. */
-function PostList({ posts, loadOlder, onDeleted }: { posts: Post[]; loadOlder: (before: PostCursor) => Promise<Post[]>; onDeleted: (id: string) => void }) {
+function PostList({
+  posts,
+  loadOlder,
+  onDeleted,
+  hide,
+}: {
+  posts: Post[]
+  loadOlder: (before: PostCursor) => Promise<Post[]>
+  onDeleted: (id: string) => void
+  /** Posts already shown elsewhere on the page (Clique first): skipped here, but paging still continues after them. */
+  hide?: Set<string>
+}) {
   const [older, setOlder] = useState<Post[]>([])
   const [done, setDone] = useState(posts.length < 20)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const all = [...posts, ...older]
+  const shown = hide ? all.filter((p) => !hide.has(p.id)) : all
   useEffect(() => {
     setOlder([])
     setDone(posts.length < 20)
@@ -81,7 +94,7 @@ function PostList({ posts, loadOlder, onDeleted }: { posts: Post[]; loadOlder: (
 
   return (
     <div className="space-y-3">
-      {all.map((p) => (
+      {shown.map((p) => (
         <PostItem
           key={p.id}
           post={p}
@@ -109,11 +122,11 @@ function PostList({ posts, loadOlder, onDeleted }: { posts: Post[]; loadOlder: (
 export function FeedPage() {
   return (
     <>
-      <PageHeader title="Home" subtitle="Posts from creators you follow, newest first. Nothing is hidden or reordered for you." />
+      <PageHeader title="Home" subtitle="Posts from creators you follow, newest first, with new posts from your Clique at the top. Only you decide what is hidden." />
       <FaceView
         label="Home views"
         faces={[
-          { key: 'clique-first', label: 'Clique first', content: <HomeFeed filter="all" withStrip withComposer /> },
+          { key: 'clique-first', label: 'Clique first', content: <HomeFeed filter="all" withStrip withComposer cliqueFirst /> },
           { key: 'clique', label: 'My Clique', content: <HomeFeed filter="clique" /> },
           { key: 'following', label: 'Following', content: <HomeFeed filter="all" /> },
         ]}
@@ -122,10 +135,28 @@ export function FeedPage() {
   )
 }
 
-/** One Home face: the whole followed feed, or only My Clique (20261130000000), chronological either way. */
-function HomeFeed({ filter, withStrip = false, withComposer = false }: { filter: FeedFilter; withStrip?: boolean; withComposer?: boolean }) {
+/**
+ * One Home face: the whole followed feed, or only My Clique (20261130000000),
+ * chronological either way. Clique first (20261201000000) shows the member's
+ * unseen recent Clique posts at the top, then everything else newest first:
+ * each post appears once, and the group empties as its posts are seen.
+ */
+function HomeFeed({
+  filter,
+  withStrip = false,
+  withComposer = false,
+  cliqueFirst = false,
+}: {
+  filter: FeedFilter
+  withStrip?: boolean
+  withComposer?: boolean
+  cliqueFirst?: boolean
+}) {
   const api = useAppApi()
   const feed = useLoad(() => api.feed(undefined, filter), [api, filter])
+  const group = useLoad(async () => (cliqueFirst ? api.homePriority() : []), [api, cliqueFirst])
+  const groupIds = new Set((group.data ?? []).map((p) => p.id))
+  const rest = (feed.data ?? []).filter((p) => !groupIds.has(p.id))
   // Only to choose the right empty state: new member, or following people who haven't posted yet.
   const me = useLoad(async () => (feed.data && feed.data.length === 0 ? api.me() : null), [api, feed.data?.length === 0])
   return (
@@ -194,9 +225,25 @@ function HomeFeed({ filter, withStrip = false, withComposer = false }: { filter:
           }
         />
       )}
-      {feed.data && feed.data.length > 0 && (
+      {group.data && group.data.length > 0 && (
+        <section aria-labelledby="clique-first-title" className="mb-5" data-testid="clique-first-group">
+          <h2 id="clique-first-title" className="mb-2 flex items-center gap-2 font-display text-[15px] font-bold text-ink-900">
+            <Users className="h-4 w-4 text-brand-700" aria-hidden="true" /> New from your Clique
+          </h2>
+          <div className="space-y-3">
+            {group.data.map((p) => (
+              <PostItem key={p.id} post={p} onDeleted={(id) => group.setData((d) => d?.filter((x) => x.id !== id))} />
+            ))}
+          </div>
+          {rest.length > 0 && (
+            <h2 className="mb-2 mt-6 font-display text-[15px] font-bold text-ink-900">Everything else, newest first</h2>
+          )}
+        </section>
+      )}
+      {feed.data && rest.length > 0 && (
         <PostList
           posts={feed.data}
+          hide={groupIds}
           loadOlder={(before) => api.feed(before, filter)}
           onDeleted={(id) => feed.setData((d) => d?.filter((p) => p.id !== id))}
         />
@@ -394,7 +441,7 @@ function GettingStarted() {
   const steps: Array<{ title: string; body: string; to: string; cta: string }> = [
     { title: 'Find people', body: 'Browse Discover or search by name, then open a profile to read their posts.', to: '/app/discover', cta: 'Discover people' },
     { title: 'Follow them', body: 'Their new posts appear here on Home, newest first. Nobody is added for you.', to: '/app/discover', cta: 'Find someone to follow' },
-    { title: 'Choose your Clique', body: 'Pick up to 25 of the people you follow. You can change them at any time.', to: '/app/clique', cta: 'Your Clique' },
+    { title: 'Choose your Clique', body: 'Choose the people you follow that you want closest. You can change them at any time.', to: '/app/clique', cta: 'Your Clique' },
   ]
   return (
     <Card className="p-5">
@@ -616,19 +663,24 @@ function MemberHeader({ member, onChange, about }: { member: Member; onChange: (
         </div>
       </div>
       {about}
-      <dl className="mt-4 flex gap-6 text-sm">
-        <div>
-          <dt className="text-ink-500">Posts</dt>
-          <dd className="font-semibold tabular-nums text-ink-900">{member.postCount}</dd>
-        </div>
-        <div>
-          <dt className="text-ink-500">Followers</dt>
-          <dd className="font-semibold tabular-nums text-ink-900">{member.followerCount}</dd>
-        </div>
-        <div>
-          <dt className="text-ink-500">Following</dt>
-          <dd className="font-semibold tabular-nums text-ink-900">{member.followingCount}</dd>
-        </div>
+      <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm" data-testid="profile-counts">
+        {(member.activeSupporterCount !== undefined
+          ? [
+              ['Followers', member.followerCount],
+              ['Clique', member.cliqueCount ?? 0],
+              ['Active Supporters', member.activeSupporterCount],
+            ]
+          : [
+              ['Posts', member.postCount],
+              ['Followers', member.followerCount],
+              ['Following', member.followingCount],
+            ]
+        ).map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-ink-500">{label}</dt>
+            <dd className="font-semibold tabular-nums text-ink-900">{value}</dd>
+          </div>
+        ))}
       </dl>
       <div className="mt-4">
         {member.isMe ? (
@@ -637,7 +689,10 @@ function MemberHeader({ member, onChange, about }: { member: Member; onChange: (
           </Link>
         ) : (
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <RelationshipButtons member={member} onChange={onChange} size="md" postsHref={member.postCount > 0 ? '#posts' : undefined} />
+            <div className="flex flex-wrap items-start gap-2">
+              <RelationshipButtons member={member} onChange={onChange} size="md" source="profile" postsHref={member.postCount > 0 ? '#posts' : undefined} />
+              <SupportButton creator={member} />
+            </div>
             <ReportButton target="profile" targetId={member.id} name={member.displayName} />
           </div>
         )}
@@ -749,395 +804,8 @@ function CommentItem({ comment, onDeleted }: { comment: Comment; onDeleted: () =
 }
 
 // ---------------------------------------------------------------------------
-// Your Clique. Two relationships, and only two: Following is everyone you
-// follow (no limit), and My Clique is up to 25 of them you choose. Removing
-// someone from your Clique never unfollows them; unfollowing removes them from
-// both. Clique membership changes presentation priority only, never feed order.
-// (Internally the Clique is still social.clique_members / in_my_clique.)
-
-export function CliquePage() {
-  const api = useAppApi()
-  const list = useLoad(() => api.following(), [api])
-  const [params, setParams] = useSearchParams()
-  const [replacing, setReplacing] = useState<FollowedCreator | null>(null)
-  const [status, setStatus] = useState('')
-  const all = list.data ?? []
-  const inner = all.filter((f) => f.inMyClique)
-  const full = inner.length >= LIMITS.clique
-
-  // ?add=<id>: sent here from elsewhere when the Clique was full.
-  const addId = params.get('add')
-  useEffect(() => {
-    if (!addId || !list.data) return
-    const target = list.data.find((f) => f.id === addId)
-    if (target && !target.inMyClique && list.data.filter((f) => f.inMyClique).length >= LIMITS.clique) setReplacing(target)
-    setParams((p) => {
-      p.delete('add')
-      return p
-    }, { replace: true })
-  }, [addId, list.data, setParams])
-
-  const closeReplace = useCallback(() => setReplacing(null), [])
-  const reload = list.reload
-  const changed = useCallback(
-    async (message: string) => {
-      setStatus(message)
-      await reload()
-    },
-    [reload],
-  )
-
-  return (
-    <>
-      <PageHeader
-        title="Your Clique"
-        subtitle="Your Clique is up to 25 creators you choose from the people you follow. It never changes the order of your feed."
-      />
-      <p aria-live="polite" data-testid="clique-status" className="sr-only">
-        {status}
-      </p>
-      {list.loading && !list.data && <Loading label="Loading your Clique…" />}
-      {list.error !== null && <ErrorNote error={list.error} />}
-      {list.data && (
-        <>
-          <section aria-labelledby="my-clique-title">
-            <div className="mb-3 flex items-baseline justify-between gap-3">
-              <h2 id="my-clique-title" className="font-display text-lg font-bold text-ink-900">
-                My Clique
-              </h2>
-              <span className="text-sm font-semibold tabular-nums text-ink-500" aria-label={`${inner.length} of ${LIMITS.clique} in your Clique`}>
-                {inner.length}/{LIMITS.clique}
-              </span>
-            </div>
-            {inner.length === 0 ? (
-              <EmptyState
-                icon={<Users className="h-7 w-7" />}
-                title="Nobody in your Clique yet"
-                body={all.length === 0 ? 'Follow people first, then choose who belongs in your Clique.' : 'Add creators from Following below. You can change them at any time.'}
-                action={
-                  all.length === 0 ? (
-                    <Link to="/app/discover" className={buttonClass('primary')}>
-                      Discover people
-                    </Link>
-                  ) : undefined
-                }
-              />
-            ) : (
-              <>
-                <p className="mb-3 text-sm text-ink-600">
-                  {full ? 'Full. Adding someone else lets you choose who to replace.' : 'Removing someone from your Clique keeps them in Following.'}
-                </p>
-                <ul className="space-y-2">
-                  {inner.map((f) => (
-                    <li key={f.id}>
-                      <InnerRow creator={f} onChange={changed} />
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </section>
-          {all.length > 0 && (
-            <section aria-labelledby="following-title" className="mt-8">
-              <div className="mb-3 flex items-baseline justify-between gap-3">
-                <h2 id="following-title" className="font-display text-lg font-bold text-ink-900">
-                  Following
-                </h2>
-                <span className="text-sm font-semibold tabular-nums text-ink-500">
-                  {all.length} {all.length === 1 ? 'creator' : 'creators'}
-                </span>
-              </div>
-              <p className="mb-3 text-sm text-ink-600">Everyone you follow. Unfollowing also removes someone from your Clique.</p>
-              <ul className="space-y-2">
-                {all.map((f) => (
-                  <li key={f.id}>
-                    <FollowedRow creator={f} full={full} onReplace={setReplacing} onChange={changed} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          <ReplaceDialog adding={replacing} all={all} onClose={closeReplace} onDone={changed} />
-        </>
-      )}
-    </>
-  )
-}
-
-function CreatorSummary({ creator }: { creator: FollowedCreator }) {
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-3">
-      <MemberAvatar member={creator} size={40} />
-      <div className="min-w-0 leading-tight">
-        <MemberLink member={creator} />
-        <p className="truncate text-[13px] text-ink-500">
-          @{creator.username} ·{' '}
-          {creator.inMyClique && creator.cliqueAddedAt ? (
-            <>
-              in your Clique since <When iso={creator.cliqueAddedAt} />
-            </>
-          ) : (
-            <>
-              following since <When iso={creator.followedAt} />
-            </>
-          )}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-/** Runs one change at a time for a row, reporting failures in place. */
-function useRowAction(onChange: (message: string) => Promise<void>) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<unknown>(null)
-  async function run(action: () => Promise<void>, message: string) {
-    if (busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      await action()
-      await onChange(message)
-    } catch (e) {
-      setError(e)
-    } finally {
-      setBusy(false)
-    }
-  }
-  return { busy, error, run }
-}
-
-function InnerRow({ creator, onChange }: { creator: FollowedCreator; onChange: (message: string) => Promise<void> }) {
-  const api = useAppApi()
-  const { busy, error, run } = useRowAction(onChange)
-  return (
-    <Card className="p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <CreatorSummary creator={creator} />
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => run(() => api.cliqueRemove(creator.id), `${creator.displayName} was removed from your Clique. You still follow them.`)}
-          className={buttonClass('secondary', 'sm')}
-        >
-          Remove from Clique<span className="sr-only">{` (${creator.displayName}, you keep following them)`}</span>
-        </button>
-      </div>
-      {error !== null && <ErrorNote error={error} />}
-    </Card>
-  )
-}
-
-function FollowedRow({
-  creator,
-  full,
-  onReplace,
-  onChange,
-}: {
-  creator: FollowedCreator
-  full: boolean
-  onReplace: (creator: FollowedCreator) => void
-  onChange: (message: string) => Promise<void>
-}) {
-  const api = useAppApi()
-  const { busy, error, run } = useRowAction(onChange)
-  return (
-    <Card className="p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <CreatorSummary creator={creator} />
-        <div className="flex flex-wrap items-center gap-2">
-          {creator.inMyClique ? (
-            <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-brand-50 px-3 text-sm font-semibold text-brand-700">
-              <Users className="h-4 w-4" aria-hidden="true" /> Clique
-            </span>
-          ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                full ? onReplace(creator) : run(() => api.cliqueAdd(creator.id), `${creator.displayName} was added to your Clique.`)
-              }
-              aria-haspopup={full ? 'dialog' : undefined}
-              className={buttonClass('secondary', 'sm')}
-            >
-              <Users className="h-4 w-4" aria-hidden="true" /> Add to Clique<span className="sr-only">{` (${creator.displayName})`}</span>
-            </button>
-          )}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => run(() => api.unfollow(creator.id), `You unfollowed ${creator.displayName}.`)}
-            className={buttonClass('ghost', 'sm')}
-          >
-            Unfollow<span className="sr-only">{creator.inMyClique ? ` ${creator.displayName} (also removes them from your Clique)` : ` ${creator.displayName}`}</span>
-          </button>
-        </div>
-      </div>
-      {error !== null && <ErrorNote error={error} />}
-    </Card>
-  )
-}
-
-/**
- * At 25: choose who the new creator replaces. One atomic change on the server.
- * If it fails (another tab or device changed things, or the server refused),
- * the dialog stays open with the error, the list is refreshed, and the choice
- * is kept while it is still valid. The dialog then follows the current state:
- * room again means a plain add; already added or no longer followed says so.
- */
-function ReplaceDialog({
-  adding,
-  all,
-  onClose,
-  onDone,
-}: {
-  adding: FollowedCreator | null
-  all: FollowedCreator[]
-  onClose: () => void
-  onDone: (message: string) => Promise<void>
-}) {
-  const api = useAppApi()
-  const [choice, setChoice] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<unknown>(null)
-  const errorRef = useRef<HTMLDivElement>(null)
-  const name = useId()
-  const inner = all.filter((f) => f.inMyClique)
-  const current = adding ? all.find((f) => f.id === adding.id) : undefined
-  const full = inner.length >= LIMITS.clique
-
-  useEffect(() => {
-    setChoice(null)
-    setError(null)
-  }, [adding])
-  // Keep the choice only while that creator is still in the Clique.
-  useEffect(() => {
-    if (choice && !inner.some((f) => f.id === choice)) setChoice(null)
-  }, [choice, inner])
-  // Move focus to the error, so keyboard and screen reader users land on it.
-  useEffect(() => {
-    if (error !== null) errorRef.current?.focus()
-  }, [error])
-
-  async function attempt(action: () => Promise<void>, message: string) {
-    if (busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      await action()
-      onClose()
-      await onDone(message)
-    } catch (err) {
-      // Nothing changed on the server; refresh so the dialog shows what is current.
-      setError(err)
-      await onDone('')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  function confirm(e: FormEvent) {
-    e.preventDefault()
-    if (!adding || !choice) return
-    const replaced = inner.find((f) => f.id === choice)?.displayName ?? 'a creator'
-    void attempt(
-      () => api.cliqueReplace(choice, adding.id),
-      `${adding.displayName} replaced ${replaced} in your Clique. You still follow ${replaced}.`,
-    )
-  }
-
-  const errorNote =
-    error !== null ? (
-      <div ref={errorRef} tabIndex={-1} className="outline-none">
-        <ErrorNote error={error} />
-      </div>
-    ) : null
-  const closeButton = (label: string) => (
-    <button type="button" onClick={onClose} className={buttonClass('secondary')}>
-      {label}
-    </button>
-  )
-
-  const title = !current ? 'No longer followed' : current.inMyClique ? 'Already in your Clique' : full ? 'Your Clique is full' : 'Add to your Clique'
-  let body: ReactNode = null
-  if (adding && !current) {
-    body = (
-      <>
-        <p className="text-sm text-ink-700">You no longer follow {adding.displayName}, so there is nothing to add.</p>
-        {errorNote}
-        <div className="mt-4 flex justify-end">{closeButton('Done')}</div>
-      </>
-    )
-  } else if (adding && current?.inMyClique) {
-    body = (
-      <>
-        <p className="text-sm text-ink-700">{adding.displayName} is already in your Clique.</p>
-        {errorNote}
-        <div className="mt-4 flex justify-end">{closeButton('Done')}</div>
-      </>
-    )
-  } else if (adding && !full) {
-    body = (
-      <>
-        <p className="text-sm text-ink-700">
-          There is room in your Clique now ({inner.length}/{LIMITS.clique}), so {adding.displayName} can be added without replacing anyone.
-        </p>
-        {errorNote}
-        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          {closeButton('Cancel')}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void attempt(() => api.cliqueAdd(adding.id), `${adding.displayName} was added to your Clique.`)}
-            className={buttonClass('primary')}
-          >
-            {busy ? 'Adding…' : `Add ${adding.displayName}`}
-          </button>
-        </div>
-      </>
-    )
-  } else if (adding) {
-    body = (
-      <form onSubmit={confirm}>
-        <fieldset>
-          <legend className="mb-3 text-sm text-ink-700">
-            Choose who <strong className="text-ink-900">{adding.displayName}</strong> replaces. The person you replace stays in Following, and you keep following them.
-          </legend>
-          <div className="max-h-[45dvh] space-y-1 overflow-y-auto">
-            {inner.map((f) => (
-              <label key={f.id} className="flex cursor-pointer items-center gap-3 rounded-2xl px-2 py-2 hover:bg-ink-50 has-[:checked]:bg-brand-50">
-                <input
-                  type="radio"
-                  name={name}
-                  value={f.id}
-                  checked={choice === f.id}
-                  onChange={() => setChoice(f.id)}
-                  className="h-4 w-4 accent-brand-600"
-                />
-                <MemberAvatar member={f} size={32} />
-                <span className="min-w-0 truncate text-sm font-semibold text-ink-900">{f.displayName}</span>
-                <span className="ml-auto truncate text-[13px] text-ink-500">@{f.username}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        {errorNote}
-        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          {closeButton('Cancel')}
-          <button type="submit" disabled={!choice || busy} className={buttonClass('primary')}>
-            {busy ? 'Replacing…' : 'Replace'}
-          </button>
-        </div>
-      </form>
-    )
-  }
-
-  return (
-    <Modal open={adding !== null} onClose={onClose} title={title}>
-      {body}
-    </Modal>
-  )
-}
+// Your Clique and everyone you follow (relationship management): src/app/relationships.tsx.
+export { CliquePage } from './relationships'
 
 // ---------------------------------------------------------------------------
 // Your profile.
@@ -1157,7 +825,7 @@ export function ProfilePage() {
               ['Posts', me.data.postCount],
               ['Followers', me.data.followerCount],
               ['Following', me.data.followingCount],
-              ['My Clique', `${me.data.cliqueCount}/${LIMITS.clique}`],
+              ['My Clique', me.data.cliqueCount],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="text-ink-500">{label}</dt>
@@ -1181,6 +849,7 @@ export function ProfilePage() {
         </Card>
       )}
       {me.error !== null && <ErrorNote error={me.error} />}
+      <AudienceInsight />
       <Card className="mb-4 p-5">
         <ProfilePictureField />
       </Card>

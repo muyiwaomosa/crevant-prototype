@@ -556,7 +556,7 @@ export function PersonSummary({
         </div>
       )}
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <RelationshipButtons member={member} onChange={onChange} postsHref={member.postCount > 0 ? `${profile}#posts` : undefined} />
+        <RelationshipButtons member={member} onChange={onChange} source="discover" postsHref={member.postCount > 0 ? `${profile}#posts` : undefined} />
         {member.postCount > 0 && (
           <Link to={`${profile}#posts`} aria-label={`See posts by ${member.displayName}`} className="text-sm font-semibold text-brand-700 underline sm:mt-1.5">
             See posts

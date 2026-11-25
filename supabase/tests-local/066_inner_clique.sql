@@ -64,8 +64,10 @@ end $$;
 commit;
 
 -- ---------------------------------------------------------------------------
--- 2. Unlimited follows; an Inner Clique of at most 25.
+-- 2. Unlimited follows; an Inner Clique of at most 25 (no limit once
+--    20261201000000 is applied).
 begin;
+select set_config('test.clique_unlimited', (to_regclass('social.mutes') is not null)::text, true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000801","role":"authenticated"}', true);
 set local role authenticated;
 do $$
@@ -94,11 +96,24 @@ begin
     raise exception 'FAIL: the Inner Clique should hold 25, holds %', n;
   end if;
   before := pg_temp.inner_set();
-  perform pg_temp.expect_error_ic('select public.app_clique_add(pg_temp.c(827))', 'clique_full', 'a 26th Inner Clique creator');
-  if pg_temp.inner_set() <> before then
-    raise exception 'FAIL: a refused 26th add changed the Inner Clique';
+  if current_setting('test.clique_unlimited') = 'false' then
+    perform pg_temp.expect_error_ic('select public.app_clique_add(pg_temp.c(827))', 'clique_full', 'a 26th Inner Clique creator');
+    if pg_temp.inner_set() <> before then
+      raise exception 'FAIL: a refused 26th add changed the Inner Clique';
+    end if;
+    raise notice 'PASS: the Inner Clique holds 25, and a 26th add is refused, changing nothing';
+  else
+    -- Relationships (20261201000000) removes the limit (CON-02).
+    perform public.app_clique_add(pg_temp.c(827));
+    if (select count(*) from public.app_following() where in_my_clique) <> 26 then
+      raise exception 'FAIL: with no Clique limit, a 26th add should succeed';
+    end if;
+    perform public.app_clique_remove(pg_temp.c(827));
+    if pg_temp.inner_set() <> before then
+      raise exception 'FAIL: removing the 26th should leave the earlier 25';
+    end if;
+    raise notice 'PASS: the Clique has no limit (a 26th add succeeds); the tests below continue from 25';
   end if;
-  raise notice 'PASS: the Inner Clique holds 25, and a 26th add is refused, changing nothing';
 end $$;
 commit;
 

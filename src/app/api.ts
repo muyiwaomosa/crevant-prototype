@@ -7,11 +7,11 @@ import { forgetRegistrationCode, storedRegistrationCode } from './registration'
  * Everything goes through the public.app_* database functions
  * (supabase/migrations/20261117000000_social_core.sql), which check who is
  * calling and enforce the rules (no self-follows, a Clique only of creators
- * you follow, at most 25 of them, only your own posts and comments can be
+ * you follow (no limit since 20261201000000), only your own posts and comments can be
  * deleted).
  *
  * Members see two relationships: Following (everyone they follow, unlimited)
- * and My Clique (up to 25 of them, chosen; stored in social.clique_members,
+ * and My Clique (the ones they choose; stored in social.clique_members,
  * supabase/migrations/20261120000000_inner_clique.sql). Removing someone from
  * the Clique never unfollows them; unfollowing removes them from both. The browser never reads the social tables directly. The one
  * exception is the member's own profile row, which the Phase 1A own-row
@@ -79,6 +79,44 @@ export interface Member extends MemberSummary {
   followedByMe: boolean
   inMyClique: boolean
   isMe: boolean
+  /** Relationships (20261201000000). Absent on a database without it. */
+  cliqueCount?: number
+  activeSupporterCount?: number
+  iAmActiveSupporter?: boolean
+  mutedByMe?: boolean
+}
+
+/** Where a follow started: a journey source, never a relationship stage. */
+export type FollowSource = 'profile' | 'discover' | 'post' | 'catch_up' | 'comment' | 'other'
+/** A non-binding Support Intent: what a member says they would be willing to support each month. Never a payment. */
+export type SupportChoice = 'usd_3' | 'usd_5' | 'usd_10' | 'not_sure'
+export const SUPPORT_CHOICES: Array<{ value: SupportChoice; label: string }> = [
+  { value: 'usd_3', label: '$3 a month' },
+  { value: 'usd_5', label: '$5 a month' },
+  { value: 'usd_10', label: '$10 a month' },
+  { value: 'not_sure', label: 'Not sure yet' },
+]
+
+/** Someone the member follows, with the relationship stage (Following, Clique Connection, Active Supporter). */
+export interface Relationship extends FollowedCreator {
+  activeSupporter: boolean
+  muted: boolean
+  supportChoice: SupportChoice | null
+  latestPostAt: string | null
+}
+
+/** The member's own audience as a creator. Aggregates only, never who. */
+export interface Audience {
+  followerCount: number
+  cliqueCount: number
+  activeSupporterCount: number
+  newFollowers7d: number
+  newFollowersPrev7d: number
+  /** Follows in the last 28 days by where they started. */
+  followSources: Record<string, number>
+  supportIntentCount: number
+  supportByChoice: Partial<Record<SupportChoice, number>>
+  posts28d: number
 }
 
 export interface DiscoverMember extends MemberSummary {
@@ -339,12 +377,24 @@ export interface AppApi {
   /** requestId: the browser's id for this post, reused on retry, so it's stored once (issue #48). */
   createPost(body: string, requestId?: string): Promise<string>
   deletePost(id: string): Promise<void>
-  follow(memberId: string): Promise<void>
+  follow(memberId: string, source?: FollowSource): Promise<void>
   unfollow(memberId: string): Promise<void>
   cliqueAdd(memberId: string): Promise<void>
   cliqueRemove(memberId: string): Promise<void>
   /** Swaps one Clique creator for another followed creator in one step; on failure nothing changes. */
   cliqueReplace(removeId: string, addId: string): Promise<void>
+  /** Relationships (20261201000000). A muted creator leaves the member's Home; nothing else changes. */
+  mute(memberId: string): Promise<void>
+  unmute(memberId: string): Promise<void>
+  /** Clique first: unseen recent posts from the member's Clique, newest first. Empty before 20261201000000. */
+  homePriority(): Promise<Post[]>
+  /** Everyone followed, with stage, mute and Support Intent; null before 20261201000000 (use following()). */
+  relationships(): Promise<Relationship[] | null>
+  /** The member's own audience insight; null before 20261201000000. */
+  audience(): Promise<Audience | null>
+  /** The member's own current Support Intent for a creator (null: none). undefined before 20261201000000. */
+  supportIntent(creatorId: string): Promise<SupportChoice | null | undefined>
+  recordSupportIntent(creatorId: string, choice: SupportChoice | 'withdrawn'): Promise<void>
   like(postId: string): Promise<void>
   unlike(postId: string): Promise<void>
   /** requestId: as for createPost. */
@@ -365,7 +415,6 @@ export const LIMITS = {
   feedbackNote: 1000,
   post: 2000,
   comment: 1000,
-  clique: 25,
   username: { min: 3, max: 30 },
   displayName: 50,
   bio: 160,
@@ -429,7 +478,7 @@ const MESSAGES: Record<string, string> = {
   cannot_follow_self: "You can't follow yourself.",
   cannot_add_self: "You can't add yourself to your Clique.",
   not_following: 'Follow this creator first. Your Clique only includes people you follow.',
-  clique_full: 'Your Clique is full (25). Choose someone to replace.',
+  clique_full: 'Your Clique is full for now. Remove someone from it, then try again.',
   not_in_clique: 'That creator is no longer in your Clique. Nothing was changed.',
   already_in_clique: 'That creator is already in your Clique. Nothing was changed.',
   rate_limited: "You're going a little fast. Please wait a moment and try again.",
@@ -569,6 +618,8 @@ export function isMissingFunction(error: { code?: string; message?: string } | n
   return !!m && m[1] === fn
 }
 
+const asSupportChoice = (v: unknown): SupportChoice | null =>
+  SUPPORT_CHOICES.some((c) => c.value === v) ? (v as SupportChoice) : null
 const asIdentity = (v: unknown): Identity | null => (IDENTITIES as unknown[]).includes(v) ? (v as Identity) : null
 const asText = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 const asTopics = (v: unknown): string[] => (Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : [])
@@ -797,6 +848,14 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
         followedByMe: Boolean(r.followed_by_me),
         inMyClique: Boolean(r.in_my_clique),
         isMe: Boolean(r.is_me),
+        ...('active_supporter_count' in r
+          ? {
+              cliqueCount: num(r.clique_count as number),
+              activeSupporterCount: num(r.active_supporter_count as number),
+              iAmActiveSupporter: Boolean(r.i_am_active_supporter),
+              mutedByMe: Boolean(r.muted_by_me),
+            }
+          : {}),
       }
     },
     async memberPosts(memberId, before) {
@@ -1124,7 +1183,72 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       const d = (data ?? {}) as { ms?: unknown; ok?: unknown }
       return { ms: Number(d.ms ?? 0), ok: d.ok === true }
     },
-    follow: (id) => rpc<void>('app_follow', { p_creator: id }),
+    async follow(id, source) {
+      // The source is recorded since 20261201000000; an older database follows without it.
+      const { error } = await client.rpc('app_follow', { p_creator: id, p_source: source ?? null })
+      if (!error) return
+      if (isMissingFunction(error, 'app_follow')) return rpc<void>('app_follow', { p_creator: id })
+      throw toAppError(error)
+    },
+    mute: (id) => rpc<void>('app_mute', { p_creator: id }),
+    unmute: (id) => rpc<void>('app_unmute', { p_creator: id }),
+    async homePriority() {
+      const { data, error } = await client.rpc('app_home_priority', { p_limit: 10 })
+      if (!error) return ((data ?? []) as PostRow[]).map(toPost)
+      if (isMissingFunction(error, 'app_home_priority')) return []
+      throw toAppError(error)
+    },
+    async relationships() {
+      const { data, error } = await client.rpc('app_my_relationships')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_relationships')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        id: String(r.id),
+        username: String(r.username),
+        displayName: String(r.display_name),
+        followedAt: String(r.followed_at),
+        inMyClique: Boolean(r.in_my_clique),
+        cliqueAddedAt: (r.clique_added_at as string | null) ?? null,
+        activeSupporter: Boolean(r.active_supporter),
+        muted: Boolean(r.muted),
+        supportChoice: asSupportChoice(r.support_choice),
+        latestPostAt: (r.latest_post_at as string | null) ?? null,
+      }))
+    },
+    async audience() {
+      const { data, error } = await client.rpc('app_my_audience')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_audience')) return null
+        throw toAppError(error)
+      }
+      const r = (Array.isArray(data) ? data[0] : null) as Record<string, unknown> | null
+      if (!r) return null
+      const counts = (v: unknown) =>
+        Object.fromEntries(Object.entries((v && typeof v === 'object' ? v : {}) as Record<string, unknown>).map(([k, n]) => [k, num(n as number)]))
+      return {
+        followerCount: num(r.follower_count as number),
+        cliqueCount: num(r.clique_count as number),
+        activeSupporterCount: num(r.active_supporter_count as number),
+        newFollowers7d: num(r.new_followers_7d as number),
+        newFollowersPrev7d: num(r.new_followers_prev_7d as number),
+        followSources: counts(r.follow_sources_28d),
+        supportIntentCount: num(r.support_intent_count as number),
+        supportByChoice: counts(r.support_by_choice) as Partial<Record<SupportChoice, number>>,
+        posts28d: num(r.posts_28d as number),
+      }
+    },
+    async supportIntent(creatorId) {
+      const { data, error } = await client.rpc('app_support_intent', { p_creator: creatorId })
+      if (error) {
+        if (isMissingFunction(error, 'app_support_intent')) return undefined
+        throw toAppError(error)
+      }
+      const r = (Array.isArray(data) ? data[0] : null) as { choice?: unknown } | null
+      return asSupportChoice(r?.choice)
+    },
+    recordSupportIntent: (creatorId, choice) => rpc<void>('app_record_support_intent', { p_creator: creatorId, p_choice: choice }),
     unfollow: (id) => rpc<void>('app_unfollow', { p_creator: id }),
     cliqueAdd: (id) => rpc<void>('app_clique_add', { p_creator: id }),
     cliqueRemove: (id) => rpc<void>('app_clique_remove', { p_creator: id }),

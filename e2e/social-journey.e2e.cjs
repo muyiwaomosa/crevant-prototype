@@ -294,12 +294,12 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   const confirmation = pageB.getByTestId('follow-confirmation')
   await confirmation.waitFor()
   check(
-    'after following, a confirmation offers Add to Clique and See their posts',
-    (await confirmation.getByRole('button', { name: 'Add to Clique (Aye Teacher)' }).count()) === 1
+    'after following, a confirmation offers Join Clique and See their posts',
+    (await confirmation.getByRole('button', { name: 'Join Clique (Aye Teacher)' }).count()) === 1
       && (await confirmation.getByRole('link', { name: 'See their posts' }).getAttribute('href')) === `/app/u/${userA}#posts`
-      && (await pageB.getByRole('button', { name: 'Add to Clique (Aye Teacher)' }).count()) === 1,
+      && (await pageB.getByRole('button', { name: 'Join Clique (Aye Teacher)' }).count()) === 1,
   )
-  await pageB.getByRole('button', { name: 'Add to Clique (Aye Teacher)' }).click()
+  await pageB.getByRole('button', { name: 'Join Clique (Aye Teacher)' }).click()
   await pageB.getByRole('button', { name: 'In your Clique (Aye Teacher, tap to remove)' }).waitFor()
   check('adding to the Clique says "Added to your Clique!"', ((await pageB.getByTestId('relationship-notice').innerText()) || '').includes('Added to your Clique!'))
   check('following and joining the Clique are separate records', sql(`select (select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${idA}') || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${idA}' and removed_at is null)`) === '1|1')
@@ -373,9 +373,8 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     check('after reading, the creator leaves the catch-up strip', (await pageB.getByRole('region', { name: 'Catch up' }).count()) === 0)
   }
 
-  // 5. Following is unlimited; My Clique holds at most 25. The database
-  //    refuses a 26th even through the API, and at 25 the page offers an
-  //    atomic replacement instead.
+  // 5. Following and the Clique are both unlimited (20261201000000). The
+  //    replace function stays for older pages and still needs a member.
   {
     const others = []
     for (let i = 1; i <= 26; i++) {
@@ -388,68 +387,18 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     check('B follows 27 creators (follows are unlimited)', sql(`select count(*) from social.follows where follower_id = '${idB}'`) === '27')
     for (const id of others.slice(0, 24)) await rpc(tokenB, 'app_clique_add', { p_creator: id })
     const extra = await rpc(tokenB, 'app_clique_add', { p_creator: others[24] })
-    check('a 26th Clique creator is refused by the database', extra.status >= 400 && JSON.stringify(extra.body).includes('clique_full'), JSON.stringify(extra.body).slice(0, 80))
+    check('a 26th Clique creator is accepted (the Clique has no limit)', extra.status === 204 || extra.status === 200, `${extra.status} ${JSON.stringify(extra.body).slice(0, 80)}`)
     const anon = await rpc(null, 'app_clique_replace', { p_remove: others[0], p_add: others[24] })
     check('signed-out visitors cannot replace Clique creators', anon.status === 401 || anon.status === 403 || anon.status === 404, String(anon.status))
 
     await pageB.goto(`${APP}/app/clique`)
-    await pageB.getByLabel('25 of 25 in your Clique').waitFor()
+    await pageB.getByText('26 in your Clique').waitFor()
     check('the Clique page lists all 27 followed creators in Following', (await pageB.getByRole('region', { name: 'Following' }).getByRole('listitem').count()) === 27)
-    const add = pageB.getByRole('button', { name: 'Add to Clique (Maker 25)' })
-    await add.click()
-    const dialog = pageB.getByRole('dialog', { name: 'Your Clique is full' })
-    await dialog.waitFor()
-    await pageB.keyboard.press('Escape')
-    await dialog.waitFor({ state: 'detached' })
-    check('Escape closes the replacement dialog and returns focus to the button', await add.evaluate((el) => el === document.activeElement))
-    await add.click()
-    await dialog.getByRole('radio', { name: /Maker 1\b/ }).check()
-    const replaceStatus = await answered(pageB, 'app_clique_replace', () => dialog.getByRole('button', { name: 'Replace' }).click())
-    check('the server accepted the replacement', replaceStatus === 204 || replaceStatus === 200, String(replaceStatus))
-    await dialog.waitFor({ state: 'detached' })
-    await pageB.getByRole('button', { name: 'Add to Clique (Maker 1)' }).waitFor()
-    check(
-      'the replacement swapped Maker 1 for Maker 25 in one step: still 25, Maker 1 still followed, closed as "replaced"',
-      sql(`select (select count(*) from social.clique_members where fan_id = '${idB}' and removed_at is null)
-        || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[0]}' and removal_reason = 'replaced')
-        || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[24]}' and removed_at is null)
-        || '|' || (select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${others[0]}')`) === '25|1|1|1',
-    )
-    const failed = await rpc(tokenB, 'app_clique_replace', { p_remove: others[0], p_add: others[25] })
-    check('a replacement naming someone no longer in the Clique is refused and changes nothing',
-      failed.status >= 400 && JSON.stringify(failed.body).includes('not_in_clique')
-        && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and removed_at is null`) === '25'
-        && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[25]}'`) === '0')
-
-    // A stale choice: another device replaces Maker 3 while the dialog is open.
-    await pageB.getByRole('button', { name: 'Add to Clique (Maker 26)' }).click()
-    await dialog.waitFor()
-    await dialog.getByRole('radio', { name: /Maker 3\b/ }).check()
-    const elsewhere = await rpc(tokenB, 'app_clique_replace', { p_remove: others[2], p_add: others[0] })
-    check('another device replaced Maker 3 while the dialog was open', elsewhere.status === 204 || elsewhere.status === 200, String(elsewhere.status))
-    const staleErrorsBefore = consoleErrors.length
-    const staleStatus = await answered(pageB, 'app_clique_replace', () => dialog.getByRole('button', { name: 'Replace' }).click())
-    await dialog.getByRole('alert').waitFor()
-    // The refusal is on purpose; the browser logs its 400. Remove only that one.
-    for (let i = consoleErrors.length - 1; i >= staleErrorsBefore; i--) {
-      if (/status of 400/.test(consoleErrors[i])) { consoleErrors.splice(i, 1); break }
-    }
-    await dialog.getByRole('radio', { name: /Maker 3\b/ }).waitFor({ state: 'detached' })
-    check(
-      'the stale replacement is refused, the dialog stays open with the error, and the list is refreshed',
-      staleStatus >= 400
-        && /Nothing was changed/.test(await dialog.getByRole('alert').textContent())
-        && (await dialog.getByRole('radio', { name: /Maker 1\b/ }).count()) === 1
-        && (await dialog.getByRole('radio').count()) === 25
-        && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and removed_at is null`) === '25'
-        && sql(`select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${others[25]}'`) === '0',
-      String(staleStatus),
-    )
-    await dialog.getByRole('button', { name: 'Cancel' }).click()
-    await dialog.waitFor({ state: 'detached' })
-
+    await pageB.getByRole('button', { name: 'Join Clique (Maker 26)' }).click()
+    await pageB.getByText('27 in your Clique').waitFor()
+    check('a 27th joins from the page, with no replacement step', (await pageB.getByRole('dialog').count()) === 0)
     await pageB.getByRole('region', { name: 'My Clique' }).getByRole('button', { name: 'Remove from Clique (Maker 2, you keep following them)' }).click()
-    await pageB.getByLabel('24 of 25 in your Clique').waitFor()
+    await pageB.getByText('26 in your Clique').waitFor()
     check('removing from the Clique keeps the follow', sql(`select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${others[1]}'`) === '1')
     const self = await rpc(tokenB, 'app_follow', { p_creator: idB })
     check('members cannot follow themselves', self.status >= 400 && JSON.stringify(self.body).includes('cannot_follow_self'))

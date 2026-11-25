@@ -13,7 +13,7 @@ Production is tracked by batch (PB-1 to PB-4), separately.
 | Package | Built | Tested | Deployed (staging) | Accepted | Notes |
 |---|---|---|---|---|---|
 | IP-1 Foundation | Yes, PR #106 merged Nov 25 | Yes, 6 of 6 CI checks | In progress: database deploy awaiting environment approval; then Auth settings (founder, `docs/FOUNDER-GUIDE-IP1.md` A2) and app address (A3) | Pending | Registration paused on member Production; launch gate closed |
-| IP-2 Relationships and Home | In progress (authorized Nov 25) | No | No | No | |
+| IP-2 Relationships and Home | Built (authorized Nov 25): migration 20261201000000, Home Clique first, mute, Active Supporter, Support Intent, audience insight; review guide `docs/RELATIONSHIPS.md` | Local: unit, database, activation, member Production sequence, rollback chain all pass; CI pending | No (needs IP-1 on staging first) | No | No Auth or dashboard step needed |
 | IP-3 Governance core | Not started | | | | Awaiting authorization |
 | IP-4 Content and discovery | Not started | | | | Depends on IP-2 |
 | IP-5 Video posts | Not started | | | | Depends on the device test |

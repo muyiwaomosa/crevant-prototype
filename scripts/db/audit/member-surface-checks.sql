@@ -93,6 +93,18 @@ declare
     'public.app_member_posts_page(uuid,timestamp with time zone,uuid,integer)',
     'public.app_my_referral_link()'
   ];
+  -- Relationships (20261201000000), once applied. app_follow gains an optional
+  -- source, so its one-argument version is replaced.
+  relationships text[] := array[
+    'public.app_follow(uuid,text)',
+    'public.app_home_priority(integer)',
+    'public.app_mute(uuid)',
+    'public.app_my_audience()',
+    'public.app_my_relationships()',
+    'public.app_record_support_intent(uuid,text)',
+    'public.app_support_intent(uuid)',
+    'public.app_unmute(uuid)'
+  ];
   actual text[];
   extra text[];
   missing text[];
@@ -116,11 +128,14 @@ begin
   if to_regclass('ops.registrations') is not null then
     expected := expected || foundation;
   end if;
+  if to_regclass('social.mutes') is not null then
+    expected := array_remove(expected, 'public.app_follow(uuid)') || relationships;
+  end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual
   from pg_catalog.pg_proc p
   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-  where n.nspname in ('public', 'ops', 'social', 'waitlist_api')
+  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent')
     and pg_catalog.has_function_privilege('authenticated', p.oid, 'EXECUTE');
   -- Normalise argument lists to the same spelling as the allow-list (no spaces after commas).
   actual := (select coalesce(array_agg(replace(a, ', ', ',') order by 1), '{}') from unnest(actual) a);
@@ -137,7 +152,7 @@ begin
     into anon_fns
   from pg_catalog.pg_proc p
   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-  where n.nspname in ('public', 'ops', 'social', 'waitlist_api')
+  where n.nspname in ('public', 'ops', 'social', 'waitlist_api', 'intent')
     and pg_catalog.has_function_privilege('anon', p.oid, 'EXECUTE');
   if cardinality(anon_fns) > 0 then
     raise exception 'FAIL: anonymous visitors can run functions: %', anon_fns;
