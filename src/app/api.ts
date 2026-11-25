@@ -470,6 +470,8 @@ export interface CampaignReport {
   simulatedRevenueCents: number
   /** The advertiser's own view withholds feedback counts under 10 (20261211000000). */
   feedbackWithheld?: boolean
+  /** The advertiser's own view: which counts are withheld because they are under 10 (20261214000000), e.g. 'clicks' or 'by_match.preference.impressions'. */
+  withheld?: string[]
 }
 
 /** Intelligence (20261210000000). Aggregates only; every figure says whether it is actual or simulated. */
@@ -487,7 +489,7 @@ export interface CreatorInsights {
   retention: { followers: number; active_supporters: number; clique: number; returning: number; connections_this_week: number; connections_last_week: number }
   money: {
     actual_income_cents: number
-    simulated_by_month: Array<{ month: string; creator_cents: number; revenue_cents: number }>
+    simulated_by_month: Array<{ month: string; creator_cents: number }>
     ads_with_your_posts: Array<{ advertiser: string; campaign: string; impressions: number; clicks: number; posts: number }>
   }
 }
@@ -1362,8 +1364,17 @@ export async function tusUpload(opts: {
   })
   if (create.status === 413) throw new AppApiError('video_too_large')
   if (create.status !== 201) throw new AppApiError('video_upload_failed')
-  const location = create.headers.get('Location')
-  if (!location) throw new AppApiError('video_upload_failed')
+  const raw = create.headers.get('Location')
+  if (!raw) throw new AppApiError('video_upload_failed')
+  // The upload token only ever goes back to the Storage host it was issued for.
+  let location: string
+  try {
+    const resolved = new URL(raw, opts.endpoint)
+    if (resolved.origin !== new URL(opts.endpoint).origin) throw new Error('foreign upload location')
+    location = resolved.toString()
+  } catch {
+    throw new AppApiError('video_upload_failed')
+  }
   let offset = 0
   let failures = 0
   opts.onProgress(0)
@@ -2549,8 +2560,11 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     },
     async myCampaignReport(id) {
       const raw = await rpc<Record<string, unknown>>('app_my_campaign_report', { p_campaign: id })
-      const withheld = ['relevant', 'not_relevant', 'hidden', 'reported'].some((k) => raw[k] === null)
-      return { ...toCampaignReport(raw), feedbackWithheld: withheld }
+      const feedbackWithheld = ['relevant', 'not_relevant', 'hidden', 'reported'].some((k) => raw[k] === null)
+      const withheld = Object.keys(raw).filter((k) => raw[k] === null)
+      const byMatch = (raw.by_match ?? {}) as Record<string, Record<string, unknown>>
+      for (const [m, v] of Object.entries(byMatch)) for (const k of ['impressions', 'clicks']) if (v?.[k] === null) withheld.push(`by_match.${m}.${k}`)
+      return { ...toCampaignReport(raw), feedbackWithheld, withheld }
     },
     async features() {
       const { data, error } = await client.rpc('app_features')

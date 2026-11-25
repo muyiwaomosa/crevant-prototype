@@ -4356,7 +4356,7 @@ function creatorInsightsFixture(over: Partial<CreatorInsights> = {}): CreatorIns
     retention: { followers: 10, active_supporters: 3, clique: 2, returning: 4, connections_this_week: 5, connections_last_week: 3 },
     money: {
       actual_income_cents: 0,
-      simulated_by_month: [{ month: '2026-10-01', creator_cents: 4000, revenue_cents: 10000 }],
+      simulated_by_month: [{ month: '2026-10-01', creator_cents: 4000 }],
       ads_with_your_posts: [{ advertiser: 'Budgetly', campaign: 'Spring', impressions: 120, clicks: 6, posts: 2 }],
     },
     ...over,

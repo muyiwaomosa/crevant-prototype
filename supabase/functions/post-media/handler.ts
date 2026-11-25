@@ -456,6 +456,10 @@ async function handleVideo(req: Request, action: string, deps: Deps, asCaller: C
   }
 
   if (action === 'video-test-link') {
+    // The emergency stop covers device-test playback too.
+    const features = await asCaller('app_features', {})
+    if (!features.ok) return refuse(features)
+    if ((features.data as Record<string, unknown> | null)?.video_playback === false) return json(403, { error: 'videos_unavailable' })
     const body = await readJson(req)
     const id = typeof body?.uploadId === 'string' && UUID.test(body.uploadId) ? body.uploadId : null
     if (!id) return json(400, { error: 'invalid_request' })

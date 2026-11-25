@@ -262,7 +262,8 @@ stable
 security definer
 set search_path = ''
 as $$
-  select coalesce(sum(case when u.status = 'pending' then u.declared_bytes else u.full_bytes + coalesce(u.feed_bytes, 0) end), 0)::bigint
+  -- A pending upload counts at the 110 MB maximum: the signed token accepts up to that, whatever was declared.
+  select coalesce(sum(case when u.status = 'pending' then greatest(u.declared_bytes, 115343360) else u.full_bytes + coalesce(u.feed_bytes, 0) end), 0)::bigint
   from social.media_uploads u
   where u.user_id = p_user and u.kind = 'video'
     and (u.status in ('stored', 'published') or (u.status = 'pending' and u.created_at > pg_catalog.now() - interval '2 hours'))
