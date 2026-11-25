@@ -25,12 +25,12 @@ steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 | IP-3 Governance and its refinements | Deployed (database) | PRs #110, #111; applied Nov 25 20:34 | Acceptance |
 | IP-7 Advertising, image and video creatives, frequency caps | Deployed (database) | PRs #111, #112; applied Nov 25 20:34 | Acceptance |
 | IP-8 Intelligence (creator faces, My Split story, advertiser report, Control Center, North Star) | Deployed (database) | PR #112; applied Nov 25 20:34 | Acceptance |
-| IP-9a Unified account and progressive onboarding: optional goal question with no public label, inviter shown with Follow or Not now, My Split education, creator setup (3 posting topics, first post, invitation link), creator suggestions for members who post or chose topics | Merged | PR #113 | Staging deploy run 45696762050 (waiting for founder) |
-| IP-9a Control Center registration and invitation tools (pause, limits, creator-attributed links, list, revoke) | Merged | PR #113 | Staging deploy run 45696762050 (waiting for founder) |
-| IP-9a Advertising requests from the member's own account, routed to managed onboarding; the advertiser's own aggregate report | Merged | PR #113 | Staging deploy run 45696762050 (waiting for founder) |
+| IP-9a Unified account and progressive onboarding: optional goal question with no public label, inviter shown with Follow or Not now, My Split education, creator setup (3 posting topics, first post, invitation link), creator suggestions for members who post or chose topics | Deployed (database) | PR #113; applied Nov 25 21:46 | Acceptance after steps A to D |
+| IP-9a Control Center registration and invitation tools (pause, limits, creator-attributed links, list, revoke) | Deployed (database) | PR #113; applied Nov 25 21:46 | Acceptance after steps A to D |
+| IP-9a Advertising requests from the member's own account, routed to managed onboarding; the advertiser's own aggregate report | Deployed (database) | PR #113; applied Nov 25 21:46 | Acceptance after steps A to D |
 | IP-9b Landing page: signature line, Find your path (creators, members, advertisers; one destination), one disclosure band, Join the Waitlist or Join Splitpost wording switch, `/tour` retired | Merged | PR #113 | Deployed with the staging app; copy needs founder review |
-| IP-10a Privacy requests (copy, correction, deletion) and audited account deletion keeping the anonymous ledger | Merged | PR #113 | Staging deploy run 45696762050 (waiting for founder) |
-| IP-10a Operational switches (ads, sharing, video posts; registration, rewards and photos shown together) | Merged | PR #113 | Staging deploy run 45696762050 (waiting for founder) |
+| IP-10a Privacy requests (copy, correction, deletion) and audited account deletion keeping the anonymous ledger | Deployed (database) | PR #113; applied Nov 25 21:46 | Acceptance after steps A to D |
+| IP-10a Operational switches (ads, sharing, video posts; registration, rewards and photos shown together) | Deployed (database) | PR #113; applied Nov 25 21:46 | Acceptance after steps A to D |
 | IP-5 Video posts (everything except activation): conversion, resumable upload, server checks, player, limits, moderation and cleanup, device test page, separate upload and playback controls with an emergency stop, storage and delivery visibility | Tested (local) | Migration 20261213000000; database suite, rollback chain (113), 865 unit tests, 15 journeys in CI order; `docs/VIDEO.md` | Pull request CI and merge authorization; then the device test; Production needs separate authorization |
 | Four stakeholder journeys end to end (creator, consumer, advertiser, founder): `e2e/stakeholder-*.e2e.cjs`, each one continuous story through the real UI across engines, with WCAG 2.2 AA at 320 and 390 px | Tested (local) | All 19 journeys pass in CI order (creator 82, consumer 78, advertiser 48, founder 80 checks); two defects found and fixed (My Split education findable again; ad feedback buttons meet the 24 px target) | PR #114 |
 | Release hardening: security and authorization review (done; fixes in migration 20261214000000), cent-exact reconciliation inside the founder journey and test 260, restore drill, performance, monitoring, error handling | In development | Review findings H1, M1, M2, L1 to L5 fixed and tested; rollback chain 116 | PR #114; then performance, restore drill and monitoring |
@@ -45,7 +45,7 @@ steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 
 ## Critical path to December 23
 
-1. **Working staging** (founder: approve run 45696762050, steps A to D; the rest of the database is current). This
+1. **Working staging** (founder: steps A to D; the staging database is current with everything merged). This
    is the main schedule risk: until it is done, no hands-on acceptance can
    start. Everything else continues in parallel.
 2. **Video pull request** merged and deployed (needs the D7 approval), and the

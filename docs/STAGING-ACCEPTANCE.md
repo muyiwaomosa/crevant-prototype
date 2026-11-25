@@ -12,7 +12,7 @@ before; **independent** ones can be done any time, in any order.
 | # | Action | Where | Depends on | Expected result | How Claude verifies |
 |---|---|---|---|---|---|
 | ✓ | Database deploy run 45677972966 (20261204000000 to 20261210000000) | | | **Done Nov 25, 20:34 UTC**: applied, every staging security and separation check passed | Read the run log |
-| 1 | **Approve the database deploy** [run 45696762050](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45696762050): 20261211000000 (unified onboarding) and 20261212000000 (privacy requests and switches), then every staging check | GitHub, the run, **Review deployments, staging, Approve** | Nothing | The run is green | Reads the run log and reports |
+| ✓ | Database deploy run 45696762050 (20261211000000 and 20261212000000) | | | **Done Nov 25, 21:46 UTC**: applied, every staging security and separation check passed | Read the run log |
 | 2 | **Step A: Vercel builds the staging app** (5 minutes) | Vercel, section 2 | Nothing | `splitpost-app-git-staging-crevant.vercel.app` loads the sign-in page | Pushes `staging`, loads the address |
 | 3 | **Step B: Resend sends staging email** (15 minutes plus DNS time) | Resend and Supabase, section 2 | Nothing (start now: DNS can take hours) | A password reset arrives from "Splitpost" | Asks you to confirm the email arrived |
 | 4 | **Step C: Supabase Auth** (10 minutes) | Supabase dashboard, section 2 | **Can be done now** (the account hook exists on staging since run 45677972966) | Signing up through a link works; a sign up without a link is refused | Runs the staging checks again |
@@ -37,9 +37,8 @@ app branch follows `main`, so you can accept features as they land.
 
 | Layer | Status | What you do |
 |---|---|---|
-| **Database deploy waiting for you** | [run 45696762050](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45696762050) applies 20261211000000 and 20261212000000 | **Review deployments, staging, Approve** |
-| Database already applied | Every migration up to 20261210000000, last applied Nov 25 at 20:34 (run 45677972966), all staging checks passed | Nothing |
-| Next database deploy | 20261213000000 (video posts), after its pull request merges | Approve the one run when it appears |
+| Database | Every merged migration, up to 20261212000000, applied Nov 25 at 21:46 (run 45696762050), all staging checks passed | Nothing |
+| Next database deploy | 20261213000000 (video posts) and 20261214000000 (release hardening) together, after PR #114 merges | Approve the one run when it appears |
 | Staging app (Vercel) | Not building yet: `splitpost-app` builds only an older branch | Step A |
 | Email | Supabase's default sender: team addresses only, about two an hour | Step B |
 | Auth (sign up through links, the account hook, Splitpost emails) | Not configured | Step C (ready now) |
@@ -71,9 +70,10 @@ once the deploy above is approved and steps A to D are done.
 | 20261208000000 | Advertising | Applied Nov 25 (run 45677972966) |
 | 20261209000000 | Image and video ad creatives, frequency caps, restored points outside daily caps | Applied Nov 25 (run 45677972966) |
 | 20261210000000 | Intelligence | Applied Nov 25 (run 45677972966) |
-| 20261211000000 | Unified onboarding: creator setup, invitations, advertising requests | In run 45696762050 |
-| 20261212000000 | Privacy requests, account deletion, switches | In run 45696762050 |
-| 20261213000000 | Video posts (uploads, playback and emergency controls, device tests) | After its merge |
+| 20261211000000 | Unified onboarding: creator setup, invitations, advertising requests | Applied Nov 25 (run 45696762050) |
+| 20261212000000 | Privacy requests, account deletion, switches | Applied Nov 25 (run 45696762050) |
+| 20261213000000 | Video posts (uploads, playback and emergency controls, device tests) | After PR #114 merges |
+| 20261214000000 | Release hardening (deletion with full history, advertiser thresholds, locks) | After PR #114 merges |
 
 ---
 
