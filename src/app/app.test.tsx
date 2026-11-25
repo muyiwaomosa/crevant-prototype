@@ -41,7 +41,7 @@ vi.mock('./photoPrep', async (importOriginal) => {
   }
 })
 import { clampOffset, coverScale, sourceRect } from './avatars'
-import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from './pages'
+import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage, SavedPage } from './pages'
 import { MySplitPage } from './split'
 
 afterEach(cleanup)
@@ -86,6 +86,12 @@ function fakeApi(
   const mutes = new Set<string>()
   const followSources = new Map<string, string | undefined>()
   const supportIntents = new Map<string, string>()
+  // Content (20261202000000): topics, edits, saves, reposts.
+  const postTopics = new Map<string, string>()
+  const edits = new Map<string, Array<{ previousBody: string; previousTopic: string | null; editedAt: string }>>()
+  const saves = new Map<string, number>()
+  const reposts = new Set<string>()
+  const shares: Array<{ id: string; channel: string }> = []
   const likes = new Set<string>()
   const comments: Array<{ id: string; post: string; author: string; body: string; at: number; deleted: boolean }> = []
   let clock = Date.parse('2026-11-17T12:00:00Z')
@@ -635,6 +641,107 @@ function fakeApi(
       complete()
       return (supportIntents.get(key(meId, id)) ?? null) as 'usd_3' | 'usd_5' | 'usd_10' | 'not_sure' | null
     },
+    async postMeta(ids) {
+      complete()
+      const out: Record<string, { topic: string | null; topicLabel: string | null; editedAt: string | null; savedByMe: boolean; repostCount: number; repostedByMe: boolean }> = {}
+      for (const id of ids) {
+        const p = posts.find((x) => x.id === id && !x.deleted)
+        if (!p) continue
+        const t = postTopics.get(id) ?? null
+        out[id] = {
+          topic: t,
+          topicLabel: t ? (topicList.find((x) => x.slug === t)?.label ?? t) : null,
+          editedAt: edits.get(id)?.[0]?.editedAt ?? null,
+          savedByMe: saves.has(key(meId, id)),
+          repostCount: [...reposts].filter((k) => k.endsWith(`>${id}`)).length,
+          repostedByMe: reposts.has(key(meId, id)),
+        }
+      }
+      return out
+    },
+    async setPostTopic(id, topic) {
+      const p = posts.find((x) => x.id === id && !x.deleted && x.author === meId)
+      if (!p || postTopics.has(id)) throw new AppApiError('not_found')
+      if (!topicList.some((t) => t.slug === topic)) throw new AppApiError('unknown_topic')
+      postTopics.set(id, topic)
+    },
+    async editPost(id, body, topic) {
+      maybeFail('editPost')
+      const p = posts.find((x) => x.id === id && !x.deleted && x.author === meId)
+      if (!p) throw new AppApiError('not_found')
+      const b = body.trim()
+      if (!b && !p.media) throw new AppApiError('empty')
+      if (b === p.body && (topic ?? null) === (postTopics.get(id) ?? null)) return
+      edits.set(id, [{ previousBody: p.body, previousTopic: postTopics.get(id) ?? null, editedAt: new Date((clock += 1000)).toISOString() }, ...(edits.get(id) ?? [])])
+      p.body = b
+      if (topic) postTopics.set(id, topic)
+      else postTopics.delete(id)
+    },
+    async postEdits(id) {
+      return edits.get(id) ?? []
+    },
+    async save(id) {
+      maybeFail('save')
+      live(id)
+      if (!saves.has(key(meId, id))) saves.set(key(meId, id), (clock += 1000))
+    },
+    async unsave(id) {
+      saves.delete(key(meId, id))
+    },
+    async savedPosts(before) {
+      complete()
+      return [...saves]
+        .filter(([k]) => k.startsWith(`${meId}>`))
+        .map(([k, at]) => ({ p: posts.find((x) => x.id === k.split('>')[1] && !x.deleted), at }))
+        .filter((x): x is { p: (typeof posts)[number]; at: number } => !!x.p)
+        .sort((a, b) => b.at - a.at)
+        .filter((x) => !before || x.at < Date.parse(before.createdAt))
+        .map((x) => ({ ...toP(x.p), activityAt: new Date(x.at).toISOString() }))
+    },
+    // Discovery (20261203000000), with the database's rules.
+    async discoverPosts(topic) {
+      complete()
+      const mineT = detailsOf(meId).topics
+      const perAuthor = new Map<string, number>()
+      return posts
+        .filter((p) => !p.deleted && p.author !== meId && !follows.has(key(meId, p.author)) && !mutes.has(key(meId, p.author)))
+        .filter((p) => {
+          const t = postTopics.get(p.id)
+          return !!t && (topic ? t === topic : mineT.length === 0 || mineT.includes(t))
+        })
+        .sort(newestFirst)
+        .filter((p) => {
+          const n = (perAuthor.get(p.author) ?? 0) + 1
+          perAuthor.set(p.author, n)
+          return n <= 2
+        })
+        .map((p) => {
+          const label = topicList.find((t) => t.slug === postTopics.get(p.id))?.label ?? ''
+          return { ...toP(p), reason: topic ? `In ${label}, the topic you chose` : `Because you're interested in ${label}` }
+        })
+    },
+    async searchPosts(q) {
+      complete()
+      if (q.trim().length < 2) throw new AppApiError('invalid_query')
+      const w = q.trim().toLowerCase()
+      return posts
+        .filter((p) => !p.deleted && !mutes.has(key(meId, p.author)))
+        .filter((p) => p.body.toLowerCase().includes(w) || (topicList.find((t) => t.slug === postTopics.get(p.id))?.label.toLowerCase().includes(w) ?? false))
+        .sort(newestFirst)
+        .map(toP)
+    },
+    async recordShare(id, channel) {
+      shares.push({ id, channel })
+    },
+    async repost(id) {
+      const p = posts.find((x) => x.id === id && !x.deleted)
+      if (!p) throw new AppApiError('not_found')
+      if (p.author === meId) throw new AppApiError('cannot_repost_own')
+      reposts.add(key(meId, id))
+    },
+    async unrepost(id) {
+      reposts.delete(key(meId, id))
+    },
     async recordSupportIntent(id, choice) {
       maybeFail('recordSupportIntent')
       if (id === meId) throw new AppApiError('invalid_request')
@@ -749,7 +856,7 @@ function fakeApi(
     reports.push({ ...r, id, status: 'open', at: (clock += 1000) })
     return id
   }
-  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
+  return { api, photo, posts, feedback, feedbackCalls, isFounder, seedPost, follows, clique, mutes, followSources, supportIntents, postTopics, edits, saves, reposts, shares, failures, key, views, marks, followedAt, access, setDetails, savedDetails, details, reports, modActions, isModerator, seedReport, pictures, pictureCalls, storage }
 }
 
 const SESSION = { access_token: 't', refresh_token: 'r', user: { id: 'me', email: 'mia@example.test' } }
@@ -774,6 +881,7 @@ function renderApp(path: string, api: AppApi) {
             <Route path="post/:id" element={<PostPage />} />
             <Route path="u/:username" element={<MemberPage />} />
             <Route path="clique" element={<CliquePage />} />
+            <Route path="saved" element={<SavedPage />} />
             <Route path="split" element={<MySplitPage />} />
             <Route path="catch-up/:username" element={<CatchUpPage />} />
             <Route path="profile" element={<ProfilePage />} />
@@ -854,7 +962,7 @@ describe('pilot membership (20261122000000): signed in is not enough', () => {
   }
 
   it('the same for every member page, not just the feed', async () => {
-    for (const path of ['/app/discover', '/app/new', '/app/clique', '/app/profile', '/app/u/creator_1', '/app/post/p1']) {
+    for (const path of ['/app/discover?face=creators', '/app/new', '/app/clique', '/app/profile', '/app/u/creator_1', '/app/post/p1']) {
       const { api, access } = fakeApi()
       access.status = 'none'
       const { unmount } = renderApp(path, api)
@@ -1045,7 +1153,7 @@ describe('first-time setup and profile details (20261123000000)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
     cleanup()
-    renderApp('/app/discover', f.api)
+    renderApp('/app/discover?face=creators', f.api)
     expect(await screen.findByRole('link', { name: 'Creator 1' })).toBeTruthy()
     expect(screen.queryByText('Browse by interest')).toBeNull()
     cleanup()
@@ -1060,7 +1168,7 @@ describe('first-time setup and profile details (20261123000000)', () => {
     f.setDetails('me', { topics: ['food'] })
     f.setDetails('c1', { identity: 'creator', bio: 'Budget recipes.', followReason: 'A new recipe every week', topics: ['food'] })
     f.setDetails('c2', { identity: 'both', topics: ['travel'] })
-    renderApp('/app/discover', f.api)
+    renderApp('/app/discover?face=creators', f.api)
     const items = await screen.findAllByRole('listitem')
     expect(within(items[0]).getByRole('link', { name: 'Creator 1' })).toBeTruthy()
     expect(within(items[0]).getByText('Shares 1 of your interests')).toBeTruthy()
@@ -1292,7 +1400,7 @@ describe('Clique confirmation (the suggestion card fix)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Go to my feed' }))
     await screen.findByRole('heading', { name: 'Home' })
     cleanup()
-    renderApp('/app/discover', f.api)
+    renderApp('/app/discover?face=creators', f.api)
     expect(await screen.findByRole('button', { name: 'In your Clique (Creator 1, tap to remove)' })).toBeTruthy()
   })
 
@@ -1358,7 +1466,7 @@ describe('profile pictures (20261125000000)', () => {
     const other = screen.getAllByTestId('post').find((p) => p.textContent?.includes('Without one'))!
     expect(other.querySelector('img[src^="https://pics.test"]')).toBeNull()
     cleanup()
-    const d = renderApp('/app/discover', f.api)
+    const d = renderApp('/app/discover?face=creators', f.api)
     await screen.findByRole('link', { name: 'Creator 1' })
     await waitFor(() => expect(d.container.querySelector('img[src="https://pics.test/c1.jpg"]')).toBeTruthy())
   })
@@ -1604,7 +1712,7 @@ describe('Following and My Clique', () => {
   it('following never adds someone to the Clique; adding is a separate choice, shown everywhere', async () => {
     const { api, seedPost } = fakeApi()
     seedPost('c1', 'Hello from Creator 1')
-    renderApp('/app/discover', api)
+    renderApp('/app/discover?face=creators', api)
     fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 1' }))
     expect(await screen.findByRole('button', { name: 'Following (Creator 1, tap to unfollow)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Join Clique (Creator 1)' }))
@@ -1701,7 +1809,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
   it('Discover cards link to the profile and posts, and lead from a follow to the next steps', async () => {
     const { api, seedPost, clique, key } = fakeApi()
     seedPost('c1', 'First post from Creator 1')
-    renderApp('/app/discover', api)
+    renderApp('/app/discover?face=creators', api)
     const card = within((await screen.findByRole('link', { name: 'Creator 1' })).closest('li')!)
     expect(card.getByRole('link', { name: 'See posts by Creator 1' }).getAttribute('href')).toBe('/app/u/creator_1#posts')
     expect(card.queryByRole('button', { name: 'Following (Creator 1, tap to unfollow)' })).toBeNull()
@@ -1725,7 +1833,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
   it('"See their posts" opens the profile at its posts', async () => {
     const { api, seedPost } = fakeApi()
     seedPost('c2', 'Something worth reading')
-    renderApp('/app/discover', api)
+    renderApp('/app/discover?face=creators', api)
     fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 2' }))
     fireEvent.click(await screen.findByRole('link', { name: 'See their posts' }))
     expect(await screen.findByRole('heading', { name: 'Creator 2', level: 1 })).toBeTruthy()
@@ -1735,7 +1843,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
 
   it('without posts, there is no "See posts" link, and the profile says what happens when they post', async () => {
     const { api } = fakeApi()
-    renderApp('/app/discover', api)
+    renderApp('/app/discover?face=creators', api)
     const card = within((await screen.findByRole('link', { name: 'Creator 3' })).closest('li')!)
     expect(card.queryByRole('link', { name: /posts/ })).toBeNull()
     fireEvent.click(card.getByRole('button', { name: 'Follow Creator 3' }))
@@ -1766,7 +1874,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     await screen.findByRole('button', { name: 'Following (Creator 1, tap to unfollow)' })
     expect(fake.followSources.get(fake.key('me', 'c1'))).toBe('profile')
     cleanup()
-    renderApp('/app/discover', fake.api)
+    renderApp('/app/discover?face=creators', fake.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Follow Creator 2' }))
     await screen.findByRole('button', { name: 'Following (Creator 2, tap to unfollow)' })
     expect(fake.followSources.get(fake.key('me', 'c2'))).toBe('discover')
@@ -1865,14 +1973,14 @@ describe('Discover, follow, add to Clique, read their posts', () => {
 
   it('a search with no matches offers to show everyone again', async () => {
     const { api } = fakeApi()
-    renderApp('/app/discover', api)
+    renderApp('/app/discover?face=creators', api)
     await screen.findByRole('link', { name: 'Creator 1' })
-    fireEvent.change(screen.getByLabelText('Search people by name or username'), { target: { value: 'zzz' } })
+    fireEvent.change(screen.getByLabelText('Search people, posts and topics'), { target: { value: 'zzz' } })
     fireEvent.click(screen.getByRole('button', { name: 'Search' }))
-    expect(await screen.findByText('No one matches "zzz". Try a different name or username.')).toBeTruthy()
+    expect(await screen.findByText('Nothing matches "zzz". Try a different name, username or word.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Show everyone' }))
     expect(await screen.findByRole('link', { name: 'Creator 1' })).toBeTruthy()
-    expect((screen.getByLabelText('Search people by name or username') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Search people, posts and topics') as HTMLInputElement).value).toBe('')
   })
 })
 
@@ -2080,7 +2188,7 @@ describe('member-facing copy never says "Inner Clique"', () => {
     for (let i = 1; i <= 27; i++) fake.follows.add(fake.key('me', `c${i}`))
     for (let i = 1; i <= 25; i++) fake.clique.add(fake.key('me', `c${i}`))
     fake.seedPost('c1', 'A post from someone in my Clique')
-    for (const path of ['/app', '/app/discover', '/app/profile', '/app/u/creator_1', '/app/u/creator_26']) {
+    for (const path of ['/app', '/app/discover?face=creators', '/app/profile', '/app/u/creator_1', '/app/u/creator_26']) {
       renderApp(path, fake.api)
       await waitFor(() => expect(document.body.textContent).not.toMatch(/Loading|Checking/))
       expect(shownCopy()).not.toMatch(OLD)
@@ -2246,7 +2354,7 @@ describe('the members area', () => {
     const { api, seedPost, follows, key } = fakeApi()
     seedPost('c1', 'Hello')
     follows.add(key('me', 'c1'))
-    for (const path of ['/app', '/app/discover', '/app/clique', '/app/profile']) {
+    for (const path of ['/app', '/app/discover?face=creators', '/app/clique', '/app/profile']) {
       renderApp(path, api)
       await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
       expect(document.body.textContent).not.toMatch(/Connection Points|\bCP\b|reward|cash|\$/i)
@@ -2276,7 +2384,7 @@ describe('feedback (Build 5.2c)', () => {
 
   it('Send feedback is in the phone header and the sidebar, and the form says where it came from', async () => {
     const f = fakeApi()
-    renderApp('/app/discover', f.api)
+    renderApp('/app/discover?face=creators', f.api)
     await waitFor(() => expect(sendLinks()).toHaveLength(2))
     fireEvent.click(sendLinks()[0])
     expect(await screen.findByRole('heading', { name: 'Help us improve Splitpost' })).toBeTruthy()
@@ -2638,5 +2746,132 @@ describe('photo posts (Build 5.3)', () => {
     await screen.findByRole('heading', { name: 'Photo storage' })
     expect(screen.getByText('Off')).toBeTruthy()
     expect(screen.getByText(/hasn't run in the last 2 hours/)).toBeTruthy()
+  })
+})
+
+describe('content (20261202000000): topics, saves, reposts, editing', () => {
+  it('a post can carry a topic from the composer, shown on its card', async () => {
+    const fake = fakeApi()
+    renderApp('/app/new', fake.api)
+    fireEvent.change(await screen.findByLabelText('Write a post'), { target: { value: 'My weekly budget, explained' } })
+    fireEvent.change(await screen.findByLabelText('Topic (optional)'), { target: { value: 'money' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    expect(await screen.findByTestId('post-topic')).toBeTruthy()
+    expect(screen.getByTestId('post-topic').textContent).toBe('Money & business')
+    expect([...fake.postTopics.values()]).toEqual(['money'])
+  })
+
+  it('saving keeps a post in the private Saved list; tapping again removes it', async () => {
+    const fake = fakeApi()
+    fake.follows.add(fake.key('me', 'c1'))
+    fake.seedPost('c1', 'Worth keeping')
+    renderApp('/app?face=following', fake.api)
+    const card = within(await screen.findByTestId('post'))
+    fireEvent.click(await card.findByRole('button', { name: 'Save' }))
+    expect(await card.findByRole('button', { name: 'Saved (tap to remove)' })).toBeTruthy()
+    cleanup()
+    renderApp('/app/saved', fake.api)
+    expect(await screen.findByText('Worth keeping')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'Saved (tap to remove)' }))
+    await waitFor(() => expect(fake.saves.size).toBe(0))
+    cleanup()
+    renderApp('/app/saved', fake.api)
+    expect(await screen.findByText('Nothing saved yet')).toBeTruthy()
+  })
+
+  it('reposting someone else\'s post counts it; your own posts offer no repost', async () => {
+    const fake = fakeApi()
+    fake.follows.add(fake.key('me', 'c1'))
+    fake.seedPost('c1', 'Share this one')
+    fake.seedPost('me', 'My own post')
+    renderApp('/app?face=following', fake.api)
+    const others = within((await screen.findAllByTestId('post')).find((p) => p.textContent?.includes('Share this one'))!)
+    fireEvent.click(await others.findByRole('button', { name: 'Repost, 0 reposts' }))
+    expect(await others.findByRole('button', { name: 'Undo repost, 1 repost' })).toBeTruthy()
+    expect(fake.reposts.has(fake.key('me', 'p001'))).toBe(true)
+    const mine = within(screen.getAllByTestId('post').find((p) => p.textContent?.includes('My own post'))!)
+    expect(mine.queryByRole('button', { name: /Repost/ })).toBeNull()
+  })
+
+  it('the author edits their post: the text and topic change, "Edited" shows, and the earlier version is kept', async () => {
+    const fake = fakeApi()
+    const id = fake.seedPost('me', 'First draft')
+    renderApp(`/app/post/${id}`, fake.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit post' }))
+    const editor = within(screen.getByTestId('post-editor'))
+    fireEvent.change(editor.getByLabelText('Edit your post'), { target: { value: 'Final version' } })
+    fireEvent.change(editor.getByLabelText('Topic'), { target: { value: 'tech' } })
+    expect(editor.getByText(/People will see that this post was edited/)).toBeTruthy()
+    fireEvent.click(editor.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText('Final version')).toBeTruthy()
+    expect(await screen.findByTestId('post-edited')).toBeTruthy()
+    expect(screen.getByTestId('post-topic').textContent).toBe('Tech')
+    expect(fake.edits.get(id)?.[0]).toMatchObject({ previousBody: 'First draft', previousTopic: null })
+  })
+
+  it('a reposted post on Home says who reposted it', async () => {
+    const fake = fakeApi()
+    const post = toPost({
+      id: 'p9', author_id: 'c2', author_username: 'creator_2', author_display_name: 'Creator 2', body: 'Reached you through a repost',
+      created_at: '2026-11-17T12:00:00Z', like_count: 0, comment_count: 0, liked_by_me: false, author_in_my_clique: false, is_mine: false,
+      activity_at: '2026-11-17T13:00:00Z', reposted_by_id: 'c1', reposted_by_username: 'creator_1', reposted_by_display_name: 'Creator 1',
+    })
+    expect(post.repostedBy).toEqual({ id: 'c1', username: 'creator_1', displayName: 'Creator 1' })
+    expect(post.activityAt).toBe('2026-11-17T13:00:00Z')
+    fake.api.feed = async () => [post]
+    renderApp('/app?face=following', fake.api)
+    expect((await screen.findByTestId('reposted-by')).textContent).toMatch(/Reposted by Creator 1/)
+  })
+})
+
+describe('discovery (20261203000000): value and intent based, search, share', () => {
+  it('Discover opens on For you: posts in your interests from people you don\'t follow, each with its reason, two per creator', async () => {
+    const fake = fakeApi()
+    fake.setDetails('me', { topics: ['money'] })
+    for (const [author, body, topic] of [
+      ['c1', 'Budget one', 'money'], ['c1', 'Budget two', 'money'], ['c1', 'Budget three', 'money'],
+      ['c2', 'A recipe', 'food'], ['c3', 'Followed already', 'money'],
+    ] as const) fake.postTopics.set(fake.seedPost(author, body), topic)
+    fake.follows.add(fake.key('me', 'c3'))
+    renderApp('/app/discover', fake.api)
+    expect((await screen.findByRole('tab', { name: 'For you' })).getAttribute('aria-selected')).toBe('true')
+    await screen.findByText('Budget three')
+    const bodies = screen.getAllByTestId('post').map((p) => p.textContent ?? '')
+    expect(bodies).toHaveLength(2)
+    expect(bodies.some((b) => b.includes('Budget one'))).toBe(false)
+    expect(screen.getAllByTestId('discover-reason').map((r) => r.textContent?.trim())).toEqual([
+      "Because you're interested in Money & business",
+      "Because you're interested in Money & business",
+    ])
+    // A focus for this visit, never stored.
+    fireEvent.click(screen.getByRole('button', { name: 'Food & cooking' }))
+    expect(await screen.findByText('A recipe')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Food & cooking' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText("Your choice here only shapes this visit. It isn't saved.")).toBeTruthy()
+  })
+
+  it('search finds people, posts and topics together', async () => {
+    const fake = fakeApi()
+    fake.postTopics.set(fake.seedPost('c2', 'Weekend travel on a budget'), 'travel')
+    renderApp('/app/discover', fake.api)
+    fireEvent.change(await screen.findByLabelText('Search people, posts and topics'), { target: { value: 'travel' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    const posts = within(await screen.findByRole('region', { name: 'Posts' }))
+    expect(posts.getByText('Weekend travel on a budget')).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Topics' })).getByText('Travel')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(await screen.findByRole('tab', { name: 'For you' })).toBeTruthy()
+  })
+
+  it('Share copies the post link where there is no share sheet, and records the share', async () => {
+    const fake = fakeApi()
+    const id = fake.seedPost('c1', 'Pass this on')
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    renderApp(`/app/post/${id}`, fake.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
+    expect(await screen.findByRole('button', { name: 'Link copied' })).toBeTruthy()
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/app/post/${id}`)
+    await waitFor(() => expect(fake.shares).toEqual([{ id, channel: 'copy_link' }]))
   })
 })

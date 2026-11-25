@@ -1,19 +1,20 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, Compass, MessageCircle, Search, Trash2, UserPlus, Users } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, Compass, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
-import { LIMITS, type Comment, type FeedFilter, type Member, type Me, type Post, type PostCursor } from './api'
+import { LIMITS, cursorOf, type Comment, type FeedFilter, type Member, type Me, type Post, type PostCursor } from './api'
 import { FaceView } from '../components/FaceView'
 import { useAppApi, useMyProfile } from './AppApiContext'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
 import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
-import { DetailsEditor, MemberAbout, PersonSummary, SuggestedPeople, useTopics } from './profileDetails'
+import { DetailsEditor, MemberAbout, SuggestedPeople, useTopics } from './profileDetails'
 import { ReportButton, useModeration } from './moderation'
 import { PostComposer, usePhotosEnabled } from './media'
 import { ProfilePictureField } from './avatars'
 import { AudienceInsight, SupportButton } from './relationships'
+import { categorize } from './content'
 
 /** Loads data for a page, with loading and error states and a reload function. */
 function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
@@ -79,7 +80,7 @@ function PostList({
     setError(null)
     try {
       // The next page starts strictly after the last post shown (time, then id), so none is skipped.
-      const next = await loadOlder({ createdAt: last.createdAt, id: last.id })
+      const next = await loadOlder(cursorOf(last))
       setOlder((o) => {
         const seen = new Set([...posts, ...o].map((x) => x.id))
         return [...o, ...next.filter((x) => !seen.has(x.id))]
@@ -174,8 +175,9 @@ function HomeFeed({
           <PostComposer
             label="Write a post"
             placeholder="Share something with the people who follow you…"
-            onPost={async ({ text, requestId, photo }) => {
-              await (photo ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description) : api.createPost(text, requestId))
+            onPost={async ({ text, requestId, photo, topic }) => {
+              const id = await (photo ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description) : api.createPost(text, requestId))
+              await categorize(api, id, topic)
               await feed.reload()
             }}
           />
@@ -487,8 +489,9 @@ export function ComposePage() {
           label="Write a post"
           placeholder="What do you want to share?"
           rows={6}
-          onPost={async ({ text, requestId, photo }) => {
+          onPost={async ({ text, requestId, photo, topic }) => {
             const id = await (photo ? api.createPhotoPost(text, requestId, photo.uploadId, photo.description) : api.createPost(text, requestId))
+            await categorize(api, id, topic)
             navigate(`/app/post/${id}`)
           }}
         />
@@ -500,105 +503,7 @@ export function ComposePage() {
 // ---------------------------------------------------------------------------
 // Discover people.
 
-export function DiscoverPage() {
-  const api = useAppApi()
-  const [query, setQuery] = useState('')
-  const [submitted, setSubmitted] = useState('')
-  const [topic, setTopic] = useState('')
-  const { topics } = useTopics()
-  const list = useLoad(() => api.discover(submitted, topic || undefined), [api, submitted, topic])
-  const mine = useLoad(async () => (await api.myDetails().catch(() => null))?.topics ?? [], [api])
-  const topicLabel = topics?.find((t) => t.slug === topic)?.label
-
-  function search(e: FormEvent) {
-    e.preventDefault()
-    setSubmitted(query.trim())
-  }
-
-  return (
-    <>
-      <PageHeader title="Discover" subtitle="Find people to follow. People who share your interests come first, then the most recently active." />
-      <form onSubmit={search} role="search" className="mb-4 flex gap-2">
-        <label htmlFor="discover-search" className="sr-only">
-          Search people by name or username
-        </label>
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true" />
-          <input
-            id="discover-search"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name or username"
-            className="block h-12 w-full rounded-2xl border border-ink-200 bg-white pl-10 pr-4 text-base text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-          />
-        </div>
-        <button type="submit" className={buttonClass('secondary')}>
-          Search
-        </button>
-      </form>
-      {topics && topics.length > 0 && (
-        <div className="mb-4">
-          <label htmlFor="discover-topic" className="mb-1.5 block text-sm font-semibold text-ink-700">
-            Browse by interest
-          </label>
-          <select
-            id="discover-topic"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            className="block h-12 w-full rounded-2xl border border-ink-200 bg-white px-4 text-base text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-          >
-            <option value="">Everyone</option>
-            {topics.map((t) => (
-              <option key={t.slug} value={t.slug}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      {list.loading && !list.data && <Loading label="Finding people…" />}
-      {list.error !== null && <ErrorNote error={list.error} />}
-      {list.data && list.data.length === 0 && (
-        <EmptyState
-          icon={<Search className="h-7 w-7" />}
-          title="Nobody found"
-          body={
-            submitted
-              ? `No one matches "${submitted}"${topicLabel ? ` in ${topicLabel}` : ''}. Try a different name or username.`
-              : topicLabel
-                ? `Nobody has chosen ${topicLabel} yet. Try another interest.`
-                : 'No other members yet. Invited members will appear here.'
-          }
-          action={
-            submitted || topic ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery('')
-                  setSubmitted('')
-                  setTopic('')
-                }}
-                className={buttonClass('secondary')}
-              >
-                Show everyone
-              </button>
-            ) : undefined
-          }
-        />
-      )}
-      {list.data && list.data.length > 0 && (
-        <ul className="space-y-3">
-          {list.data.map((m) => (
-            <li key={m.id}>
-              <PersonSummary member={m} topics={topics} myTopics={mine.data} onChange={list.reload} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  )
-}
+export { DiscoverPage } from './discover'
 
 // ---------------------------------------------------------------------------
 // A member's page.
@@ -804,6 +709,41 @@ function CommentItem({ comment, onDeleted }: { comment: Comment; onDeleted: () =
 }
 
 // ---------------------------------------------------------------------------
+// Saved posts (20261202000000): private to the member, most recently saved first.
+
+export function SavedPage() {
+  const api = useAppApi()
+  const saved = useLoad(() => api.savedPosts(), [api])
+  return (
+    <>
+      <PageHeader title="Saved" subtitle="Posts you saved. Only you can see this list." />
+      {saved.loading && saved.data === undefined && <Loading label="Loading your saved posts…" />}
+      {saved.error !== null && <ErrorNote error={saved.error} />}
+      {saved.data === null && <Message tone="info">Saving posts isn't available yet.</Message>}
+      {saved.data && saved.data.length === 0 && (
+        <EmptyState
+          icon={<Bookmark className="h-7 w-7" />}
+          title="Nothing saved yet"
+          body="Tap the bookmark on any post to keep it here."
+          action={
+            <Link to="/app" className={buttonClass('primary')}>
+              Back to Home
+            </Link>
+          }
+        />
+      )}
+      {saved.data && saved.data.length > 0 && (
+        <PostList
+          posts={saved.data}
+          loadOlder={async (before) => (await api.savedPosts(before)) ?? []}
+          onDeleted={(id) => saved.setData((d) => d?.filter((p) => p.id !== id))}
+        />
+      )}
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Your Clique and everyone you follow (relationship management): src/app/relationships.tsx.
 export { CliquePage } from './relationships'
 
@@ -836,6 +776,9 @@ export function ProfilePage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <Link to={`/app/u/${profile.username}`} className={buttonClass('secondary', 'sm')}>
               <UserPlus className="h-4 w-4" aria-hidden="true" /> View your public page
+            </Link>
+            <Link to="/app/saved" className={buttonClass('secondary', 'sm')}>
+              <Bookmark className="h-4 w-4" aria-hidden="true" /> Saved
             </Link>
             <Link to="/app/account" className={buttonClass('secondary', 'sm')}>
               Your account

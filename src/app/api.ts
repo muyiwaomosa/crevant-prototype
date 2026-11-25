@@ -38,7 +38,24 @@ export interface Post {
   isMine: boolean
   /** Photo posts (20261127000000): the photo's shape and description; null or absent for text posts. */
   media?: PostMedia | null
+  /** Home with reposts (20261202000000): when this item reached the feed (the repost time for a repost). */
+  activityAt?: string
+  /** Who reposted it to this member, when it reached Home as a repost. */
+  repostedBy?: MemberSummary | null
+  /** Discovery (20261203000000): why this post was suggested. */
+  reason?: string
 }
+
+/** Card details (20261202000000), fetched for many posts at once. */
+export interface PostMeta {
+  topic: string | null
+  topicLabel: string | null
+  editedAt: string | null
+  savedByMe: boolean
+  repostCount: number
+  repostedByMe: boolean
+}
+export type PostEdit = { previousBody: string; previousTopic: string | null; editedAt: string }
 
 export type PostMedia = { kind: 'photo'; width: number; height: number; description: string | null }
 /** Signed links (valid for an hour) to a post's photo: the 800 px feed copy and the full 1600 px one. */
@@ -395,6 +412,24 @@ export interface AppApi {
   /** The member's own current Support Intent for a creator (null: none). undefined before 20261201000000. */
   supportIntent(creatorId: string): Promise<SupportChoice | null | undefined>
   recordSupportIntent(creatorId: string, choice: SupportChoice | 'withdrawn'): Promise<void>
+  /** Content (20261202000000). Card details for posts; null before the migration. */
+  postMeta(postIds: string[]): Promise<Record<string, PostMeta> | null>
+  /** Gives a just-published post its topic (once). */
+  setPostTopic(postId: string, topic: string): Promise<void>
+  editPost(postId: string, body: string, topic: string | null): Promise<void>
+  postEdits(postId: string): Promise<PostEdit[]>
+  save(postId: string): Promise<void>
+  unsave(postId: string): Promise<void>
+  /** Saved posts, most recently saved first; null before the migration. */
+  savedPosts(before?: PostCursor): Promise<Post[] | null>
+  repost(postId: string): Promise<void>
+  unrepost(postId: string): Promise<void>
+  /** Discovery (20261203000000): posts in the member's interests (or one topic) from people they don't follow; null before it. */
+  discoverPosts(topic?: string): Promise<Post[] | null>
+  /** Posts matching words or a topic name; null before the migration. Nothing about a search is stored. */
+  searchPosts(query: string): Promise<Post[] | null>
+  /** Records a share (copy link or share sheet). Best effort: sharing still works if this fails. */
+  recordShare(postId: string, channel: 'copy_link' | 'share_sheet'): Promise<void>
   like(postId: string): Promise<void>
   unlike(postId: string): Promise<void>
   /** requestId: as for createPost. */
@@ -481,6 +516,8 @@ const MESSAGES: Record<string, string> = {
   clique_full: 'Your Clique is full for now. Remove someone from it, then try again.',
   not_in_clique: 'That creator is no longer in your Clique. Nothing was changed.',
   already_in_clique: 'That creator is already in your Clique. Nothing was changed.',
+  cannot_repost_own: "You can't repost your own post.",
+  invalid_query: 'Type at least two letters to search.',
   rate_limited: "You're going a little fast. Please wait a moment and try again.",
   too_many: 'Something went wrong. Please try again.',
   invalid_request: 'Something went wrong. Please try again.',
@@ -568,6 +605,11 @@ type PostRow = {
   author_in_my_clique: boolean
   is_mine: boolean
   media?: unknown
+  activity_at?: string
+  reason?: string | null
+  reposted_by_id?: string | null
+  reposted_by_username?: string | null
+  reposted_by_display_name?: string | null
 }
 
 const num = (v: number | string | null | undefined) => Number(v ?? 0)
@@ -584,7 +626,17 @@ export function toPost(r: PostRow): Post {
     authorInMyClique: r.author_in_my_clique,
     isMine: r.is_mine,
     media: toMedia(r.media),
+    ...(r.activity_at ? { activityAt: r.activity_at } : {}),
+    ...(r.reason ? { reason: r.reason } : {}),
+    ...(r.reposted_by_id
+      ? { repostedBy: { id: r.reposted_by_id, username: String(r.reposted_by_username), displayName: String(r.reposted_by_display_name) } }
+      : {}),
   }
+}
+
+/** Where the next page of a list starts: after the last item's activity (a repost's time), then its id. */
+export function cursorOf(p: Post): PostCursor {
+  return { createdAt: p.activityAt ?? p.createdAt, id: p.id }
 }
 
 /** The real data layer, backed by the signed-in member's Supabase session. */
@@ -821,6 +873,15 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       }
     },
     async feed(before, filter = 'all') {
+      // Home with reposts (20261202000000), paged on (activity, id); before it, the plain feed.
+      const items = await client.rpc('app_feed_items_page', {
+        p_before_at: before?.createdAt ?? null,
+        p_before_id: before?.id ?? null,
+        p_limit: 20,
+        p_filter: filter,
+      })
+      if (!items.error) return ((items.data ?? []) as PostRow[]).map(toPost)
+      if (!isMissingFunction(items.error, 'app_feed_items_page')) throw toAppError(items.error)
       // Pages on (created_at, id), so posts with the same time are never skipped (20261130000000).
       const { data, error } = await client.rpc('app_feed_page', {
         p_before_at: before?.createdAt ?? null,
@@ -1249,6 +1310,63 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       return asSupportChoice(r?.choice)
     },
     recordSupportIntent: (creatorId, choice) => rpc<void>('app_record_support_intent', { p_creator: creatorId, p_choice: choice }),
+    async postMeta(postIds) {
+      const out: Record<string, PostMeta> = {}
+      for (let i = 0; i < postIds.length; i += 100) {
+        const { data, error } = await client.rpc('app_post_meta', { p_posts: postIds.slice(i, i + 100) })
+        if (error) {
+          if (isMissingFunction(error, 'app_post_meta')) return null
+          throw toAppError(error)
+        }
+        for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+          out[String(r.post_id)] = {
+            topic: (r.topic as string | null) ?? null,
+            topicLabel: (r.topic_label as string | null) ?? null,
+            editedAt: (r.edited_at as string | null) ?? null,
+            savedByMe: Boolean(r.saved_by_me),
+            repostCount: num(r.repost_count as number),
+            repostedByMe: Boolean(r.reposted_by_me),
+          }
+        }
+      }
+      return out
+    },
+    setPostTopic: (postId, topic) => rpc<void>('app_set_post_topic', { p_post: postId, p_topic: topic }),
+    editPost: (postId, body, topic) => rpc<void>('app_edit_post', { p_post: postId, p_body: body, p_topic: topic }),
+    async postEdits(postId) {
+      const rows = await rpc<Array<Record<string, unknown>>>('app_post_edits', { p_post: postId })
+      return rows.map((r) => ({ previousBody: String(r.previous_body), previousTopic: (r.previous_topic as string | null) ?? null, editedAt: String(r.edited_at) }))
+    },
+    save: (postId) => rpc<void>('app_save', { p_post: postId }),
+    unsave: (postId) => rpc<void>('app_unsave', { p_post: postId }),
+    async savedPosts(before) {
+      const { data, error } = await client.rpc('app_saved_page', { p_before_at: before?.createdAt ?? null, p_before_id: before?.id ?? null, p_limit: 20 })
+      if (error) {
+        if (isMissingFunction(error, 'app_saved_page')) return null
+        throw toAppError(error)
+      }
+      // Paged on (saved time, id): the cursor carries the saved time.
+      return ((data ?? []) as Array<PostRow & { saved_at: string }>).map((r) => ({ ...toPost(r), activityAt: r.saved_at }))
+    },
+    async discoverPosts(topic) {
+      const { data, error } = await client.rpc('app_discover_content', { p_topic: topic ?? null, p_limit: 30 })
+      if (error) {
+        if (isMissingFunction(error, 'app_discover_content')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as PostRow[]).map(toPost)
+    },
+    async searchPosts(query) {
+      const { data, error } = await client.rpc('app_search_posts', { p_query: query, p_limit: 30 })
+      if (error) {
+        if (isMissingFunction(error, 'app_search_posts')) return null
+        throw toAppError(error)
+      }
+      return ((data ?? []) as PostRow[]).map(toPost)
+    },
+    recordShare: (postId, channel) => rpc<void>('app_record_share', { p_post: postId, p_channel: channel }),
+    repost: (postId) => rpc<void>('app_repost', { p_post: postId }),
+    unrepost: (postId) => rpc<void>('app_unrepost', { p_post: postId }),
     unfollow: (id) => rpc<void>('app_unfollow', { p_creator: id }),
     cliqueAdd: (id) => rpc<void>('app_clique_add', { p_creator: id }),
     cliqueRemove: (id) => rpc<void>('app_clique_remove', { p_creator: id }),

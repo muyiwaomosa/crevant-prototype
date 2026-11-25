@@ -16,8 +16,10 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: relationships (20261201000000,
-# scripts/db/rollback-relationships-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: discovery (20261203000000,
+# scripts/db/rollback-discovery-test.sh, the newest, so it goes first),
+# content (20261202000000, scripts/db/rollback-content-test.sh),
+# relationships (20261201000000, scripts/db/rollback-relationships-test.sh),
 # foundation v2 (20261130000000, scripts/db/rollback-foundation-v2-test.sh),
 # the member launch gate (20261129000000,
 # scripts/db/rollback-member-launch-gate-test.sh), the photo audience (20261128000000,
@@ -110,9 +112,35 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+DISCOVERY=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261203000000')")
+if [ "$DISCOVERY" = t ]; then
+  # The newest migration (discovery) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-content.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the content rollback refuses while discovery is recorded" \
+    || bad "the content rollback did not refuse while discovery is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-discovery-test.sh; then
+    ok "discovery: its rollback refuses while shares or a later migration exist, and otherwise removes exactly its own objects"
+  else
+    bad "the discovery rollback tests failed"
+  fi
+fi
+CONTENT=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261202000000')")
+if [ "$CONTENT" = t ]; then
+  # Then content.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-relationships.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the relationships rollback refuses while content is recorded" \
+    || bad "the relationships rollback did not refuse while content is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-content-test.sh; then
+    ok "content: its rollback refuses while member data or a later migration exists, and otherwise removes exactly its own objects"
+  else
+    bad "the content rollback tests failed"
+  fi
+fi
 RELATIONSHIPS=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261201000000')")
 if [ "$RELATIONSHIPS" = t ]; then
-  # The newest migration (relationships) goes first.
+  # Then relationships.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-foundation-v2.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the foundation v2 rollback refuses while relationships is recorded" \
@@ -427,9 +455,29 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
           && ok "after reapplying, the foundation v2 rollback refuses while relationships is recorded" \
           || bad "the foundation v2 rollback did not refuse after reapply while relationships is recorded (exit $code)"
         out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-relationships.sql 2>&1); code=$?
-        [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-          && ok "after reapplying, the relationships rollback check passes again" \
-          || bad "relationships rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+        if [ "$CONTENT" = t ]; then
+          [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+            && ok "after reapplying, the relationships rollback refuses while content is recorded" \
+            || bad "the relationships rollback did not refuse after reapply while content is recorded (exit $code)"
+          out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-content.sql 2>&1); code=$?
+          if [ "$DISCOVERY" = t ]; then
+            [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+              && ok "after reapplying, the content rollback refuses while discovery is recorded" \
+              || bad "the content rollback did not refuse after reapply while discovery is recorded (exit $code)"
+            out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-discovery.sql 2>&1); code=$?
+            [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+              && ok "after reapplying, the discovery rollback check passes again" \
+              || bad "discovery rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+          else
+            [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+              && ok "after reapplying, the content rollback check passes again" \
+              || bad "content rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+          fi
+        else
+          [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+            && ok "after reapplying, the relationships rollback check passes again" \
+            || bad "relationships rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+        fi
       else
         [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
           && ok "after reapplying, the foundation v2 rollback check passes again" \

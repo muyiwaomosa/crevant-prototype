@@ -105,6 +105,25 @@ declare
     'public.app_support_intent(uuid)',
     'public.app_unmute(uuid)'
   ];
+  -- Content (20261202000000), once applied.
+  content text[] := array[
+    'public.app_edit_post(uuid,text,text)',
+    'public.app_feed_items_page(timestamp with time zone,uuid,integer,text)',
+    'public.app_post_edits(uuid)',
+    'public.app_post_meta(uuid[])',
+    'public.app_repost(uuid)',
+    'public.app_save(uuid)',
+    'public.app_saved_page(timestamp with time zone,uuid,integer)',
+    'public.app_set_post_topic(uuid,text)',
+    'public.app_unrepost(uuid)',
+    'public.app_unsave(uuid)'
+  ];
+  -- Discovery (20261203000000), once applied.
+  discovery text[] := array[
+    'public.app_discover_content(text,integer)',
+    'public.app_record_share(uuid,text)',
+    'public.app_search_posts(text,integer)'
+  ];
   actual text[];
   extra text[];
   missing text[];
@@ -130,6 +149,12 @@ begin
   end if;
   if to_regclass('social.mutes') is not null then
     expected := array_remove(expected, 'public.app_follow(uuid)') || relationships;
+  end if;
+  if to_regclass('social.saves') is not null then
+    expected := expected || content;
+  end if;
+  if to_regclass('social.shares') is not null then
+    expected := expected || discovery;
   end if;
   select coalesce(array_agg(n.nspname || '.' || p.proname || '(' || pg_catalog.oidvectortypes(p.proargtypes) || ')' order by 1), '{}')
     into actual

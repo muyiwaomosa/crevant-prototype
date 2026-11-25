@@ -15,6 +15,7 @@ import { ModerationProvider } from './moderation'
 import { FeedbackProvider, SendFeedbackLink } from './feedback'
 import { MediaProvider } from './media'
 import { AvatarProvider } from './avatars'
+import { PostMetaProvider } from './content'
 
 /**
  * The members area (/app): invited, signed-in members only (RequireAuth wraps
@@ -69,6 +70,7 @@ function Gate() {
   return (
     <ProfileProvider value={{ profile: status.profile, refresh: reload }}>
       <AvatarProvider>
+      <PostMetaProvider>
         <FirstTimeSetup>
           <ModerationProvider>
             <FeedbackProvider>
@@ -80,6 +82,7 @@ function Gate() {
             </FeedbackProvider>
           </ModerationProvider>
         </FirstTimeSetup>
+      </PostMetaProvider>
       </AvatarProvider>
     </ProfileProvider>
   )

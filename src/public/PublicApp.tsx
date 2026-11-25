@@ -19,7 +19,7 @@ import { SetPasswordPage } from './auth/SetPasswordPage'
 import { AccountPage } from './auth/AccountPage'
 import { RequireAuth } from './auth/AuthUi'
 import { MemberArea } from '../app/MemberArea'
-import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage } from '../app/pages'
+import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage, SavedPage } from '../app/pages'
 import { MySplitPage } from '../app/split'
 import { ModerationQueuePage, ModerationReportPage } from '../app/moderation'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from '../app/feedback'
@@ -60,6 +60,7 @@ function memberAreaRoute() {
       <Route path="post/:id" element={<PostPage />} />
       <Route path="u/:username" element={<MemberPage />} />
       <Route path="clique" element={<CliquePage />} />
+      <Route path="saved" element={<SavedPage />} />
       <Route path="split" element={<MySplitPage />} />
       <Route path="catch-up/:username" element={<CatchUpPage />} />
       <Route path="profile" element={<ProfilePage />} />
