@@ -1507,7 +1507,7 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     if (error) throw toAppError(error)
     // The deletion register (docs/RECOVERY.md): report a completed deletion or
     // restore to the function log now. Never awaited and never shown: if it
-    // fails, the scheduled drain reports it within 15 minutes.
+    // fails, the next successful scheduled drain reports it.
     if (DELETION_REGISTER_RPCS.has(fn)) {
       try {
         void client.functions.invoke('post-media/deletions', { body: {} }).catch(() => undefined)
