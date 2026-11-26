@@ -100,7 +100,7 @@ database). The tracker, staging guide and recovery procedure now say so.
       also downtime-free unless its compute was raised above Nano (then about
       a minute's restart), and it loses backups again. Nothing else changes.
 
-## 2a. Transfer readiness baseline for `crevant-staging` (checked Nov 26)
+## 2a. Transfer readiness baseline for `crevant-staging` (checked Nov 26; transfer done by the founder Nov 26)
 
 **Project identity.** `crevant-staging`, reference `kpudeppgokpjhvaqrprn`,
 US West, Nano, in the Crevant (Free) organization. The same reference is
@@ -182,7 +182,7 @@ explicitly (founder action T5).
 
 | Project | Daily backups | Retention | Logs (API, Postgres, Auth audit) |
 |---|---|---|---|
-| Staging and pilot | **None today** (Free) → daily after the transfer | 7 days | 1 day today → 7 days |
+| Staging and pilot | Daily since the Nov 26 transfer (first listed Nov 27) | 7 days | 7 days |
 | Member Production | Daily | 7 days | 7 days |
 | Waitlist | Daily | 7 days | 7 days |
 

@@ -8,14 +8,12 @@ Applies to the staging project (`kpudeppgokpjhvaqrprn`, the pilot database
 once testers join) and, with its own approvals, to member Production later.
 Everything financial is simulated during the pilot.
 
-> **Status (Nov 26): not yet in force for staging.** Staging is in the Crevant
-> organization on the **Free** plan, which has no backups. The objectives below
-> apply once it is moved into the Splitpost Production (Pro) organization
-> (`docs/INFRASTRUCTURE.md`). The deletion safeguard (below) is **built and
-> demonstrated on local Supabase**, and runs in every CI run. It counts as
-> complete only once the same exercise has passed on staging after its
-> transfer (on Free, Edge Function logs are kept 1 day and there are no
-> backups to restore).
+> **Status (Nov 26):** staging moved into the Splitpost Production (Pro)
+> organization on Nov 26, so it now gets daily backups (7 days) and 7-day
+> logs. The objectives below are in force for staging from its first listed
+> backup. The deletion safeguard is built, applied to staging and reporting
+> there; it counts as complete once the recovery exercise has passed on
+> staging (after that first backup).
 
 ## What protects what
 
@@ -160,22 +158,72 @@ founder's, in the Supabase and Vercel dashboards, unless marked Claude.
    Claude compares the migration history with the repository and, if a
    migration merged after the backup, reapplies it with the normal approved
    run.
-6. **Settings and secrets** (only if the project itself was lost; 1 hour).
+6. **Login role passwords** (every restore; 10 minutes). Daily backups do not
+   keep passwords for custom login roles. If the waitlist logins
+   (`waitlist_writer`, `waitlist_admin`) were activated on this project, set
+   new passwords in the SQL editor and update the secrets that use them
+   (`docs/WAITLIST.md`). Never paste a password into chat or a file.
+7. **Settings and secrets** (only if the project itself was lost; 1 hour).
    Re-enter the Auth, URL, sender and Storage settings from
    `docs/STAGING-ACCEPTANCE.md` section 2, issue new secrets (Resend key,
    drain key), and put them where the steps say. Never paste a secret into
    chat or a file.
-7. **Reopen** (10 minutes). Turn the switches back on with the reason
+8. **Reopen** (10 minutes). Turn the switches back on with the reason
    "Recovered from the backup of <time>". Tell testers that activity after
    that time (posts, likes, points) was lost and needs redoing; simulated
    points are not compensated with anything real.
-8. **Record** it in `docs/DELIVERY-TRACKER.md`: what happened, the backup
+9. **Record** it in `docs/DELIVERY-TRACKER.md`: what happened, the backup
    used, the time taken, and what was re-applied.
 
 Photos and videos uploaded after the backup point stay in Storage without a
 post; the cleanup leaves them alone, and they are removed at pilot close.
 Posts restored whose file was deleted after the backup show "This photo
 couldn't load"; their authors can delete and repost them.
+
+## Staging recovery exercise (founder action 7; plan, Nov 26)
+
+The deletion safeguard and the recovery objectives count as demonstrated only
+after this passes on staging. **Recommended: restore staging in place**, which
+exercises the real procedure end to end. "Restore to a new project" needs
+physical backups (not used for a database this small) and adds a project's
+cost, and a downloaded copy cannot be restored into another Supabase project
+cleanly, so neither is proposed.
+
+**What it costs:** a few minutes of staging downtime, and every change made on
+staging between the backup and the restore is lost. Run it soon after a
+daily backup is listed, in a quiet window, with no other activity until it is
+done. Nothing in Production is touched.
+
+1. **Backup** (founder). `crevant-staging`, Database, Backups: note the time
+   of the newest daily backup (T).
+2. **Deletions after the backup** (founder). On the staging app, delete one of
+   your own test posts and one of your own test comments. Tell Claude.
+3. **Evidence** (Claude). The staging checks: the two deletions have register
+   rows (completeness) and reached the log (speed).
+4. **Stop changes** (founder): procedure step 1, reason "Recovery exercise".
+5. **Keep the evidence** (founder): procedure step 3, both sources: the live
+   export (SQL editor, download the result) and the Edge Function log lines
+   (Logs, Edge Functions, `post-media`, filter `deletion_register`, from T to
+   now, download). Note the time: the exercise's clock starts here.
+6. **Restore T in place** (founder). Database, Backups, Restore. Note when it
+   finishes.
+7. **Restrict again** (founder): the switches come back as they were at T.
+8. **The danger, shown** (founder, SQL editor; Claude sends the exact query
+   with the two ids): both items are visible again.
+9. **Re-apply** (founder, SQL editor): `select ops.reapply_deletions('<live export>'::jsonb, '<T>');`,
+   then the same with the events from the log (Claude converts them). The
+   second run must change nothing.
+10. **Verify** (founder runs Claude's query; then Claude): both items are
+    deleted again; the staging checks pass, including completeness and the
+    reconciliation; Verify Edge Functions passes for both functions.
+11. **Login role passwords** (founder): procedure step 6, if the waitlist
+    logins were activated on staging.
+12. **Reopen** (founder): switches back on, reason "Recovery exercise
+    complete". Claude records the times (restore duration, total against the
+    4-hour objective) and the result here and in the tracker.
+
+The rehearsal project is not used and stays until this has passed, its
+dependencies are ruled out, and the founder explicitly approves deleting it.
 
 ## Decisions (founder, Nov 26)
 
@@ -258,7 +306,11 @@ either completes in one transaction or changes nothing).
 6. **Failed reporting is detectable:** a row not logged after 30 minutes
    fails the reconciliation (`scripts/db/audit/reconciliation.sql`, "every
    completed deletion reached the function log within 30 minutes") and shows
-   in the staging checks (032). A failed read or mark is logged
+   in the staging checks (032). **Completeness** is checked too, not only
+   speed: staging check 032 fails if any post or comment deleted since the
+   register started has no register row, if the founder's completed account
+   deletions outnumber the register's account rows, or if any row is not
+   logged after 30 minutes. A failed read or mark is logged
    (`deletion_register_read_failed`, `deletion_register_mark_failed`).
    Unreported rows are those with `reported_at` empty.
 7. **Private and auditable:** members cannot read the register or call its

@@ -75,6 +75,42 @@ begin
   end if;
 end $$;
 
+-- Completeness, not just speed: every deletion completed since the register
+-- started (within its 30-day window) has a register row, and every row has
+-- been logged. Fails on any gap. Counts only.
+do $$
+declare
+  started timestamptz;
+  posts_missing integer;
+  comments_missing integer;
+  account_events integer;
+  account_rows integer;
+  unlogged integer;
+begin
+  select min(occurred_at) into started from ops.deletion_register;
+  if started is null then
+    raise notice 'PASS: deletion register completeness: nothing deleted since the register started, nothing to compare yet';
+    return;
+  end if;
+  started := greatest(started, pg_catalog.now() - interval '29 days');
+  select count(*) into posts_missing from social.posts p
+  where p.deleted_at >= started
+    and not exists (select 1 from ops.deletion_register r where r.kind = 'post' and r.target_id = p.id and r.event = 'deleted');
+  select count(*) into comments_missing from social.comments c
+  where c.deleted_at >= started
+    and not exists (select 1 from ops.deletion_register r where r.kind = 'comment' and r.target_id = c.id and r.event = 'deleted');
+  -- Accounts are gone once deleted, so compare the founder's completed deletions with the register's account rows.
+  select count(*) into account_events from ops.member_request_events where action = 'account_deleted' and occurred_at >= started;
+  select count(*) into account_rows from ops.deletion_register where kind = 'account' and event = 'deleted' and occurred_at >= started;
+  select count(*) into unlogged from ops.deletion_register where reported_at is null and occurred_at < pg_catalog.now() - interval '30 minutes';
+  if posts_missing > 0 or comments_missing > 0 or account_events > account_rows or unlogged > 0 then
+    raise exception 'FAIL: deletion register completeness: % post(s) and % comment(s) deleted without a register row; % account deletion(s) recorded against % register row(s); % row(s) not logged after 30 minutes',
+      posts_missing, comments_missing, account_events, account_rows, unlogged;
+  end if;
+  raise notice 'PASS: deletion register completeness: every post, comment and founder account deletion since % has a register row (accounts: % deletion(s), % row(s)), and every row older than 30 minutes is logged',
+    started, account_events, account_rows;
+end $$;
+
 \else
 \echo 'Skipped 032_deletion_register.sql: 20261216000000 is not applied here.'
 \endif
