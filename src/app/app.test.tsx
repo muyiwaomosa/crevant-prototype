@@ -2526,7 +2526,10 @@ describe('feed and posting', () => {
     renderApp('/app', api)
     expect(await screen.findByText('Your feed is quiet')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Discover people' }).getAttribute('href')).toBe('/app/discover')
-    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: '  My first post  ' } })
+    // Home opens on content: posting is in Create (approved design, V1).
+    expect(screen.queryByLabelText('Write a post')).toBeNull()
+    fireEvent.click(screen.getAllByRole('link', { name: 'Create' })[0])
+    fireEvent.change(await screen.findByLabelText('Write a post'), { target: { value: '  My first post  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     expect(await screen.findByText('My first post')).toBeTruthy()
   })
@@ -2539,8 +2542,8 @@ describe('feed and posting', () => {
       sent.push(body)
       return createPost(body, requestId)
     }
-    renderApp('/app', api)
-    await screen.findByText('Your feed is quiet')
+    renderApp('/app/new', api)
+    await screen.findByLabelText('Write a post')
     fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Only once, please' } })
     const form = screen.getByLabelText('Write a post').closest('form')!
     // Both events land before React re-renders, as with a fast double click.
@@ -2568,8 +2571,8 @@ describe('feed and posting', () => {
       }
       return id
     }
-    renderApp('/app', api)
-    await screen.findByText('Your feed is quiet')
+    renderApp('/app/new', api)
+    await screen.findByLabelText('Write a post')
     fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Sent on a bad connection' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     expect(await screen.findByText("We couldn't reach Splitpost. Check your connection and try again.")).toBeTruthy()
@@ -2594,15 +2597,17 @@ describe('feed and posting', () => {
       }
       return createPost(body, requestId)
     }
-    renderApp('/app', api)
-    await screen.findByText('Your feed is quiet')
+    renderApp('/app/new', api)
+    await screen.findByLabelText('Write a post')
     fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'First draft' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     await screen.findByText("We couldn't reach Splitpost. Check your connection and try again.")
     fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Second draft' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     await screen.findByText('Second draft')
-    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Another post' } })
+    // Publishing opens the post; the next one starts again from Create.
+    fireEvent.click(screen.getAllByRole('link', { name: 'Create' })[0])
+    fireEvent.change(await screen.findByLabelText('Write a post'), { target: { value: 'Another post' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     await screen.findByText('Another post')
     expect(ids).toHaveLength(3)
@@ -3486,8 +3491,8 @@ describe('photo posts (Build 5.3)', () => {
 
   it('with photos off, posting is text only, exactly as before', async () => {
     const f = fakeApi()
-    renderApp('/app', f.api)
-    await screen.findByRole('heading', { name: 'Home' })
+    renderApp('/app/new', f.api)
+    await screen.findByRole('heading', { name: 'Create a post' })
     await act(async () => {})
     expect(screen.queryByRole('button', { name: 'Add photo' })).toBeNull()
     fireEvent.change(screen.getByRole('textbox', { name: 'Write a post' }), { target: { value: 'Words only' } })
@@ -3498,7 +3503,7 @@ describe('photo posts (Build 5.3)', () => {
 
   it('posts a photo with no caption: one upload, one post, with an accessible fallback name', async () => {
     const f = fakeApi('me', { photos: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose()
     expect(await screen.findByRole('img', { name: "The photo you're adding" })).toBeTruthy()
@@ -3522,7 +3527,7 @@ describe('photo posts (Build 5.3)', () => {
 
   it('with a photo: the preview, then Change photo and Remove photo, then one caption field, then Post; no other inputs', async () => {
     const f = fakeApi('me', { photos: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose()
     const preview = await screen.findByRole('img', { name: "The photo you're adding" })
@@ -3553,7 +3558,7 @@ describe('photo posts (Build 5.3)', () => {
 
   it('changing or removing the photo keeps the caption', async () => {
     const f = fakeApi('me', { photos: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose()
     await screen.findByRole('img', { name: "The photo you're adding" })
@@ -3597,7 +3602,7 @@ describe('photo posts (Build 5.3)', () => {
   it('a failed publish is retried with the same upload and request id (posted once)', async () => {
     const f = fakeApi('me', { photos: true })
     f.failures.createPhotoPost = new AppApiError('network')
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose()
     await screen.findByRole('img', { name: "The photo you're adding" })
@@ -3631,7 +3636,7 @@ describe('photo posts (Build 5.3)', () => {
 
   it('a file that is not a photo is refused before anything is sent', async () => {
     const f = fakeApi('me', { photos: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose('notes.txt')
     expect((await screen.findByRole('alert')).textContent).toMatch(/Please choose a photo/)
@@ -5047,7 +5052,7 @@ describe('video posts (20261213000000)', () => {
 
   it('a member adds a video: it is checked, prepared, uploaded and checked by the server, then posted once with a player that never autoplays', async () => {
     const f = fakeApi('me', { video: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add video' }))
     chooseVideo()
     expect(await screen.findByText(/Ready to post: 0:20, 1280 x 720/)).toBeTruthy()
@@ -5075,7 +5080,7 @@ describe('video posts (20261213000000)', () => {
 
   it('a video that cannot be used shows a clear message and can be removed; nothing is posted', async () => {
     const f = fakeApi('me', { video: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add video' }))
     chooseVideo('clip.hevc', 'video/mp4')
     expect(await screen.findByText(/Most Compatible/)).toBeTruthy()

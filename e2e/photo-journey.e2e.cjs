@@ -114,6 +114,7 @@ const makePhoto = (page, w, h) =>
     const ctx0 = await newContext(browser, { viewport: { width: 390, height: 844 } })
     const p0 = await ctx0.newPage()
     await signIn(p0, P.email)
+    await p0.goto(`${APP}/app/new`)
     await p0.getByRole('textbox', { name: 'Write a post' }).waitFor()
     await p0.waitForTimeout(800)
     check('with the audience at founder, a tester sees no Add photo', (await p0.getByRole('button', { name: 'Add photo' }).count()) === 0)
@@ -126,9 +127,11 @@ const makePhoto = (page, w, h) =>
   const pageP = await ctxP.newPage()
   pageP.on('console', (m) => /Content Security Policy/i.test(m.text()) && cspViolations.push(m.text()))
   await signIn(pageP, P.email)
+  // Posting is in Create (approved design, V1: Home opens on content).
+  await pageP.goto(`${APP}/app/new`)
   const addPhoto = pageP.getByRole('button', { name: 'Add photo' })
   await addPhoto.waitFor()
-  check('with photos on, Home offers Add photo', true)
+  check('with photos on, Create offers Add photo', true)
   const tall = await makePhoto(pageP, 3024, 4032)
   await pageP.getByTestId('photo-input').setInputFiles({ name: 'IMG_0420.jpg', mimeType: 'image/jpeg', buffer: tall })
   await pageP.getByRole('img', { name: "The photo you're adding" }).waitFor()
@@ -190,7 +193,7 @@ const makePhoto = (page, w, h) =>
   const mine = pageP.getByTestId('post').filter({ has: pageP.getByRole('img', { name: /^Photo by / }) }).first()
   await mine.waitFor()
   for (let i = 0; i < 20 && !(await photoShown(mine)); i++) await pageP.waitForTimeout(250)
-  check('the photo post appears on Home, loaded from Storage, with the fallback alt text (Photo by ...)', await photoShown(mine))
+  check('the photo post opens on its page, loaded from Storage, with the fallback alt text (Photo by ...)', await photoShown(mine))
   const firstPost = sql(`select id from social.posts where author_id = '${P.id}' and media_kind = 'photo' order by created_at limit 1`)
   check('it was stored with no caption and no description, and two files exist', sql(`select body from social.posts where id = '${firstPost}'`) === ''
     && sql(`select description is null from social.post_media where post_id = '${firstPost}'`) === 't'
@@ -209,7 +212,7 @@ const makePhoto = (page, w, h) =>
   await pageP.getByText(`Wide one (${RUN})`).waitFor()
   check('a photo with a caption posts from Create and opens its post page', true)
   // Text posting is unchanged.
-  await pageP.goto(`${APP}/app`)
+  await pageP.goto(`${APP}/app/new`)
   await pageP.getByRole('textbox', { name: 'Write a post' }).fill(`Just text (${RUN})`)
   await pageP.getByRole('button', { name: 'Post', exact: true }).click()
   // The post card, not the text: the composer's textarea holds the same text until the post is saved.
@@ -226,6 +229,14 @@ const makePhoto = (page, w, h) =>
   for (let i = 0; i < 20 && !(await photoShown(qPost)); i++) await pageQ.waitForTimeout(250)
   check('Q sees P\'s photo in the feed (the 800 px copy)', await photoShown(qPost)
     && /-feed\.jpg/.test(await qPost.locator('img[src*="post-photos"]').first().getAttribute('src')))
+  // Optional, for a person to look at (SHOTS=<directory>); never in CI.
+  if (process.env.SHOTS) {
+    await pageQ.screenshot({ path: path.join(process.env.SHOTS, 'home-desktop.png') })
+    await pageQ.setViewportSize({ width: 390, height: 844 })
+    await pageQ.waitForTimeout(300)
+    await pageQ.screenshot({ path: path.join(process.env.SHOTS, 'home-phone.png') })
+    await pageQ.setViewportSize({ width: 1280, height: 900 })
+  }
   {
     const v = await axe(pageQ, 'main')
     check('Home with photo posts has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))

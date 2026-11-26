@@ -95,32 +95,71 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
     }
   }
 
+  // Approved design (SP-DESIGN-002, V1): photos and videos run edge to edge
+  // at the top of the card with the creator over the image; short text posts
+  // use the display face.
+  const media = post.media?.kind === 'photo' || post.media?.kind === 'video'
+  const display = !media && body.length > 0 && body.length <= 160 && !body.includes('\n')
+  const header = (overlay: boolean) => (
+    <header
+      className={clsx(
+        'flex items-center gap-3',
+        overlay &&
+          'pointer-events-none absolute inset-x-0 top-0 z-10 bg-linear-to-b from-black/55 to-transparent px-4 pb-8 pt-4 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.45)] [&_a]:pointer-events-auto [&_a]:inline-flex [&_a]:min-h-6 [&_a]:items-center [&_a]:text-white [&_p]:text-white/90',
+      )}
+    >
+      <span className={clsx(overlay && 'pointer-events-auto rounded-full ring-2 ring-white')}>
+        <MemberAvatar member={post.author} />
+      </span>
+      <div className="min-w-0 flex-1 leading-tight">
+        <MemberLink member={post.author} />
+        <p className="truncate text-[13px] text-ink-500">
+          @{post.author.username} · <When iso={post.createdAt} />
+          <PostMetaLine postId={post.id} />
+        </p>
+      </div>
+      {post.authorInMyClique && (
+        <span
+          className={clsx(
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold',
+            overlay ? 'bg-sp-accent text-ink-900 [text-shadow:none]' : 'bg-brand-50 text-brand-700',
+          )}
+        >
+          <Users className="h-3.5 w-3.5" aria-hidden="true" /> Clique
+        </span>
+      )}
+    </header>
+  )
+
   return (
-    <Card className="p-4 sm:p-5">
+    <Card className={clsx('overflow-hidden rounded-[26px]', media ? 'p-0' : 'p-4 sm:p-5')}>
       <article ref={trackView} aria-label={`Post by ${post.author.displayName}`} data-testid="post">
         {post.repostedBy && (
-          <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-600" data-testid="reposted-by">
+          <p className={clsx('mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-600', media && 'px-4 pt-3 sm:px-5')} data-testid="reposted-by">
             <Repeat2 className="h-4 w-4" aria-hidden="true" /> Reposted by <MemberLink member={post.repostedBy} className="text-[13px]" />
           </p>
         )}
-        <header className="flex items-center gap-3">
-          <MemberAvatar member={post.author} />
-          <div className="min-w-0 flex-1 leading-tight">
-            <MemberLink member={post.author} />
-            <p className="truncate text-[13px] text-ink-500">
-              @{post.author.username} · <When iso={post.createdAt} />
-              <PostMetaLine postId={post.id} />
-            </p>
+        {media ? (
+          <div className="relative">
+            {header(true)}
+            {post.media?.kind === 'photo' && <PostPhoto post={post} bleed />}
+            {post.media?.kind === 'video' && <PostVideo post={post} bleed />}
           </div>
-          {post.authorInMyClique && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[12px] font-semibold text-brand-700">
-              <Users className="h-3.5 w-3.5" aria-hidden="true" /> Clique
-            </span>
-          )}
-        </header>
-        {post.media?.kind === 'photo' && <PostPhoto post={post} />}
-        {post.media?.kind === 'video' && <PostVideo post={post} />}
-        {body !== '' && <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-800">{body}</p>}
+        ) : (
+          header(false)
+        )}
+        <div className={clsx(media && 'px-4 pb-4 sm:px-5')}>
+        {body !== '' && (
+          <p
+            className={clsx(
+              'mt-3 whitespace-pre-wrap break-words',
+              display ? 'font-display text-[20px] font-extrabold leading-snug text-ink-900' : 'text-[15px] leading-relaxed text-ink-800',
+            )}
+            data-display={display ? 'true' : undefined}
+          >
+            {body}
+          </p>
+        )}
         <footer className="mt-3 flex flex-wrap items-center gap-1">
           <button
             type="button"
@@ -191,6 +230,7 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
             <ErrorNote error={error} />
           </div>
         )}
+        </div>
       </article>
     </Card>
   )

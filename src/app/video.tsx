@@ -99,7 +99,7 @@ export function useVideoStatus(): VideoStatus | null {
 // A post's video.
 
 /** The player: no autoplay, nothing loaded before play, standard controls, never swiped away. */
-export function PostVideo({ post }: { post: Post }) {
+export function PostVideo({ post, bleed = false }: { post: Post; bleed?: boolean }) {
   const media = post.media as VideoMedia
   const ctx = useContext(Ctx)
   const ref = useRef<HTMLVideoElement>(null)
@@ -121,8 +121,8 @@ export function PostVideo({ post }: { post: Post }) {
   const ratio = Math.max(media.width / media.height, 9 / 16)
   const label = media.description ?? `Video by ${post.author.displayName}`
   return (
-    <div className="mt-3" data-no-swipe data-testid="post-video" onTouchStart={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-      <div className="relative mx-auto w-full max-w-full overflow-hidden rounded-2xl bg-ink-900" style={{ aspectRatio: String(ratio), maxHeight: '75vh' }}>
+    <div className={bleed ? undefined : 'mt-3'} data-no-swipe data-testid="post-video" onTouchStart={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+      <div className={`relative mx-auto w-full max-w-full overflow-hidden bg-ink-900 ${bleed ? '' : 'rounded-2xl'}`} style={{ aspectRatio: String(ratio), maxHeight: '75vh' }}>
         {links === undefined && <div className="absolute inset-0 animate-pulse bg-ink-800" aria-hidden="true" />}
         {links === null && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-ink-100 p-4 text-center text-sm text-ink-700">

@@ -130,10 +130,13 @@ function PostList({
 export function FeedPage() {
   return (
     <>
-      <PageHeader title="Home" subtitle="New posts from the people you follow. Only you decide what is hidden." />
+      {/* Approved design (V1): Home opens on content. The logo is in the
+          header; the title stays for screen readers and page focus. Create is
+          one tap away in the navigation. */}
+      <h1 className="sr-only">Home</h1>
       <GovernanceBanner />
       <JoinedForPrompt />
-      <HomeFeed filter="all" withStrip withComposer cliqueFirst />
+      <HomeFeed filter="all" withStrip withAd cliqueFirst />
     </>
   )
 }
@@ -148,11 +151,13 @@ function HomeFeed({
   filter,
   withStrip = false,
   withComposer = false,
+  withAd = false,
   cliqueFirst = false,
 }: {
   filter: FeedFilter
   withStrip?: boolean
   withComposer?: boolean
+  withAd?: boolean
   cliqueFirst?: boolean
 }) {
   const api = useAppApi()
@@ -243,7 +248,7 @@ function HomeFeed({
         </div>
       )}
       {/* A general feed ad between the sections: never removes or reorders a post. */}
-      {withComposer && feed.data && rest.length > 0 && <AdSlot surface="feed" />}
+      {(withComposer || withAd) && feed.data && rest.length > 0 && <AdSlot surface="feed" />}
       {feed.data && rest.length > 0 && (
         <PostList
           posts={feed.data}
@@ -354,7 +359,7 @@ function CliqueRow() {
             <span aria-hidden="true" className="flex h-[60px] w-[60px] items-center justify-center rounded-full border-2 border-dashed border-ink-200 text-ink-500">
               {clique.length === 0 ? <UserPlus className="h-6 w-6" /> : <Users className="h-6 w-6" />}
             </span>
-            <span className="w-full truncate text-center text-[12px] text-ink-700">{clique.length === 0 ? 'Add to Clique' : 'Edit Clique'}</span>
+            <span className="w-full text-center text-[12px] leading-tight text-ink-700">{clique.length === 0 ? 'Add to Clique' : 'Edit Clique'}</span>
           </Link>
         </li>
       </ul>
