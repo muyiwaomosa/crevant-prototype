@@ -256,7 +256,11 @@ either completes in one transaction or changes nothing).
 6. **Failed reporting is detectable:** a row not logged after 30 minutes
    fails the reconciliation (`scripts/db/audit/reconciliation.sql`, "every
    completed deletion reached the function log within 30 minutes") and shows
-   in the staging checks (032). A failed read or mark is logged
+   in the staging checks (032). **Completeness** is checked too, not only
+   speed: staging check 032 fails if any post or comment deleted since the
+   register started has no register row, if the founder's completed account
+   deletions outnumber the register's account rows, or if any row is not
+   logged after 30 minutes. A failed read or mark is logged
    (`deletion_register_read_failed`, `deletion_register_mark_failed`).
    Unreported rows are those with `reported_at` empty.
 7. **Private and auditable:** members cannot read the register or call its
