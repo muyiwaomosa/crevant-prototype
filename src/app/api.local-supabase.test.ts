@@ -26,6 +26,7 @@ const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
 // Newest first.
 const LATER = [
+  { version: '20261216000000', name: 'deletion_register', file: 'supabase/migrations/20261216000000_deletion_register.sql', rollback: 'scripts/db/staging-rollback-deletion-register.sql', phrase: 'REMOVE THE STAGING DELETION REGISTER' },
   { version: '20261215000000', name: 'founder_decisions', file: 'supabase/migrations/20261215000000_founder_decisions.sql', rollback: 'scripts/db/staging-rollback-founder-decisions.sql', phrase: 'REMOVE THE STAGING FOUNDER DECISIONS' },
   { version: '20261214000000', name: 'release_hardening', file: 'supabase/migrations/20261214000000_release_hardening.sql', rollback: 'scripts/db/staging-rollback-release-hardening.sql', phrase: 'REMOVE THE STAGING RELEASE HARDENING' },
   { version: '20261213000000', name: 'video_posts', file: 'supabase/migrations/20261213000000_video_posts.sql', rollback: 'scripts/db/staging-rollback-video-posts.sql', phrase: 'REMOVE THE STAGING VIDEO POSTS' },
@@ -57,6 +58,8 @@ const sql = (q: string) => execFileSync('psql', [DB!, '-X', '-qAt', '-v', 'ON_ER
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const recorded = (version: string) => sql(`select count(*) from supabase_migrations.schema_migrations where version = '${version}'`) === '1'
 function removeLater() {
+  // The register's rollback refuses while deletions are unreported (the drain would have logged them).
+  if (recorded('20261216000000')) sql('select public.svc_deletion_register_reported(array(select id from ops.deletion_register where reported_at is null))')
   for (const m of LATER) {
     if (recorded(m.version)) execFileSync('psql', [DB!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-v', 'mode=apply', '-v', `confirm=${m.phrase}`, '-f', m.rollback])
   }

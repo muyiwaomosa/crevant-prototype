@@ -35,3 +35,4 @@
 029_video_posts.sql 20261213000000
 030_release_hardening.sql 20261214000000
 031_founder_decisions.sql 20261215000000
+032_deletion_register.sql 20261216000000

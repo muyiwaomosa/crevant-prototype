@@ -14,7 +14,7 @@ staging checks passed), and the `staging` app branch is at the latest merge.
 
 | # | Action | Where, exactly | Depends on | Expected result | How Claude verifies |
 |---|---|---|---|---|---|
-| V1 | **Deploy post-media to staging at the current approved code** (10 minutes). Staging runs commit 27b323a, from before video. On your computer, signed in with `supabase login`, with the pinned CLI 2.122.1 and Node 22, in a clean clone: `git fetch origin && git checkout 40a055bfd5b1712eafe812183a595e4f72182ed3`, then `node scripts/functions/deploy.mjs deploy --target staging --function post-media --commit 40a055bfd5b1712eafe812183a595e4f72182ed3 --operator founder --confirm "DEPLOY post-media TO kpudeppgokpjhvaqrprn"` (`docs/FUNCTIONS-DEPLOYMENT.md`) | Your computer | Nothing | The script prints `deployed, unverified` and a version number; send Claude the version | Runs **Verify Edge Functions** (staging, post-media, deployed, that commit and version), then opens the ledger PR whose merge is your approval |
+| V1 | **Deploy post-media to staging at the current approved code** (10 minutes). Staging runs commit 27b323a, from before video. On your computer, signed in with `supabase login`, with the pinned CLI 2.122.1 and Node 22, in a clean clone: `git fetch origin && git checkout 40a055bfd5b1712eafe812183a595e4f72182ed3`, then `node scripts/functions/deploy.mjs deploy --target staging --function post-media --commit 40a055bfd5b1712eafe812183a595e4f72182ed3 --operator founder --confirm "DEPLOY post-media TO kpudeppgokpjhvaqrprn"` (`docs/FUNCTIONS-DEPLOYMENT.md`) | Your computer | Nothing. If B5 is approved first, skip this and deploy once at the B5 merge commit instead (it includes everything here); the newer code is safe either way, because it skips the register until the migration is applied | The script prints `deployed, unverified` and a version number; send Claude the version | Runs **Verify Edge Functions** (staging, post-media, deployed, that commit and version), then opens the ledger PR whose merge is your approval |
 | V2 | **Storage upload limit of at least 110 MB** (2 minutes) | Supabase, `crevant-staging`, **Storage, Settings**, *Upload file size limit*: 110 MB or more, then Save | Nothing | The limit reads 110 MB or more (the `post-videos` bucket itself already allows 110 MB) | A too-low limit shows as a clear upload error on the test page |
 | V3 | **Video device test** (`docs/video/DEVICE-TEST.md`; half a day): iPhone Safari and Android Chrome, a 1 and a 5 minute clip each; then record each result and the storage cap (50 GB proposed) in Control Center, Video posts | `/app/video-test` on both phones | V1 and V2 | A pass or fail per device | Reads the results; proposes the 1080p fallback only if the iPhone fails |
 | V4 | Turn on **New video uploads** on staging | Control Center, Operational switches, with a reason | V3 passes (the server refuses otherwise) | Members can post videos on staging; Production stays off | Runs the video checks on staging |
@@ -43,7 +43,7 @@ allowed for the founder and testers while posts are off.
 | # | Decision | Where | Recommended |
 |---|---|---|---|
 | B1 | Supabase consolidation: move `crevant-staging` into Splitpost Production (it gains daily backups), then delete `splitpost-members-rehearsal-v2` | `docs/INFRASTRUCTURE.md` | Yes: about $45 a month before and after |
-| B5 | The deletion register (deleted accounts and posts stay deleted after a restore) | `docs/RECOVERY.md` | Yes: no new service; a migration (D7) and a post-media change |
+| B5 | **Approve migration 20261216000000, the deletion register** (deleted accounts and posts stay deleted after a restore). Built and demonstrated on local Supabase; its pull request says what it changes. Your D7 approval is the merge; Claude then applies it to staging with the approved run, and you redeploy post-media at that merge commit (the same command as V1, with the new commit), because the drain writes the register to the function log | `docs/RECOVERY.md`, the PR | Yes: no new service or cost; the safeguard you required before a restore can reopen the app |
 
 After B1: transfer the project (Supabase, `crevant-staging`, Settings, General,
 Transfer project), then the next day confirm Database, Backups lists a daily
@@ -77,7 +77,7 @@ backup, then delete the rehearsal project.
 * **Recovery:** approved pilot objectives, RPO 24 hours and RTO 4 hours (not
   service commitments), in force for staging after its transfer; no separate
   photo and video backup during the controlled pilot, disclosed in the
-  composer; the deletion safeguard is not complete (B5). Procedure in
+  composer; the deletion safeguard is built and demonstrated locally, awaiting B5 and a staging exercise. Procedure in
   `docs/RECOVERY.md`, drilled in every CI run.
 * **GitHub Actions:** six CI jobs per push (about 10 minutes of runner time).
 

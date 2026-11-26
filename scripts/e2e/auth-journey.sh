@@ -78,3 +78,7 @@ APP_URL="http://127.0.0.1:$APP_PORT" node e2e/stakeholder-founder.e2e.cjs
 # database, and check counts, the financial and advertising reconciliation and
 # the member authorization audit on the restored copy.
 scripts/db/restore-drill.sh
+# Deleted accounts and posts stay deleted after a restore: back up, delete,
+# run the real drain (which logs the deletion register outside the database),
+# restore, reconcile from the log, and check (docs/RECOVERY.md).
+scripts/db/recovery-exercise.sh

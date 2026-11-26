@@ -165,6 +165,7 @@ We will publish new versions with a new version number and date. If a change aff
 | Feedback | Improve Splitpost | Through the pilot evaluation, deleted within 30 days after it closes | Evaluation close, or account deletion |
 | Administrative audit records (ids, actions, times, without message text) | Accountability and security | [Retention period: audit records] | End of period |
 | Technical logs (providers) | Security and operations | Provider default, [Retention period: provider logs] | Automatic |
+| Deletion register (ids of deleted or restored accounts, posts and comments, with the time; no names, emails or content) | Make sure deleted accounts and content stay deleted if we ever restore a backup | 30 days in our database; 7 days in our hosting provider's function logs (draft, Nov 26; for legal review) | Automatic at the end of each period |
 | Backups (database only; photos and videos are not backed up during the pilot) | Recovery | [Retention period: backups; 7 days on the current plan] | Overwritten in the normal cycle. If we ever restore one, accounts and content deleted since it was taken are deleted again before the service reopens |
 
 ### 13. Exceptions when you delete your account

@@ -16,8 +16,9 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: founder decisions (20261215000000,
-# scripts/db/rollback-founder-decisions-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: the deletion register (20261216000000,
+# scripts/db/rollback-deletion-register-test.sh, the newest, so it goes first),
+# founder decisions (20261215000000, scripts/db/rollback-founder-decisions-test.sh),
 # release hardening (20261214000000, scripts/db/rollback-release-hardening-test.sh),
 # video posts (20261213000000, scripts/db/rollback-video-posts-test.sh),
 # privacy requests and switches (20261212000000, scripts/db/rollback-privacy-switches-test.sh),
@@ -124,9 +125,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+REGISTER=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261216000000')")
+if [ "$REGISTER" = t ]; then
+  # The newest migration (the deletion register) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-founder-decisions.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the founder decisions rollback refuses while the deletion register is recorded" \
+    || bad "the founder decisions rollback did not refuse while the deletion register is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-deletion-register-test.sh; then
+    ok "deletion register: the rollback refuses while a deletion is not yet logged or a later migration exists, and otherwise removes exactly the register"
+  else
+    bad "the deletion register rollback tests failed"
+  fi
+fi
 DECISIONS=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261215000000')")
 if [ "$DECISIONS" = t ]; then
-  # The newest migration (founder decisions) goes first.
+  # Then the founder decisions.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-release-hardening.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the release hardening rollback refuses while the founder decisions are recorded" \
@@ -693,9 +707,21 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
                                       && ok "after reapplying, the release hardening rollback refuses while the founder decisions are recorded" \
                                       || bad "the release hardening rollback did not refuse after reapply while the founder decisions are recorded (exit $code)"
                                     out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-founder-decisions.sql 2>&1); code=$?
-                                    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-                                      && ok "after reapplying, the founder decisions rollback check passes again" \
-                                      || bad "founder decisions rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                    if [ "$REGISTER" = t ]; then
+                                      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                                        && ok "after reapplying, the founder decisions rollback refuses while the deletion register is recorded" \
+                                        || bad "the founder decisions rollback did not refuse after reapply while the deletion register is recorded (exit $code)"
+                                      # Deletions made by the tests in between are reported first, as the drain would.
+                                      "${PSQL[@]}" -c "select public.svc_deletion_register_reported(array(select id from ops.deletion_register where reported_at is null))" >/dev/null
+                                      out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-deletion-register.sql 2>&1); code=$?
+                                      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                        && ok "after reapplying, the deletion register rollback check passes again" \
+                                        || bad "deletion register rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                    else
+                                      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                        && ok "after reapplying, the founder decisions rollback check passes again" \
+                                        || bad "founder decisions rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                    fi
                                   else
                                     [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                                       && ok "after reapplying, the release hardening rollback check passes again" \
