@@ -101,12 +101,16 @@ begin
     and not exists (select 1 from ops.deletion_register r where r.kind = 'comment' and r.target_id = c.id and r.event = 'deleted');
   -- Accounts, one by one: the founder's deletion writes its 'account_deleted'
   -- event and (through the trigger) its register row in the same transaction,
-  -- so both carry the same transaction time. Each event must have its own
-  -- register row at that time. No new identifier is kept for this.
-  select count(*) into account_events from ops.member_request_events e
-  where e.action = 'account_deleted' and e.occurred_at >= started
-    and not exists (select 1 from ops.deletion_register r
-                    where r.kind = 'account' and r.event = 'deleted' and r.occurred_at = e.occurred_at);
+  -- so both carry the same transaction time. Two deletions in different
+  -- transactions can, rarely, share that time, so the match is counted per
+  -- time: each time must have at least as many register rows as deletion
+  -- events, so every event is matched to a row of its own. No new identifier
+  -- is kept for this.
+  select coalesce(sum(greatest(e.n - coalesce(r.n, 0), 0)), 0) into account_events
+  from (select occurred_at, count(*) as n from ops.member_request_events
+        where action = 'account_deleted' and occurred_at >= started group by occurred_at) e
+  left join (select occurred_at, count(*) as n from ops.deletion_register
+             where kind = 'account' and event = 'deleted' group by occurred_at) r on r.occurred_at = e.occurred_at;
   -- Register rows for accounts removed another way (the dashboard), for information.
   select count(*) into account_rows from ops.deletion_register r
   where r.kind = 'account' and r.event = 'deleted' and r.occurred_at >= started
@@ -116,7 +120,7 @@ begin
     raise exception 'FAIL: deletion register completeness: % post(s), % comment(s) and % founder account deletion(s) without their own register row; % row(s) not logged after 30 minutes',
       posts_missing, comments_missing, account_events, unlogged;
   end if;
-  raise notice 'PASS: deletion register completeness: every post, comment and founder account deletion since % has its own register row (matched one by one), and every row older than 30 minutes is logged; % account row(s) from deletions outside the founder function', started, account_rows;
+  raise notice 'PASS: deletion register completeness: every post, comment and founder account deletion since % has its own register row (counted per transaction time, so a shared time cannot hide a missing row), and every row older than 30 minutes is logged; % account row(s) from deletions outside the founder function', started, account_rows;
 end $$;
 
 \else

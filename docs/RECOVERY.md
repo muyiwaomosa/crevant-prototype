@@ -199,11 +199,32 @@ the steps below in between.
 
 **Prerequisites** (all must hold before step 4):
 
-* A daily backup is listed, and its time T is **after** today's device test
-  results were recorded (Control Center, Video posts). Check it: SQL editor,
+* **Founder authorization.** The restore happens only after the founder has
+  explicitly authorized this run, in writing (the tracker), having seen the
+  backup time and the evidence export below. Claude never starts it.
+* **The exact backup time** (T): Database, Backups, the newest daily backup,
+  with its time zone, copied into the tracker.
+* The backup is **after** today's device test results. SQL editor:
   `select device, passed, recorded_at from ops.video_device_tests order by recorded_at desc;`.
-  Every row there must be older than T. If any is newer, wait for the next
-  daily backup; otherwise those results would be lost.
+  Every row must be older than T. If any is newer, wait for the next daily
+  backup; otherwise those results would be lost.
+* **Acceptance evidence exported** before the restore (it survives whatever
+  the restore does): the device test results above (download the result),
+  the Control Center switch history and video readiness panel (screenshots),
+  and the tracker's acceptance rows. Nothing else on staging is needed
+  afterwards.
+* **Contingency** (if the restore fails or the restored project misbehaves):
+  1. Before step 6, the founder takes a full copy of staging as it is, on
+     their computer: `supabase db dump --db-url "<staging connection string>" -f staging-before-restore.sql`
+     plus `--data-only` into a second file (the connection string stays on
+     the founder's computer, never in chat or a file in the repository).
+  2. If the restore fails, retry it once from the dashboard; if it fails
+     again, ask Supabase support (Pro plan) and keep the app restricted.
+  3. If the restored project is unusable, staging can be rebuilt from the
+     repository (every migration, then the functions at their ledger
+     commits) and the data from step 1 reloaded; staging holds only the
+     founder's test data, so this is slow but complete. Production is never
+     involved.
 * Nobody but the founder is using staging (true today).
 * You know whether the waitlist logins (`waitlist_writer`, `waitlist_admin`)
   were activated on staging, and you can set their passwords (step 11).
@@ -336,8 +357,10 @@ either completes in one transaction or changes nothing).
    in the staging checks (032). **Completeness** is checked too, not only
    speed: staging check 032 fails if any post or comment deleted since the
    register started has no register row, if any of the founder's completed
-   account deletions has no register row of its own (each is matched one by
-   one, by the shared transaction time, with no extra identifier kept), or if
+   account deletions has no register row of its own (each deletion and its row
+   share the transaction time; the check counts per time, so two deletions
+   that happen to share a time each still need a row; no extra identifier is
+   kept), or if
    any row is not logged after 30 minutes. A failed read or mark is logged
    (`deletion_register_read_failed`, `deletion_register_mark_failed`).
    Unreported rows are those with `reported_at` empty.

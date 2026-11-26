@@ -189,7 +189,7 @@ J.run(async (browser) => {
   // ---------------------------------------------------------------------------
   step('8. Attention, Retention and Money reflect the new follower')
   await cleo.page.goto(`${APP}/app/profile`)
-  await cleo.page.getByRole('tab', { name: 'Attention' }).click()
+  await cleo.page.getByRole('tab', { name: 'Reach' }).click()
   const att = cleo.page.getByTestId('attention-face')
   await att.waitFor()
   const ta = flat(await att.innerText())
@@ -197,7 +197,7 @@ J.run(async (browser) => {
   check('Attention: every post was available to her follower, who saw one', followers === '1' && ta.includes('Every post was available to your follower. They saw at least one.'), ta)
   check('Attention: where the new follower came from (the invitation card follows as Other)', /Where your new follower came from Other 1/.test(ta), ta)
   await screenChecks(cleo.page, 'the Attention face')
-  await cleo.page.getByRole('tab', { name: 'Retention' }).click()
+  await cleo.page.getByRole('tab', { name: 'Connection' }).click()
   const ret = cleo.page.getByTestId('retention-face')
   await ret.waitFor()
   const tr = flat(await ret.innerText())
@@ -206,7 +206,7 @@ J.run(async (browser) => {
   check('Retention: 1 Active Supporter and 1 in her Clique, as in the database',
     /1 Active Supporter, 1 in your Clique/.test(tr) && sql(`select social.is_active_supporter('${n}', '${c}')`) === 't', tr.slice(0, 300))
   await screenChecks(cleo.page, 'the Retention face')
-  await cleo.page.getByRole('tab', { name: 'Money' }).click()
+  await cleo.page.getByRole('tab', { name: 'Earnings' }).click()
   const money = cleo.page.getByTestId('money-face')
   await money.waitFor()
   const tm0 = flat(await money.innerText())
