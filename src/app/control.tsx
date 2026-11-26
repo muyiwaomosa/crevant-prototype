@@ -221,6 +221,7 @@ const SWITCH_TEXT: Record<SwitchFeature, { title: string; body: string }> = {
   sharing: { title: 'Sharing', body: 'Copy link and the share sheet on posts.' },
   video_posts: { title: 'New video uploads', body: 'New video posts. Turns on only once the iPhone and Android device tests have passed and the video storage cap is set (see Video posts below).' },
   video_playback: { title: 'Video playback', body: 'Playing videos already published. Separate from uploads, so pausing uploads never hides existing videos.' },
+  progression: { title: 'Progression', body: 'Goals and simulated locked earnings in My Split. Nobody qualifies while it is off or until you set every goal value.' },
 }
 
 export function SwitchesPanel() {

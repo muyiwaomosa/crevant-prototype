@@ -550,8 +550,26 @@ export type MyAdvertising = {
   campaigns: Array<{ id: string; name: string; advertiser: string; status: string; startsOn: string; endsOn: string; placement: string }>
 }
 /** Privacy requests and switches (20261212000000). */
+/** Progression (20261217000000): goals and SIMULATED earnings by state. */
+export type GoalAudience = 'creator' | 'consumer'
+export type GoalStep = { metric: string; value: number; target: number | null }
+export type EarningsByState = { accumulatedCents: number; lockedCents: number; eligibleCents: number; settledCents: number }
+export type MyProgress =
+  | { enabled: false }
+  | {
+      enabled: true
+      goodStanding: boolean
+      creator: { qualifiedAt: string | null; steps: GoalStep[] }
+      consumer: { qualifiedAt: string | null; steps: GoalStep[] }
+      earnings: { creator: EarningsByState; consumer: EarningsByState }
+    }
+export type FounderGoals = {
+  catalogue: Record<GoalAudience, string[]>
+  versions: Array<{ id: number; audience: GoalAudience; targets: Record<string, number>; reason: string; setAt: string }>
+  qualified: Record<GoalAudience, number>
+}
 export type Features = { ads: boolean; sharing: boolean; videoPosts: boolean; videoPlayback: boolean; photos: boolean; rewards: boolean }
-export type SwitchFeature = 'ads' | 'sharing' | 'video_posts' | 'video_playback'
+export type SwitchFeature = 'ads' | 'sharing' | 'video_posts' | 'video_playback' | 'progression'
 export type FounderSwitches = {
   switches: Array<{ feature: SwitchFeature; enabled: boolean; updatedAt: string }>
   registrationPaused: boolean
@@ -880,6 +898,11 @@ export interface AppApi {
   features(): Promise<Features | null>
   founderSwitches(): Promise<FounderSwitches | null>
   founderSetSwitch(feature: SwitchFeature, enabled: boolean, reason: string): Promise<void>
+  /** Progression (20261217000000); null where it is not applied. */
+  myProgress(): Promise<MyProgress | null>
+  founderGoals(): Promise<FounderGoals | null>
+  founderSetGoals(audience: GoalAudience, targets: Record<string, number>, reason: string): Promise<number>
+  founderSettleEligible(reason: string): Promise<{ creatorEntries: number; consumerAllocations: number }>
   submitMemberRequest(kind: MemberRequestKind, details: string): Promise<number>
   myMemberRequests(): Promise<MemberRequest[] | null>
   withdrawMemberRequest(id: number): Promise<void>
@@ -1090,6 +1113,8 @@ const MESSAGES: Record<string, string> = {
   request_open: 'You already have a request like this open.',
   sharing_paused: 'Sharing is paused for a moment. Please try again later.',
   reason_required: 'Write a short reason first.',
+  every_goal_needs_a_value: 'Give every goal a whole number of 1 or more.',
+  unknown_goal: 'That goal is not in the list.',
   video_not_ready: 'Video posts stay off until the iPhone and Android device tests have passed and the video storage cap is set.',
   videos_unavailable: "Video posts aren't available right now. You can still post text.",
   not_tester: 'Only the founder and testers can run the video device test.',
@@ -1216,6 +1241,38 @@ export function isMissingRequestIdVersion(error: { code?: string; message?: stri
  * function, a malformed reply) is false, so it can never be mistaken for
  * "the gate isn't there".
  */
+/** Reads app_my_progress (20261217000000). Amounts are SIMULATED cents. */
+export function toMyProgress(r: Record<string, unknown>): MyProgress {
+  if (r.enabled !== true) return { enabled: false }
+  const steps = (x: unknown): GoalStep[] =>
+    ((x as Array<Record<string, unknown>>) ?? []).map((s) => ({
+      metric: String(s.metric),
+      value: num(s.value as number),
+      target: s.target === null || s.target === undefined ? null : num(s.target as number),
+    }))
+  const journey = (x: unknown) => {
+    const j = (x ?? {}) as Record<string, unknown>
+    return { qualifiedAt: (j.qualified_at as string | null) ?? null, steps: steps(j.steps) }
+  }
+  const money = (x: unknown): EarningsByState => {
+    const m = (x ?? {}) as Record<string, unknown>
+    return {
+      accumulatedCents: num(m.accumulated_cents as number),
+      lockedCents: num(m.locked_cents as number),
+      eligibleCents: num(m.eligible_cents as number),
+      settledCents: num(m.settled_cents as number),
+    }
+  }
+  const e = (r.earnings ?? {}) as Record<string, unknown>
+  return {
+    enabled: true,
+    goodStanding: r.good_standing !== false,
+    creator: journey(r.creator),
+    consumer: journey(r.consumer),
+    earnings: { creator: money(e.creator), consumer: money(e.consumer) },
+  }
+}
+
 export function isMissingFunction(error: { code?: string; message?: string } | null | undefined, fn: string): boolean {
   if (!error || error.code !== 'PGRST202') return false
   const m = /^Could not find the function public\.([a-z_]+)(?:\(| without parameters)/.exec(error.message ?? '')
@@ -2614,6 +2671,42 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       }
       const r = (data ?? {}) as Record<string, unknown>
       return { ads: r.ads !== false, sharing: r.sharing !== false, videoPosts: r.video_posts === true, videoPlayback: r.video_playback !== false, photos: r.photos === true, rewards: r.rewards !== false }
+    },
+    async myProgress() {
+      const { data, error } = await client.rpc('app_my_progress')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_progress')) return null
+        throw toAppError(error)
+      }
+      return toMyProgress((data ?? {}) as Record<string, unknown>)
+    },
+    async founderGoals() {
+      const { data, error } = await client.rpc('app_founder_goals')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_goals')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      const cat = (r.catalogue ?? {}) as Record<string, unknown>
+      const q = (r.qualified ?? {}) as Record<string, unknown>
+      return {
+        catalogue: { creator: ((cat.creator as string[]) ?? []).map(String), consumer: ((cat.consumer as string[]) ?? []).map(String) },
+        versions: ((r.versions as Array<Record<string, unknown>>) ?? []).map((v) => ({
+          id: num(v.id as number),
+          audience: v.audience === 'consumer' ? 'consumer' : 'creator',
+          targets: Object.fromEntries(Object.entries((v.targets ?? {}) as Record<string, unknown>).map(([k, x]) => [k, num(x as number)])),
+          reason: String(v.reason ?? ''),
+          setAt: String(v.set_at),
+        })),
+        qualified: { creator: num(q.creator as number), consumer: num(q.consumer as number) },
+      }
+    },
+    async founderSetGoals(audience, targets, reason) {
+      return num(await rpc<number>('app_founder_set_goals', { p_audience: audience, p_targets: targets, p_reason: reason }))
+    },
+    async founderSettleEligible(reason) {
+      const r = (await rpc<Record<string, unknown>>('app_founder_settle_eligible', { p_reason: reason })) ?? {}
+      return { creatorEntries: num(r.creator_entries as number), consumerAllocations: num(r.consumer_allocations as number) }
     },
     async founderSwitches() {
       const { data, error } = await client.rpc('app_founder_switches')

@@ -138,3 +138,50 @@ Phased after launch unless the founder asks otherwise.
 6. Account deletion reconciliation: counting per transaction time is exact
    without any new data; a stable event identifier would need a migration.
    Recommended: keep the counting.
+
+## 8. Built (Nov 26): G1 and G3, migration 20261217000000
+
+Behind the operational switch **progression**, off by default. While it is
+off, members see nothing and nobody qualifies.
+
+**The goal catalogue** (measures only; the founder sets every value in Control
+Center, with a reason, each change a new version):
+
+| Journey | Measure | Counted from |
+|---|---|---|
+| Creator | `original_posts` | Your posts, not reposts, not deleted or hidden |
+| Creator | `posting_weeks` | Calendar weeks with a post, last 6 weeks |
+| Creator | `genuine_followers` | Followers who are active pilot members, not suspended or blocked |
+| Creator | `active_supporters` | Followers with a meaningful comment on your posts in 28 days |
+| Creator | `clique_connections` | Active members who keep you in their Clique |
+| Consumer | `clique_engagement_weeks` | Weeks, of the last 4, with a meaningful comment, save or repost on a post by someone in your Clique |
+| Consumer | `support_weeks` | Weeks, of the last 6, with a meaningful comment, save or repost on someone else's post |
+| Consumer | `shares` | Shares of others' posts, last 28 days |
+| Consumer | `verified_contributions` | Qualified referrals approved or settled |
+
+One change from section 4: the Clique step counts **support for Clique
+members, not reading**. An existing safeguard (since 20261121) keeps viewed
+state out of anything reward-related, and qualification gates simulated
+money, so reading time stays out.
+
+**Rules the database enforces:**
+
+* No default values: until every measure of a journey has a value (a whole
+  number of 1 or more), nobody on that journey qualifies.
+* Qualification is recorded once, under the version in force, and is never
+  taken away by a later change to the values.
+* Integrity is a gate, not a score: a restriction or suspension in force
+  blocks qualification, release and settlement until it ends or is lifted.
+* States are append-only rows: locked (no row), eligible, settled. Eligible
+  only for a qualified member; settled only after eligible; each once.
+  Splitpost never takes a locked amount. Nothing is paid.
+* Consumers, Option A: at a month close, approved redeemable points take
+  their share of the pool as today (settled points never enter another
+  pool); the value is locked until the member qualifies.
+* Nothing in feeds, discovery, ranking or advertising reads progression
+  (checked on staging by 033).
+
+**Open, unchanged:** the values themselves; deletion, dormancy and
+disqualification treatment of balances; legal and accounting review before
+any real money. Revenue entries have no reversal type today; a reversal
+(fraud, refund) would need a compensating entry type before real money.

@@ -28,14 +28,16 @@ https://claude.ai/artifact/LT9k8aSFrFMz6MxRqtsvQ9).
 
 | Item | Stage | Evidence | Next |
 |---|---|---|---|
-| H1 Home: one feed, Clique row with the approved rings and counts, catch-up then earlier posts (approved decision) | **Tested** | Unit suite (892) and the six affected journeys pass; a phone layout defect found and fixed (screen-reader text widened the page) | Merge after the full browser suite; then on staging |
-| V1 Visual fidelity: logo header, immersive post cards, Home without the composer | Proposed (preview 1) | Discrepancies listed in SP-REFINE-001, section 1 | Founder confirms the preview |
-| D1 Discover: search first, For you, People, Topics | Proposed (previews 2, 3) | | Founder confirms |
-| P1 Profile: public profile versus Your insights; Reach, Connection, Earnings | Proposed (previews 4, 5) | | Founder confirms |
-| N1 Names: Reach, Connection, Earnings | **Approved** (founder, Nov 26); **Tested** | Profile tabs renamed; the faces and data unchanged underneath (Attention, Retention, Monetization); unit tests and the intelligence and creator journeys pass | Merge |
-| F1 Connection framework (goals, private explainable score, one currency, My Split as the centre) | **Approved in principle**; no formula or threshold approved | SP-REFINE-002, sections 1 and 5 | Lean December 23 plan: G1 goals engine, G2 creator progress, G5 My Split (behind a switch) |
-| F2 Locked creator earnings (simulated) | **Approved in principle** | SP-REFINE-002, section 3 | G3 release states; legal and accounting review for real money |
-| F3 Consumer qualification and eligible points before qualification | Proposal | SP-REFINE-002, section 4 (A: include and lock, recommended) | Founder decision 4 |
+| H1 Home: one feed, Clique row with the approved rings and counts, catch-up then earlier posts (approved decision) | **Merged** (PR #123) | Unit suite and the affected journeys pass | On staging |
+| V1 Visual fidelity: logo header, immersive post cards, Home without the composer | **Approved** (previews, SP-REFINE-002 direction) | Discrepancies listed in SP-REFINE-001, section 1 | Build; target December 10 |
+| D1 Discover: search first, For you, People, Topics | **Approved** (previews 2, 3) | | Build; target December 10 |
+| P1 Profile: public profile versus Your insights; Reach, Connection, Earnings | **Approved** (previews 4, 5) | | Build; target December 10 |
+| N1 Names: Reach, Connection, Earnings | **Merged** | Profile tabs renamed; data unchanged underneath | On staging |
+| G1 Goals engine (versioned, founder-set values, no defaults) and G3 simulated locked earnings (locked, eligible, settled; consumer Option A) | **Built and tested**, behind the progression switch (off) | Migration 20261217000000: behaviour test 300 (7 checks), staging check 033, rollback (10 checks) in the rollback suite (125 pass), reconciliation invariant; full database suite passes | PR for review; founder D7 approval of the checksum at merge; then staging |
+| G2 creator progress, G4 consumer (supporter) progress, G5 simplified My Split, Control Center goals panel | **Built and tested**, behind the same switch | 6 unit tests (switch off unchanged, unset goals, progress and next step, restriction, founder goals and settlement); browser journey `progression-journey` passes (WCAG 2.2 AA, 320 and 390 px, no CSP violations) and leaves the switch off; the consumer and founder journeys pass after it | Same PR as G1 |
+| F1 Connection framework | **Approved in principle**; weighted Connection Score, leaderboards, rankings and advanced achievements **deferred** (founder, Nov 26) | SP-REFINE-002, sections 1 and 5 | After launch |
+| F2 Locked creator earnings (simulated) | **Approved**: append-only states; Splitpost never absorbs a locked amount | SP-REFINE-002, section 3 | Built in G3; deletion, dormancy, disqualification and legal treatment stay open |
+| F3 Consumer eligible points before qualification | **Option A approved** (include and lock) | SP-REFINE-002, section 4 | Built in G3 |
 | F4 Interactive advertising | **Approved as a controlled experiment** in principle | SP-REFINE-002, section 6 | After launch unless the founder asks otherwise |
 | L1 Landing page visual assets | Not started | Prepared from the approved screens once V1 lands; not published before approval | After V1 |
 

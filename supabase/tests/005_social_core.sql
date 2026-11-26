@@ -129,6 +129,8 @@ declare
   -- Video posts (20261213000000), once applied: status, uploads, playback, device tests and the cap.
   video text[] := array['app_founder_record_device_test', 'app_founder_set_video_cap', 'app_founder_video_emergency_stop', 'app_founder_video_status', 'app_post_videos',
                         'app_video_status', 'app_video_upload_begin', 'app_video_upload_paths'];
+  -- Progression (20261217000000), once applied: goals, progress and simulated settlement.
+  progression text[] := array['app_founder_goals', 'app_founder_set_goals', 'app_founder_settle_eligible', 'app_my_progress'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -181,6 +183,9 @@ begin
   end if;
   if to_regclass('ops.video_device_tests') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || video) x);
+  end if;
+  if to_regclass('sim.goal_versions') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || progression) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -363,7 +368,8 @@ begin
                -- launch settings it reads. No waitlist, invitation or admin data.
                and regexp_replace(p.prosrc, 'ops\.(age_attestations|adult_attested|registration_settings|registration_links|registrations|registration_check|set_registration_settings|create_invitation_link|new_link_code|member_launch_settings|member_access(_active)?|content_reports|moderation_actions|moderator_active|purge_expired_report_data|clean_note|storage_cleanup_plans|storage_cleanup_candidates|storage_orphans|history_append_only|feedback|feedback_notes|feedback_actions|media_settings|media_deletions|media_drain_runs|media_admin_events|photos_open|photo_storage_used|queue_media_deletion|public_preview_settings|enforcements|enforcement_lifts|member_standing|member_notices|notify_member|appeals|moderators|other_moderator_available|connections|week_start|feature_switches|feature_switch_events|feature_on|member_requests|member_request_events|video_device_tests|video_device_passed|video_ready|videos_open|video_tester|video_storage_used|video_member_bytes|video_delivery_daily|forget_member_invitations)\M', '', 'g')
                   -- Relationships (20261201000000): the member's own non-binding Support Intent.
-                  ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings|reverse|restore_hidden)\M)') then
+                  -- Progression (20261217000000): the sim goal, qualification and earnings-state objects.
+                  ~* '\m(ops|waitlist_api|analytics)\.|\mintent\.(?!support_intents\M)|\msim\.(?!(points_ledger|award_state|outstanding|open_pool_cents|split|revenue_entries|settlements|settlement_lines|reward_settings|reverse|restore_hidden|goal_metrics|goal_versions|goal_values|goal_steps|qualifications|in_good_standing|check_qualification|creator_share_states|allocation_states|release_qualified|earnings_summary)\M)') then
     raise exception 'FAIL: a social or member function reaches private admin, waitlist or analytics data';
   end if;
   if exists (

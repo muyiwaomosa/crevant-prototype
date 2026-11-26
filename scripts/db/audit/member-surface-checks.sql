@@ -223,6 +223,13 @@ declare
     'public.app_video_upload_begin(integer,integer,text)',
     'public.app_video_upload_paths(uuid)'
   ];
+  -- Progression (20261217000000), once applied.
+  progression text[] := array[
+    'public.app_founder_goals()',
+    'public.app_founder_set_goals(text,jsonb,text)',
+    'public.app_founder_settle_eligible(text)',
+    'public.app_my_progress()'
+  ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
   actual text[];
@@ -253,6 +260,9 @@ begin
   end if;
   if to_regclass('social.saves') is not null then
     expected := expected || content;
+  end if;
+  if to_regclass('sim.goal_versions') is not null then
+    expected := expected || progression;
   end if;
   if to_regclass('social.shares') is not null then
     expected := expected || discovery;
