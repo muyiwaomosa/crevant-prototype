@@ -71,6 +71,11 @@ function reapplyLater() {
   execFileSync('scripts/db/local-open-launch-gate.sh', { env: { ...process.env, DB_URL: DB! } })
 }
 
+// Each schema switch rolls migrations back or re-applies every later one
+// (LATER), which grows with each migration: these tests get a budget for that
+// work instead of vitest's 5-second default.
+const SCHEMA_SWITCH_MS = 60_000
+
 describe.skipIf(!enabled)('posting against the old and the new database schema (local Supabase)', () => {
   let admin: SupabaseClient
   let member: SupabaseClient
@@ -130,7 +135,7 @@ describe.skipIf(!enabled)('posting against the old and the new database schema (
     expect(sql(`select id from social.posts where author_id = '${userId}' and body = 'Sent to the old schema'`)).toBe(postId)
     await api.addComment(postId, 'Commented on the old schema', newRequestId())
     expect(sql(`select count(*) from social.comments where author_id = '${userId}' and body = 'Commented on the old schema'`)).toBe('1')
-  })
+  }, SCHEMA_SWITCH_MS)
 
   it('on the new schema, the same request id sent twice is one post', async () => {
     execFileSync('psql', [DB!, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', MIGRATION])
@@ -151,7 +156,7 @@ describe.skipIf(!enabled)('posting against the old and the new database schema (
     expect(b).toBe(a)
     expect(sql(`select count(*) from social.posts where author_id = '${userId}' and body = 'Sent twice to the new schema'`)).toBe('1')
     expect(sql(`select client_request_id from social.posts where id = '${a}'`)).toBe(rid)
-  })
+  }, SCHEMA_SWITCH_MS)
 
   it('the migration file in use is the one under review', () => {
     expect(readFileSync(MIGRATION, 'utf8')).toContain('create function public.app_create_post(p_body text, p_request_id uuid)')
