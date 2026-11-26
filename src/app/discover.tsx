@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { Compass, Search, Sparkles } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ChevronLeft, Compass, LayoutGrid, Search, Sparkles, UserPlus } from 'lucide-react'
 import { EmptyState, PageHeader, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { type DiscoverMember, type Post, type Topic } from './api'
@@ -21,8 +21,27 @@ import { useTopicList } from './content'
 export function DiscoverPage() {
   const api = useAppApi()
   const topics = useTopicList()
+  const [params, setParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [submitted, setSubmitted] = useState('')
+  // Approved design (D1): one question and one search box, then three ways
+  // in. A focused view (For you, People, Topics) opens full screen with the
+  // face transition; the choice is kept in the URL so Back works.
+  const focused = params.has('face') || params.has('browse')
+  function open(face: 'for-you' | 'creators' | 'content') {
+    const p = new URLSearchParams(params)
+    p.set('browse', '1')
+    if (face === 'for-you') p.delete('face')
+    else p.set('face', face)
+    setParams(p)
+    window.scrollTo({ top: 0 })
+  }
+  function back() {
+    const p = new URLSearchParams(params)
+    p.delete('browse')
+    p.delete('face')
+    setParams(p)
+  }
   function search(e: FormEvent) {
     e.preventDefault()
     setSubmitted(query.trim())
@@ -33,7 +52,7 @@ export function DiscoverPage() {
   }
   return (
     <>
-      <PageHeader title="Discover" subtitle="Find new value: people and posts that match what you care about. Nothing here changes your Home." />
+      <PageHeader title="Discover" subtitle="What are you looking for today?" />
       <form onSubmit={search} role="search" className="mb-4 flex gap-2">
         <label htmlFor="discover-search" className="sr-only">
           Search people, posts and topics
@@ -45,7 +64,7 @@ export function DiscoverPage() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search people, posts and topics"
+            placeholder="People, posts or topics"
             className="block h-12 w-full rounded-2xl border border-ink-200 bg-white pl-10 pr-4 text-base text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
           />
         </div>
@@ -55,17 +74,86 @@ export function DiscoverPage() {
       </form>
       {submitted ? (
         <SearchResults query={submitted} topics={topics} onClear={clear} api={api} />
+      ) : focused ? (
+        <>
+          <button type="button" onClick={back} className="mb-3 inline-flex items-center gap-1 text-[14px] font-semibold text-brand-700" data-testid="discover-back">
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" /> All of Discover
+          </button>
+          <FaceView
+            label="Discover views"
+            faces={[
+              { key: 'for-you', label: 'For you', content: <ForYou topics={topics} /> },
+              { key: 'creators', label: 'People', content: <Creators topics={topics} /> },
+              { key: 'content', label: 'Topics', content: <ByTopic topics={topics} /> },
+            ]}
+          />
+        </>
       ) : (
-        <FaceView
-          label="Discover views"
-          faces={[
-            { key: 'for-you', label: 'For you', content: <ForYou topics={topics} /> },
-            { key: 'creators', label: 'Creators', content: <Creators topics={topics} /> },
-            { key: 'content', label: 'Content', content: <ByTopic topics={topics} /> },
-          ]}
-        />
+        <DiscoverHome onOpen={open} />
       )}
     </>
+  )
+}
+
+const WAYS_IN = [
+  { face: 'for-you' as const, label: 'For you', icon: Sparkles, hint: 'Picked for your interests' },
+  { face: 'creators' as const, label: 'People', icon: UserPlus, hint: 'Creators to follow' },
+  { face: 'content' as const, label: 'Topics', icon: LayoutGrid, hint: 'Browse by subject' },
+]
+
+/** The first screen: three ways in, one recommended person, and a few posts. Everything else is one tap deeper. */
+function DiscoverHome({ onOpen }: { onOpen: (face: 'for-you' | 'creators' | 'content') => void }) {
+  const api = useAppApi()
+  const topics = useTopicList()
+  const people = useAsync(() => api.discover(''), [api])
+  const mine = useAsync(async () => (await api.myDetails().catch(() => null))?.topics ?? [], [api])
+  const posts = useAsync(() => api.discoverPosts(), [api])
+  // Someone new: never a person already followed.
+  const hero = people.data?.find((m) => !m.followedByMe)
+  const few = (posts.data ?? []).slice(0, 3)
+  return (
+    <div className="space-y-5" data-testid="discover-home">
+      <nav aria-label="Ways into Discover" className="grid grid-cols-3 gap-2">
+        {WAYS_IN.map((w, i) => (
+          <button
+            key={w.face}
+            type="button"
+            onClick={() => onOpen(w.face)}
+            className={`flex flex-col items-center gap-1.5 rounded-3xl px-2 py-4 text-center transition ${
+              i === 0 ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-white text-ink-900 ring-1 ring-ink-100 hover:bg-ink-50'
+            }`}
+          >
+            <w.icon className="h-5 w-5" aria-hidden="true" />
+            <span className="text-[15px] font-bold">{w.label}</span>
+            <span className={`text-[12px] leading-tight ${i === 0 ? 'text-white/85' : 'text-ink-600'}`}>{w.hint}</span>
+          </button>
+        ))}
+      </nav>
+      {hero && (
+        <section aria-labelledby="discover-hero-title">
+          <h2 id="discover-hero-title" className="mb-2 text-[15px] font-bold text-ink-900">
+            Someone you might value
+          </h2>
+          <PersonSummary member={hero} topics={topics} myTopics={mine.data} onChange={people.reload} source="discover" />
+        </section>
+      )}
+      {few.length > 0 && (
+        <section aria-labelledby="discover-posts-title">
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 id="discover-posts-title" className="text-[15px] font-bold text-ink-900">
+              Posts you might value
+            </h2>
+            <button type="button" onClick={() => onOpen('for-you')} className="text-[14px] font-semibold text-brand-700">
+              See more
+            </button>
+          </div>
+          <PostResults posts={few} empty={null} />
+        </section>
+      )}
+      {people.data && people.data.length === 0 && posts.data !== undefined && few.length === 0 && (
+        <EmptyState icon={<Compass className="h-7 w-7" />} title="Quiet for now" body="As more members join and post, people and posts you might value appear here." />
+      )}
+    </div>
   )
 }
 
@@ -250,6 +338,9 @@ function ByTopic({ topics }: { topics: Topic[] | null }) {
   const [topic, setTopic] = useState('')
   const label = topics?.find((t) => t.slug === topic)?.label
   const posts = useAsync(async () => (label ? api.searchPosts(label) : []), [api, label])
+  // Who posts about it (shared interests first), then what: the approved Topics view.
+  const people = useAsync(async () => (topic ? (await api.discover('', topic)).slice(0, 3) : []), [api, topic])
+  const mine = useAsync(async () => (await api.myDetails().catch(() => null))?.topics ?? [], [api])
   if (!topics || topics.length === 0) return <Message tone="info">Topics aren't available yet.</Message>
   return (
     <div>
@@ -263,7 +354,16 @@ function ByTopic({ topics }: { topics: Topic[] | null }) {
           ))}
         </div>
       </fieldset>
-      {!topic && <p className="text-sm text-ink-600">Pick a topic to see its latest posts.</p>}
+      {!topic && <p className="text-sm text-ink-600">Pick a topic to see who posts about it and its latest posts.</p>}
+      {topic && people.data && people.data.length > 0 && (
+        <section aria-labelledby="topic-people" className="mb-5" data-testid="topic-people">
+          <h2 id="topic-people" className="mb-2 text-[15px] font-bold text-ink-900">
+            People who post about {label}
+          </h2>
+          <People people={people.data} topics={topics} myTopics={mine.data} onChange={people.reload} />
+        </section>
+      )}
+      {topic && <h2 className="mb-2 text-[15px] font-bold text-ink-900">Latest in {label}</h2>}
       {posts.error !== null && <ErrorNote error={posts.error} />}
       {topic && posts.data === null && <Message tone="info">Browsing posts by topic isn't available yet.</Message>}
       {topic && posts.data && <PostResults posts={posts.data} empty={<Message tone="info">No posts in {label} yet.</Message>} />}

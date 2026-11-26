@@ -283,7 +283,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
       && (await card.getByRole('list', { name: 'Interests' }).getByText('Learning').count()) === 1)
     // Interest-based discovery: by topic, without searching.
     await pageB.getByRole('button', { name: 'Clear search' }).click()
-    await pageB.getByRole('tab', { name: 'Creators' }).click()
+    await pageB.getByRole('navigation', { name: 'Ways into Discover' }).getByRole('button', { name: /^People/ }).click()
     const interest = pageB.getByLabel('Browse by interest')
     await interest.selectOption({ label: 'Learning' })
     await pageB.getByRole('link', { name: 'Aye Teacher', exact: true }).waitFor()

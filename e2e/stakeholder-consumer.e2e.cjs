@@ -97,6 +97,18 @@ J.run(async (browser) => {
   // ---------------------------------------------------------------------------
   step('3. Discover: posts in his interests with their reason, and creators by interest')
   await nav(kai.page).getByTitle('Discover').click()
+  // The first screen (D1): one question, the search box and three ways in.
+  const ways = kai.page.getByRole('navigation', { name: 'Ways into Discover' })
+  await ways.waitFor()
+  await screenChecks(kai.page, 'Discover, first screen')
+  if (process.env.SHOTS) {
+    await kai.page.screenshot({ path: require('node:path').join(process.env.SHOTS, 'discover-desktop.png') })
+    await kai.page.setViewportSize({ width: 390, height: 844 })
+    await kai.page.waitForTimeout(300)
+    await kai.page.screenshot({ path: require('node:path').join(process.env.SHOTS, 'discover-phone.png') })
+    await kai.page.setViewportSize({ width: 1280, height: 900 })
+  }
+  await ways.getByRole('button', { name: /^For you/ }).click()
   await kai.page.getByRole('tab', { name: 'For you' }).waitFor()
   const boPost = kai.page.getByRole('listitem').filter({ hasText: bo.text[0] })
   await boPost.first().waitFor()
@@ -104,12 +116,12 @@ J.run(async (browser) => {
   check('For you shows Bo\'s travel post, from someone he doesn\'t follow, with its reason', /Travel/.test(reason), reason)
   check('For you leaves out the creator he already follows', (await kai.page.getByRole('listitem').filter({ hasText: ola.text[0] }).count()) === 0)
   await screenChecks(kai.page, 'Discover, For you')
-  await kai.page.getByRole('tab', { name: 'Creators' }).click()
+  await kai.page.getByRole('tab', { name: 'People' }).click()
   await kai.page.getByLabel('Browse by interest').selectOption('travel')
   const boCard = kai.page.getByRole('listitem').filter({ hasText: 'Bo Travels' }).first()
   await boCard.waitFor()
   check('Creators by interest shows Bo with what he posts about', (await boCard.innerText()).includes('Travel'))
-  await screenChecks(kai.page, 'Discover, Creators')
+  await screenChecks(kai.page, 'Discover, People')
   await boCard.getByRole('button', { name: 'Follow Bo Travels' }).click()
   await boCard.getByTestId('follow-confirmation').waitFor()
   check('he follows Bo intentionally, from Discover', sql(`select source from social.follow_events where follower_id = '${k}' and creator_id = '${bo.id}' and action = 'followed'`) === 'discover')
