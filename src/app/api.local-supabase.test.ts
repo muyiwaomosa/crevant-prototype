@@ -26,6 +26,7 @@ const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
 // Newest first.
 const LATER = [
+  { version: '20261219000000', name: 'pilot_closure_activation_triage', file: 'supabase/migrations/20261219000000_pilot_closure_activation_triage.sql', rollback: 'scripts/db/staging-rollback-pilot-closure.sql', phrase: 'REMOVE STAGING PILOT CLOSURE' },
   { version: '20261218000000', name: 'progression_rules', file: 'supabase/migrations/20261218000000_progression_rules.sql', rollback: 'scripts/db/staging-rollback-progression-rules.sql', phrase: 'REMOVE STAGING PROGRESSION RULES' },
   { version: '20261217000000', name: 'progression', file: 'supabase/migrations/20261217000000_progression.sql', rollback: 'scripts/db/staging-rollback-progression.sql', phrase: 'REMOVE STAGING PROGRESSION' },
   { version: '20261216000000', name: 'deletion_register', file: 'supabase/migrations/20261216000000_deletion_register.sql', rollback: 'scripts/db/staging-rollback-deletion-register.sql', phrase: 'REMOVE THE STAGING DELETION REGISTER' },

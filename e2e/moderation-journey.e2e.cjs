@@ -132,7 +132,9 @@ async function signIn(page, email) {
   await signIn(pageB, B.email)
   const post = pageB.getByTestId('post').filter({ hasText: postText })
   await post.waitFor()
-  check("B's own posts and other members' posts: Report shows only on other people's", (await post.getByRole('button', { name: `Report this post by ${A.displayName}` }).count()) === 1)
+  check("B's own posts and other members' posts: Report shows only on other people's", (await post.getByRole('button', { name: `More options for this post by ${A.displayName}` }).count()) === 1)
+  // Report is in the post's "···" menu.
+  await post.getByRole('button', { name: `More options for this post by ${A.displayName}` }).click()
   await post.getByRole('button', { name: `Report this post by ${A.displayName}` }).click()
   const dialog = pageB.getByRole('dialog', { name: 'Report this post' })
   await dialog.waitFor()

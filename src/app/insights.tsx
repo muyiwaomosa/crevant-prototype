@@ -6,7 +6,7 @@ import { Message, Spinner } from '../public/auth/AuthUi'
 import { messageFor, type Audience, type ContributionInsights, type CreatorInsights, type FounderOverview } from './api'
 import { useAppApi } from './AppApiContext'
 import { InvitationLinksPanel, PrivacyRequestsPanel, RegistrationPanel, SwitchesPanel } from './control'
-import { GoalsPanel } from './progression'
+import { ActivationPanel, GoalsPanel } from './progression'
 import { VideoReadinessPanel } from './video'
 import { useFeedbackAccess } from './feedback'
 import { simulatedDollars } from './split'
@@ -786,6 +786,7 @@ export function ControlCenterPage() {
         <InvitationLinksPanel />
         <SwitchesPanel />
         <GoalsPanel />
+        <ActivationPanel />
         <VideoReadinessPanel />
         <PrivacyRequestsPanel />
       </section>

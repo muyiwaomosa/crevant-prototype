@@ -1320,6 +1320,22 @@ function fakeApi(
         members: progression.queue.members.map((m) => (m.memberId === d.memberId && m.audience === d.audience ? { ...m, status: d.decision === 'revoked' ? 'revoked' : 'qualified' } : m)),
       }
     },
+    async myDeletionConsequences() {
+      return { recognitionPoints: 4, eligiblePoints: 100, openSimulatedCents: 1240 }
+    },
+    async founderActivation() {
+      requireFounder()
+      const m = (activated: number, denominator: number, definition: string) => ({ definition, denominatorDefinition: 'Active pilot members', denominator, activated })
+      return {
+        effectiveFrom: '2026-11-26',
+        transitionUntil: '2026-12-26',
+        creator: m(2, 10, 'Published an eligible original post and has a meaningful audience connection'),
+        consumer: m(3, 10, 'Follows three creators, one in their Clique, one meaningful engagement'),
+        consumerPrevious: m(4, 8, 'Previous metric'),
+        advertiser: m(1, 2, 'Approved, with a delivered test campaign'),
+        comparability: 'Not comparable with the previous metric.',
+      }
+    },
     async founderPlaceHold(h) {
       requireFounder()
       if (h.scope === 'account' && (h.justification ?? '').trim().length < 10) throw new AppApiError('justification_required')
@@ -2154,6 +2170,9 @@ describe('reporting and moderation (20261124000000)', () => {
     const own = screen.getAllByTestId('post').find((p) => p.textContent?.includes('My own post'))!
     expect(within(own).queryByRole('button', { name: /^Report/ })).toBeNull()
     expect(mine).toBeTruthy()
+    // Report is in the post's "···" menu.
+    expect(within(own).queryByRole('button', { name: /^More options/ })).toBeNull()
+    fireEvent.click(within(theirs).getByRole('button', { name: 'More options for this post by Creator 1' }))
     fireEvent.click(within(theirs).getByRole('button', { name: 'Report this post by Creator 1' }))
     const dialog = await screen.findByRole('dialog', { name: 'Report this post' })
     expect(within(dialog).getByRole('note').textContent).toMatch(/Reporting isn't an emergency service\..*not around the clock.*call 911.*988/)
@@ -4056,6 +4075,34 @@ describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () 
     expect(card).toMatch(/Publish original posts: 1 \(25%\)/)
     expect(card).toMatch(/Qualified referrals: 7; at most 1 supporters can reach the referral goal/)
   })
+
+  it('triages the review queue into routine and flagged, with the reason, the wait and the metrics; activation shows both consumer metrics', async () => {
+    const f = fakeApi('me', { founder: true })
+    f.progression.queue = {
+      members: [
+        { memberId: 'dan', username: 'dan', audience: 'consumer', goalsMetAt: '2026-11-22T00:00:00Z', status: 'under_review', routine: false, concerns: ['open report'], pendingReason: 'Flagged: open report', waitingHours: 80 },
+        { memberId: 'cleo', username: 'cleo', audience: 'creator', goalsMetAt: '2026-11-25T00:00:00Z', status: 'under_review', routine: true, concerns: [], pendingReason: 'Every routine check passed; waiting for your decision', waitingHours: 5 },
+      ],
+      holds: [],
+      decisions: [],
+      metrics: { routine_waiting: 1, flagged_waiting: 1, oldest_waiting_hours: 80, decisions_7d: 0, median_turnaround_hours: null, revoked: 0 },
+    }
+    renderApp('/app/control', f.api)
+    const review = within(await screen.findByTestId('progression-review'))
+    const rows = review.getAllByTestId('review-row')
+    expect(within(rows[0]).getByTestId('review-triage').textContent).toBe('Flagged')
+    expect(rows[0].textContent).toMatch(/Flagged: open report · waiting 3 days/)
+    expect(within(rows[1]).getByTestId('review-triage').textContent).toBe('Routine')
+    expect(rows[1].textContent).toMatch(/waiting 5 h/)
+    expect(review.getByTestId('review-metrics').textContent).toMatch(/Waiting: 1 routine, 1 flagged \(oldest 80 h\)\. Decisions in 7 days: 0\. Median time to approval: not yet measured/)
+    // Approval stays manual: both rows still need a decision.
+    expect(review.getAllByRole('button', { name: 'Approve' }).length).toBe(2)
+    const act = (await screen.findByTestId('activation-panel')).textContent
+    expect(act).toMatch(/effective 2026-11-26.*until 2026-12-26/)
+    expect(act).toMatch(/Creators: 2 of 10 \(20%\)/)
+    expect(act).toMatch(/Consumers \(previous metric\): 4 of 8 \(50%\)/)
+    expect(act).toMatch(/Advertisers: 1 of 2 \(50%\)/)
+  })
 })
 
 describe('progression governance (SP-PRG-001): holds and corrections in Control Center', () => {
@@ -4996,6 +5043,12 @@ describe('unified account and progressive onboarding (20261211000000, 2026121200
     const f = fakeApi()
     renderApp('/app/privacy', f.api)
     fireEvent.click(await screen.findByRole('radio', { name: /Delete my account/ }))
+    // The consequences are explained before the member confirms (pilot closure policy).
+    const note = await screen.findByTestId('deletion-consequences')
+    await waitFor(() => expect(note.textContent).toMatch(/4 recognition points are removed/))
+    expect(note.textContent).toMatch(/100 reward-eligible points not yet allocated are cancelled/)
+    expect(note.textContent).toMatch(/\$12\.40 of simulated earnings not yet settled are closed/)
+    expect(note.textContent).toMatch(/never become Splitpost revenue.*not how real earnings would be treated/)
     const send = screen.getByRole('button', { name: 'Send request' }) as HTMLButtonElement
     expect(send.disabled).toBe(true)
     fireEvent.click(screen.getByRole('checkbox', { name: /I understand my account/ }))

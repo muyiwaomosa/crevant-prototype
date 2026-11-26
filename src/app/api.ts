@@ -575,10 +575,34 @@ export type FounderGoals = {
 }
 /** Progression rules (20261218000000): the founder's review queue and scorecard. */
 export type ProgressionQueue = {
-  members: Array<{ memberId: string; username: string | null; audience: GoalAudience; goalsMetAt: string; status: QualificationStatus }>
+  members: Array<{
+    memberId: string
+    username: string | null
+    audience: GoalAudience
+    goalsMetAt: string
+    status: QualificationStatus
+    /** Triage (20261219000000): every routine check passed, or the plain reasons it is flagged. */
+    routine?: boolean
+    concerns?: string[]
+    pendingReason?: string | null
+    waitingHours?: number | null
+  }>
   holds: Array<{ id: number; username: string | null; scope: string; revenueEntryId: number | null; settlementId: number | null; reason: string; placedAt: string }>
   decisions: Array<{ username: string | null; audience: GoalAudience; decision: string; reason: string; evidenceRef: string | null; decidedAt: string }>
+  metrics?: Record<string, number | null>
 }
+/** Activation by the SP-PRG-001 definitions (20261219000000). */
+export type ActivationMetric = { definition: string; denominatorDefinition: string; denominator: number; activated: number }
+export type Activation = {
+  effectiveFrom: string
+  transitionUntil: string
+  creator: ActivationMetric
+  consumer: ActivationMetric
+  consumerPrevious: ActivationMetric
+  advertiser: ActivationMetric
+  comparability: string
+}
+export type DeletionConsequences = { recognitionPoints: number; eligiblePoints: number; openSimulatedCents: number }
 export type ProgressionReport = {
   definitions: Record<string, string>
   creator: { denominator: number; milestones: Record<string, number> }
@@ -929,6 +953,9 @@ export interface AppApi {
   founderDecideQualification(d: { memberId: string; audience: GoalAudience; decision: 'approved' | 'revoked' | 'restored'; reason: string; evidenceRef?: string; memberMessage?: string }): Promise<void>
   founderPlaceHold(h: { memberId: string; scope: 'account' | 'creator_entry' | 'consumer_allocation'; revenueEntryId?: number; settlementId?: number; reason: string; evidenceRef?: string; justification?: string; memberMessage: string }): Promise<number>
   founderReleaseHold(id: number, reason: string): Promise<void>
+  /** Pilot closure and activation (20261219000000); null where not applied. */
+  myDeletionConsequences(): Promise<DeletionConsequences | null>
+  founderActivation(): Promise<Activation | null>
   founderCorrectRevenue(c: { entryId: number; deltaCents: number; kind: 'refund' | 'invalid_activity' | 'correction' | 'restoration'; reason: string; evidenceRef?: string }): Promise<number>
   founderCorrectAllocation(c: { settlementId: number; memberId: string; deltaCents: number; kind: 'invalid_activity' | 'correction' | 'restoration'; reason: string; evidenceRef?: string }): Promise<number>
   submitMemberRequest(kind: MemberRequestKind, details: string): Promise<number>
@@ -2768,6 +2795,10 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
           audience: m.audience === 'consumer' ? 'consumer' : 'creator',
           goalsMetAt: String(m.goals_met_at),
           status: String(m.status) as QualificationStatus,
+          routine: m.routine === undefined ? undefined : m.routine === true,
+          concerns: Array.isArray(m.concerns) ? (m.concerns as unknown[]).map(String) : undefined,
+          pendingReason: (m.pending_reason as string | null | undefined) ?? null,
+          waitingHours: m.waiting_hours == null ? null : num(m.waiting_hours as number),
         })),
         holds: rows('holds').map((h) => ({
           id: num(h.id as number),
@@ -2786,6 +2817,44 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
           evidenceRef: (d.evidence_ref as string | null) ?? null,
           decidedAt: String(d.decided_at),
         })),
+        metrics: r.metrics
+          ? Object.fromEntries(Object.entries(r.metrics as Record<string, unknown>).map(([k, v]) => [k, v == null ? null : Number(v)]))
+          : undefined,
+      }
+    },
+    async myDeletionConsequences() {
+      const { data, error } = await client.rpc('app_my_deletion_consequences')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_deletion_consequences')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      return { recognitionPoints: num(r.recognition_points as number), eligiblePoints: num(r.eligible_points as number), openSimulatedCents: num(r.open_simulated_cents as number) }
+    },
+    async founderActivation() {
+      const { data, error } = await client.rpc('app_founder_activation')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_activation')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      const m = (x: unknown): ActivationMetric => {
+        const o = (x ?? {}) as Record<string, unknown>
+        return {
+          definition: String(o.definition ?? ''),
+          denominatorDefinition: String(o.denominator_definition ?? ''),
+          denominator: num(o.denominator as number),
+          activated: num(o.activated as number),
+        }
+      }
+      return {
+        effectiveFrom: String(r.effective_from ?? ''),
+        transitionUntil: String(r.transition_until ?? ''),
+        creator: m(r.creator),
+        consumer: m(r.consumer),
+        consumerPrevious: m(r.consumer_previous),
+        advertiser: m(r.advertiser),
+        comparability: String(r.comparability ?? ''),
       }
     },
     async founderProgressionReport() {

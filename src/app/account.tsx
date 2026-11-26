@@ -22,6 +22,7 @@ import {
   type MemberRequest,
   type MemberRequestKind,
   type MyAdvertising,
+  type DeletionConsequences,
 } from './api'
 import { useAppApi } from './AppApiContext'
 import { campaignStory } from './ads'
@@ -377,10 +378,44 @@ const KIND_TEXT: Record<MemberRequestKind, { title: string; body: string }> = {
   correction: { title: 'Correct something', body: 'Tell us what is wrong and we will fix it.' },
   deletion: {
     title: 'Delete my account',
-    body: 'Your profile, posts, comments and follows are removed. Simulated points are forfeited. This cannot be undone.',
+    body: 'Your profile, posts, comments and follows are removed, and your simulated pilot balances are closed. This cannot be undone.',
   },
 }
 const REQUEST_STATUS: Record<MemberRequest['status'], string> = { open: 'Open', completed: 'Done', declined: 'Declined', withdrawn: 'Withdrawn' }
+
+/** What a deletion closes, before the member confirms (pilot policy, Nov 26). Simulated amounts only. */
+function DeletionConsequencesNote() {
+  const api = useAppApi()
+  const [c, setC] = useState<DeletionConsequences | null | undefined>(undefined)
+  useEffect(() => {
+    let live = true
+    api.myDeletionConsequences().then(
+      (x) => live && setC(x),
+      () => live && setC(null),
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
+  return (
+    <div className="rounded-2xl bg-paper p-4 text-[14px] text-ink-800" data-testid="deletion-consequences">
+      <p className="font-semibold text-ink-900">What deleting your account closes</p>
+      {c && (
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <li>{c.recognitionPoints} recognition points are removed.</li>
+          <li>{c.eligiblePoints} reward-eligible points not yet allocated are cancelled.</li>
+          <li>
+            ${(c.openSimulatedCents / 100).toFixed(2)} of simulated earnings not yet settled are closed.
+          </li>
+        </ul>
+      )}
+      <p className="mt-2 text-[13px] text-ink-600">
+        During the pilot every amount is simulated and nothing is paid. Closed amounts are recorded for audit and never become Splitpost revenue. This pilot
+        rule is not how real earnings would be treated.
+      </p>
+    </div>
+  )
+}
 
 export function PrivacyPage() {
   const api = useAppApi()
@@ -471,10 +506,11 @@ export function PrivacyPage() {
                   multiline
                 />
               )}
+              {kind === 'deletion' && <DeletionConsequencesNote />}
               {kind === 'deletion' && (
                 <label className="flex gap-3 text-[14px] text-ink-800">
                   <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} className="mt-1" />I understand my account and
-                  everything I posted will be deleted, and my simulated points forfeited.
+                  everything I posted will be deleted, and my simulated pilot balances closed.
                 </label>
               )}
               <button
