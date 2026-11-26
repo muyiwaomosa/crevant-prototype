@@ -9,6 +9,8 @@ merging approves its migration checksums under D7), **Deployed** (database on
 staging and the `staging` app at that commit), **Accepted** (the founder used it
 on staging and signed off).
 
+Infrastructure: Vercel Pro and Supabase Pro (founder, Nov 26).
+
 Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 branch, fast-forwarded only to merged `main`). Founder actions and acceptance
 steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
@@ -37,7 +39,8 @@ steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 | Founder decisions of Nov 25: own-audience referrals recognized (20 points, 5 a day, configurable pilot parameters pending economic validation; recognition, never redeemable), moderator discipline escalated to the founder, Money & Business advertising policy | Merged | PR #115, Nov 26 01:28 (9270ea5); implementation accepted by the founder | Staging deploy run 45736045685 (waiting for founder), then acceptance |
 | Ad placement regression test: feed and post serves of one campaign, attributed by placement, valid counts, report split, nothing served while off (permanent regression suite, accepted by the founder Nov 26) | Merged | PR #115; test 280 runs in every Database CI job; the founder journey sees the Home feed ad on purpose, with exact counts | Done |
 | Defects found in testing: a like tapped before a post card finished mounting was undone on screen; a second tap during "Skip the rest" could skip a setup step | Merged | PR #115; each with a unit test that fails without the fix | Acceptance |
-| Release hardening, part 2: first-load speed on emulated phones (members area loaded on demand and preloaded; sign-in 2.7 to 2.1 s on Slow 4G), database timings at 30 times pilot size, backup and restore drill in every CI run, financial and advertising reconciliation (12 checks), recovery procedure with proposed objectives, a recovery screen instead of blank pages, page titles and focus after navigation, ad views counted only in a visible tab, video journey switch changes recorded | Tested (local) | `docs/PERFORMANCE.md`, `docs/RECOVERY.md`; 879+ unit tests, 19 journeys and the drill pass locally | Pull request CI; founder: Supabase Pro, the recovery objectives and the real-device check (staging guide, Journey 9) |
+| Release hardening, part 2: first-load speed on emulated phones (sign-in 2.7 to 2.1 s on Slow 4G), database timings at 30 times pilot size, backup and restore drill in every CI run, financial and advertising reconciliation (12 checks), recovery procedure, recovery screen instead of blank pages, page titles and focus after navigation, ad views counted only in a visible tab | Merged | PR #116, Nov 26 (9908901); accepted by the founder; recovery objectives approved (RPO 24 h, RTO 4 h) | Staging app at 9908901; real-device check and acceptance (staging guide, Journey 9) |
+| Pilot media disclosure: "Keep your original" in the composer when a photo or video is attached; privacy notice draft line; recovery procedure makes re-deleting accounts mandatory | Tested (local) | `docs/RECOVERY.md` decisions; unit tests | Pull request CI |
 | "See Splitpost" screenshots on the landing page | Not started | Needs the Dec 7 build | Take from staging after acceptance starts |
 
 | Production batch | Planned | Status |
@@ -46,6 +49,7 @@ steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 | PB-2 Migrations and functions | Dec 16 | Not started |
 | PB-3 Release candidate fixes | Dec 20 | Not started |
 | PB-4 Open external access | Dec 23 | Not started; needs separate authorization |
+| Before wider commercial launch | Before PB-4 or any cohort beyond the controlled pilot | **Required:** a media backup and recovery approach for photos and videos (accepted as absent for the controlled pilot only, Nov 26); revisit point-in-time recovery |
 
 ## Critical path to December 23
 

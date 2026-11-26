@@ -19,14 +19,14 @@ Everything financial is simulated during the pilot.
 | **Settings outside the database** (Auth settings, Site and redirect URLs, the email sender, Storage upload limit, Edge Function secrets, Vercel variables) | Supabase and Vercel dashboards; written down in `docs/STAGING-ACCEPTANCE.md` section 2 and `docs/PILOT-ENVIRONMENT.md` | Re-entered from those steps; secrets re-issued (never restored from a copy) | **0** for the settings (documented); secrets are re-issued | **1 hour** |
 | **The app itself** (front end, Edge Functions) | This repository; Vercel builds `staging`; Edge Functions are published from this repository by the reviewed workflow | Redeploy the last good commit | **0** | Minutes |
 
-**Why 24 hours is proposed:** Supabase Pro takes a daily backup and keeps 7
+**Why 24 hours (approved Nov 26):** Supabase Pro takes a daily backup and keeps 7
 days. For a closed pilot with simulated money, losing at most a day of
 activity is acceptable, and every ledger is append-only, so what is restored
 always reconciles. Point-in-time recovery (an add-on, about 2 minutes RPO) is
 **not** proposed for the pilot; it becomes worth its cost before real money or
 a large cohort. Both are founder decisions with a cost.
 
-**Why photos and videos have no copy:** Storage is durable against hardware
+**Why photos and videos have no copy (accepted for the pilot, Nov 26):** Storage is durable against hardware
 loss; the remaining risk is deletion by mistake (a bucket, the project, or a
 bug). Copying every file elsewhere would add a new system and, for video,
 large storage costs. Proposed for the pilot: accept it, and reduce the risk
@@ -69,7 +69,7 @@ founder's, in the Supabase and Vercel dashboards, unless marked Claude.
    can tell from the run logs and the reconciliation which day is clean.
 3. **Restore** (about 30 to 60 minutes for a pilot-sized database). Restore
    that backup from the dashboard. The project is unavailable while it runs.
-4. **Re-apply what must not come back** (30 minutes). A restore brings back
+4. **Re-apply what must not come back** (30 minutes; mandatory). A restore brings back
    anything deleted after the backup point, including accounts deleted on a
    member's request. Supabase, Logs, Auth: list every account deleted after
    the backup time, and delete each again (Control Center, Privacy requests,
@@ -97,14 +97,45 @@ post; the cleanup leaves them alone, and they are removed at pilot close.
 Posts restored whose file was deleted after the backup show "This photo
 couldn't load"; their authors can delete and repost them.
 
+## Decisions (founder, Nov 26)
+
+* **Approved provisional pilot objectives:** RPO at most 24 hours of data
+  loss; RTO restoration within 4 hours. These are pilot objectives, not
+  guaranteed service commitments, and are not promised to members.
+* **Accepted:** the existing database backup, restore drill, security
+  verification and financial reconciliation approach.
+* **Accepted for the controlled pilot only:** no separate copy of photos and
+  videos, on these conditions:
+  * **Disclosure to creators.** When a photo or video is attached to a post,
+    the composer says: "Keep your original. During the pilot, Splitpost does
+    not keep a separate backup of photos and videos." The pilot privacy notice
+    draft says the same (`docs/policies/PRIVACY-NOTICE-MEMBER-DRAFT.md`).
+  * **Creators keep their originals** (the same line encourages it; say it
+    again in the pilot welcome).
+  * **Unavailable media is handled gracefully:** a post whose photo file is
+    missing shows "This photo couldn't load" with Try again, the rest of the
+    feed is unaffected (the link service skips a missing file rather than
+    failing the whole request), and the author can delete and repost it.
+  * **Required before wider commercial launch:** a media backup and recovery
+    approach (tracked in `docs/DELIVERY-TRACKER.md`, Production readiness).
+* **Deleted accounts must not come back after a recovery.** Step 4 of the
+  procedure is mandatory, not optional: before reopening, every account and
+  post deleted after the backup point is deleted again. Supabase Pro keeps the
+  Auth logs for the same 7 days as the backups (confirm the retention in the
+  dashboard, Logs), so any restore point in the backup window can be
+  reconciled. If the logs for the window are not available, the restore does
+  not reopen until every deletion request recorded elsewhere (emails, support
+  notes) is re-applied. Claude checks afterwards that no account named in a
+  completed deletion request since the backup point exists.
+* **Infrastructure:** Vercel Pro and Supabase Pro are in place (founder). No
+  further subscription or system is added for recovery.
+
 ## Founder actions this depends on
 
-* **Confirm the staging organization is on Supabase Pro** and that Database,
-  Backups lists a backup. On the Free plan there are no restorable backups
-  and nothing above applies (`docs/PILOT-ENVIRONMENT.md` already lists this
-  as required before real pilot members). This is a monthly cost.
-* **Accept the proposed objectives**: RPO 24 hours and RTO 4 hours for the
-  database and ledgers, no copy of media for the pilot, no point-in-time
-  recovery add-on for the pilot.
+* **Confirm Supabase project coverage and incremental cost:** Pro is billed
+  per organization, and each project adds its own compute cost. Confirm the
+  staging project (`kpudeppgokpjhvaqrprn`) is in the Pro organization and that
+  Database, Backups lists a daily backup. Member Production, planned in its
+  own organization, will need the same before PB-4.
 * Keep the organization access to the founder only, with multi-factor
   authentication.

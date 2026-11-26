@@ -108,6 +108,7 @@ Information stored or processed outside Canada is subject to the laws of those c
 * Your profile, posts and comments are visible to signed-in pilot members who can see them (not to people you have blocked).
 * Eligible shared content may be shown in a public preview to people without an account.
 * Photos and videos are stored privately and shown only through short-lived links.
+* During the pilot we do not keep a separate backup copy of photos and videos. Keep your original files: if a file is lost, we may not be able to restore it. (Draft wording, Nov 26; for legal review with the rest of this notice.)
 * Reports are confidential: the person you report is not told who reported them.
 * Your Connection Points, Support Intent and commercial preferences are visible to you and to authorized Splitpost staff, not to other members. Creators may see aggregate Support Intent totals, not who indicated it. [Review note: confirm with founder.]
 
@@ -164,7 +165,7 @@ We will publish new versions with a new version number and date. If a change aff
 | Feedback | Improve Splitpost | Through the pilot evaluation, deleted within 30 days after it closes | Evaluation close, or account deletion |
 | Administrative audit records (ids, actions, times, without message text) | Accountability and security | [Retention period: audit records] | End of period |
 | Technical logs (providers) | Security and operations | Provider default, [Retention period: provider logs] | Automatic |
-| Backups | Recovery | [Retention period: backups] | Overwritten in the normal cycle |
+| Backups (database only; photos and videos are not backed up during the pilot) | Recovery | [Retention period: backups; 7 days on the current plan] | Overwritten in the normal cycle. If we ever restore one, accounts and content deleted since it was taken are deleted again before the service reopens |
 
 ### 13. Exceptions when you delete your account
 

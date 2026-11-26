@@ -542,6 +542,11 @@ function PhotoComposer({
           </div>
         </div>
       )}
+      {(photo || withVideo) && (
+        <p className="text-[13px] leading-snug text-ink-500" data-testid="media-backup-note">
+          Keep your original. During the pilot, Splitpost does not keep a separate backup of photos and videos.
+        </p>
+      )}
       <label htmlFor={textId} className="sr-only">
         {label}
       </label>

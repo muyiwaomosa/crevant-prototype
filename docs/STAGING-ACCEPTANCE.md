@@ -25,11 +25,13 @@ before; **independent** ones can be done any time, in any order.
 | 10 | Turn on **New video uploads** on staging | Control Center, Operational switches | After 9 passes | Members can post videos on staging (Production stays off) | Runs the video checks on staging |
 | 11 | PB-1 member Production operations, section 4 | Resend, Supabase, GitHub | Independent | Production email, drain key and health checks in place | Reruns the schedule and health checks |
 | 12 | **Approve the founder decisions database deploy** [run 45736045685](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45736045685) (20261215000000). PR #115 merged Nov 26, 01:28 UTC on six green checks; the `staging` app branch is at the merge (9270ea5) | GitHub, the run, **Review deployments, staging, Approve** | Nothing | The run is green | Reads the run log |
-| 13 | **Confirm the staging Supabase organization is on Pro** and that Database, Backups lists a backup; accept the proposed recovery objectives (`docs/RECOVERY.md`) | Supabase dashboard | Independent; before real testers | A backup is listed | Records it in the tracker |
+| 13 | Confirm Supabase **project coverage and incremental cost**: the staging project `kpudeppgokpjhvaqrprn` is in the Pro organization and Database, Backups lists a daily backup (Pro is confirmed; recovery objectives approved Nov 26) | Supabase dashboard, Billing and Database, Backups | Independent | A backup is listed | Records it in the tracker |
 
 ### Infrastructure status (Nov 26)
 
-* **Vercel:** upgraded to Pro by the founder after the free plan's limit of
+Both **Vercel and Supabase are on Pro** (founder, Nov 26). No other subscription or system is planned for the pilot.
+
+* **Vercel:** Pro since Nov 25, after the free plan's limit of
   100 deployments a day was reached on Nov 25. Every push builds three
   projects (`crevant-prototype`, `splitpost`, `splitpost-app`), and
   `splitpost-app` skips everything but the `staging` branch, and `splitpost`
@@ -40,12 +42,15 @@ before; **independent** ones can be done any time, in any order.
   The main cost risk is bandwidth once testers use staging with photos and
   video; video is served from Supabase Storage, not Vercel, so it does not
   count against Vercel bandwidth.
-* **Supabase staging:** every migration up to 20261214000000 applied (run
-  45710436593, Nov 26 00:47 UTC, all checks passed). 20261215000000 is in
-  run 45736045685, waiting for approval.
-* **Backups:** restorable backups need Supabase Pro on the staging
-  organization (step 13). The recovery procedure and proposed objectives are
-  in `docs/RECOVERY.md`.
+* **Supabase:** Pro (daily backups kept 7 days). Every migration up to
+  20261214000000 is applied on staging (run 45710436593, Nov 26 00:47 UTC, all
+  checks passed); 20261215000000 is in run 45736045685, waiting for approval.
+  Confirm the project coverage and incremental cost (step 13).
+* **Recovery:** approved pilot objectives, RPO 24 hours and RTO 4 hours (not
+  service commitments); no separate photo and video backup during the
+  controlled pilot, disclosed to creators in the composer; procedure in
+  `docs/RECOVERY.md`, drilled in every CI run.
+* **Staging app:** the `staging` branch is at 9908901 (PR #116 merged Nov 26).
 * **GitHub Actions:** six CI jobs per push (about 10 minutes of runner time).
 
 **Never done from here without separate authorization:** video on member
@@ -308,8 +313,8 @@ Allocation percentages are not shown to members until the Rewards Rules are lega
 |---|---|---|
 | 61 | On your phone with Wi-Fi off, in a private tab: open sign-in, sign in, scroll Home, open a post, like it (`docs/PERFORMANCE.md`, Real-device check) | Sign-in appears in about 2 seconds, Home with posts in about 3; nothing stutters or jumps |
 | 62 | Supabase, SQL editor (staging): paste `scripts/db/audit/reconciliation.sql` and run it | 12 rows, every `ok` is true (read-only; changes nothing) |
-| 63 | Supabase, Database, Backups | At least one daily backup is listed (needs Pro; `docs/RECOVERY.md`) |
-| 64 | Read `docs/RECOVERY.md` and decide on the proposed objectives | Recorded in the tracker |
+| 63 | Supabase, Database, Backups | At least one daily backup is listed (Pro; `docs/RECOVERY.md`) |
+| 64 | As a creator, add a photo to a new post | Above the caption: "Keep your original. During the pilot, Splitpost does not keep a separate backup of photos and videos." |
 
 ---
 

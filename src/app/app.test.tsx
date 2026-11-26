@@ -3471,6 +3471,8 @@ describe('photo posts (Build 5.3)', () => {
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
+    // The pilot keeps no separate copy of media, so the creator is told to keep the original.
+    expect(within(form).getByTestId('media-backup-note').textContent).toMatch(/Keep your original\. During the pilot, Splitpost does not keep a separate backup of photos and videos\./)
     // Native buttons (keyboard operable), at least 44 px tall for touch.
     for (const b of [change, remove]) {
       expect(b.tagName).toBe('BUTTON')
@@ -4250,7 +4252,10 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
       f.ads.next = ad()
       renderApp(`/app/post/${post}`, f.api)
       const card = await screen.findByTestId('ad')
-      const slot = callbacks.find((c) => c.el === card || c.el.contains(card) || card.contains(c.el))!
+      // The slot starts observing in an effect, which can run just after the ad first appears.
+      const find = () => callbacks.find((c) => c.el === card || c.el.contains(card) || card.contains(c.el))
+      await waitFor(() => expect(find()).toBeTruthy())
+      const slot = find()!
       const show = (ratio: number) => slot.cb([{ target: slot.el, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry], {} as IntersectionObserver)
       show(1)
       setVisibility('hidden') // the person switched tabs straight away
