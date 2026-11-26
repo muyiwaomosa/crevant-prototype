@@ -102,4 +102,21 @@ select 'every completed deletion reached the function log within 30 minutes', dr
 from (select case when to_regclass('ops.deletion_register') is null then 0
                   else (xpath('/row/n/text()', query_to_xml(
                           'select count(*) as n from ops.deletion_register where reported_at is null and occurred_at < pg_catalog.now() - interval ''30 minutes''',
-                          false, true, '')))[1]::text::int end as waiting) dr;
+                          false, true, '')))[1]::text::int end as waiting) dr
+union all
+-- Progression (20261217000000): every released or settled simulated amount
+-- belongs to a qualified member, was eligible before it was settled, and is
+-- released once. Counts only; passes where the migration is not applied.
+select 'every released simulated amount belongs to a qualified member, in order, once', pg.bad = 0,
+       case when pg.bad > 0 then pg.bad || ' state(s) out of order' end
+from (select case when to_regclass('sim.creator_share_states') is null then 0
+                  else (xpath('/row/n/text()', query_to_xml($q$
+  select (select count(*) from sim.creator_share_states s join sim.revenue_entries r on r.id = s.revenue_entry_id
+          where r.kind <> 'content_ad'
+             or (r.creator_id is not null and not exists (select 1 from sim.qualifications q where q.member_id = r.creator_id and q.audience = 'creator'))
+             or (s.state = 'settled' and not exists (select 1 from sim.creator_share_states e where e.revenue_entry_id = s.revenue_entry_id and e.state = 'eligible' and e.id < s.id)))
+       + (select count(*) from sim.allocation_states s
+          where not exists (select 1 from sim.settlement_lines l where l.settlement_id = s.settlement_id and l.member_id is not distinct from s.member_id)
+             or (s.member_id is not null and not exists (select 1 from sim.qualifications q where q.member_id = s.member_id and q.audience = 'consumer'))
+             or (s.state = 'settled' and not exists (select 1 from sim.allocation_states e where e.settlement_id = s.settlement_id and e.member_id is not distinct from s.member_id and e.state = 'eligible' and e.id < s.id))) as n
+  $q$, false, true, '')))[1]::text::int end as bad) pg;

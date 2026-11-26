@@ -16,8 +16,9 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: the deletion register (20261216000000,
-# scripts/db/rollback-deletion-register-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: progression (20261217000000,
+# scripts/db/rollback-progression-test.sh, the newest, so it goes first),
+# the deletion register (20261216000000, scripts/db/rollback-deletion-register-test.sh),
 # founder decisions (20261215000000, scripts/db/rollback-founder-decisions-test.sh),
 # release hardening (20261214000000, scripts/db/rollback-release-hardening-test.sh),
 # video posts (20261213000000, scripts/db/rollback-video-posts-test.sh),
@@ -125,9 +126,23 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+PROGRESSION=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261217000000')")
+if [ "$PROGRESSION" = t ]; then
+  # The newest migration (progression) goes first.
+  "${PSQL[@]}" -c "select public.svc_deletion_register_reported(array(select id from ops.deletion_register where reported_at is null))" >/dev/null
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-deletion-register.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the deletion register rollback refuses while progression is recorded" \
+    || bad "the deletion register rollback did not refuse while progression is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-progression-test.sh; then
+    ok "progression: the rollback refuses while the switch is on, history is recorded or a later migration exists, and otherwise removes exactly progression"
+  else
+    bad "the progression rollback tests failed"
+  fi
+fi
 REGISTER=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261216000000')")
 if [ "$REGISTER" = t ]; then
-  # The newest migration (the deletion register) goes first.
+  # Then the deletion register.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-founder-decisions.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the founder decisions rollback refuses while the deletion register is recorded" \
@@ -714,9 +729,19 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
                                       # Deletions made by the tests in between are reported first, as the drain would.
                                       "${PSQL[@]}" -c "select public.svc_deletion_register_reported(array(select id from ops.deletion_register where reported_at is null))" >/dev/null
                                       out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-deletion-register.sql 2>&1); code=$?
-                                      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
-                                        && ok "after reapplying, the deletion register rollback check passes again" \
-                                        || bad "deletion register rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                      if [ "$PROGRESSION" = t ]; then
+                                        [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                                          && ok "after reapplying, the deletion register rollback refuses while progression is recorded" \
+                                          || bad "the deletion register rollback did not refuse after reapply while progression is recorded (exit $code)"
+                                        out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-progression.sql 2>&1); code=$?
+                                        [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                          && ok "after reapplying, the progression rollback check passes again" \
+                                          || bad "progression rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                      else
+                                        [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                          && ok "after reapplying, the deletion register rollback check passes again" \
+                                          || bad "deletion register rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                      fi
                                     else
                                       [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                                         && ok "after reapplying, the founder decisions rollback check passes again" \

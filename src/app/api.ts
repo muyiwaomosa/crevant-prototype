@@ -551,7 +551,7 @@ export type MyAdvertising = {
 }
 /** Privacy requests and switches (20261212000000). */
 export type Features = { ads: boolean; sharing: boolean; videoPosts: boolean; videoPlayback: boolean; photos: boolean; rewards: boolean }
-export type SwitchFeature = 'ads' | 'sharing' | 'video_posts' | 'video_playback'
+export type SwitchFeature = 'ads' | 'sharing' | 'video_posts' | 'video_playback' | 'progression'
 export type FounderSwitches = {
   switches: Array<{ feature: SwitchFeature; enabled: boolean; updatedAt: string }>
   registrationPaused: boolean
