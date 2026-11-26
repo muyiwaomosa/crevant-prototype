@@ -111,32 +111,50 @@ founder's, in the Supabase and Vercel dashboards, unless marked Claude.
      Each re-applied deletion is itself recorded in the restored register.
    * Check that none of the listed accounts exists and none of the listed
      posts or comments is visible (Claude runs this from the list).
-   * **Fails safe.** Reopen only when the evidence is complete:
-     * with the live export: complete;
-     * with the log only: complete except for the residual risk below. The
-       founder then decides, in writing in the tracker, to reopen with that
-       risk, and posts the notice below. Until then the app stays
-       restricted;
-     * with neither (no export and no readable log): the app stays
-       restricted until account deletions are re-applied from the founder's
-       request records and the founder accepts that self-service content
-       deletions since the backup cannot be re-applied.
+   * **Fails safe.** Incomplete evidence keeps the restored app restricted
+     until the gap is resolved. There is no time limit that makes it
+     complete on its own: the 15-minute drain is a retry, not a guaranteed
+     maximum, because the drain itself can fail.
+     * **With the live export:** complete. Reopen after the checks in step 5.
+     * **With the log only:** the evidence is complete only up to the
+       **covered-until time**: the last successful scheduled drain (an
+       invocation of `post-media/drain` with status 200 in the Edge Function
+       logs) with no `deletion_register_read_failed` or
+       `deletion_register_mark_failed` line after it. Then check the API
+       logs (Supabase, Logs, API; kept 7 days outside the database) for calls
+       to any of the eight functions that delete or restore (`app_delete_post`,
+       `app_delete_comment`, `app_founder_delete_member`, `app_mod_hide`,
+       `app_mod_restore`, `app_mod_enforce`, `app_mod_lift`,
+       `app_mod_decide_appeal`) between the covered-until time and the loss.
+       * None: the evidence is complete. Reopen after step 5.
+       * Any: the app **stays restricted** until each one is resolved (below)
+         and the founder records in the tracker that none is outstanding.
+     * **With neither** (no export and no readable log): the app stays
+       restricted. Account deletions are re-applied from the founder's
+       request records and moderator actions from the moderation history;
+       member deletions of their own posts and comments since the backup
+       cannot be identified, so the founder resolves them with the members
+       (below) before reopening.
 
-   **Residual risk (log only).** Each completed deletion is reported at once
-   (the app calls post-media right after it) and again by the 15-minute
-   drain if that first report did not arrive. A deletion can be missing from
-   the log only if **both** failed: its immediate report (for example, the
-   member closed the app at that moment) and the scheduled drain before the
-   database was lost, so within about 15 minutes of the loss. Affected
-   paths:
-   * a member deleting their own post or comment: the request records do
-     **not** cover these. If any were missed they would reappear, so the
-     reopening notice asks members who deleted something in the
-     15 minutes before <time> to check it and delete it again;
-   * moderator hides and restores: re-done from the moderation queue
-     history;
+   **Resolving an unconfirmed window** (log only, calls after the
+   covered-until time):
    * founder account deletions: re-done from the founder's request records
-     (each one is a recorded request).
+     (each one is a recorded request);
+   * moderator hides, restores and appeal decisions: re-done from the
+     moderation queue history;
+   * a member deleting their own post or comment: the request records do
+     **not** cover these. The API log shows that a deletion was made and
+     when, not what was deleted. While the app is still restricted, the
+     founder asks the members who were active in that window (Auth logs) to
+     confirm what they deleted, and re-deletes it. The app reopens only when
+     each call in the window is accounted for.
+
+   How likely this is: each completed deletion is reported at once (the app
+   calls post-media right after it) and again by every scheduled drain until
+   it is logged. A deletion is missing from the log only if its immediate
+   report failed **and** no drain succeeded between it and the loss. A failed
+   drain is not silent: the reconciliation flags any deletion not logged
+   after 30 minutes.
 5. **Check** (30 minutes; Claude). Run the staging checks
    (`deploy-db-staging.yml`, plan mode) and the reconciliation. Both must pass.
    Claude compares the migration history with the repository and, if a
