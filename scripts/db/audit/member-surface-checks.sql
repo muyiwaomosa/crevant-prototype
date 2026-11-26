@@ -230,6 +230,16 @@ declare
     'public.app_founder_settle_eligible(text)',
     'public.app_my_progress()'
   ];
+  -- Progression rules (20261218000000), once applied.
+  progression_rules text[] := array[
+    'public.app_founder_correct_allocation(bigint,uuid,bigint,text,text,text)',
+    'public.app_founder_correct_revenue(bigint,bigint,text,text,text)',
+    'public.app_founder_decide_qualification(uuid,text,text,text,text,text)',
+    'public.app_founder_place_hold(uuid,text,bigint,bigint,text,text,text,text)',
+    'public.app_founder_progression_queue()',
+    'public.app_founder_progression_report()',
+    'public.app_founder_release_hold(bigint,text)'
+  ];
   -- The one function visitors may call, once previews exist.
   anon_allowed text[] := '{}';
   actual text[];
@@ -263,6 +273,9 @@ begin
   end if;
   if to_regclass('sim.goal_versions') is not null then
     expected := expected || progression;
+  end if;
+  if to_regclass('sim.qualification_decisions') is not null then
+    expected := expected || progression_rules;
   end if;
   if to_regclass('social.shares') is not null then
     expected := expected || discovery;

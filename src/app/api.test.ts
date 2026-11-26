@@ -552,21 +552,23 @@ describe('progression (20261217000000)', () => {
     const p = toMyProgress({
       enabled: true,
       good_standing: false,
-      creator: { qualified_at: null, steps: [{ metric: 'original_posts', value: 3, target: null }] },
-      consumer: { qualified_at: '2026-11-26T00:00:00Z', steps: [{ metric: 'shares', value: '2', target: 1 }] },
+      creator: { status: 'under_review', qualified_at: null, goals_since: '2026-11-26T00:00:00Z', steps: [{ metric: 'original_posts', value: 3, target: null }] },
+      consumer: { status: 'qualified', qualified_at: '2026-11-26T00:00:00Z', steps: [{ metric: 'shares', value: '2', target: 1 }] },
+      notices: [{ kind: 'hold', message: 'Being checked.', since: '2026-11-26T00:00:00Z', scope: 'account' }],
       earnings: {
-        creator: { accumulated_cents: 4000, locked_cents: 4000, eligible_cents: 0, settled_cents: 0 },
+        creator: { accumulated_cents: 4000, locked_cents: 2000, paused_cents: 2000, eligible_cents: 0, settled_cents: 0 },
         consumer: { accumulated_cents: '500', locked_cents: 0, eligible_cents: 500, settled_cents: 0 },
       },
     })
     expect(p).toEqual({
       enabled: true,
       goodStanding: false,
-      creator: { qualifiedAt: null, steps: [{ metric: 'original_posts', value: 3, target: null }] },
-      consumer: { qualifiedAt: '2026-11-26T00:00:00Z', steps: [{ metric: 'shares', value: 2, target: 1 }] },
+      creator: { status: 'under_review', qualifiedAt: null, goalsSince: '2026-11-26T00:00:00Z', steps: [{ metric: 'original_posts', value: 3, target: null }] },
+      consumer: { status: 'qualified', qualifiedAt: '2026-11-26T00:00:00Z', goalsSince: null, steps: [{ metric: 'shares', value: 2, target: 1 }] },
+      notices: [{ kind: 'hold', message: 'Being checked.', since: '2026-11-26T00:00:00Z', scope: 'account', audience: null }],
       earnings: {
-        creator: { accumulatedCents: 4000, lockedCents: 4000, eligibleCents: 0, settledCents: 0 },
-        consumer: { accumulatedCents: 500, lockedCents: 0, eligibleCents: 500, settledCents: 0 },
+        creator: { accumulatedCents: 4000, lockedCents: 2000, pausedCents: 2000, eligibleCents: 0, settledCents: 0 },
+        consumer: { accumulatedCents: 500, lockedCents: 0, pausedCents: 0, eligibleCents: 500, settledCents: 0 },
       },
     })
   })

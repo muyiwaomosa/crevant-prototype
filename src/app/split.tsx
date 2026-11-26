@@ -65,7 +65,7 @@ function Overview() {
     return (
       <div className="space-y-4" data-testid="split-progression">
         {points && <PointsBar recognized={points.recognized} redeemable={points.redeemableApproved} />}
-        <ProgressCards progress={progress} />
+        <ProgressCards progress={progress} estimatedCents={points?.simulatedValueCents} />
         <p className="rounded-xl bg-[#e7f4f1] px-3 py-2 text-[13px] text-[#1f5e52]" data-testid="split-disclosure">
           During the pilot all rewards and values are simulated. Connection Points have no cash value and nothing is paid out.
         </p>

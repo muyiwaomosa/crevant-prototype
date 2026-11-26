@@ -37,3 +37,4 @@
 031_founder_decisions.sql 20261215000000
 032_deletion_register.sql 20261216000000
 033_progression.sql 20261217000000
+034_progression_rules.sql 20261218000000
