@@ -284,9 +284,11 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
     }
   }
 
+  // While "Skip the rest" saves, the step buttons wait too, so a second tap
+  // can't move to another step underneath the save.
   const label = SETUP_STEPS[step - 1]
   const skip = (next: () => void, what: string) => (
-    <button type="button" onClick={next} className="text-sm font-semibold text-ink-600 underline underline-offset-2" aria-label={`Skip for now: ${what}`}>
+    <button type="button" onClick={next} disabled={busy} className="text-sm font-semibold text-ink-600 underline underline-offset-2" aria-label={`Skip for now: ${what}`}>
       Skip for now
     </button>
   )
@@ -298,7 +300,7 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
         <IdentityPicker value={draft.identity} onChange={(identity) => set({ identity })} hideLegend />
         <div className="flex items-center justify-between gap-3">
           {skip(() => (set({ identity: null }), setStep(3)), 'what brings you here')}
-          <button type="button" onClick={() => setStep(3)} className={buttonClass('primary')}>
+          <button type="button" disabled={busy} onClick={() => setStep(3)} className={buttonClass('primary')}>
             Continue
           </button>
         </div>
@@ -312,12 +314,12 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
         <p className="text-[15px] leading-relaxed text-ink-700">Choose what you love so we can help you find your people.</p>
         {topics && <TopicPicker topics={topics} value={draft.topics} onChange={(t) => set({ topics: t })} hideLegend />}
         <div className="flex items-center justify-between gap-3">
-          <button type="button" onClick={() => setStep(2)} className={buttonClass('secondary')}>
+          <button type="button" disabled={busy} onClick={() => setStep(2)} className={buttonClass('secondary')}>
             Back
           </button>
           <div className="flex items-center gap-4">
             {skip(() => (set({ topics: [] }), setStep(4)), 'your interests')}
-            <button type="button" onClick={() => setStep(4)} className={buttonClass('primary')}>
+            <button type="button" disabled={busy} onClick={() => setStep(4)} className={buttonClass('primary')}>
               Continue
             </button>
           </div>
@@ -346,7 +348,7 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
         />
         {problem && <Message tone="error">{problem}</Message>}
         <div className="flex items-center justify-between gap-3">
-          <button type="button" onClick={() => setStep(3)} className={buttonClass('secondary')}>
+          <button type="button" disabled={busy} onClick={() => setStep(3)} className={buttonClass('secondary')}>
             Back
           </button>
           <button type="submit" disabled={busy} className={buttonClass('primary')}>
