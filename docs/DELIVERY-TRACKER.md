@@ -32,14 +32,18 @@ https://claude.ai/artifact/LT9k8aSFrFMz6MxRqtsvQ9).
 | V1 Visual fidelity: logo header, immersive post cards, Home without the composer | Proposed (preview 1) | Discrepancies listed in SP-REFINE-001, section 1 | Founder confirms the preview |
 | D1 Discover: search first, For you, People, Topics | Proposed (previews 2, 3) | | Founder confirms |
 | P1 Profile: public profile versus Your insights; Reach, Connection, Earnings | Proposed (previews 4, 5) | | Founder confirms |
-| F1 Connection framework: goals, private Connection Score, one points currency | Proposal | SP-REFINE-001, sections 5 and 7 | Founder decisions 3 and 6; recommended after December 23 |
-| F2 Creator qualification and locked earnings | Proposal | SP-REFINE-001, section 6 (accounting and legal implications) | Founder decisions 4 and 5; legal review |
-| F3 Interactive advertising (message comprehension) | Proposal | SP-REFINE-001, section 8 | Founder decision 7 |
+| N1 Names: Reach, Connection, Earnings | **Approved** (founder, Nov 26); **Tested** | Profile tabs renamed; the faces and data unchanged underneath (Attention, Retention, Monetization); unit tests and the intelligence and creator journeys pass | Merge |
+| F1 Connection framework (goals, private explainable score, one currency, My Split as the centre) | **Approved in principle**; no formula or threshold approved | SP-REFINE-002, sections 1 and 5 | Lean December 23 plan: G1 goals engine, G2 creator progress, G5 My Split (behind a switch) |
+| F2 Locked creator earnings (simulated) | **Approved in principle** | SP-REFINE-002, section 3 | G3 release states; legal and accounting review for real money |
+| F3 Consumer qualification and eligible points before qualification | Proposal | SP-REFINE-002, section 4 (A: include and lock, recommended) | Founder decision 4 |
+| F4 Interactive advertising | **Approved as a controlled experiment** in principle | SP-REFINE-002, section 6 | After launch unless the founder asks otherwise |
 | L1 Landing page visual assets | Not started | Prepared from the approved screens once V1 lands; not published before approval | After V1 |
 
 **Impact on December 23:** H1, V1, D1 and P1 are about 7 working days of UI
-work with no database change; confirmed previews by December 1 keep
-December 23. F1 to F3 are not proposed for December 23.
+work with no database change. The lean progression plan (G1, G2, G3, G5) is
+about 10 more, behind a switch, merged by December 12 if approved by
+December 1; together they are tight, so the UI refinements should be limited
+to the previews confirmed first (SP-REFINE-002, section 2).
 
 ## Deliverables
 

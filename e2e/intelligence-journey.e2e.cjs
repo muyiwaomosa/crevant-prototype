@@ -3,8 +3,8 @@
 //
 //  1. a fan follows a creator from search, opens a post and leaves a thoughtful
 //     comment; My Split tells them what happened, what it means and what next;
-//  2. the creator's Profile has four faces (Profile, Attention, Retention,
-//     Money): availability versus reach, where followers came from, this
+//  2. the creator's Profile has four faces (Profile, Reach, Connection,
+//     Earnings): availability versus reach, where followers came from, this
 //     week's connections, simulated money apart from actual income;
 //  3. the founder's Control Center shows the North Star with these test
 //     accounts excluded and counted apart, labels every figure, exports, and
@@ -208,23 +208,23 @@ async function signIn(page, email) {
       const page = await ctx.newPage()
       await signIn(page, email('c'))
       await page.goto(`${APP}/app/profile`)
-      await page.getByRole('tab', { name: 'Money' }).waitFor()
+      await page.getByRole('tab', { name: 'Earnings' }).waitFor()
       const tabs = await page.getByRole('tab').allInnerTexts()
-      check('the Profile has the four approved faces', JSON.stringify(tabs) === JSON.stringify(['Profile', 'Attention', 'Retention', 'Money']), JSON.stringify(tabs))
-      await page.getByRole('tab', { name: 'Attention' }).click()
+      check('the Profile has the four approved faces', JSON.stringify(tabs) === JSON.stringify(['Profile', 'Reach', 'Connection', 'Earnings']), JSON.stringify(tabs))
+      await page.getByRole('tab', { name: 'Reach' }).click()
       const att = page.getByTestId('attention-face')
       await att.waitFor()
       const ta = (await att.innerText()).replace(/\s+/g, ' ')
       check('Attention: available to every follower, and how many saw a post', ta.includes('Every post was available to your follower. They saw at least one.'), ta)
       check('Attention: where new followers came from (search)', /Where your new follower came from Search 1/.test(ta), ta)
       await screenChecks(page, 'the Attention face')
-      await page.getByRole('tab', { name: 'Retention' }).click()
+      await page.getByRole('tab', { name: 'Connection' }).click()
       const ret = page.getByTestId('retention-face')
       await ret.waitFor()
       const tr = (await ret.innerText()).replace(/\s+/g, ' ')
       const expected = sql(`select count(*) from ops.connections(ops.week_start(now()), now()) where creator = '${c}'`)
       check('Retention: this week\'s connections match the database', tr.includes(`${expected} follower connected`) && expected === '1', `${expected}: ${tr.slice(0, 120)}`)
-      await page.getByRole('tab', { name: 'Money' }).click()
+      await page.getByRole('tab', { name: 'Earnings' }).click()
       const money = page.getByTestId('money-face')
       await money.waitFor()
       const tm = (await money.innerText()).replace(/\s+/g, ' ')

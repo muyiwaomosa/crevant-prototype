@@ -855,9 +855,9 @@ export function ProfilePage() {
         label="Your profile and insights"
         faces={[
           { key: 'profile', label: 'Profile', content: <ProfileFace /> },
-          { key: 'attention', label: 'Attention', content: <AttentionFace /> },
-          { key: 'retention', label: 'Retention', content: <RetentionFace /> },
-          { key: 'money', label: 'Money', content: <MoneyFace /> },
+          { key: 'attention', label: 'Reach', content: <AttentionFace /> },
+          { key: 'retention', label: 'Connection', content: <RetentionFace /> },
+          { key: 'money', label: 'Earnings', content: <MoneyFace /> },
         ]}
       />
     </>

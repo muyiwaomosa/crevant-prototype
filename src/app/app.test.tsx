@@ -4527,7 +4527,7 @@ describe('intelligence (20261210000000): what happened, what it means, what to d
     f.intel.creator = creatorInsightsFixture()
     renderApp('/app/profile?face=attention', f.api)
     const face = await screen.findByTestId('attention-face')
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Profile', 'Attention', 'Retention', 'Money'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Profile', 'Reach', 'Connection', 'Earnings'])
     expect(face.textContent).toMatch(/What happened.*What it means.*What to do next/)
     expect(face.textContent).toMatch(/Available\. Your posts were in every follower's Home\..*Reached\. Followers who actually viewed a post/)
     expect(face.textContent).toMatch(/Where your 4 new followers came from.*Discover.*3.*Search.*1/)
