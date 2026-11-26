@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { AppApiError, DELETION_REGISTER_RPCS, createSupabaseApi, isMissingFunction, isMissingRequestIdVersion } from './api'
+import { AppApiError, DELETION_REGISTER_RPCS, createSupabaseApi, isMissingFunction, isMissingRequestIdVersion, toMyProgress } from './api'
 
 // The exact answers local Supabase gave when the request id versions were not
 // deployed (PostgREST lists the parameters it searched for, alphabetically).
@@ -542,5 +542,32 @@ describe('reporting deletions right away', () => {
       'app_delete_comment', 'app_delete_post', 'app_founder_delete_member', 'app_mod_decide_appeal',
       'app_mod_enforce', 'app_mod_hide', 'app_mod_lift', 'app_mod_restore',
     ])
+  })
+})
+
+describe('progression (20261217000000)', () => {
+  it('reads a switched-off answer as disabled, and an enabled one with null targets kept null', () => {
+    expect(toMyProgress({ enabled: false })).toEqual({ enabled: false })
+    expect(toMyProgress({})).toEqual({ enabled: false })
+    const p = toMyProgress({
+      enabled: true,
+      good_standing: false,
+      creator: { qualified_at: null, steps: [{ metric: 'original_posts', value: 3, target: null }] },
+      consumer: { qualified_at: '2026-11-26T00:00:00Z', steps: [{ metric: 'shares', value: '2', target: 1 }] },
+      earnings: {
+        creator: { accumulated_cents: 4000, locked_cents: 4000, eligible_cents: 0, settled_cents: 0 },
+        consumer: { accumulated_cents: '500', locked_cents: 0, eligible_cents: 500, settled_cents: 0 },
+      },
+    })
+    expect(p).toEqual({
+      enabled: true,
+      goodStanding: false,
+      creator: { qualifiedAt: null, steps: [{ metric: 'original_posts', value: 3, target: null }] },
+      consumer: { qualifiedAt: '2026-11-26T00:00:00Z', steps: [{ metric: 'shares', value: 2, target: 1 }] },
+      earnings: {
+        creator: { accumulatedCents: 4000, lockedCents: 4000, eligibleCents: 0, settledCents: 0 },
+        consumer: { accumulatedCents: 500, lockedCents: 0, eligibleCents: 500, settledCents: 0 },
+      },
+    })
   })
 })

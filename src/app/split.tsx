@@ -10,6 +10,7 @@ import { useFeedbackAccess } from './feedback'
 import { useAppApi } from './AppApiContext'
 import { ContributionInsight } from './insights'
 import { MySplitIntro } from './onboarding'
+import { PointsBar, ProgressCards, useMyProgress } from './progression'
 
 /**
  * My Split (SP-DESIGN-002). IP-1 delivers the destination, its three faces and
@@ -56,6 +57,29 @@ function Overview() {
       live = false
     }
   }, [api])
+  const progress = useMyProgress()
+  // Progression on (20261217000000): the simplified one-column My Split (G5):
+  // points as one bar, the goals, the simulated earnings; history and
+  // opportunities stay one tap away.
+  if (progress?.enabled) {
+    return (
+      <div className="space-y-4" data-testid="split-progression">
+        {points && <PointsBar recognized={points.recognized} redeemable={points.redeemableApproved} />}
+        <ProgressCards progress={progress} />
+        <p className="rounded-xl bg-[#e7f4f1] px-3 py-2 text-[13px] text-[#1f5e52]" data-testid="split-disclosure">
+          During the pilot all rewards and values are simulated. Connection Points have no cash value and nothing is paid out.
+        </p>
+        {founder && (
+          <Link to="/app/split/review" className={buttonClass('secondary', 'sm')}>
+            Founder: review referrals and rewards
+          </Link>
+        )}
+        <Card className="p-5">
+          <MySplitIntro />
+        </Card>
+      </div>
+    )
+  }
   return (
     <div className="space-y-4">
       <ContributionInsight />

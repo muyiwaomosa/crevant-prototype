@@ -65,6 +65,8 @@ APP_URL="http://127.0.0.1:$APP_PORT" node e2e/content-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/preview-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/governance-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/rewards-journey.e2e.cjs
+# Progression (20261217000000): switched on for the journey and off again at its end.
+APP_URL="http://127.0.0.1:$APP_PORT" node e2e/progression-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/advertising-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/intelligence-journey.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/video-journey.e2e.cjs
