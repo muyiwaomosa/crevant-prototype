@@ -35,3 +35,16 @@ Migrations: `supabase/migrations/20261206000000_governance.sql` (merged) and `20
 * Rollbacks `staging-rollback-governance.sql` (15 checks) and `staging-rollback-governance-refinements.sql` (12 checks) within the full chain (95).
 * Unit tests for blocking, the blocked list, comment reports, the Home banner, notices and appeals, the account panel and the appeals page.
 * Browser journey `e2e/governance-journey.e2e.cjs` (33 checks, WCAG 2.2 AA at 320 and 390 px).
+
+## Moderator authority (founder decision, Nov 25)
+
+* Moderators may report other moderators and hide their ordinary content under
+  the community standards. Emergency content protection is unchanged: anyone
+  with moderator access can hide harmful content at once.
+* Warnings, restrictions and suspensions of a moderator or of the founder are
+  refused for everyone but the founder (`escalate_to_founder`, migration
+  20261215000000). Removing moderator privileges was already founder-only.
+* Every decision stays in the append-only audit trail, and the existing
+  conflict-of-interest rules (no one decides their own appeal; another
+  moderator reviews appeals on your own action, with the sole-moderator
+  disclosure) still apply.

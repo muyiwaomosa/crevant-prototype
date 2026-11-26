@@ -31,9 +31,12 @@ steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 | IP-9b Landing page: signature line, Find your path (creators, members, advertisers; one destination), one disclosure band, Join the Waitlist or Join Splitpost wording switch, `/tour` retired | Merged | PR #113 | Deployed with the staging app; copy needs founder review |
 | IP-10a Privacy requests (copy, correction, deletion) and audited account deletion keeping the anonymous ledger | Deployed (database) | PR #113; applied Nov 25 21:46 | Acceptance after steps A to D |
 | IP-10a Operational switches (ads, sharing, video posts; registration, rewards and photos shown together) | Deployed (database) | PR #113; applied Nov 25 21:46 | Acceptance after steps A to D |
-| IP-5 Video posts (everything except activation): conversion, resumable upload, server checks, player, limits, moderation and cleanup, device test page, separate upload and playback controls with an emergency stop, storage and delivery visibility | Tested (local) | Migration 20261213000000; database suite, rollback chain (113), 865 unit tests, 15 journeys in CI order; `docs/VIDEO.md` | Pull request CI and merge authorization; then the device test; Production needs separate authorization |
-| Four stakeholder journeys end to end (creator, consumer, advertiser, founder): `e2e/stakeholder-*.e2e.cjs`, each one continuous story through the real UI across engines, with WCAG 2.2 AA at 320 and 390 px | Tested (local) | All 19 journeys pass in CI order (creator 82, consumer 78, advertiser 48, founder 80 checks); two defects found and fixed (My Split education findable again; ad feedback buttons meet the 24 px target) | PR #114 |
-| Release hardening: security and authorization review (done; fixes in migration 20261214000000), cent-exact reconciliation inside the founder journey and test 260, restore drill, performance, monitoring, error handling | In development | Review findings H1, M1, M2, L1 to L5 fixed and tested; rollback chain 116 | PR #114; then performance, restore drill and monitoring |
+| IP-5 Video posts (everything except activation), with separate upload and playback controls and an emergency stop | Deployed (database) | PR #114; applied Nov 26 00:47 (run 45710436593) | The 110 MB limit and the device test |
+| Four stakeholder journeys end to end (creator, consumer, advertiser, founder) | Merged | PR #114; 19 journeys pass in CI | Hands-on acceptance on staging |
+| Release hardening, part 1: security and authorization review and its fixes (migration 20261214000000) | Deployed (database) | PR #114; applied Nov 26 00:47 | Acceptance |
+| Founder decisions of Nov 25: own-audience referrals recognized (20 points, 5 a day, configurable pilot parameters pending economic validation; recognition, never redeemable), moderator discipline escalated to the founder, Money & Business advertising policy | Tested | PR #115; migration 20261215000000; test 270, check 031; implementation accepted by the founder Nov 26; merge authorized | Merge on green checks, then the staging deploy |
+| Ad placement regression test: feed and post serves of one campaign, attributed by placement, valid counts, report split, nothing served while off | Tested (local) | Test 280 (database, deterministic); the founder journey now has Vi see the feed ad on Home on purpose, with exact counts | Same pull request |
+| Release hardening, part 2: performance (page load and slow queries), backup and restore drill on a throwaway project, monitoring and alerting, error handling review, keyboard and screen reader pass, device and usability pass with testers | In development | Accessibility is checked by axe in every journey at 320 and 390 px; restore drill needs a disposable Supabase project | Next |
 | "See Splitpost" screenshots on the landing page | Not started | Needs the Dec 7 build | Take from staging after acceptance starts |
 
 | Production batch | Planned | Status |
@@ -63,19 +66,20 @@ recommendation then is to accept in two batches (core social and rewards first,
 advertising and intelligence second) rather than shorten security or financial
 testing.
 
-## Open founder decisions
+## Genuinely outstanding against the approved MVP scope (Nov 26)
 
-* Referral points for a creator's own audience: when someone joins through a
-  creator's link and follows that creator, the creator earns no referral
-  points (the existing "never for yourself" rule). Keep, or reward creators
-  for bringing their own audience (economic change, needs a migration).
-* Moderators can act against other moderators (the founder cannot be deleted
-  through a request, but enforcement on the founder is not blocked).
-* The "Money & business" topic can be used for contextual ads; tell Claude if
-  it should be treated as sensitive.
+Everything else in the approved scope is built and merged. What remains:
 
-* Landing page copy for Find your path and the pilot details band (drafted in
-  the house style, marked approved in principle).
-* Whether "Join the Waitlist" should show while the waitlist form itself is
-  closed. Today the buttons say "Waitlist Opens Soon" until the form opens (the
-  existing safeguard against inviting a sign-up that isn't possible yet).
+* **Hands-on acceptance on staging** (founder), once steps A to D are done.
+* **Video activation:** the device test (founder), then the switch on staging.
+  The iPhone 1080p fallback only if the test shows it is needed.
+* **Release hardening, part 2** (row above).
+* **"See Splitpost" screenshots** on the landing page, from staging.
+* **Legal and policy dependencies:** the Rewards Rules legal review (before
+  allocation percentages are shown to members), the pilot privacy notice and
+  policies in `docs/policies/` (before external invitations), and the
+  regulated financial products review (deferred).
+* **Production batches PB-1 to PB-4**, each with its own approval, and the
+  cohort plan for December 23 (N10).
+
+No new functionality is planned beyond these.

@@ -735,6 +735,8 @@ export function AdsManagePage() {
   const [demand, setDemand] = useState<Array<{ category: string; label: string; members: number | null }>>([])
   const [open, setOpen] = useState<string | null>(null)
   const [error, setError] = useState<unknown>(null)
+  // Approving confirms the Advertising Policy (founder decision, Nov 25), advertiser by advertiser.
+  const [policyOk, setPolicyOk] = useState<Record<string, boolean>>({})
   const load = useCallback(async () => {
     try {
       const a = await api.founderAds()
@@ -777,10 +779,33 @@ export function AdsManagePage() {
                 {a.offering}. Solves: {a.problem_solved}. Outcome: {a.desired_outcome}.
               </p>
               {a.status === 'pending' && (
+                <label className="mt-2 flex gap-2 text-[13px] leading-snug text-ink-800">
+                  <input
+                    type="checkbox"
+                    checked={!!policyOk[a.id]}
+                    onChange={(e) => setPolicyOk((p) => ({ ...p, [a.id]: e.target.checked }))}
+                    className="mt-0.5 h-5 w-5 shrink-0"
+                  />
+                  <span>
+                    Meets the Advertising Policy: no deceptive financial claims, get-rich-quick schemes, guaranteed returns or predatory products, and not a
+                    regulated financial product (those wait for legal review).<span className="sr-only">{` ${a.name}`}</span>
+                  </span>
+                </label>
+              )}
+              {a.status === 'pending' && (
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => act(() => api.founderReviewAdvertiser(a.id, true, 'Meets the Advertising Policy'))}
+                    disabled={!policyOk[a.id]}
+                    onClick={() =>
+                      act(() =>
+                        api.founderReviewAdvertiser(
+                          a.id,
+                          true,
+                          'Meets the Advertising Policy (no deceptive financial claims, get-rich-quick schemes, guaranteed returns, predatory or regulated financial products)',
+                        ),
+                      )
+                    }
                     className={buttonClass('primary', 'sm')}
                   >
                     Approve<span className="sr-only">{` ${a.name}`}</span>

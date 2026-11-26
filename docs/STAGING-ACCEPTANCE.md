@@ -13,32 +13,35 @@ before; **independent** ones can be done any time, in any order.
 |---|---|---|---|---|---|
 | ✓ | Database deploy run 45677972966 (20261204000000 to 20261210000000) | | | **Done Nov 25, 20:34 UTC**: applied, every staging security and separation check passed | Read the run log |
 | ✓ | Database deploy run 45696762050 (20261211000000 and 20261212000000) | | | **Done Nov 25, 21:46 UTC**: applied, every staging security and separation check passed | Read the run log |
-| 2 | **Step A: Vercel builds the staging app** (5 minutes) | Vercel, section 2 | Nothing | `splitpost-app-git-staging-crevant.vercel.app` loads the sign-in page | **Ignored Build Step is in place** (Nov 25: `splitpost-app` now skips every branch but `staging`). Left: confirm the staging Supabase variables on Preview; Claude then pushes `staging` and loads the address |
+| 2 | **Step A: open the staging app** (2 minutes) | https://splitpost-app-git-staging-crevant.vercel.app | Nothing | The sign-in page loads after your Vercel login | **Built**: the `staging` branch is at merged main (5a15fe2) and the address answers behind Vercel's login; Claude can't log in, so please confirm it loads, and that Preview has the staging Supabase variables (section 2, step A.2) |
 | 3 | **Step B: Resend sends staging email** (15 minutes plus DNS time) | Resend and Supabase, section 2 | Nothing (start now: DNS can take hours) | A password reset arrives from "Splitpost" | Asks you to confirm the email arrived |
 | 4 | **Step C: Supabase Auth** (10 minutes) | Supabase dashboard, section 2 | **Can be done now** (the account hook exists on staging since run 45677972966) | Signing up through a link works; a sign up without a link is refused | Runs the staging checks again |
 | 5 | **Step D: activate staging** (2 minutes) | Supabase SQL editor, section 2 | **After 2, 3 and 4** | You have a founder account, an invitation link and the moderator role | Checks registration is open on staging only |
-| ✓ | Merge of PR #114 (20261213000000 and 20261214000000, D7) | | | **Authorized Nov 25**, on six green checks and Vercel builds after the quota reset | Claude merges once both hold |
-| 7 | **Approve the video database deploy** | GitHub, the run | After 6 | The run is green | Reads the run log |
-| 8 | **Set the staging Storage upload limit to at least 110 MB** (2 minutes) | Supabase dashboard, staging project, **Storage, Settings, Upload file size limit** | Independent (do any time before the device test) | The limit reads 110 MB or more | Confirms with you before the device test; a too-low limit shows as a clear upload error on the test page |
-| 9 | Hands-on acceptance, section 3 | The staging app | After 5 | Each row behaves as written; note anything that doesn't in Feedback | Fixes what you report and redeploys |
-| 10 | **The video device test**, `docs/video/DEVICE-TEST.md`: record and upload a 1 and a 5 minute clip on an iPhone and an Android phone, play them, copy the results; then record each result and the storage cap (50 GB proposed) in Control Center, Video posts | Your iPhone, an Android phone and a computer, on `/app/video-test` | **After 5, 7 and 8** | A pass or fail per device | Reads the results; if the iPhone 5 minute conversion fails, proposes the 1080p fallback before anything is turned on |
-| 11 | Turn on **New video uploads** on staging | Control Center, Operational switches | After 10 passes | Members can post videos on staging (Production stays off) | Runs the video checks on staging |
-| 12 | PB-1 member Production operations, section 4 | Resend, Supabase, GitHub | Independent | Production email, drain key and health checks in place | Reruns the schedule and health checks |
+| ✓ | Merge of PR #114 (20261213000000 and 20261214000000, D7) | | | **Merged Nov 25, 22:06 UTC** on six green checks and successful Vercel builds | Done |
+| ✓ | Database deploy run 45710436593 (20261213000000 and 20261214000000) | | | **Done Nov 26, 00:47 UTC**: applied, every staging security and separation check passed | Read the run log |
+| 7 | **Set the staging Storage upload limit to at least 110 MB** (2 minutes) | Supabase dashboard, staging project, **Storage, Settings, Upload file size limit** | Independent (do any time before the device test) | The limit reads 110 MB or more | Confirms with you before the device test; a too-low limit shows as a clear upload error on the test page |
+| 8 | Hands-on acceptance, section 3 | The staging app | After 5 | Each row behaves as written; note anything that doesn't in Feedback | Fixes what you report and redeploys |
+| 9 | **The video device test**, `docs/video/DEVICE-TEST.md`: record and upload a 1 and a 5 minute clip on an iPhone and an Android phone, play them, copy the results; then record each result and the storage cap (50 GB proposed) in Control Center, Video posts | Your iPhone, an Android phone and a computer, on `/app/video-test` | **After 5 and 7** | A pass or fail per device | Reads the results; if the iPhone 5 minute conversion fails, proposes the 1080p fallback before anything is turned on |
+| 10 | Turn on **New video uploads** on staging | Control Center, Operational switches | After 9 passes | Members can post videos on staging (Production stays off) | Runs the video checks on staging |
+| 11 | PB-1 member Production operations, section 4 | Resend, Supabase, GitHub | Independent | Production email, drain key and health checks in place | Reruns the schedule and health checks |
+| 12 | **Approve the founder decisions database deploy** (20261215000000). The merge of PR #115 was authorized Nov 26; Claude merges it once its six checks and Vercel are green, then starts the run | GitHub, the run, **Review deployments, staging, Approve** | The merge | The run is green | Reads the run log, then moves the `staging` app branch to the merge |
 
-### Infrastructure status (Nov 25)
+### Infrastructure status (Nov 26)
 
 * **Vercel:** upgraded to Pro by the founder after the free plan's limit of
   100 deployments a day was reached on Nov 25. Every push builds three
   projects (`crevant-prototype`, `splitpost`, `splitpost-app`), and
-  `splitpost-app` skips everything but the `staging` branch. Claude batches
+  `splitpost-app` skips everything but the `staging` branch, and `splitpost`
+  skips branch previews too, so most pushes build only `crevant-prototype`. Claude batches
   commits so each push carries a meaningful change. Pro includes a usage
   allowance with charges beyond it; check the Vercel **Usage** page weekly for
   build minutes, bandwidth and Function invocations (the app uses none today).
   The main cost risk is bandwidth once testers use staging with photos and
   video; video is served from Supabase Storage, not Vercel, so it does not
   count against Vercel bandwidth.
-* **Supabase staging:** every merged migration applied; the next deploy carries
-  20261213000000 and 20261214000000.
+* **Supabase staging:** every migration up to 20261214000000 applied (run
+  45710436593, Nov 26 00:47 UTC, all checks passed). 20261215000000 follows
+  the PR #115 merge.
 * **GitHub Actions:** six CI jobs per push (about 10 minutes of runner time).
 
 **Never done from here without separate authorization:** video on member
@@ -53,9 +56,9 @@ app branch follows `main`, so you can accept features as they land.
 
 | Layer | Status | What you do |
 |---|---|---|
-| Database | Every merged migration, up to 20261212000000, applied Nov 25 at 21:46 (run 45696762050), all staging checks passed | Nothing |
-| Next database deploy | 20261213000000 (video posts) and 20261214000000 (release hardening) together, after PR #114 merges | Approve the one run when it appears |
-| Staging app (Vercel) | Not building yet: `splitpost-app` builds only an older branch | Step A |
+| Database | Every merged migration, up to 20261214000000, applied Nov 26 at 00:47 (run 45710436593), all staging checks passed | Nothing |
+| Next database deploy | 20261215000000 (founder decisions), after PR #115 merges | Approve the one run when it appears |
+| Staging app (Vercel) | Builds the `staging` branch (at merged main); behind your Vercel login | Step A: confirm it loads and the Preview variables |
 | Email | Supabase's default sender: team addresses only, about two an hour | Step B |
 | Auth (sign up through links, the account hook, Splitpost emails) | Not configured | Step C (ready now) |
 | Testers can register; previews; a moderator | Closed / off / none | Step D |
@@ -88,8 +91,9 @@ once the deploy above is approved and steps A to D are done.
 | 20261210000000 | Intelligence | Applied Nov 25 (run 45677972966) |
 | 20261211000000 | Unified onboarding: creator setup, invitations, advertising requests | Applied Nov 25 (run 45696762050) |
 | 20261212000000 | Privacy requests, account deletion, switches | Applied Nov 25 (run 45696762050) |
-| 20261213000000 | Video posts (uploads, playback and emergency controls, device tests) | After PR #114 merges |
-| 20261214000000 | Release hardening (deletion with full history, advertiser thresholds, locks) | After PR #114 merges |
+| 20261213000000 | Video posts (uploads, playback and emergency controls, device tests) | Applied Nov 26 (run 45710436593) |
+| 20261214000000 | Release hardening (deletion with full history, advertiser thresholds, locks) | Applied Nov 26 (run 45710436593) |
+| 20261215000000 | Founder decisions: own-audience referrals recognized, moderator discipline escalated | After PR #115 merges |
 
 ---
 

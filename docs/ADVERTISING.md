@@ -44,3 +44,22 @@ Aggregated commercial demand intelligence beyond counts, temporary purchase inte
 * Unit tests for the ad card, Why this ad, the click and hide, contextual and own-post cases, the feed slot, preferences, and the founder page.
 * Browser journey `e2e/advertising-journey.e2e.cjs` (26 checks, WCAG 2.2 AA at 320 and 390 px): onboarding through to the creator's simulated share.
 * Creatives and caps (20261209000000): staging-safe check `025_ad_creatives_and_caps.sql`; behaviour tests `210_ad_creatives_and_caps.sql` (no campaign activates without its file, video play and completion order, 6 a day, 3 per campaign, shown with the creator, hide an advertiser, restored points outside the daily cap); rollback `scripts/db/staging-rollback-ad-creatives.sql`. The browser journey uploads a real image creative and checks it renders with its text alternative.
+
+## Money & Business advertising (founder decision, Nov 25)
+
+Money & Business is an advertising-eligible content topic: ads for legitimate
+business products, professional education, productivity software and creator
+tools can appear next to Money & Business posts under the usual commercial
+relevance rules.
+
+* **Prohibited:** deceptive financial claims, get-rich-quick schemes,
+  guaranteed investment returns and predatory products. The founder confirms
+  this, and that the advertiser is not offering a regulated financial product,
+  before approving an advertiser (the approval records it).
+* **Deferred:** regulated financial products (lending, credit, investing,
+  insurance, banking, crypto, trading) until legal and compliance review. None
+  of them is a commercial category, so none can be targeted; the staging check
+  `031_founder_decisions.sql` confirms it on every deploy.
+* **Never:** inferring financial vulnerability or using sensitive personal
+  information for targeting. Matching reads only the member's own category
+  choices and the topic of the post being viewed.

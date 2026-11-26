@@ -1882,6 +1882,28 @@ describe('first-time setup and profile details (20261123000000)', () => {
     expect(await screen.findByRole('heading', { name: 'Home' })).toBeTruthy()
   })
 
+  it('while "Skip the rest" is saving, the step buttons wait too, so a second tap cannot change the step underneath it', async () => {
+    const f = fakeApi('me', { details: 'new' })
+    let release!: () => void
+    const save = f.api.saveDetails.bind(f.api)
+    f.api.saveDetails = async (d) => {
+      await new Promise<void>((r) => (release = r))
+      return save(d)
+    }
+    renderApp('/app', f.api)
+    expect(await screen.findByRole('heading', { name: 'What brings you to Splitpost?' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Skip the rest' }))
+    const next = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement
+    await waitFor(() => expect(next.disabled).toBe(true))
+    expect((screen.getByRole('button', { name: 'Skip for now: what brings you here' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(next)
+    expect(screen.getByRole('heading', { name: 'What brings you to Splitpost?' })).toBeTruthy()
+    release()
+    expect(await screen.findByRole('heading', { name: 'People you might like' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findByRole('button', { name: 'Go to my feed' })).toBeTruthy()
+  })
+
   it('every step can be skipped: "Skip the rest" saves empty details and setup is not shown again', async () => {
     const f = fakeApi('me', { details: 'new' })
     const view = renderApp('/app', f.api)
@@ -4345,7 +4367,10 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
       simulatedRevenueCents: 0,
     }
     renderApp('/app/ads', f.api)
-    fireEvent.click(await screen.findByRole('button', { name: 'Approve Budgetly' }))
+    // Approving needs the Advertising Policy confirmation (founder decision, Nov 25).
+    expect(((await screen.findByRole('button', { name: 'Approve Budgetly' })) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('checkbox', { name: /Meets the Advertising Policy.*Budgetly/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Budgetly' }))
     await waitFor(() => expect(f.ads.reviews).toEqual([{ id: 'a1', approve: true }]))
     fireEvent.click(screen.getByRole('button', { name: 'Activate Spring' }))
     await waitFor(() => expect(f.ads.statuses).toEqual([{ id: 'k1', status: 'active' }]))

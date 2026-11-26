@@ -147,10 +147,10 @@ J.run(async (browser) => {
   await inviter.getByRole('button', { name: 'Follow Cleo Creator' }).click()
   await inviter.getByText("You're following Cleo Creator.").waitFor()
   check('Nia now follows Cleo, by her own choice', sql(`select count(*) from social.follows where follower_id = '${n}' and creator_id = '${c}'`) === '1')
-  // Economic safeguard (sim.award): nobody earns points for growing their own audience. A referral
-  // earns Connection Points only when the person joins and follows someone other than the referrer.
-  check('following the person who invited her earns Cleo no referral points (never for yourself)',
-    sql(`select count(*) from sim.points_ledger where member_id = '${c}'`) === '0')
+  // Founder decision (Nov 25, 20261215000000): bringing someone to your own profile earns
+  // recognition points, never redeemable referral points; once per referred member.
+  check('bringing Nia to her own profile earns Cleo recognition only: 20 points, not redeemable, nothing waiting for review',
+    sql(`select string_agg(action || ':' || points || ':' || redeemable || ':' || status, ',') from sim.points_ledger where member_id = '${c}'`) === 'own_audience_referral:20:false:recognized')
   await nia.page.getByRole('button', { name: 'Continue', exact: true }).click()
   await nia.page.getByRole('button', { name: 'Go to my feed' }).click()
   await nia.page.getByRole('heading', { name: 'Home' }).waitFor()

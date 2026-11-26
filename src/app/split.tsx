@@ -126,6 +126,7 @@ const ACTION_LABEL: Record<string, string> = {
   repost: 'Reposted',
   external_share: 'Shared outside Splitpost',
   qualified_referral: 'Qualified referral',
+  own_audience_referral: 'Brought someone to your profile',
 }
 const STATUS_LABEL: Record<string, string> = {
   recognized: 'Recognized',

@@ -1111,6 +1111,7 @@ const MESSAGES: Record<string, string> = {
   video_canceled: 'Stopped. Your video was not uploaded.',
   use_delete_account: 'Complete a deletion request by deleting the account.',
   cannot_delete_founder: "A founder account can't be deleted here.",
+  escalate_to_founder: 'Action against a moderator or the founder is decided by the founder. Hide the content if it is urgent, then let the founder know.',
   network: "We couldn't reach Splitpost. Check your connection and try again.",
   unknown: 'Something went wrong. Please try again.',
 }

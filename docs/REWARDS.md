@@ -30,3 +30,23 @@ Database suite with `021_rewards.sql` and `170_rewards.sql` (awards once each, o
 ## Economic transparency
 
 Members are told everything is simulated and how points become eligible. The allocation rules (40% creator, 20% fan rewards pool, 40% Splitpost for content advertising; feed advertising to Splitpost) are enforced and reconciled by the database but stay off member screens until the Rewards Rules are legally reviewed. Once approved, they are shown in My Split; the claims guard (`src/public/landing/claims.test.ts`) is the switch to change.
+
+## Referrals and creators (founder decision, Nov 25)
+
+One identity: creators earn Connection Points as members, under the same
+rules. When someone joins through a member's personal link and first follows
+another creator, the member earns the qualified referral (100 redeemable
+points after founder review). When the person's first follow is the referrer
+themselves (their own profile and content), the referrer earns
+**recognition** instead: 20 points, never redeemable, at most 5 a day. Either
+way it happens once per referred member, only for the direct referrer (no
+downstream recruitment rewards), never for yourself, and only for adults with
+a verified email.
+
+The 20 points and the limit of 5 a day are **pilot parameters** (founder,
+Nov 26), kept until economic validation. They live in the `sim.point_rules`
+row for `own_audience_referral` in the current rule version, not in code, so
+changing them is a new rule version (an economic change, which needs founder
+approval and a reviewed migration) with no code change. Recognition points and
+redeemable referral points stay separate: recognition never enters the
+redeemable pool or a settlement.
