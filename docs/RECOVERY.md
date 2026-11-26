@@ -189,13 +189,31 @@ physical backups (not used for a database this small) and adds a project's
 cost, and a downloaded copy cannot be restored into another Supabase project
 cleanly, so neither is proposed.
 
-**What it costs:** a few minutes of staging downtime, and every change made on
-staging between the backup and the restore is lost. Run it soon after a
-daily backup is listed, in a quiet window, with no other activity until it is
-done. Nothing in Production is touched.
+**Downtime:** the project is unavailable while the restore runs. Supabase
+gives no fixed figure; it depends on the database size, and staging is small
+(minutes, not hours). The exercise measures it (step 6).
 
-1. **Backup** (founder). `crevant-staging`, Database, Backups: note the time
-   of the newest daily backup (T).
+**What is lost:** every change on staging between the backup and the restore.
+So the exercise runs right after a daily backup, in a quiet window, with only
+the steps below in between.
+
+**Prerequisites** (all must hold before step 4):
+
+* A daily backup is listed, and its time T is **after** today's device test
+  results were recorded (Control Center, Video posts). Check it: SQL editor,
+  `select device, passed, recorded_at from ops.video_device_tests order by recorded_at desc;`.
+  Every row there must be older than T. If any is newer, wait for the next
+  daily backup; otherwise those results would be lost.
+* Nobody but the founder is using staging (true today).
+* You know whether the waitlist logins (`waitlist_writer`, `waitlist_admin`)
+  were activated on staging, and you can set their passwords (step 11).
+* The drain key in Vault (`media_drain_key`) has not been changed since T. If
+  it has, store the current value again after the restore.
+* Claude is available for steps 3, 8, 9 and 10.
+
+1. **Backup** (founder). `crevant-staging`, Database, Backups: note the exact
+   time of the newest daily backup (T, with its time zone) and confirm the
+   device test prerequisite above.
 2. **Deletions after the backup** (founder). On the staging app, delete one of
    your own test posts and one of your own test comments. Tell Claude.
 3. **Evidence** (Claude). The staging checks: the two deletions have register
@@ -213,9 +231,18 @@ done. Nothing in Production is touched.
 9. **Re-apply** (founder, SQL editor): `select ops.reapply_deletions('<live export>'::jsonb, '<T>');`,
    then the same with the events from the log (Claude converts them). The
    second run must change nothing.
-10. **Verify** (founder runs Claude's query; then Claude): both items are
-    deleted again; the staging checks pass, including completeness and the
-    reconciliation; Verify Edge Functions passes for both functions.
+10. **Verify** (founder runs Claude's queries, then Claude). Post-restore
+    acceptance, all required:
+    * both items are deleted again, and the re-apply's second run changed
+      nothing;
+    * the staging checks pass, including deletion completeness (each item
+      matched to its own register row) and the reconciliation;
+    * Verify Edge Functions passes for `post-media` and `avatar`;
+    * the device test results are all present (the query above);
+    * the cleanup job has run since the restore (the staging check shows
+      its time);
+    * you can sign in on the staging app, Home loads, and a photo post
+      shows its photo.
 11. **Login role passwords** (founder): procedure step 6, if the waitlist
     logins were activated on staging.
 12. **Reopen** (founder): switches back on, reason "Recovery exercise
@@ -308,9 +335,10 @@ either completes in one transaction or changes nothing).
    completed deletion reached the function log within 30 minutes") and shows
    in the staging checks (032). **Completeness** is checked too, not only
    speed: staging check 032 fails if any post or comment deleted since the
-   register started has no register row, if the founder's completed account
-   deletions outnumber the register's account rows, or if any row is not
-   logged after 30 minutes. A failed read or mark is logged
+   register started has no register row, if any of the founder's completed
+   account deletions has no register row of its own (each is matched one by
+   one, by the shared transaction time, with no extra identifier kept), or if
+   any row is not logged after 30 minutes. A failed read or mark is logged
    (`deletion_register_read_failed`, `deletion_register_mark_failed`).
    Unreported rows are those with `reported_at` empty.
 7. **Private and auditable:** members cannot read the register or call its
