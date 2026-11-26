@@ -99,16 +99,24 @@ begin
   select count(*) into comments_missing from social.comments c
   where c.deleted_at >= started
     and not exists (select 1 from ops.deletion_register r where r.kind = 'comment' and r.target_id = c.id and r.event = 'deleted');
-  -- Accounts are gone once deleted, so compare the founder's completed deletions with the register's account rows.
-  select count(*) into account_events from ops.member_request_events where action = 'account_deleted' and occurred_at >= started;
-  select count(*) into account_rows from ops.deletion_register where kind = 'account' and event = 'deleted' and occurred_at >= started;
+  -- Accounts, one by one: the founder's deletion writes its 'account_deleted'
+  -- event and (through the trigger) its register row in the same transaction,
+  -- so both carry the same transaction time. Each event must have its own
+  -- register row at that time. No new identifier is kept for this.
+  select count(*) into account_events from ops.member_request_events e
+  where e.action = 'account_deleted' and e.occurred_at >= started
+    and not exists (select 1 from ops.deletion_register r
+                    where r.kind = 'account' and r.event = 'deleted' and r.occurred_at = e.occurred_at);
+  -- Register rows for accounts removed another way (the dashboard), for information.
+  select count(*) into account_rows from ops.deletion_register r
+  where r.kind = 'account' and r.event = 'deleted' and r.occurred_at >= started
+    and not exists (select 1 from ops.member_request_events e where e.action = 'account_deleted' and e.occurred_at = r.occurred_at);
   select count(*) into unlogged from ops.deletion_register where reported_at is null and occurred_at < pg_catalog.now() - interval '30 minutes';
-  if posts_missing > 0 or comments_missing > 0 or account_events > account_rows or unlogged > 0 then
-    raise exception 'FAIL: deletion register completeness: % post(s) and % comment(s) deleted without a register row; % account deletion(s) recorded against % register row(s); % row(s) not logged after 30 minutes',
-      posts_missing, comments_missing, account_events, account_rows, unlogged;
+  if posts_missing > 0 or comments_missing > 0 or account_events > 0 or unlogged > 0 then
+    raise exception 'FAIL: deletion register completeness: % post(s), % comment(s) and % founder account deletion(s) without their own register row; % row(s) not logged after 30 minutes',
+      posts_missing, comments_missing, account_events, unlogged;
   end if;
-  raise notice 'PASS: deletion register completeness: every post, comment and founder account deletion since % has a register row (accounts: % deletion(s), % row(s)), and every row older than 30 minutes is logged',
-    started, account_events, account_rows;
+  raise notice 'PASS: deletion register completeness: every post, comment and founder account deletion since % has its own register row (matched one by one), and every row older than 30 minutes is logged; % account row(s) from deletions outside the founder function', started, account_rows;
 end $$;
 
 \else

@@ -188,11 +188,11 @@ async function signIn(page, email) {
     await page.goto(`${APP}/app`)
     const group = page.getByTestId('clique-first-group')
     await group.waitFor()
-    check('Clique first leads with the new Clique post', /A new post from Amara/.test(await group.innerText()))
+    check('Home leads with the new Clique post', /A new post from Amara/.test(await group.innerText()))
     const bodies = await page.getByTestId('post').allInnerTexts()
     const amara = bodies.filter((t) => t.includes(`A new post from Amara ${RUN}`)).length
     const bo = bodies.filter((t) => t.includes(`from Bo ${RUN}`)).length
-    check('every eligible post appears exactly once on Clique first', amara === 1 && bo === 2, `Amara ${amara}, Bo ${bo}`)
+    check('every eligible post appears exactly once on Home', amara === 1 && bo === 2, `Amara ${amara}, Bo ${bo}`)
     await screenChecks(page, 'Home, Clique first')
 
     // 4. A meaningful comment makes M an Active Supporter.
@@ -212,13 +212,13 @@ async function signIn(page, email) {
     await page.getByRole('button', { name: 'Mute Bo Rel on your Home (you keep following them)' }).click()
     await page.getByText('Muted on Home').waitFor()
     check('muting keeps the follow', sql(`select count(*) from social.follows where follower_id = '${m}' and creator_id = '${b}'`) === '1')
-    await page.goto(`${APP}/app?face=following`)
+    await page.goto(`${APP}/app`)
     await page.getByText(`A new post from Amara ${RUN}`).first().waitFor()
     check('a muted creator leaves Home', (await page.getByText(`from Bo ${RUN}`).count()) === 0)
     await page.goto(`${APP}/app/clique`)
     await page.getByRole('button', { name: 'Unmute Bo Rel' }).click()
     await page.getByRole('button', { name: 'Mute Bo Rel on your Home (you keep following them)' }).waitFor()
-    await page.goto(`${APP}/app?face=following`)
+    await page.goto(`${APP}/app`)
     await page.getByText(`A new post from Bo ${RUN}`).waitFor()
     check('unmuting brings the creator back to Home', true)
     check('mute and unmute are in the event stream', sql(`select string_agg(name, ',' order by id) from analytics.events where actor_id = '${m}' and name in ('muted', 'unmuted')`) === 'muted,unmuted')
