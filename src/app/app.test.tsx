@@ -3471,6 +3471,8 @@ describe('photo posts (Build 5.3)', () => {
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
+    // The pilot keeps no separate copy of media, so the creator is told to keep the original.
+    expect(within(form).getByTestId('media-backup-note').textContent).toMatch(/Keep your original\. During the pilot, Splitpost does not keep a separate backup of photos and videos\./)
     // Native buttons (keyboard operable), at least 44 px tall for touch.
     for (const b of [change, remove]) {
       expect(b.tagName).toBe('BUTTON')
@@ -4245,23 +4247,46 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
       document.dispatchEvent(new Event('visibilitychange'))
     }
     try {
+      // If this ever fails, the trace below says whether the test lost track of
+      // the slot (synchronization) or the app counted a view it should not have
+      // (a defect): observers registered, whether the card was still on the
+      // page, and every ad event, with times.
+      const t0 = Date.now()
+      const trace: string[] = []
+      const note = (what: string) => trace.push(`${Date.now() - t0}ms ${what}`)
       const f = fakeApi()
-      const post = f.seedPost('c1', 'A post about budgets')
-      f.ads.next = ad()
-      renderApp(`/app/post/${post}`, f.api)
-      const card = await screen.findByTestId('ad')
-      const slot = callbacks.find((c) => c.el === card || c.el.contains(card) || card.contains(c.el))!
-      const show = (ratio: number) => slot.cb([{ target: slot.el, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry], {} as IntersectionObserver)
-      show(1)
-      setVisibility('hidden') // the person switched tabs straight away
-      await new Promise((r) => setTimeout(r, 1300))
-      expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([])
-      setVisibility('visible')
-      show(0.3) // less than half on screen does not count
-      await new Promise((r) => setTimeout(r, 1300))
-      expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([])
-      show(0.8)
-      await waitFor(() => expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([{ id: 'imp1', kind: 'view' }]), { timeout: 2500 })
+      try {
+        const post = f.seedPost('c1', 'A post about budgets')
+        f.ads.next = ad()
+        renderApp(`/app/post/${post}`, f.api)
+        const card = await screen.findByTestId('ad')
+        note(`ad shown; observers so far ${callbacks.length}`)
+        // The slot's observer is registered in an effect, which may run after the ad first appears.
+        const find = () => callbacks.find((c) => c.el === card || c.el.contains(card) || card.contains(c.el))
+        await waitFor(() => expect(find()).toBeTruthy())
+        const slot = find()!
+        note(`slot observer found; observers ${callbacks.length}; card on page ${card.isConnected}`)
+        const show = (ratio: number) => {
+          note(`show ${ratio}; card on page ${card.isConnected}; events ${JSON.stringify(f.ads.events)}`)
+          slot.cb([{ target: slot.el, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry], {} as IntersectionObserver)
+        }
+        show(1)
+        setVisibility('hidden') // the person switched tabs straight away
+        note('tab hidden')
+        await new Promise((r) => setTimeout(r, 1300))
+        expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([])
+        setVisibility('visible')
+        note('tab visible')
+        show(0.3) // less than half on screen does not count
+        await new Promise((r) => setTimeout(r, 1300))
+        expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([])
+        show(0.8)
+        await waitFor(() => expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([{ id: 'imp1', kind: 'view' }]), { timeout: 2500 })
+      } catch (e) {
+        note(`failed; observers ${callbacks.length}; events ${JSON.stringify(f.ads.events)}`)
+        console.error(`ad view test trace:\n${trace.join('\n')}`)
+        throw e
+      }
     } finally {
       globalThis.IntersectionObserver = original
       if (desc) Object.defineProperty(document, 'visibilityState', desc)
