@@ -52,7 +52,13 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
   const [error, setError] = useState<unknown>(null)
   const [body, setBody] = useState(post.body)
   useEffect(() => setBody(post.body), [post.body])
+  // Follow the server's values when they change (a refreshed feed), but never
+  // on mount: the first state already holds them, and a like tapped before the
+  // card's effects have run must not be undone by them.
+  const synced = useRef({ liked: post.likedByMe, likes: post.likeCount })
   useEffect(() => {
+    if (synced.current.liked === post.likedByMe && synced.current.likes === post.likeCount) return
+    synced.current = { liked: post.likedByMe, likes: post.likeCount }
     setLiked(post.likedByMe)
     setLikes(post.likeCount)
   }, [post.likedByMe, post.likeCount])
