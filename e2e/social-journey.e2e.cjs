@@ -246,12 +246,17 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   await pageA.reload()
   await pageA.getByRole('heading', { name: 'Home' }).waitFor()
   check('after a reload, first-time setup is not shown again', (await pageA.getByRole('progressbar').count()) === 0)
+  // Home opens on content; posting is one tap away in Create (approved design, V1).
+  check('Home has no composer', (await pageA.getByLabel('Write a post').count()) === 0)
+  await pageA.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Create' }).first().click()
   await pageA.getByLabel('Write a post').fill(postText)
   const postStatus = await answered(pageA, 'app_create_post', () => pageA.getByRole('button', { name: 'Post', exact: true }).click())
   check('the server accepted A\'s post', postStatus === 200, String(postStatus))
   await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
+  check('A\'s post opens on its own page once published', (await pageA.getByTestId('post').filter({ hasText: postText }).count()) === 1 && /\/app\/post\//.test(pageA.url()))
+  await pageA.goto(`${APP}/app`)
+  await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
   check('A\'s post appears in their own feed', (await pageA.getByTestId('post').filter({ hasText: postText }).count()) === 1)
-  check('the composer is cleared once the post is published', (await pageA.getByLabel('Write a post').inputValue()) === '')
   {
     const posts = rowsReport('social.posts', `author_id = '${idA}' and body = '${postText}' and deleted_at is null`)
     const all = rowsReport('social.posts', `author_id = '${idA}'`)
@@ -278,7 +283,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
       && (await card.getByRole('list', { name: 'Interests' }).getByText('Learning').count()) === 1)
     // Interest-based discovery: by topic, without searching.
     await pageB.getByRole('button', { name: 'Clear search' }).click()
-    await pageB.getByRole('tab', { name: 'Creators' }).click()
+    await pageB.getByRole('navigation', { name: 'Ways into Discover' }).getByRole('button', { name: /^People/ }).click()
     const interest = pageB.getByLabel('Browse by interest')
     await interest.selectOption({ label: 'Learning' })
     await pageB.getByRole('link', { name: 'Aye Teacher', exact: true }).waitFor()
@@ -434,8 +439,8 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   {
     const errorsBefore = consoleErrors.length
     const countWhere = (table, where) => rowsReport(table, where)
-    await pageA.goto(`${APP}/app`)
-    await pageA.getByRole('heading', { name: 'Home' }).waitFor()
+    await pageA.goto(`${APP}/app/new`)
+    await pageA.getByLabel('Write a post').waitFor()
 
     const twice = `Pressed twice (${RUN})`
     await pageA.getByLabel('Write a post').fill(twice)
@@ -454,6 +459,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
       await route.fetch()
       await route.abort('connectionreset')
     })
+    await pageA.goto(`${APP}/app/new`)
     await pageA.getByLabel('Write a post').fill(lost)
     await pageA.getByRole('button', { name: 'Post', exact: true }).click()
     await pageA.getByText("We couldn't reach Splitpost. Check your connection and try again.").waitFor()
@@ -465,7 +471,8 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     await pageA.unroute('**/rest/v1/rpc/app_create_post')
 
     // The same for a comment, on that post.
-    await pageA.getByTestId('post').filter({ hasText: lost }).getByRole('link', { name: '0 comments' }).click()
+    // Publishing opened the post's own page, where comments are.
+    await pageA.waitForURL(/\/app\/post\//)
     const said = `Said once (${RUN})`
     let droppedComment = false
     await pageA.route('**/rest/v1/rpc/app_add_comment', async (route) => {

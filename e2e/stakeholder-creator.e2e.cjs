@@ -76,7 +76,7 @@ J.run(async (browser) => {
   check('the identity, interests and bio are saved',
     sql(`select d.identity || '|' || (select string_agg(topic, ',' order by topic) from social.member_topics where user_id = d.user_id) || '|' || (d.bio is not null) from social.profile_details d where d.user_id = '${c}'`) === 'creator|books,food,travel|true')
   await cleo.page.getByRole('link', { name: 'Set up my creator profile' }).click()
-  await cleo.page.waitForURL(`${APP}/app/profile`)
+  await cleo.page.waitForURL(`${APP}/app/profile?edit=1`)
   const setup = cleo.page.getByTestId('creator-setup')
   await setup.waitFor()
   check('"Set up my creator profile" opens Profile with "Share your own work"', (await setup.getByRole('heading', { name: 'Share your own work' }).count()) === 1)
@@ -118,6 +118,7 @@ J.run(async (browser) => {
   // ---------------------------------------------------------------------------
   step('5. Cleo copies her personal invitation link')
   await nav(cleo.page).getByTitle('Profile').click()
+  await cleo.page.getByRole('link', { name: 'Edit profile' }).click()
   await setup.waitFor()
   await setup.getByRole('button', { name: 'Copy my invitation link' }).click()
   await setup.getByRole('button', { name: 'Link copied' }).waitFor()
@@ -169,7 +170,7 @@ J.run(async (browser) => {
 
   // ---------------------------------------------------------------------------
   step('7. Cleo strengthens the relationship: who joined, follow back, her own Clique')
-  await cleo.page.goto(`${APP}/app/profile`)
+  await cleo.page.goto(`${APP}/app/profile?edit=1`)
   const tools = cleo.page.getByTestId('creator-setup')
   await tools.waitFor()
   const t7 = flat(await tools.innerText())
@@ -188,7 +189,23 @@ J.run(async (browser) => {
 
   // ---------------------------------------------------------------------------
   step('8. Attention, Retention and Money reflect the new follower')
+  // Optional, for a person to look at (SHOTS=<directory>); never in CI.
+  if (process.env.SHOTS) {
+    const shot = async (url, name, ready) => {
+      await cleo.page.goto(url)
+      await ready.waitFor()
+      await cleo.page.screenshot({ path: require('node:path').join(process.env.SHOTS, `${name}-desktop.png`) })
+      await cleo.page.setViewportSize({ width: 390, height: 844 })
+      await cleo.page.waitForTimeout(300)
+      await cleo.page.screenshot({ path: require('node:path').join(process.env.SHOTS, `${name}-phone.png`) })
+      await cleo.page.setViewportSize({ width: 1280, height: 900 })
+    }
+    await shot(`${APP}/app/profile`, 'profile-own', cleo.page.getByTestId('insights-card'))
+    await shot(`${APP}/app/u/${userN}`, 'profile-public', cleo.page.getByTestId('profile-counts'))
+  }
   await cleo.page.goto(`${APP}/app/profile`)
+  await screenChecks(cleo.page, 'Your profile (P1)')
+  await cleo.page.goto(`${APP}/app/profile?insights=1`)
   await cleo.page.getByRole('tab', { name: 'Reach' }).click()
   const att = cleo.page.getByTestId('attention-face')
   await att.waitFor()

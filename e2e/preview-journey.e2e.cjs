@@ -160,7 +160,7 @@ async function signIn(page, email) {
       const ctxC = await newContext(browser)
       const pageC = await ctxC.newPage()
       await signIn(pageC, `pv-c-${RUN}@example.test`)
-      await pageC.goto(`${APP}/app/profile`)
+      await pageC.goto(`${APP}/app/profile?edit=1`)
       const box = pageC.getByRole('checkbox', { name: 'Allow public previews of my posts' })
       await box.waitFor()
       check('previews start off for every creator', !(await box.isChecked()))

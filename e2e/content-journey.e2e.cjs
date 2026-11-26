@@ -198,6 +198,7 @@ async function signIn(page, email) {
 
     // 5. Discovery (20261203000000): For you with a focus, search, share.
     await pageV.goto(`${APP}/app/discover`)
+    await pageV.getByRole('navigation', { name: 'Ways into Discover' }).getByRole('button', { name: /^For you/ }).click()
     await pageV.getByRole('tab', { name: 'For you' }).waitFor()
     await pageV.getByRole('button', { name: 'Money & business' }).click()
     // Wait for the focused list itself (the same post can be in the unfocused list too).

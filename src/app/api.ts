@@ -930,6 +930,7 @@ export interface AppApi {
   founderPlaceHold(h: { memberId: string; scope: 'account' | 'creator_entry' | 'consumer_allocation'; revenueEntryId?: number; settlementId?: number; reason: string; evidenceRef?: string; justification?: string; memberMessage: string }): Promise<number>
   founderReleaseHold(id: number, reason: string): Promise<void>
   founderCorrectRevenue(c: { entryId: number; deltaCents: number; kind: 'refund' | 'invalid_activity' | 'correction' | 'restoration'; reason: string; evidenceRef?: string }): Promise<number>
+  founderCorrectAllocation(c: { settlementId: number; memberId: string; deltaCents: number; kind: 'invalid_activity' | 'correction' | 'restoration'; reason: string; evidenceRef?: string }): Promise<number>
   submitMemberRequest(kind: MemberRequestKind, details: string): Promise<number>
   myMemberRequests(): Promise<MemberRequest[] | null>
   withdrawMemberRequest(id: number): Promise<void>
@@ -2848,6 +2849,18 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       return num(
         await rpc<number>('app_founder_correct_revenue', {
           p_entry: c.entryId,
+          p_delta_cents: c.deltaCents,
+          p_kind: c.kind,
+          p_reason: c.reason,
+          p_evidence_ref: c.evidenceRef ?? null,
+        }),
+      )
+    },
+    async founderCorrectAllocation(c) {
+      return num(
+        await rpc<number>('app_founder_correct_allocation', {
+          p_settlement: c.settlementId,
+          p_member: c.memberId,
           p_delta_cents: c.deltaCents,
           p_kind: c.kind,
           p_reason: c.reason,

@@ -106,7 +106,7 @@ const pictureShown = (page, scope = page) =>
       return [...new Uint8Array(await b.arrayBuffer())]
     }),
   )
-  await pageP.goto(`${APP}/app/profile`)
+  await pageP.goto(`${APP}/app/profile?edit=1`)
   await pageP.getByRole('button', { name: 'Add a photo' }).click()
   const dialog = pageP.getByRole('dialog', { name: 'Profile picture' })
   await dialog.waitFor()

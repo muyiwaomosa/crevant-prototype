@@ -371,6 +371,7 @@ function fakeApi(
     settleCalls: [] as string[],
     queue: { members: [], holds: [], decisions: [] } as ProgressionQueue,
     decisions: [] as Array<{ memberId: string; decision: string; reason: string }>,
+    actions: [] as Array<Record<string, unknown>>,
   }
   // Feedback, with the database's rules.
   const feedbackPresent = opts.feedback !== 'absent'
@@ -1319,15 +1320,23 @@ function fakeApi(
         members: progression.queue.members.map((m) => (m.memberId === d.memberId && m.audience === d.audience ? { ...m, status: d.decision === 'revoked' ? 'revoked' : 'qualified' } : m)),
       }
     },
-    async founderPlaceHold() {
+    async founderPlaceHold(h) {
       requireFounder()
+      if (h.scope === 'account' && (h.justification ?? '').trim().length < 10) throw new AppApiError('justification_required')
+      progression.actions.push({ action: 'hold', ...h })
       return 1
     },
     async founderReleaseHold() {
       requireFounder()
     },
-    async founderCorrectRevenue() {
+    async founderCorrectRevenue(c) {
       requireFounder()
+      progression.actions.push({ action: 'correct_revenue', ...c })
+      return 1
+    },
+    async founderCorrectAllocation(c) {
+      requireFounder()
+      progression.actions.push({ action: 'correct_allocation', ...c })
       return 1
     },
     async founderSettleEligible(reason) {
@@ -2049,7 +2058,7 @@ describe('first-time setup and profile details (20261123000000)', () => {
     expect(await screen.findByRole('link', { name: 'Creator 1' })).toBeTruthy()
     expect(screen.queryByText('Browse by interest')).toBeNull()
     cleanup()
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     expect(await screen.findByRole('heading', { name: 'Your name' })).toBeTruthy()
     await waitFor(() => expect(screen.queryByText('Loading your details…')).toBeNull())
     expect(screen.queryByRole('heading', { name: 'About you' })).toBeNull()
@@ -2110,7 +2119,7 @@ describe('first-time setup and profile details (20261123000000)', () => {
   it('details are edited later from Profile', async () => {
     const f = fakeApi()
     f.setDetails('me', { identity: 'fan', bio: 'Old bio', topics: ['tech'] })
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     expect(await screen.findByRole('heading', { name: 'About you' })).toBeTruthy()
     expect((screen.getByRole('radio', { name: /Find creators I'll love/ }) as HTMLInputElement).checked).toBe(true)
     expect((screen.getByLabelText('Short bio') as HTMLTextAreaElement).value).toBe('Old bio')
@@ -2188,6 +2197,7 @@ describe('reporting and moderation (20261124000000)', () => {
   it('a threat or self-harm report says it is reviewed first, but not around the clock', async () => {
     const f = fakeApi()
     renderApp('/app/u/creator_2', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'More options for Creator 2' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Report Creator 2' }))
     const dialog = await screen.findByRole('dialog', { name: 'Report Creator 2' })
     fireEvent.click(within(dialog).getByRole('radio', { name: 'Self-harm' }))
@@ -2210,8 +2220,9 @@ describe('reporting and moderation (20261124000000)', () => {
   it('members who are not moderators see no Moderation link, and the page is not available', async () => {
     const f = fakeApi()
     renderApp('/app/profile', f.api)
-    await screen.findByRole('heading', { name: 'Your name' })
-    expect(screen.queryByRole('link', { name: 'Moderation' })).toBeNull()
+    await screen.findByRole('heading', { name: 'Settings' })
+    expect(screen.getAllByRole('link', { name: /Your account/ }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('link', { name: /Moderation/ })).toBeNull()
     cleanup()
     renderApp('/app/moderation', f.api)
     expect(await screen.findByText("This page isn't available")).toBeTruthy()
@@ -2414,7 +2425,7 @@ describe('profile pictures (20261125000000)', () => {
   it('the editor offers camera and gallery, refuses non-photos and huge files, and removes a picture after confirming', async () => {
     const f = fakeApi()
     f.pictures.set('me', 'https://pics.test/me.jpg')
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Change picture' }))
     const editor = within(await screen.findByTestId('avatar-editor'))
     const input = editor.getByLabelText('Choose a new photo', { selector: 'input' }) as HTMLInputElement
@@ -2468,7 +2479,7 @@ describe('profile pictures (20261125000000)', () => {
     expect(await screen.findByText('Still readable')).toBeTruthy()
     expect(document.querySelector('img[src^="https://pics.test"]')).toBeNull()
     cleanup()
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     expect(await screen.findByRole('heading', { name: 'Your name' })).toBeTruthy()
     expect(await screen.findByRole('heading', { name: 'About you' })).toBeTruthy()
   })
@@ -2477,7 +2488,7 @@ describe('profile pictures (20261125000000)', () => {
     const f = fakeApi()
     f.pictures.set('me', 'https://pics.test/me.jpg')
     f.failures.removeAvatar = new AppApiError('not_available')
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Change picture' }))
     const editor = within(await screen.findByTestId('avatar-editor'))
     fireEvent.click(editor.getByRole('button', { name: 'Remove picture' }))
@@ -2517,7 +2528,10 @@ describe('feed and posting', () => {
     renderApp('/app', api)
     expect(await screen.findByText('Your feed is quiet')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Discover people' }).getAttribute('href')).toBe('/app/discover')
-    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: '  My first post  ' } })
+    // Home opens on content: posting is in Create (approved design, V1).
+    expect(screen.queryByLabelText('Write a post')).toBeNull()
+    fireEvent.click(screen.getAllByRole('link', { name: 'Create' })[0])
+    fireEvent.change(await screen.findByLabelText('Write a post'), { target: { value: '  My first post  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     expect(await screen.findByText('My first post')).toBeTruthy()
   })
@@ -2530,8 +2544,8 @@ describe('feed and posting', () => {
       sent.push(body)
       return createPost(body, requestId)
     }
-    renderApp('/app', api)
-    await screen.findByText('Your feed is quiet')
+    renderApp('/app/new', api)
+    await screen.findByLabelText('Write a post')
     fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Only once, please' } })
     const form = screen.getByLabelText('Write a post').closest('form')!
     // Both events land before React re-renders, as with a fast double click.
@@ -2559,8 +2573,8 @@ describe('feed and posting', () => {
       }
       return id
     }
-    renderApp('/app', api)
-    await screen.findByText('Your feed is quiet')
+    renderApp('/app/new', api)
+    await screen.findByLabelText('Write a post')
     fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Sent on a bad connection' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     expect(await screen.findByText("We couldn't reach Splitpost. Check your connection and try again.")).toBeTruthy()
@@ -2585,15 +2599,17 @@ describe('feed and posting', () => {
       }
       return createPost(body, requestId)
     }
-    renderApp('/app', api)
-    await screen.findByText('Your feed is quiet')
+    renderApp('/app/new', api)
+    await screen.findByLabelText('Write a post')
     fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'First draft' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     await screen.findByText("We couldn't reach Splitpost. Check your connection and try again.")
     fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Second draft' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     await screen.findByText('Second draft')
-    fireEvent.change(screen.getByLabelText('Write a post'), { target: { value: 'Another post' } })
+    // Publishing opens the post; the next one starts again from Create.
+    fireEvent.click(screen.getAllByRole('link', { name: 'Create' })[0])
+    fireEvent.change(await screen.findByLabelText('Write a post'), { target: { value: 'Another post' } })
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
     await screen.findByText('Another post')
     expect(ids).toHaveLength(3)
@@ -2827,7 +2843,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     renderApp('/app/u/creator_1', fake.api)
     const counts = await screen.findByTestId('profile-counts')
     expect(counts.textContent).toMatch(/Followers1/)
-    expect(counts.textContent).toMatch(/Clique0/)
+    expect(counts.textContent).toMatch(/In Cliques0/)
     expect(counts.textContent).toMatch(/Active Supporters0/)
     fireEvent.click(await screen.findByTestId('support-button'))
     const sheet = within(await screen.findByRole('dialog', { name: "Show Creator you'd support their work" }))
@@ -2857,7 +2873,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
   it('your own profile tells your audience story: What happened, What it means, What to do next', async () => {
     const fake = fakeApi()
     fake.follows.add(fake.key('c1', 'me'))
-    renderApp('/app/profile', fake.api)
+    renderApp('/app/profile?edit=1', fake.api)
     const card = within(await screen.findByTestId('audience-insight'))
     expect(card.getByText('What happened')).toBeTruthy()
     expect(card.getByText('1 new follower this week, 1 more than last week.')).toBeTruthy()
@@ -3233,7 +3249,7 @@ describe('posts, comments and profiles', () => {
 
   it('profile edits are saved', async () => {
     const { api } = fakeApi()
-    renderApp('/app/profile', api)
+    renderApp('/app/profile?edit=1', api)
     const name = await screen.findByLabelText('Display name')
     fireEvent.change(name, { target: { value: 'Mia Chen' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
@@ -3477,8 +3493,8 @@ describe('photo posts (Build 5.3)', () => {
 
   it('with photos off, posting is text only, exactly as before', async () => {
     const f = fakeApi()
-    renderApp('/app', f.api)
-    await screen.findByRole('heading', { name: 'Home' })
+    renderApp('/app/new', f.api)
+    await screen.findByRole('heading', { name: 'Create a post' })
     await act(async () => {})
     expect(screen.queryByRole('button', { name: 'Add photo' })).toBeNull()
     fireEvent.change(screen.getByRole('textbox', { name: 'Write a post' }), { target: { value: 'Words only' } })
@@ -3489,7 +3505,7 @@ describe('photo posts (Build 5.3)', () => {
 
   it('posts a photo with no caption: one upload, one post, with an accessible fallback name', async () => {
     const f = fakeApi('me', { photos: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose()
     expect(await screen.findByRole('img', { name: "The photo you're adding" })).toBeTruthy()
@@ -3513,7 +3529,7 @@ describe('photo posts (Build 5.3)', () => {
 
   it('with a photo: the preview, then Change photo and Remove photo, then one caption field, then Post; no other inputs', async () => {
     const f = fakeApi('me', { photos: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose()
     const preview = await screen.findByRole('img', { name: "The photo you're adding" })
@@ -3544,7 +3560,7 @@ describe('photo posts (Build 5.3)', () => {
 
   it('changing or removing the photo keeps the caption', async () => {
     const f = fakeApi('me', { photos: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose()
     await screen.findByRole('img', { name: "The photo you're adding" })
@@ -3588,7 +3604,7 @@ describe('photo posts (Build 5.3)', () => {
   it('a failed publish is retried with the same upload and request id (posted once)', async () => {
     const f = fakeApi('me', { photos: true })
     f.failures.createPhotoPost = new AppApiError('network')
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose()
     await screen.findByRole('img', { name: "The photo you're adding" })
@@ -3622,7 +3638,7 @@ describe('photo posts (Build 5.3)', () => {
 
   it('a file that is not a photo is refused before anything is sent', async () => {
     const f = fakeApi('me', { photos: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose('notes.txt')
     expect((await screen.findByRole('alert')).textContent).toMatch(/Please choose a photo/)
@@ -3794,6 +3810,12 @@ describe('discovery (20261203000000): value and intent based, search, share', ()
       fake.postTopics.set(fake.seedPost(author, body), topic)
     fake.follows.add(fake.key('me', 'c3'))
     renderApp('/app/discover', fake.api)
+    // The first screen (D1): three ways in, then a few posts you might value, each with its reason.
+    const home = within(await screen.findByTestId('discover-home'))
+    expect(home.getByRole('navigation', { name: 'Ways into Discover' }).textContent).toMatch(/For you.*People.*Topics/)
+    await home.findByText('Budget three')
+    expect(home.getAllByTestId('discover-reason')).toHaveLength(2)
+    fireEvent.click(home.getByRole('button', { name: /^For you/ }))
     expect((await screen.findByRole('tab', { name: 'For you' })).getAttribute('aria-selected')).toBe('true')
     await screen.findByText('Budget three')
     const bodies = screen.getAllByTestId('post').map((p) => p.textContent ?? '')
@@ -3820,7 +3842,7 @@ describe('discovery (20261203000000): value and intent based, search, share', ()
     expect(posts.getByText('Weekend travel on a budget')).toBeTruthy()
     expect(within(screen.getByRole('region', { name: 'Topics' })).getByText('Travel')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
-    expect(await screen.findByRole('tab', { name: 'For you' })).toBeTruthy()
+    expect(await screen.findByTestId('discover-home')).toBeTruthy()
   })
 
   it('Share copies the post link where there is no share sheet, and records the share', async () => {
@@ -3871,7 +3893,7 @@ describe('previews and search measurement (20261204000000)', () => {
 
   it('public previews are opt-in: off until the creator reads what is shown and chooses to allow them', async () => {
     const fake = fakeApi()
-    renderApp('/app/profile', fake.api)
+    renderApp('/app/profile?edit=1', fake.api)
     const setting = within(await screen.findByTestId('public-previews-setting'))
     const box = setting.getByRole('checkbox', { name: 'Allow public previews of my posts' }) as HTMLInputElement
     expect(box.checked).toBe(false)
@@ -4036,6 +4058,67 @@ describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () 
   })
 })
 
+describe('progression governance (SP-PRG-001): holds and corrections in Control Center', () => {
+  it('places a targeted hold only after a review step, with the member message, and keeps the reason internal', async () => {
+    const f = fakeApi('me', { founder: true })
+    renderApp('/app/control', f.api)
+    const form = within(await screen.findByTestId('governance-form'))
+    fireEvent.change(form.getByLabelText('Member username'), { target: { value: '@creator_2' } })
+    fireEvent.change(form.getByLabelText('Revenue entry number'), { target: { value: '41' } })
+    fireEvent.change(form.getByLabelText('Reason (internal)'), { target: { value: 'refund dispute' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    expect(await form.findByText('Write the message the member will see.')).toBeTruthy()
+    fireEvent.change(form.getByLabelText('Message the member will see'), { target: { value: 'One advertising entry is being checked.' } })
+    fireEvent.change(form.getByLabelText('Evidence reference'), { target: { value: 'case-17' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    const confirm = within(await form.findByTestId('governance-confirm'))
+    expect(confirm.getByText(/Hold one revenue entry 41 for @creator_2\. The member will see: “One advertising entry is being checked\.” Nothing is taken/)).toBeTruthy()
+    expect(f.progression.actions).toEqual([])
+    fireEvent.click(confirm.getByRole('button', { name: 'Confirm and record' }))
+    expect(await screen.findByText('Hold recorded.')).toBeTruthy()
+    expect(f.progression.actions).toEqual([
+      {
+        action: 'hold',
+        memberId: 'c2',
+        scope: 'creator_entry',
+        revenueEntryId: 41,
+        settlementId: undefined,
+        reason: 'refund dispute',
+        evidenceRef: 'case-17',
+        justification: undefined,
+        memberMessage: 'One advertising entry is being checked.',
+      },
+    ])
+  })
+
+  it('an account-wide hold needs a justification; a refund is recorded as a negative compensating correction; cancel records nothing', async () => {
+    const f = fakeApi('me', { founder: true })
+    renderApp('/app/control', f.api)
+    const form = within(await screen.findByTestId('governance-form'))
+    fireEvent.change(form.getByLabelText('Action'), { target: { value: 'hold_account' } })
+    fireEvent.change(form.getByLabelText('Member username'), { target: { value: 'creator_3' } })
+    fireEvent.change(form.getByLabelText('Reason (internal)'), { target: { value: 'coordinated activity' } })
+    fireEvent.change(form.getByLabelText('Message the member will see'), { target: { value: 'Your account is being reviewed.' } })
+    fireEvent.change(form.getByLabelText('Why the risk cannot be isolated (justification)'), { target: { value: 'short' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    expect(await form.findByText(/needs a documented justification/)).toBeTruthy()
+    fireEvent.change(form.getByLabelText('Why the risk cannot be isolated (justification)'), { target: { value: 'Activity across all entries is affected' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    fireEvent.click(within(await form.findByTestId('governance-confirm')).getByRole('button', { name: 'Cancel' }))
+    expect(f.progression.actions).toEqual([])
+    fireEvent.change(form.getByLabelText('Action'), { target: { value: 'correct_entry' } })
+    fireEvent.change(form.getByLabelText('Revenue entry number'), { target: { value: '7' } })
+    fireEvent.change(form.getByLabelText('Amount in dollars (simulated)'), { target: { value: '25' } })
+    fireEvent.change(form.getByLabelText('Reason (internal)'), { target: { value: 'advertiser refund' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    const confirm = within(await form.findByTestId('governance-confirm'))
+    expect(confirm.getByText(/Correct a revenue entry 7 for @creator_3: Advertiser refund \(reduces\), −\$25\.00 \(simulated\)\. A new compensating record/)).toBeTruthy()
+    fireEvent.click(confirm.getByRole('button', { name: 'Confirm and record' }))
+    expect(await screen.findByText('Correction recorded.')).toBeTruthy()
+    expect(f.progression.actions).toEqual([{ action: 'correct_revenue', entryId: 7, deltaCents: -2500, kind: 'refund', reason: 'advertiser refund', evidenceRef: undefined }])
+  })
+})
+
 describe('rewards (20261205000000): simulated Connection Points', () => {
   it('My Split shows recognized and redeemable points separately, and their value marked as simulated', async () => {
     const fake = fakeApi()
@@ -4186,6 +4269,7 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
   it('blocks from a profile after explaining what a block does, then shows the block with Unblock', async () => {
     const f = fakeApi()
     renderApp('/app/u/creator_2', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'More options for Creator 2' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Block Creator 2' }))
     const dialog = await screen.findByRole('dialog', { name: 'Block Creator 2?' })
     expect(dialog.textContent).toMatch(/won't see each other's profiles, posts or comments/)
@@ -4200,13 +4284,18 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
     expect(f.governance.blockCalls[1]).toEqual({ id: 'c2', block: false })
   })
 
-  it('your profile lists the members you blocked, with Unblock, and links to your notices', async () => {
+  it('your profile settings link to your notices', async () => {
+    const f = fakeApi()
+    renderApp('/app/profile', f.api)
+    expect((await screen.findByRole('link', { name: /Notices/ })).getAttribute('href')).toBe('/app/notices')
+  })
+
+  it('your profile lists the members you blocked, with Unblock', async () => {
     const f = fakeApi()
     await f.api.block('c3')
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     const list = await screen.findByTestId('blocked-members')
     expect(list.textContent).toMatch(/Creator 3.*@creator_3/)
-    expect(screen.getByRole('link', { name: 'Notices' }).getAttribute('href')).toBe('/app/notices')
     fireEvent.click(within(list).getByRole('button', { name: 'Unblock' }))
     await waitFor(() => expect(screen.queryByTestId('blocked-members')).toBeNull())
   })
@@ -4558,7 +4647,7 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
   it('ad preferences are optional, editable and removable, and explain the separation from content interests', async () => {
     const f = fakeApi()
     f.ads.exclusions = [{ kind: 'campaign', target: 'c9', label: 'Budgetly: Plan your month', createdAt: new Date().toISOString() }]
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     const box = await screen.findByTestId('ad-preferences')
     expect(box.textContent).toMatch(/Optional.*content interests, follows\s+and searches are never used for ads.*full access/)
     fireEvent.change(within(box).getByLabelText('Software & apps'), { target: { value: 'chosen' } })
@@ -4727,12 +4816,12 @@ describe('intelligence (20261210000000): what happened, what it means, what to d
     ).toBe("Share Kofi's new post with someone who'd value it.")
   })
 
-  it('the Profile has four faces; Attention shows availability versus reach and where followers came from', async () => {
+  it('Your insights has three faces; Reach shows availability versus reach and where followers came from', async () => {
     const f = fakeApi()
     f.intel.creator = creatorInsightsFixture()
     renderApp('/app/profile?face=attention', f.api)
     const face = await screen.findByTestId('attention-face')
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Profile', 'Reach', 'Connection', 'Earnings'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Reach', 'Connection', 'Earnings'])
     expect(face.textContent).toMatch(/What happened.*What it means.*What to do next/)
     expect(face.textContent).toMatch(/Available\. Your posts were in every follower's Home\..*Reached\. Followers who actually viewed a post/)
     expect(face.textContent).toMatch(/Where your 4 new followers came from.*Discover.*3.*Search.*1/)
@@ -4862,7 +4951,7 @@ describe('unified account and progressive onboarding (20261211000000, 2026121200
 
   it('creator setup on Profile saves up to three posting topics and guides the first post', async () => {
     const f = fakeApi()
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     const setup = await screen.findByTestId('creator-setup')
     expect(within(setup).getByText(/Optional\. Every Splitpost account can post/)).toBeTruthy()
     fireEvent.click(await within(setup).findByRole('button', { name: 'Music' }))
@@ -4977,7 +5066,7 @@ describe('video posts (20261213000000)', () => {
 
   it('a member adds a video: it is checked, prepared, uploaded and checked by the server, then posted once with a player that never autoplays', async () => {
     const f = fakeApi('me', { video: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add video' }))
     chooseVideo()
     expect(await screen.findByText(/Ready to post: 0:20, 1280 x 720/)).toBeTruthy()
@@ -5005,7 +5094,7 @@ describe('video posts (20261213000000)', () => {
 
   it('a video that cannot be used shows a clear message and can be removed; nothing is posted', async () => {
     const f = fakeApi('me', { video: true })
-    renderApp('/app', f.api)
+    renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add video' }))
     chooseVideo('clip.hevc', 'video/mp4')
     expect(await screen.findByText(/Most Compatible/)).toBeTruthy()

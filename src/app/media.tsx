@@ -214,7 +214,7 @@ function usePhotoLinks(postId: string): {
 // ---------------------------------------------------------------------------
 // A post's photo, and the larger view.
 
-export function PostPhoto({ post }: { post: Post }) {
+export function PostPhoto({ post, bleed = false }: { post: Post; bleed?: boolean }) {
   const media = post.media;
   const { links, retry, failed } = usePhotoLinks(post.id);
   const [open, setOpen] = useState(false);
@@ -223,9 +223,9 @@ export function PostPhoto({ post }: { post: Post }) {
   // Tall photos are shown at 4:5 in the feed (the whole photo opens on tap).
   const ratio = Math.max(media.width / media.height, 4 / 5);
   return (
-    <div className="mt-3">
+    <div className={bleed ? undefined : "mt-3"}>
       <div
-        className="relative w-full overflow-hidden rounded-2xl bg-ink-100"
+        className={`relative w-full overflow-hidden bg-ink-100 ${bleed ? "" : "rounded-2xl"}`}
         style={{ aspectRatio: String(ratio) }}
         data-testid="post-photo"
       >
