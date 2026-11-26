@@ -10,56 +10,46 @@ Only what is still outstanding. Done so far: every merged migration through
 20261215000000 is on staging (last run 45736045685, Nov 26 03:15 UTC, all
 staging checks passed), and the `staging` app branch is at the latest merge.
 
-**A. Needs you now (staging activation; none of it waits for the Supabase change)**
+**Priority 1. Video readiness (in order)**
+
+| # | Action | Where, exactly | Depends on | Expected result | How Claude verifies |
+|---|---|---|---|---|---|
+| V1 | **Deploy post-media to staging at the current approved code** (10 minutes). Staging runs commit 27b323a, from before video. On your computer, signed in with `supabase login`, with the pinned CLI 2.122.1 and Node 22, in a clean clone: `git fetch origin && git checkout 40a055bfd5b1712eafe812183a595e4f72182ed3`, then `node scripts/functions/deploy.mjs deploy --target staging --function post-media --commit 40a055bfd5b1712eafe812183a595e4f72182ed3 --operator founder --confirm "DEPLOY post-media TO kpudeppgokpjhvaqrprn"` (`docs/FUNCTIONS-DEPLOYMENT.md`) | Your computer | Nothing | The script prints `deployed, unverified` and a version number; send Claude the version | Runs **Verify Edge Functions** (staging, post-media, deployed, that commit and version), then opens the ledger PR whose merge is your approval |
+| V2 | **Storage upload limit of at least 110 MB** (2 minutes) | Supabase, `crevant-staging`, **Storage, Settings**, *Upload file size limit*: 110 MB or more, then Save | Nothing | The limit reads 110 MB or more (the `post-videos` bucket itself already allows 110 MB) | A too-low limit shows as a clear upload error on the test page |
+| V3 | **Video device test** (`docs/video/DEVICE-TEST.md`; half a day): iPhone Safari and Android Chrome, a 1 and a 5 minute clip each; then record each result and the storage cap (50 GB proposed) in Control Center, Video posts | `/app/video-test` on both phones | V1 and V2 | A pass or fail per device | Reads the results; proposes the 1080p fallback only if the iPhone fails |
+| V4 | Turn on **New video uploads** on staging | Control Center, Operational switches, with a reason | V3 passes (the server refuses otherwise) | Members can post videos on staging; Production stays off | Runs the video checks on staging |
+
+Already in place on staging: the private `post-videos` bucket (MP4 and JPEG,
+110 MB); video playback on; new video posts off until V3; device-test uploads
+allowed for the founder and testers while posts are off.
+
+**Priority 2. The rest of staging activation**
 
 | # | Action | Where | Depends on | Expected result | How Claude verifies |
 |---|---|---|---|---|---|
-| ✓ | Staging app deployed and founder signed in (Nov 26): Ignored Build Step allows `main` and `staging`; the `staging` branch has the staging Supabase URL and publishable key; Production keeps its own key; commit 967b692 redeployed to Preview | | | **Done** | Founder confirmed |
-| A2 | **Resend sends staging email** (15 minutes plus DNS time) | Resend and Supabase, section 2, step B | Nothing (start now: DNS can take hours) | A password reset arrives from "Splitpost" | Asks you to confirm the email arrived |
-| A3 | **Supabase Auth** (10 minutes) | Supabase dashboard, section 2, step C | Nothing | Signing up through a link works; a sign up without a link is refused | Runs the staging checks again |
-| A4 | **Activate staging** (2 minutes) | Supabase SQL editor, section 2, step D | After A1 to A3 | You have a founder account, an invitation link and the moderator role | Checks registration is open on staging only |
-| A5 | **Storage upload limit of at least 110 MB** (2 minutes) | Supabase, staging, Storage, Settings, Upload file size limit | Nothing | The limit reads 110 MB or more | Confirms with you before the device test |
-| A6 | **Hands-on acceptance**, section 3 (Journeys 1 to 9) | The staging app | After A4 | Each row behaves as written; anything that doesn't goes in Feedback | Fixes what you report and redeploys |
-| A7 | **Video device test** (`docs/video/DEVICE-TEST.md`): iPhone Safari and Android Chrome, a 1 and a 5 minute clip each; record the results and the storage cap in Control Center | `/app/video-test` on both phones | After A4 and A5 | A pass or fail per device | Reads the results; proposes the 1080p fallback only if the iPhone fails |
-| A8 | **Real-device speed check** (Journey 9, row 61) | Your phone, Wi-Fi off | After A4 | Sign-in in about 2 s, Home in about 3 s | Reruns the measurement on any loading change |
-| A9 | Turn on **New video uploads** on staging | Control Center, Operational switches | After A7 passes | Members can post videos on staging (Production stays off) | Runs the video checks on staging |
+| A2 | **Resend sends staging email**, if not done (15 minutes plus DNS time). Needed before other testers can register or reset passwords | Resend and Supabase, section 2, step B | Nothing | A password reset arrives from "Splitpost" | Asks you to confirm the email arrived |
+| A3 | **Supabase Auth**, if not done (10 minutes) | Supabase dashboard, section 2, step C | Nothing | Signing up through an invitation link works; a sign up without a link is refused | Runs the staging checks again |
+| A4 | **Activation:** you can sign in as founder (done Nov 26). Confirm you also have an invitation link and the moderator role | Supabase SQL editor, section 2, step D, only if either is missing | Nothing | Profile shows your invitation link; Moderation is available | Checks registration is open on staging only |
 
-**M. Photo and profile picture failures (open, Nov 26): evidence only you can collect**
+**Priority 3. Hands-on acceptance (continuing)**
 
-Every photo, profile picture and feed photo call failed with "We couldn't reach
-Splitpost" while text posts worked. What Claude has checked: both staging
-media functions (`avatar`, `post-media`) are deployed and answer; they accept
-the staging address `https://splitpost-app-git-staging-crevant.vercel.app`
-(checked from a real browser with the app's own headers); and they **refuse
-any other address** by leaving out the permission header, which the browser
-then reports exactly as this connection error. Text posts go to the database
-API, which accepts any address, which is why they worked. So the leading
-cause is the address the app was opened on. These three checks confirm or
-rule it out:
+| # | Action | Where | Expected result |
+|---|---|---|---|
+| A6 | The remaining journeys in section 3 (the media rows are accepted; see the results table) | The staging app | Each row behaves as written; anything that doesn't goes in Feedback |
+| A8 | Real-device speed check (Journey 9, row 61) | Your phone, Wi-Fi off | Sign-in in about 2 s, Home in about 3 s |
 
-| # | Do this | Tell Claude |
-|---|---|---|
-| M1 | Note the **exact address** in the browser bar while signed in to staging | The address (it is not secret) |
-| M2 | With that page open: browser menu, Developer tools, **Console**; then add a photo and press Post | Any red line mentioning `functions/v1` or `CORS`, and, once PR #118 is deployed, the line starting `Splitpost: the post-media photo media function did not answer from` |
-| M3 | Supabase, `crevant-staging`, **Edge Functions**, `post-media`, **Logs** (or Invocations), for the minutes of a failed try | Whether there are `POST` requests at all, or only `OPTIONS` (no `POST` means the browser blocked them) |
+**Priority 4. Decisions**
 
-If the address differs from the staging address above, open staging at
-`https://splitpost-app-git-staging-crevant.vercel.app` and try a photo again.
-If you want a different address to work (for example your own staging
-domain), tell Claude which: it is added to the staging allow-list only,
-never to Production.
+| # | Decision | Where | Recommended |
+|---|---|---|---|
+| B1 | Supabase consolidation: move `crevant-staging` into Splitpost Production (it gains daily backups), then delete `splitpost-members-rehearsal-v2` | `docs/INFRASTRUCTURE.md` | Yes: about $45 a month before and after |
+| B5 | The deletion register (deleted accounts and posts stay deleted after a restore) | `docs/RECOVERY.md` | Yes: no new service; a migration (D7) and a post-media change |
 
-**B. Depends on the Supabase consolidation (`docs/INFRASTRUCTURE.md`)**
+After B1: transfer the project (Supabase, `crevant-staging`, Settings, General,
+Transfer project), then the next day confirm Database, Backups lists a daily
+backup, then delete the rehearsal project.
 
-| # | Action | Where | Depends on | Expected result | How Claude verifies |
-|---|---|---|---|---|---|
-| B1 | Decide the recommendation: move `crevant-staging` into the Splitpost Production (Pro) organization; retire `splitpost-members-rehearsal-v2` | `docs/INFRASTRUCTURE.md`, section 2 | Nothing | A decision | Updates this guide |
-| B2 | Transfer `crevant-staging` (no downtime) | Supabase, project Settings, General, Transfer project | B1, and Claude's baseline check | The project is in Splitpost Production; its reference is unchanged | Runs the staging checks within the hour |
-| B3 | **Backups and log retention on staging** | Supabase, staging, Database, Backups; Logs | The day after B2 | A daily backup is listed; logs keep 7 days | Records it in the tracker |
-| B4 | Delete `splitpost-members-rehearsal-v2` (irreversible) | Supabase | B1, and confirming the rehearsal is finished | The project is gone; compute charges drop | Confirms nothing refers to it |
-| B5 | Approve or amend the **deletion register** proposal (`docs/RECOVERY.md`) | This repository | Nothing | A decision | Builds it, then runs the recovery exercise |
-
-**C. Independent (any time)**
+**Priority 5. Independent (any time)**
 
 | # | Action | Where | Expected result |
 |---|---|---|---|
@@ -246,15 +236,25 @@ Every change is recorded. To close staging again:
 |---|---|---|---|
 | Nov 26 | Sign in to staging | **Accepted** | |
 | Nov 26 | Text post; text post with a topic | **Accepted** | |
-| Nov 26 | Photo post (twice, including a smaller photo) | **Failed** | "We couldn't reach Splitpost" after a correct local preview. Open: section 0, M1 to M3 |
-| Nov 26 | Profile picture upload | **Failed** | Same message. Open: M1 to M3 |
-| Nov 26 | An existing photo in the Home feed, also after refreshing | **Failed** | "This photo couldn't load". Open: M1 to M3 |
+| Nov 26 | BUG-001 Photo post | Failed, then **Accepted** on the canonical staging URL | Resolved in the tested staging environment |
+| Nov 26 | BUG-002 Profile picture upload | Failed, then **Accepted** (upload, and persistence after refreshing) | Resolved in the tested staging environment |
+| Nov 26 | BUG-003 An existing photo in the Home feed | Failed, then **Accepted** (retrieval after refreshing) | Resolved in the tested staging environment |
+| Nov 26 | Photo post with caption and topic; photo post deletion | **Accepted** | |
 
-Once the cause is fixed, the media rows to redo: profile picture upload,
-display, replace and remove; photo post publish, display and delete; both
-after refreshing and signing in again; another member sees the photo and a
-signed-out visitor does not; a post whose file is gone shows "couldn't load"
-without breaking the feed; text posting still works.
+**BUG-001 to BUG-003, likely cause (not conclusively verified):** the media
+functions accept only the staging address pattern and leave out the browser's
+permission header for any other address, which a browser reports as a
+connection error, while text posts go to the database API, which accepts any
+address. On the canonical staging URL
+(`https://splitpost-app-git-staging-crevant.vercel.app`) all three passed.
+PR #118's diagnostics stay in place (code MEDIA-UNREACHABLE and a console line
+naming the function and the page address) in case it recurs.
+
+Media rows not yet exercised by the founder (no need to repeat the accepted
+ones): replacing and removing a profile picture; another member seeing the
+photo and a signed-out visitor not; a post whose file is gone showing
+"couldn't load" without breaking the feed. Automated checks cover these
+locally and in CI.
 
 Use a fresh email address for each new account, on desktop and phone. You need
 four accounts: **you** (founder and moderator), a **creator**, a **fan**, and a
