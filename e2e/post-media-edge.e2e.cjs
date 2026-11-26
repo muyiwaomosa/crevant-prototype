@@ -141,7 +141,7 @@ function frame(b) {
   // 0. Sign-in is checked first, for every member action.
   for (const [what, token] of [['no token', null], ['a malformed token', 'abc.def'], ['the anon key', ANON], ['the service key', SERVICE]]) {
     const codes = []
-    for (const action of ['photo', 'links', 'cleanup', 'mod-photo', 'mod-drain', 'check']) codes.push((await call(action, token, '{}', { contentType: 'application/json' })).status)
+    for (const action of ['photo', 'links', 'cleanup', 'deletions', 'mod-photo', 'mod-drain', 'check']) codes.push((await call(action, token, '{}', { contentType: 'application/json' })).status)
     check(`${what} is refused (401) for every member action`, codes.every((c) => c === 401), codes.join(','))
   }
   check('nothing was stored by any refused request', photoFiles() === 0 && sql('select count(*) from social.media_uploads') === '0')
@@ -360,6 +360,23 @@ function frame(b) {
   const origin = async (o) => (await fetch(`${DRAIN}/photo`, { method: 'OPTIONS', headers: { Origin: o, 'Access-Control-Request-Method': 'POST' } })).headers.get('access-control-allow-origin')
   check('the member app\'s Preview may call it from the browser', (await origin('https://splitpost-app-git-claude-pilot-membership-integration-crevant.vercel.app')) === 'https://splitpost-app-git-claude-pilot-membership-integration-crevant.vercel.app')
   check('other websites may not', (await origin('https://evil.example')) === null)
+
+  // 11b. The deletion register (20261216000000): right after a member deletes
+  // a text post, the app's report writes it to the function log at once, so
+  // it no longer waits for the 15-minute schedule.
+  if (sql("select to_regclass('ops.deletion_register') is not null") === 't') {
+    const textPost = (await rpc(A.token, 'app_create_post', { p_body: 'Deleted at once', p_request_id: crypto.randomUUID() })).json
+    await rpc(A.token, 'app_delete_post', { p_post: textPost })
+    const waiting = sql(`select count(*) from ops.deletion_register where target_id = '${textPost}' and reported_at is null`)
+    const rep = await call('deletions', A.token, '{}', { contentType: 'application/json' })
+    const repBody = rep.json ?? {}
+    check('after a member deletes a post, the deletions report marks it reported at once and returns only a count',
+      waiting === '1' && rep.status === 200 && Object.keys(repBody).join() === 'reported' && repBody.reported >= 1
+        && sql(`select count(*) from ops.deletion_register where target_id = '${textPost}' and reported_at is not null`) === '1',
+      `${waiting} ${rep.status} ${JSON.stringify(repBody)}`)
+    const again = await call('deletions', A.token, '{}', { contentType: 'application/json' })
+    check('reporting again is harmless (nothing left to report)', again.status === 200 && again.json?.reported === 0)
+  }
 
   // 12. Avatars untouched.
   check('nothing in the avatars bucket changed, and no photo file is outside post-photos', avatarFiles() === avatarsBefore

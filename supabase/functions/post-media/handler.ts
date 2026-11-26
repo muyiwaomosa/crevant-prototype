@@ -198,6 +198,16 @@ export async function handle(req: Request, action: string, deps: Deps): Promise<
   if (!(await deps.verifyUser(token, key))) return json(401, { error: 'not_signed_in' })
   const asCaller = (fn: string, body: Record<string, unknown>) => deps.userRpc(token, fn, body, key)
 
+  if (action === 'deletions') {
+    // Right after a member, moderator or the founder deletes or restores an
+    // account, post or comment: write the deletion register to the log now
+    // instead of at the next scheduled drain (which still retries anything
+    // left). It reads nothing from the request and returns only a count; the
+    // rows are ids and times, and logging one twice is harmless.
+    const n = await reportDeletions(deps, 'request')
+    return json(200, { reported: n })
+  }
+
   if (action === 'photo') {
     const bytes = await readBody(req, MAX_INPUT_BYTES)
     if (!bytes) return json(413, { error: 'too_large' })

@@ -1490,10 +1490,31 @@ function toMemberRequest(r: Record<string, unknown>): MemberRequest {
   }
 }
 
+/**
+ * Every member, moderator and founder call that deletes or restores an
+ * account, post or comment (each is recorded in ops.deletion_register by a
+ * trigger, 20261216000000). After any of them succeeds, the app asks
+ * post-media to write the register to its log at once.
+ */
+export const DELETION_REGISTER_RPCS: ReadonlySet<string> = new Set([
+  'app_delete_post', 'app_delete_comment', 'app_founder_delete_member',
+  'app_mod_hide', 'app_mod_restore', 'app_mod_enforce', 'app_mod_lift', 'app_mod_decide_appeal',
+])
+
 export function createSupabaseApi(client: SupabaseClient, userId: string): AppApi {
   async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
     const { data, error } = await client.rpc(fn, args)
     if (error) throw toAppError(error)
+    // The deletion register (docs/RECOVERY.md): report a completed deletion or
+    // restore to the function log now. Never awaited and never shown: if it
+    // fails, the scheduled drain reports it within 15 minutes.
+    if (DELETION_REGISTER_RPCS.has(fn)) {
+      try {
+        void client.functions.invoke('post-media/deletions', { body: {} }).catch(() => undefined)
+      } catch {
+        // Never let reporting affect the deletion the member just made.
+      }
+    }
     return data as T
   }
   /**

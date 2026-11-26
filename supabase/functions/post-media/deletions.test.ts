@@ -1,6 +1,6 @@
 // Unit tests for the deletion register report (20261216000000, docs/RECOVERY.md).
 import { describe, expect, it } from 'vitest'
-import { reportDeletions, type Deps, type RpcResult } from './handler.ts'
+import { handle, reportDeletions, type Deps, type RpcResult } from './handler.ts'
 
 function fakeDeps(unreported: RpcResult, markResult: RpcResult = { ok: true, data: 1 }) {
   const logs: Array<{ event: string; detail: Record<string, unknown> }> = []
@@ -50,5 +50,28 @@ describe('the deletion register is written to the function log, outside the data
     const { deps, logs } = fakeDeps({ ok: true, data: [row(7, 'post', 'deleted')] }, { ok: false, status: 503, code: 'unavailable' })
     expect(await reportDeletions(deps, 'scheduled')).toBe(1)
     expect(logs.map((l) => l.event)).toEqual(['deletion_register', 'deletion_register_mark_failed'])
+  })
+})
+
+describe('the deletions action reports right after a deletion, for signed-in members only', () => {
+  const post = (token?: string) =>
+    new Request('http://local/post-media/deletions', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: '{}' })
+
+  it('refuses without a valid sign-in, before touching the register', async () => {
+    const { deps, calls } = fakeDeps({ ok: true, data: [row(8, 'post', 'deleted')] })
+    ;(deps as unknown as { verifyUser: () => Promise<boolean> }).verifyUser = async () => false
+    expect((await handle(post(), 'deletions', deps)).status).toBe(401)
+    expect((await handle(post('bad'), 'deletions', deps)).status).toBe(401)
+    expect(calls).toEqual([])
+  })
+
+  it('for a signed-in member, logs and marks the pending rows and returns only a count', async () => {
+    const { deps, logs, calls } = fakeDeps({ ok: true, data: [row(9, 'comment', 'deleted')] })
+    ;(deps as unknown as { verifyUser: () => Promise<boolean> }).verifyUser = async () => true
+    const r = await handle(post('a.b.c'), 'deletions', deps)
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ reported: 1 })
+    expect(logs.filter((l) => l.event === 'deletion_register').map((l) => l.detail.id)).toEqual([9])
+    expect(calls.map((c) => c.fn)).toEqual(['svc_deletion_register_unreported', 'svc_deletion_register_reported'])
   })
 })

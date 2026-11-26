@@ -86,7 +86,14 @@ docker exec "$C" sh -c "pg_restore -U supabase_admin -d $DRILL /tmp/recovery.dum
   || fail "the restored copy should hold the deleted account and post (it reflects the backup)"
 pass "without reconciliation, the restore brings back the deleted account and the deleted post"
 
-# 5. Reconcile from the log.
+# 5. The evidence. Primary: the live database's own register, exported before
+#    the restore whenever the database still answers (complete). Fallback, if
+#    the database is lost: the function log. Both must name the same deletions.
+LIVE="$(q postgres -c "select coalesce(json_agg(json_build_object('id', id, 'kind', kind, 'target_id', target_id, 'event', event, 'occurred_at', occurred_at) order by id), '[]') from ops.deletion_register where occurred_at > '$BACKUP_AT'")"
+LIVE_IDS="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).map((e) => e.target_id).sort().join(","))' "$LIVE")"
+LOG_IDS="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).filter((e) => e.occurred_at > process.argv[2]).map((e) => e.target_id).sort().join(","))' "$EVENTS" "$(q postgres -c "select to_char('$BACKUP_AT'::timestamptz at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US')")")"
+[ -n "$LIVE_IDS" ] && [ "$LIVE_IDS" = "$LOG_IDS" ] || fail "the live register export and the function log should name the same deletions ($LIVE_IDS / $LOG_IDS)"
+pass "the live register export and the function log name the same deletions after the backup"
 RESULT="$(echo "select ops.reapply_deletions(:'events'::jsonb, :'backup_at'::timestamptz);" | docker exec -i "$C" psql -U supabase_admin -d "$DRILL" -X -q -v ON_ERROR_STOP=1 -At \
   -v events="$(cat "$EVENTS")" -v backup_at="$BACKUP_AT")" \
   || fail "reapply_deletions failed"
@@ -97,6 +104,13 @@ echo "$RESULT" | grep -q '"accounts_deleted": 1' || fail "reapply_deletions did 
   || fail "after reconciliation the deleted account or post is still there"
 [ "$(q $DRILL -c "select count(*) from social.posts where id = '$PB'")" = 1 ] || fail "the post row should remain, marked deleted"
 pass "after reconciliation the deleted account is gone (it cannot sign in) and neither its posts nor the deleted post are visible"
+AGAIN="$(echo "select ops.reapply_deletions(:'events'::jsonb, :'backup_at'::timestamptz);" | docker exec -i "$C" psql -U supabase_admin -d "$DRILL" -X -q -v ON_ERROR_STOP=1 -At \
+  -v events="$LIVE" -v backup_at="$BACKUP_AT")"
+[ "$(node -e 'const r = JSON.parse(process.argv[1]); process.stdout.write(String(r.accounts_deleted + r.content_deleted + r.content_restored))' "$AGAIN")" = 0 ] || fail "re-applying from the live export after the log should change nothing: $AGAIN"
+pass "re-applying again, from the live export, changes nothing (idempotent, whichever evidence is used)"
+[ "$(q $DRILL -c "select count(*) from ops.deletion_register where target_id in ('$A', '$PB') and event = 'deleted' and occurred_at > '$BACKUP_AT' and reported_at is null")" = 2 ] \
+  || fail "the re-applied deletions should be recorded in the restored register"
+pass "the re-applied deletions are themselves recorded in the restored register (audit trail), for its next drain to log"
 
 q postgres -c "delete from auth.users where id = '$B'" >/dev/null
 rm -f "$LOG" "$EVENTS"

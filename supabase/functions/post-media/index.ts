@@ -22,7 +22,7 @@
 //                              schedule run the drain. Without it the drain
 //                              action refuses, and everything else works.
 //
-// Routes (POST): /post-media/photo, /links, /cleanup, /mod-photo, /mod-drain,
+// Routes (POST): /post-media/photo, /links, /cleanup, /deletions, /mod-photo, /mod-drain,
 // /check, /video-begin, /video-verify, /video-poster, /video-links,
 // /video-test-link (signed-in members; the database decides), /drain (the schedule).
 import { handle, type Bucket, type Deps, type RpcResult } from './handler.ts'
