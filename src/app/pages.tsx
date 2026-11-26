@@ -123,25 +123,17 @@ function PostList({
 }
 
 // ---------------------------------------------------------------------------
-// Home: the Following feed, newest first.
+// Home: one feed (founder decision, Nov 26). Posts from the people the member
+// follows, newest first, with unseen posts from their Clique first. Each post
+// appears once; nothing from outside the people they follow is added.
 
 export function FeedPage() {
   return (
     <>
-      <PageHeader
-        title="Home"
-        subtitle="Posts from creators you follow, newest first, with new posts from your Clique at the top. Only you decide what is hidden."
-      />
+      <PageHeader title="Home" subtitle="New posts from the people you follow. Only you decide what is hidden." />
       <GovernanceBanner />
       <JoinedForPrompt />
-      <FaceView
-        label="Home views"
-        faces={[
-          { key: 'clique-first', label: 'Clique first', content: <HomeFeed filter="all" withStrip withComposer cliqueFirst /> },
-          { key: 'clique', label: 'My Clique', content: <HomeFeed filter="clique" /> },
-          { key: 'following', label: 'Following', content: <HomeFeed filter="all" /> },
-        ]}
-      />
+      <HomeFeed filter="all" withStrip withComposer cliqueFirst />
     </>
   )
 }
@@ -172,7 +164,7 @@ function HomeFeed({
   const me = useLoad(async () => (feed.data && feed.data.length === 0 ? api.me() : null), [api, feed.data?.length === 0])
   return (
     <>
-      {withStrip && <UnseenStrip />}
+      {withStrip && <CliqueRow />}
       {filter === 'clique' && (
         <div className="mb-3 flex justify-end">
           <Link to="/app/clique" className="text-[13px] font-semibold text-brand-700 underline underline-offset-2">
@@ -241,18 +233,14 @@ function HomeFeed({
           }
         />
       )}
+      {/* Unseen posts from the member's Clique come first, with no label: the
+          feed simply starts with them. Then everything else, newest first. */}
       {group.data && group.data.length > 0 && (
-        <section aria-labelledby="clique-first-title" className="mb-5" data-testid="clique-first-group">
-          <h2 id="clique-first-title" className="mb-2 flex items-center gap-2 font-display text-[15px] font-bold text-ink-900">
-            <Users className="h-4 w-4 text-brand-700" aria-hidden="true" /> New from your Clique
-          </h2>
-          <div className="space-y-3">
-            {group.data.map((p) => (
-              <PostItem key={p.id} post={p} onDeleted={(id) => group.setData((d) => d?.filter((x) => x.id !== id))} />
-            ))}
-          </div>
-          {rest.length > 0 && <h2 className="mb-2 mt-6 font-display text-[15px] font-bold text-ink-900">Everything else, newest first</h2>}
-        </section>
+        <div className="mb-3 space-y-3" data-testid="clique-first-group">
+          {group.data.map((p) => (
+            <PostItem key={p.id} post={p} onDeleted={(id) => group.setData((d) => d?.filter((x) => x.id !== id))} />
+          ))}
+        </div>
       )}
       {/* A general feed ad between the sections: never removes or reorders a post. */}
       {withComposer && feed.data && rest.length > 0 && <AdSlot surface="feed" />}
@@ -278,16 +266,24 @@ export function unseenBadge(n: number) {
  * first (marked with a ring), newest unseen first. Only creators with unseen
  * posts appear. Opening one starts catch-up. The feed below stays chronological.
  */
-function UnseenStrip() {
+/**
+ * The Clique row at the top of Home: every member of the member's Clique,
+ * those with unseen posts first (with a ring), then the rest. Tapping one
+ * opens their posts in catch-up, unseen first. Not Stories: nothing expires,
+ * and these are the same posts as everywhere else. The last tile opens the
+ * Clique page to add or remove people.
+ */
+function CliqueRow() {
   const api = useAppApi()
-  const strip = useLoad(() => api.unseenCreators(), [api])
+  const relationships = useLoad(() => api.relationships(), [api])
+  const unseen = useLoad(() => api.unseenCreators(), [api])
   // Refresh a moment after views are recorded (at most every 2 seconds).
   const refresh = useRef<ReturnType<typeof setTimeout> | null>(null)
   useViewsSent(() => {
     if (refresh.current) return
     refresh.current = setTimeout(() => {
       refresh.current = null
-      void strip.reload()
+      void unseen.reload()
     }, 2000)
   })
   useEffect(
@@ -296,47 +292,60 @@ function UnseenStrip() {
     },
     [],
   )
-  // The strip is optional: while loading, on error or when empty it takes no space.
-  if (!strip.data || strip.data.length === 0) return null
+  // Optional: while loading, on error, or for someone who follows nobody, it takes no space.
+  if (!relationships.data || relationships.data.length === 0) return null
+  const counts = new Map((unseen.data ?? []).map((c) => [c.id, c]))
+  const clique = relationships.data
+    .filter((r) => r.inMyClique)
+    .map((r) => ({ ...r, unseenCount: counts.get(r.id)?.unseenCount ?? 0, latestUnseenAt: counts.get(r.id)?.latestUnseenAt ?? '' }))
+    .sort((x, y) =>
+      (y.unseenCount > 0 ? 1 : 0) - (x.unseenCount > 0 ? 1 : 0) ||
+      y.latestUnseenAt.localeCompare(x.latestUnseenAt) ||
+      (y.latestPostAt ?? '').localeCompare(x.latestPostAt ?? ''),
+    )
   return (
-    <section aria-labelledby="unseen-title" className="mb-4">
-      <h2 id="unseen-title" className="mb-2 text-sm font-semibold text-ink-700">
-        Catch up
+    <section aria-labelledby="clique-row-title" className="mb-4" data-testid="clique-row">
+      <h2 id="clique-row-title" className="sr-only">
+        Your Clique
       </h2>
       <ul className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:px-0">
-        {strip.data.map((c) => {
+        {clique.map((c) => {
+          const fresh = c.unseenCount > 0
           const count = c.unseenCount > 9 ? 'more than 9' : String(c.unseenCount)
           return (
             <li key={c.id} className="shrink-0">
-              {/* Named "Catch up: 3 unseen posts from <name> (in your Clique)" from the visible
-                  name plus screen-reader text, so speech and sight match (WCAG 2.5.3). */}
+              {/* The name is visible; screen readers also hear whether there is something new (WCAG 2.5.3). */}
               <Link
                 to={`/app/catch-up/${c.username}`}
-                className="flex w-[68px] flex-col items-center gap-1 rounded-2xl py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
+                data-unseen={fresh ? 'true' : 'false'}
+                // relative: keeps the screen-reader text inside the scrolling row (an absolutely
+                // positioned element would otherwise widen the whole page on a phone).
+                className="relative flex w-[68px] flex-col items-center gap-1 rounded-2xl py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
               >
-                <span className="relative" aria-hidden="true">
-                  <span className={`block rounded-full p-[2px] ${c.inMyClique ? 'bg-brand-600' : 'bg-ink-200'}`}>
-                    <span className="block rounded-full bg-paper p-[2px]">
-                      <MemberAvatar member={c} size={52} />
-                    </span>
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    data-testid="unseen-badge"
-                    className="absolute -right-1 -top-1 min-w-[22px] rounded-full bg-[#c2372b] px-1.5 text-center text-[12px] font-bold leading-[22px] text-white ring-2 ring-paper"
-                  >
-                    {unseenBadge(c.unseenCount)}
+                <span aria-hidden="true" className={`block rounded-full p-[2px] ${fresh ? 'bg-brand-600' : 'bg-ink-200'}`}>
+                  <span className="block rounded-full bg-paper p-[2px]">
+                    <MemberAvatar member={c} size={52} />
                   </span>
                 </span>
                 <span className="w-full truncate text-center text-[12px] text-ink-700">
-                  <span className="sr-only">{`Catch up: ${count} unseen ${c.unseenCount === 1 ? 'post' : 'posts'} from `}</span>
                   {c.displayName}
-                  {c.inMyClique && <span className="sr-only"> (in your Clique)</span>}
+                  <span className="sr-only">{fresh ? ` has ${count} new ${c.unseenCount === 1 ? 'post' : 'posts'}` : ' has nothing new'}</span>
                 </span>
               </Link>
             </li>
           )
         })}
+        <li className="shrink-0">
+          <Link
+            to="/app/clique"
+            className="flex w-[68px] flex-col items-center gap-1 rounded-2xl py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
+          >
+            <span aria-hidden="true" className="flex h-[60px] w-[60px] items-center justify-center rounded-full border-2 border-dashed border-ink-200 text-ink-500">
+              {clique.length === 0 ? <UserPlus className="h-6 w-6" /> : <Users className="h-6 w-6" />}
+            </span>
+            <span className="w-full truncate text-center text-[12px] text-ink-700">{clique.length === 0 ? 'Add to Clique' : 'Edit Clique'}</span>
+          </Link>
+        </li>
       </ul>
     </section>
   )
@@ -354,6 +363,8 @@ export function CatchUpPage() {
   const [error, setError] = useState<unknown>(null)
   const [hasEarlier, setHasEarlier] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
+  // After the unseen posts: the member's earlier posts (the same posts as on their profile).
+  const recent = useLoad(async () => (m ? api.memberPosts(m.id) : []), [api, m])
 
   useEffect(() => {
     if (!m) return
@@ -402,22 +413,27 @@ export function CatchUpPage() {
         <MemberAvatar member={m} size={48} />
         <div className="min-w-0">
           <h1 className="truncate font-display text-xl font-extrabold text-ink-900">Catching up with {m.displayName}</h1>
-          <p className="text-sm text-ink-600">Unseen posts, oldest first. They're marked as seen as you read them.</p>
+          <p className="text-sm text-ink-600">New posts first, oldest of them first, then earlier ones. New posts are marked as seen as you read them.</p>
         </div>
       </div>
       {posts === null && error === null && <Loading label="Loading unseen posts…" />}
       {error !== null && <ErrorNote error={error} />}
-      {posts && posts.length === 0 && (
+      {posts && posts.length === 0 && !(m.followedByMe || m.isMe) && (
         <EmptyState
           icon={<Check className="h-7 w-7" />}
           title="You're all caught up"
-          body={m.followedByMe || m.isMe ? `Nothing new from ${m.displayName}.` : `Follow ${m.displayName} to catch up on their new posts.`}
+          body={`Follow ${m.displayName} to catch up on their new posts.`}
           action={
             <Link to={`/app/u/${m.username}`} className={buttonClass('secondary')}>
               See {m.displayName}'s profile
             </Link>
           }
         />
+      )}
+      {posts && posts.length === 0 && (m.followedByMe || m.isMe) && (
+        <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink-700" data-testid="caught-up">
+          <Check className="h-4 w-4 text-brand-700" aria-hidden="true" /> Nothing new from {m.displayName}. Here are their earlier posts.
+        </p>
       )}
       {posts && posts.length > 0 && (
         <>
@@ -435,23 +451,42 @@ export function CatchUpPage() {
               </li>
             ))}
           </ul>
-          {/* Only once no earlier unseen posts remain. */}
-          {!hasEarlier && (
-            <Card className="mt-4 p-5 text-center">
-              <p className="font-semibold text-ink-900">That's everything new from {m.displayName}</p>
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
-                <Link to="/app" className={buttonClass('primary', 'sm')}>
-                  Back to Home
-                </Link>
-                <Link to={`/app/u/${m.username}`} className={buttonClass('secondary', 'sm')}>
-                  See profile
-                </Link>
-              </div>
-            </Card>
-          )}
         </>
       )}
+      {/* Once every unseen post is shown: the member's earlier posts, without repeating any. */}
+      {posts && !hasEarlier && (m.followedByMe || m.isMe) && recent.data && (
+        <EarlierPosts member={m} posts={recent.data.filter((p) => !posts.some((u) => u.id === p.id))} />
+      )}
     </>
+  )
+}
+
+function EarlierPosts({ member, posts }: { member: Member; posts: Post[] }) {
+  return (
+    <section aria-labelledby="earlier-title" className="mt-5">
+      <h2 id="earlier-title" className="mb-2 font-display text-[15px] font-bold text-ink-900">
+        Earlier from {member.displayName}
+      </h2>
+      {posts.length === 0 ? (
+        <p className="text-sm text-ink-600">No earlier posts.</p>
+      ) : (
+        <ul className="space-y-3">
+          {posts.map((p) => (
+            <li key={p.id}>
+              <PostItem post={p} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <Link to="/app" className={buttonClass('primary', 'sm')}>
+          Back to Home
+        </Link>
+        <Link to={`/app/u/${member.username}`} className={buttonClass('secondary', 'sm')}>
+          See profile
+        </Link>
+      </div>
+    </section>
   )
 }
 

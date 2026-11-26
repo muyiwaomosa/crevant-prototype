@@ -2212,6 +2212,7 @@ describe('accessible names match what is visible (WCAG 2.5.3)', () => {
     const f = fakeApi()
     f.follows.add(f.key('me', 'c1'))
     f.followedAt.set(f.key('me', 'c1'), 0)
+    f.clique.add(f.key('me', 'c1'))
     const id = f.seedPost('c1', 'Named from what you see')
     renderApp('/app', f.api)
     const post = within((await screen.findAllByTestId('post')).find((p) => p.textContent?.includes('Named from what you see'))!)
@@ -2224,8 +2225,8 @@ describe('accessible names match what is visible (WCAG 2.5.3)', () => {
     }
     fireEvent.click(like)
     expect(await post.findByRole('button', { name: 'Unlike, 1 like' })).toBeTruthy()
-    const strip = within(await screen.findByRole('region', { name: 'Catch up' }))
-    const link = strip.getByRole('link', { name: 'Catch up: 1 unseen post from Creator 1' })
+    const row = within(await screen.findByRole('region', { name: 'Your Clique' }))
+    const link = await row.findByRole('link', { name: 'Creator 1 has 1 new post' })
     expect(link.getAttribute('aria-label')).toBeNull()
     expect(link.textContent).toContain('Creator 1')
     expect(id).toBeTruthy()
@@ -2812,7 +2813,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     expect(screen.queryByText('Your feed is quiet')).toBeNull()
   })
 
-  it('Home has three faces: Clique first leads with unseen Clique posts, then everything chronologically; My Clique and Following are strictly chronological', async () => {
+  it('Home is one feed: unseen Clique posts first, then everyone followed newest first, each once, with no tabs or section labels', async () => {
     const { api, seedPost, follows, clique, key } = fakeApi()
     follows.add(key('me', 'c1'))
     follows.add(key('me', 'c2'))
@@ -2821,30 +2822,14 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     seedPost('c1', 'Newer, from someone I follow')
     renderApp('/app', api)
     await screen.findByText('Newer, from someone I follow')
-    const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
-    expect(tabs).toEqual(['Clique first', 'My Clique', 'Following'])
-    expect(screen.getByRole('tab', { name: 'Clique first' }).getAttribute('aria-selected')).toBe('true')
-    const panel = () => screen.getByRole('tabpanel')
-    const bodies = () =>
-      within(panel())
-        .getAllByTestId('post')
-        .map((p) => p.textContent ?? '')
-    // Clique first: the unseen Clique post leads, then everything else newest first, each once.
+    expect(screen.queryAllByRole('tab')).toHaveLength(0)
+    const bodies = () => screen.getAllByTestId('post').map((p) => p.textContent ?? '')
     await waitFor(() => expect(bodies()).toHaveLength(2))
     expect(bodies()[0]).toMatch(/Older, from my Clique/)
     expect(bodies()[1]).toMatch(/Newer, from someone I follow/)
-    expect(within(panel()).getByTestId('clique-first-group').textContent).toMatch(/New from your Clique/)
-    // My Clique: only Clique creators.
-    fireEvent.click(screen.getByRole('tab', { name: 'My Clique' }))
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'My Clique' }).getAttribute('aria-selected')).toBe('true'))
-    await waitFor(() => expect(bodies()).toHaveLength(1))
-    expect(bodies()[0]).toMatch(/Older, from my Clique/)
-    expect(within(panel()).getByRole('link', { name: 'Manage Clique' })).toBeTruthy()
-    // Following, by keyboard: everyone followed, newest first.
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Following' }).getAttribute('aria-selected')).toBe('true'))
-    await waitFor(() => expect(bodies()).toHaveLength(2))
-    expect(bodies()[0]).toMatch(/Newer, from someone I follow/)
+    // The Clique is prioritized without being named in the feed.
+    expect(screen.queryByRole('heading', { name: /New from your Clique|Everything else/ })).toBeNull()
+    expect(screen.queryByText(/Clique first|Everything else, newest first/)).toBeNull()
   })
 
   it('a search with no matches offers to show everyone again', async () => {
@@ -2871,42 +2856,38 @@ describe('Unseen-first Home', () => {
   }
   const T = Date.parse('2026-11-18T09:00:00Z')
 
-  it('the strip lists only followed creators with unseen posts, My Clique first, then newest, with 9+ badges', async () => {
+  it('the Clique row shows every Clique member, those with new posts first; others followed are not in it; the last tile edits the Clique', async () => {
     const fake = unseenSetup()
-    for (let i = 0; i < 12; i++) fake.seedPost('c3', `c3 post ${i}`, T + i * 1000) // 12 unseen, newest of all
-    fake.seedPost('c1', 'c1 post', T - 60_000) // Clique, older
-    fake.seedPost('c2', 'c2 post', T - 30_000) // Clique, newer than c1
+    for (let i = 0; i < 12; i++) fake.seedPost('c3', `c3 post ${i}`, T + i * 1000) // followed, not in the Clique
+    fake.seedPost('c2', 'c2 post', T - 30_000) // Clique, unseen
     fake.seedPost('c5', 'not followed', T + 99_000)
     renderApp('/app', fake.api)
-    const strip = within(await screen.findByRole('region', { name: 'Catch up' }))
-    const links = strip.getAllByRole('link')
+    const row = within(await screen.findByRole('region', { name: 'Your Clique' }))
+    await row.findByRole('link', { name: 'Creator 2 has 1 new post' })
+    const links = row.getAllByRole('link')
     // Named from what is visible (WCAG 2.5.3): no aria-label overriding the text.
     expect(links.map((l) => l.getAttribute('aria-label'))).toEqual([null, null, null])
-    ;[
-      'Catch up: 1 unseen post from Creator 2 (in your Clique)',
-      'Catch up: 1 unseen post from Creator 1 (in your Clique)',
-      'Catch up: more than 9 unseen posts from Creator 3',
-    ].forEach((name, i) => expect(strip.getByRole('link', { name })).toBe(links[i]))
-    // The visible name is part of the accessible name.
-    links.forEach((l) => expect(l.textContent).toMatch(/Creator \d/))
-    expect(strip.getAllByTestId('unseen-badge').map((b) => b.textContent)).toEqual(['1', '1', '9+'])
-    expect(links[2].getAttribute('href')).toBe('/app/catch-up/creator_3')
-    // Clique first: the unseen Clique posts lead, newest first; everything else
-    // follows strictly chronologically, and no post appears twice.
-    const group = within(screen.getByTestId('clique-first-group'))
-    expect(group.getAllByTestId('post').map((p) => p.textContent)).toEqual([expect.stringMatching(/c2 post/), expect.stringMatching(/c1 post/)])
+    expect(links.map((l) => l.textContent)).toEqual([expect.stringMatching(/Creator 2/), expect.stringMatching(/Creator 1/), 'Edit Clique'])
+    expect(row.getByRole('link', { name: 'Creator 1 has nothing new' })).toBe(links[1])
+    expect(links.map((l) => l.getAttribute('data-unseen'))).toEqual(['true', 'false', null])
+    expect(links[0].getAttribute('href')).toBe('/app/catch-up/creator_2')
+    expect(links[2].getAttribute('href')).toBe('/app/clique')
+    expect(row.queryByText(/Creator 3/)).toBeNull()
+    // The feed starts with the unseen Clique post, then everything else newest first, each once.
     const all = screen.getAllByTestId('post').map((p) => p.textContent ?? '')
-    expect(all[2]).toMatch(/c3 post 11/)
-    expect(all.filter((t) => /c[12] post/.test(t))).toHaveLength(2)
+    expect(all[0]).toMatch(/c2 post/)
+    expect(all[1]).toMatch(/c3 post 11/)
+    expect(all.filter((t) => /c2 post/.test(t))).toHaveLength(1)
   })
 
-  it('the strip is hidden when nothing is unseen, and posts from before the follow do not count', async () => {
+  it('with an empty Clique the row offers to add people, and posts from before a follow are not new', async () => {
     const fake = fakeApi('me', { creators: 3 })
     fake.seedPost('c1', 'Before the follow')
     await fake.api.follow('c1') // follows now: the earlier post is not unseen
     renderApp('/app', fake.api)
     await screen.findByText('Before the follow')
-    expect(screen.queryByRole('region', { name: 'Catch up' })).toBeNull()
+    const row = within(await screen.findByRole('region', { name: 'Your Clique' }))
+    expect(row.getAllByRole('link').map((l) => l.textContent)).toEqual(['Add to Clique'])
   })
 
   it('catch-up shows the newest 20 unseen posts oldest first, then earlier ones on request, without repeats', async () => {
@@ -2917,22 +2898,27 @@ describe('Unseen-first Home', () => {
     await screen.findByText('Unseen 25')
     let bodies = screen.getAllByTestId('post').map((p) => p.textContent?.match(/Unseen \d{2}/)?.[0])
     expect(bodies).toEqual([...Array(20)].map((_, i) => `Unseen ${String(i + 6).padStart(2, '0')}`))
-    // Earlier unseen posts remain, so it doesn't claim to be finished yet.
-    expect(screen.queryByText("That's everything new from Creator 4")).toBeNull()
+    // Earlier unseen posts remain, so the earlier posts aren't shown yet.
+    expect(screen.queryByRole('heading', { name: 'Earlier from Creator 4' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Show earlier unseen posts' }))
     await screen.findByText('Unseen 01')
     bodies = screen.getAllByTestId('post').map((p) => p.textContent?.match(/Unseen \d{2}/)?.[0])
     expect(bodies).toEqual([...Array(25)].map((_, i) => `Unseen ${String(i + 1).padStart(2, '0')}`))
     expect(screen.queryByRole('button', { name: 'Show earlier unseen posts' })).toBeNull()
-    expect(screen.getByText("That's everything new from Creator 4")).toBeTruthy()
+    // Then the member's earlier posts, without repeating the unseen ones (all 25 were unseen here).
+    expect(await screen.findByRole('heading', { name: 'Earlier from Creator 4' })).toBeTruthy()
+    expect(screen.getByText('No earlier posts.')).toBeTruthy()
   })
 
-  it('catch-up says when you are all caught up, and asks you to follow if you do not', async () => {
+  it('with nothing new, catch-up says so and shows earlier posts; it asks you to follow if you do not', async () => {
     const fake = unseenSetup()
     fake.seedPost('c5', 'From someone I do not follow')
+    fake.seedPost('c1', 'An earlier post', T - 3_600_000)
+    for (const id of fake.posts.filter((p) => p.author === 'c1').map((p) => p.id)) fake.views.add(fake.key('me', id))
     renderApp('/app/catch-up/creator_1', fake.api)
-    expect(await screen.findByText("You're all caught up")).toBeTruthy()
-    expect(screen.getByText('Nothing new from Creator 1.')).toBeTruthy()
+    expect(await screen.findByText('Nothing new from Creator 1. Here are their earlier posts.')).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Earlier from Creator 1' })).toBeTruthy()
+    expect(await screen.findByText('An earlier post')).toBeTruthy()
     cleanup()
     renderApp('/app/catch-up/creator_5', fake.api)
     expect(await screen.findByText('Follow Creator 5 to catch up on their new posts.')).toBeTruthy()
@@ -2980,7 +2966,8 @@ describe('Unseen-first Home', () => {
       const fake = unseenSetup()
       fake.seedPost('c3', 'Read me', T + 1000)
       renderApp('/app', fake.api)
-      await screen.findByRole('region', { name: 'Catch up' })
+      await screen.findByText('Read me')
+      await screen.findByRole('region', { name: 'Your Clique' })
       expect(observed).toHaveLength(1)
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       act(() => show(0.8))
@@ -3006,7 +2993,8 @@ describe('Unseen-first Home', () => {
       const fake = unseenSetup()
       fake.seedPost('c3', 'Gone while hidden', T + 1000)
       renderApp('/app', fake.api)
-      await screen.findByRole('region', { name: 'Catch up' })
+      await screen.findByText('Gone while hidden')
+      await screen.findByRole('region', { name: 'Your Clique' })
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       act(() => show(0.8))
       act(() => setVisibility('hidden'))
@@ -3016,15 +3004,15 @@ describe('Unseen-first Home', () => {
       expect(fake.marks).toHaveLength(0)
     })
 
-    it('posts at least half on screen for 2 seconds are recorded in one batch; own posts never; the strip refreshes', async () => {
+    it('posts at least half on screen for 2 seconds are recorded in one batch; own posts never; the Clique row refreshes', async () => {
       installObserver()
       const fake = unseenSetup()
-      fake.seedPost('c3', 'One', T + 1000)
-      fake.seedPost('c3', 'Two', T + 2000)
+      fake.seedPost('c1', 'One', T + 1000)
+      fake.seedPost('c1', 'Two', T + 2000)
       fake.seedPost('me', 'My own post', T + 3000)
       renderApp('/app', fake.api)
-      const strip = within(await screen.findByRole('region', { name: 'Catch up' }))
-      expect(strip.getByTestId('unseen-badge').textContent).toBe('2')
+      const row = within(await screen.findByRole('region', { name: 'Your Clique' }))
+      expect((await row.findByRole('link', { name: 'Creator 1 has 2 new posts' })).getAttribute('data-unseen')).toBe('true')
       expect(observed).toHaveLength(2) // own post is not watched
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       act(() => show(0.4))
@@ -3040,9 +3028,9 @@ describe('Unseen-first Home', () => {
       expect(fake.marks).toHaveLength(1) // one request for both
       expect(fake.marks[0].basis).toBe('visible')
       expect([...fake.marks[0].ids].sort()).toEqual(['p001', 'p002'])
-      await act(async () => vi.advanceTimersByTime(2500)) // the strip refreshes shortly after
+      await act(async () => vi.advanceTimersByTime(2500)) // the row refreshes shortly after
       vi.useRealTimers()
-      await waitFor(() => expect(screen.queryByRole('region', { name: 'Catch up' })).toBeNull())
+      await waitFor(() => expect(row.getByRole('link', { name: 'Creator 1 has nothing new' }).getAttribute('data-unseen')).toBe('false'))
       expect(fake.views.size).toBe(2)
     })
   })

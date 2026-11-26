@@ -285,8 +285,8 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
       const st = await player.evaluate((v) => ({ autoplay: v.autoplay, preload: v.preload, paused: v.paused, time: v.currentTime, controls: v.controls, src: v.src, poster: v.poster, label: v.getAttribute('aria-label') }))
       check('the follower sees the video with controls, a poster and an accessible name, not playing and not preloaded', !st.autoplay && st.preload === 'none' && st.paused && st.time === 0 && st.controls && st.label === 'Video by Vera Video' && st.poster.includes('/object/sign/post-videos/'), JSON.stringify({ ...st, src: undefined, poster: Boolean(st.poster) }))
       check('it plays from a short-lived signed link to the private bucket', st.src.includes('/storage/v1/object/sign/post-videos/') && /token=/.test(st.src))
-      // A sideways swipe over the player never changes the Home view.
-      const tab = async () => page.getByRole('tablist', { name: 'Home views' }).getByRole('tab', { selected: true }).innerText()
+      // A sideways swipe over the player never leaves Home.
+      const tab = async () => page.url()
       const before = await tab()
       const box = await player.boundingBox()
       await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2)
@@ -295,7 +295,7 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
       await page.mouse.move(box.x + box.width * 0.1, box.y + box.height / 2, { steps: 5 })
       await page.mouse.up()
       await page.waitForTimeout(400)
-      check('a sideways swipe over the player leaves the Home view where it was', (await tab()) === before, `${before} -> ${await tab()}`)
+      check('a sideways swipe over the player stays on Home', (await tab()) === before, `${before} -> ${await tab()}`)
       const p = await plays(player)
       check('the follower plays the video', p.ok, p.why)
       await screenChecks(page, 'Home with a video post')

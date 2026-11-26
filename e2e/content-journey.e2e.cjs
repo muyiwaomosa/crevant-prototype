@@ -189,7 +189,7 @@ async function signIn(page, email) {
     const ctxV = await newContext(browser)
     const pageV = await ctxV.newPage()
     await signIn(pageV, emailV)
-    await pageV.goto(`${APP}/app?face=following`)
+    await pageV.goto(`${APP}/app`)
     await pageV.getByTestId('reposted-by').first().waitFor()
     const by = await pageV.getByTestId('reposted-by').first().innerText()
     check('the repost shows who reposted it', /Reposted by\s+Fola Follower/.test(by), by)

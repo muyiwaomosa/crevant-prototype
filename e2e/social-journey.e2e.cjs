@@ -343,22 +343,23 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     const unseenText = `Something new for catch-up (${RUN})`
     sql(`insert into social.posts (author_id, body) values ('${idA}', '${unseenText}')`)
     await pageB.goto(`${APP}/app`)
-    const strip = pageB.getByRole('region', { name: 'Catch up' })
+    const strip = pageB.getByRole('region', { name: 'Your Clique' })
     await strip.waitFor()
-    const link = strip.getByRole('link', { name: 'Catch up: 1 unseen post from Aye Teacher (in your Clique)' })
-    check('a followed creator with a new post appears in the catch-up strip, marked as in your Clique, with a count of 1', await link.isVisible())
-    check('the post published before the follow is not unseen', (await strip.getByRole('link').count()) === 1)
+    const link = strip.getByRole('link', { name: 'Aye Teacher has 1 new post' })
+    await link.waitFor()
+    check('a Clique member with a new post is in the Clique row at the top of Home, marked as new, with a count of 1', (await link.getAttribute('data-unseen')) === 'true')
+    check('the post published before the follow is not new', (await strip.locator('[data-unseen="true"]').count()) === 1)
     check('the Home feed stays chronological: the newest post first', ((await pageB.getByTestId('post').first().textContent()) || '').includes(unseenText))
     {
-      // The whole Home page: posts (Like, comments, Report) and the catch-up strip.
+      // The whole Home page: posts (Like, comments, Report) and the Clique row.
       const v = await axe(pageB)
-      check('Home, with posts and the catch-up strip, has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
+      check('Home, with posts and the Clique row, has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
     }
     const desktop = pageB.viewportSize()
     for (const width of [390, 320]) {
       await pageB.setViewportSize({ width, height: 760 })
       const sideways = await pageB.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-      check(`at ${width}px, Home with the catch-up strip has no sideways scrolling`, sideways <= 0, `${sideways}px`)
+      check(`at ${width}px, Home with the Clique row has no sideways scrolling`, sideways <= 0, `${sideways}px`)
       await pageB.screenshot({ path: `${process.env.SCREENSHOT_DIR || '/tmp'}/unseen-strip-${width}.png` })
     }
     if (desktop) await pageB.setViewportSize(desktop)
@@ -372,7 +373,9 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     await pageB.getByRole('link', { name: 'Back to Home' }).click()
     await pageB.getByTestId('post').first().waitFor()
     await pageB.waitForTimeout(500)
-    check('after reading, the creator leaves the catch-up strip', (await pageB.getByRole('region', { name: 'Catch up' }).count()) === 0)
+    const after = pageB.getByRole('region', { name: 'Your Clique' }).getByRole('link', { name: 'Aye Teacher has nothing new' })
+    for (let i = 0; i < 10 && (await after.count()) === 0; i++) await pageB.waitForTimeout(500)
+    check('after reading, the Clique member is no longer marked as new', (await after.getAttribute('data-unseen')) === 'false')
   }
 
   // 5. Following and the Clique are both unlimited (20261201000000). The

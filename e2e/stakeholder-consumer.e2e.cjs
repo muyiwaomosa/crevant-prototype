@@ -127,7 +127,7 @@ J.run(async (browser) => {
   // ---------------------------------------------------------------------------
   step('5. He consumes: Home puts his Clique first, and he opens a post')
   await nav(kai.page).getByTitle('Home').click()
-  await kai.page.getByRole('tab', { name: 'Clique first' }).waitFor()
+  await kai.page.getByRole('region', { name: 'Your Clique' }).waitFor()
   const feed = kai.page.getByTestId('post')
   await feed.first().waitFor()
   const top = await feed.first().innerText()

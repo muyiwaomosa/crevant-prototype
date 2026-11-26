@@ -159,7 +159,7 @@ J.run(async (browser) => {
   await nia.page.getByRole('button', { name: 'Join Clique (Cleo Creator)' }).click()
   await nia.page.getByRole('button', { name: 'In your Clique (Cleo Creator, tap to remove)' }).waitFor()
   check('Nia added Cleo to her Clique', sql(`select count(*) from social.clique_members where fan_id = '${n}' and creator_id = '${c}' and removed_at is null`) === '1')
-  await nia.page.goto(`${APP}/app?face=following`)
+  await nia.page.goto(`${APP}/app`)
   await nia.page.getByTestId('post').filter({ hasText: postText }).first().getByRole('link', { name: '0 comments' }).click()
   await nia.page.waitForURL(`${APP}/app/post/${post}`)
   await nia.page.getByLabel('Write a comment').fill('Made this tonight with my kids and it was a hit, thank you Cleo!')
