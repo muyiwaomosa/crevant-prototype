@@ -20,9 +20,9 @@ backups, which the recovery exercise on staging needs.
 | # | Action (time) | Exactly where and how | Depends on | Expected result | Claude then |
 |---|---|---|---|---|---|
 | **1** | ~~Deploy post-media to staging~~ **Done Nov 26:** v3 at 74d41d7 (video and deletion register reporting), verified by run 45862869246 (454 checks), recorded in the ledger | | | | Checks deletion reporting on staging after your next test deletion (action 10) |
-| **2** | **Transfer prerequisites** (5 min) | Supabase: Crevant, Team: you are Owner. Splitpost Production, Team: same login. Crevant, Billing: nothing overdue. `crevant-staging`, Project Settings, Integrations: disconnect GitHub if connected | Nothing | All four true; tell Claude | Records the baseline (`docs/INFRASTRUCTURE.md`, 2a) |
-| **3** | **Transfer `crevant-staging` to Splitpost Production** (5 min, no downtime) | `crevant-staging`, Project Settings, General, Transfer project, Splitpost Production; read the added compute (about $10 a month), confirm | 2 | Same name and reference, now under Splitpost Production | Within the hour: staging checks, sign-in, Edge Functions, cleanup job (T4) |
-| **4** | **Storage upload limit 110 MB** (2 min) | `crevant-staging`, Storage, Settings, *Global file size limit*: 110 MB, Save (the `post-videos` bucket already allows 110 MB; on Free it cannot go above 50 MB) | 3 | The limit reads 110 MB | A too-low limit shows as a clear upload error on the test page |
+| **2** | ~~Transfer prerequisites~~ **Done Nov 26** | | | | |
+| **3** | ~~Transfer `crevant-staging` to Splitpost Production~~ **Done Nov 26** (founder) | | | Same name and reference | Post-transfer checks: Edge Functions verified again (post-media 454 checks, avatar), staging checks (see the tracker) |
+| **4** | ~~Storage upload limit 110 MB~~ **Done Nov 26** (founder): global file size limit 110 MB | | | | The 5-minute clip in action 5 confirms it in practice (a lower limit shows as a clear upload error) |
 | **5** | **Video device test** (half a day) | `/app/video-test` on the staging app, on an iPhone (Safari) and an Android phone (Chrome): a 1-minute and a 5-minute clip each (`docs/video/DEVICE-TEST.md`). Then Control Center, Video posts: record each result, and set the storage cap (50 GB proposed) | 4. Founder and testers only | A pass or fail per phone, recorded | Reads the results; proposes the 1080p fallback only if the iPhone fails |
 | **6** | **Turn on New video uploads (staging only)** | Control Center, Operational switches, with a reason | 5 passes and the cap is set (the server refuses otherwise) | Members can post videos on staging; Production stays off | Runs the video checks on staging |
 | **7** | **Next day: confirm backups, then decide on the rehearsal project** | `crevant-staging`, Database, Backups: one daily backup listed. Then, only if you are sure the Nov 22 rehearsal is finished and nothing in it is needed, tell Claude you authorize deleting `splitpost-members-rehearsal-v2` (or delete it: Project Settings, General, Delete project; irreversible) | 3, plus one day | A backup is listed; the total returns to about $45 a month after the deletion | Runs the recovery exercise on staging (completes the deletion safeguard) |
@@ -44,11 +44,12 @@ backups, which the recovery exercise on staging needs.
   too, so most pushes build only `crevant-prototype`. Claude batches commits.
   Check the Vercel **Usage** page weekly; video is served from Supabase
   Storage, not Vercel.
-* **Supabase:** two organizations. **Splitpost Production (Pro, $25 a month,
-  spend cap on)** holds member Production, the waitlist and the disposable
-  rehearsal project. **Crevant (Free)** holds `crevant-staging`, which
-  therefore has **no backups** and pauses after a week of inactivity until it
-  is moved (actions 2, 3 and 7). Every merged migration through 20261215000000 is
+* **Supabase:** since Nov 26, one **Splitpost Production (Pro, $25 a month,
+  spend cap on)** organization holds staging (`crevant-staging`, transferred
+  by the founder), member Production, the waitlist and the disposable
+  rehearsal project (kept until the founder explicitly approves deleting it).
+  Staging now gets daily backups (the first is confirmed in action 7) and is
+  no longer paused for inactivity. Every merged migration through 20261215000000 is
   applied on staging.
 * **Recovery:** approved pilot objectives, RPO 24 hours and RTO 4 hours (not
   service commitments), in force for staging after its transfer; no separate
@@ -71,7 +72,7 @@ app branch follows `main`, so you can accept features as they land.
 |---|---|---|
 | Database | Every merged migration, up to 20261215000000, applied Nov 26 at 03:15 (run 45736045685), all staging checks passed | Nothing |
 | Next database deploy | None pending | Approve a run only when one appears |
-| Backups | None: staging is on the Free plan | Actions 2, 3 and 7 |
+| Backups | Daily from Nov 27 (staging moved to Pro on Nov 26) | Action 7 confirms the first one |
 | Staging app (Vercel) | Builds the `staging` branch (at merged main); behind your Vercel login | A1: confirm it loads, the commit and the Preview variables |
 | Email | Supabase's default sender: team addresses only, about two an hour | Action 8 |
 | Auth (sign up through links, the account hook, Splitpost emails) | Not configured | A3 (ready now) |

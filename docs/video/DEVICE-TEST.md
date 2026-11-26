@@ -73,7 +73,10 @@ Three separate controls, each recorded with its reason:
 * **Stop all video now** (in the Video posts panel) turns both off at once.
 
 Before the test, the staging project's Storage upload size limit must be at
-least 110 MB (Supabase dashboard, Storage settings); Claude checks this.
+least 110 MB (Supabase dashboard, Storage settings). Done Nov 26 (founder),
+after staging moved to the Pro plan (the Free plan caps it at 50 MB). The
+5-minute clip confirms it in practice: a lower limit shows as a clear upload
+error.
 
 If the iPhone cannot finish the 5 minute conversion reliably, Claude applies the
 agreed fallback (SP-VID-001, section 6: accept iPhone H.264 up to 1080p as

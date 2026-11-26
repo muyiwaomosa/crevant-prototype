@@ -8,14 +8,12 @@ Applies to the staging project (`kpudeppgokpjhvaqrprn`, the pilot database
 once testers join) and, with its own approvals, to member Production later.
 Everything financial is simulated during the pilot.
 
-> **Status (Nov 26): not yet in force for staging.** Staging is in the Crevant
-> organization on the **Free** plan, which has no backups. The objectives below
-> apply once it is moved into the Splitpost Production (Pro) organization
-> (`docs/INFRASTRUCTURE.md`). The deletion safeguard (below) is **built and
-> demonstrated on local Supabase**, and runs in every CI run. It counts as
-> complete only once the same exercise has passed on staging after its
-> transfer (on Free, Edge Function logs are kept 1 day and there are no
-> backups to restore).
+> **Status (Nov 26):** staging moved into the Splitpost Production (Pro)
+> organization on Nov 26, so it now gets daily backups (7 days) and 7-day
+> logs. The objectives below are in force for staging from its first listed
+> backup. The deletion safeguard is built, applied to staging and reporting
+> there; it counts as complete once the recovery exercise has passed on
+> staging (after that first backup).
 
 ## What protects what
 
