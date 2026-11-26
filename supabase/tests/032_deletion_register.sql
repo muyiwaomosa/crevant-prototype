@@ -56,9 +56,18 @@ do $$
 declare
   last_run timestamptz;
   waiting integer;
+  recent integer;
+  slowest numeric;
+  quick integer;
 begin
   select max(finished_at) into last_run from ops.media_drain_runs where source = 'scheduled';
   select count(*) into waiting from ops.deletion_register where reported_at is null and occurred_at < pg_catalog.now() - interval '30 minutes';
+  -- How fast recent deletions reached the log: seconds only, for the latest 10.
+  select count(*), round(coalesce(max(extract(epoch from (r.reported_at - r.occurred_at))), 0)),
+         count(*) filter (where r.reported_at - r.occurred_at < interval '1 minute')
+    into recent, slowest, quick
+  from (select reported_at, occurred_at from ops.deletion_register where reported_at is not null order by id desc limit 10) r;
+  raise notice 'INFO: deletion register: of the latest % logged deletion(s), % reached the log within a minute (immediate report); the slowest took % s', recent, quick, slowest;
   if last_run is null or last_run < pg_catalog.now() - interval '30 minutes' or waiting > 0 then
     raise notice 'NOTICE: deletion register: the scheduled drain last ran at %, and % deletion(s) have waited over 30 minutes to be logged. Check the photo cleanup schedule (docs/RECOVERY.md)', coalesce(last_run::text, 'never'), waiting;
   else
