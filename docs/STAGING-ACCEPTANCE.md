@@ -6,6 +6,8 @@ Production batch PB-1, which needs its own approval, is at the end.
 
 ## 0. Founder action guide (start here)
 
+**For founder acceptance of the full member journey, use the one page guide `docs/FOUNDER-TESTING-GUIDE.md`** (canonical URL https://splitpost-app-git-staging-crevant.vercel.app).
+
 One prioritized list of what is still yours, in order. Done so far: every
 merged migration through 20261215000000 is on staging (run 45736045685, all
 checks passed); founder media acceptance passed on Nov 26 (BUG-001 to 003

@@ -194,6 +194,9 @@ J.run(async (browser) => {
     const shot = async (url, name, ready) => {
       await cleo.page.goto(url)
       await ready.waitFor()
+      await cleo.page.getByText(/^Checking your profile|^Loading/).first().waitFor({ state: 'detached' }).catch(() => {})
+      await cleo.page.waitForLoadState('networkidle')
+      await cleo.page.waitForTimeout(300)
       await cleo.page.screenshot({ path: require('node:path').join(process.env.SHOTS, `${name}-desktop.png`) })
       await cleo.page.setViewportSize({ width: 390, height: 844 })
       await cleo.page.waitForTimeout(300)
@@ -202,6 +205,22 @@ J.run(async (browser) => {
     }
     await shot(`${APP}/app/profile`, 'profile-own', cleo.page.getByTestId('insights-card'))
     await shot(`${APP}/app/u/${userN}`, 'profile-public', cleo.page.getByTestId('profile-counts'))
+    const main = cleo.page.locator('main').first()
+    for (const [route, name] of [['/app', 'home'], ['/app/clique', 'clique'], ['/app/discover', 'discover'], ['/app/new', 'create'], ['/app/split', 'my-split']]) {
+      await shot(`${APP}${route}`, name, main)
+    }
+    // The full-screen faces, one after another.
+    for (const face of ['Reach', 'Connection', 'Earnings']) {
+      await cleo.page.goto(`${APP}/app/profile?insights=1`)
+      await cleo.page.getByRole('tab', { name: face }).click()
+      await cleo.page.waitForLoadState('networkidle')
+      await cleo.page.waitForTimeout(400)
+      await cleo.page.screenshot({ path: require('node:path').join(process.env.SHOTS, `face-${face.toLowerCase()}-desktop.png`) })
+      await cleo.page.setViewportSize({ width: 390, height: 844 })
+      await cleo.page.waitForTimeout(400)
+      await cleo.page.screenshot({ path: require('node:path').join(process.env.SHOTS, `face-${face.toLowerCase()}-phone.png`) })
+      await cleo.page.setViewportSize({ width: 1280, height: 900 })
+    }
   }
   await cleo.page.goto(`${APP}/app/profile`)
   await screenChecks(cleo.page, 'Your profile (P1)')
