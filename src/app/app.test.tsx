@@ -2870,6 +2870,7 @@ describe('Unseen-first Home', () => {
     expect(links.map((l) => l.textContent)).toEqual([expect.stringMatching(/Creator 2/), expect.stringMatching(/Creator 1/), 'Edit Clique'])
     expect(row.getByRole('link', { name: 'Creator 1 has nothing new' })).toBe(links[1])
     expect(links.map((l) => l.getAttribute('data-unseen'))).toEqual(['true', 'false', null])
+    expect(row.getAllByTestId('unseen-badge').map((b) => b.textContent)).toEqual(['1'])
     expect(links[0].getAttribute('href')).toBe('/app/catch-up/creator_2')
     expect(links[2].getAttribute('href')).toBe('/app/clique')
     expect(row.queryByText(/Creator 3/)).toBeNull()

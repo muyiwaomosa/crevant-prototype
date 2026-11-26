@@ -322,10 +322,21 @@ function CliqueRow() {
                 // positioned element would otherwise widen the whole page on a phone).
                 className="relative flex w-[68px] flex-col items-center gap-1 rounded-2xl py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
               >
-                <span aria-hidden="true" className={`block rounded-full p-[2px] ${fresh ? 'bg-brand-600' : 'bg-ink-200'}`}>
-                  <span className="block rounded-full bg-paper p-[2px]">
-                    <MemberAvatar member={c} size={52} />
+                {/* SP-DESIGN-002: an apricot-to-seafoam ring and a count (9+ at most) for new posts; a plain ring when caught up. */}
+                <span aria-hidden="true" className="relative">
+                  <span className={`block rounded-full p-[3px] ${fresh ? 'bg-linear-to-br from-sp-accent to-sp-secondary' : 'bg-ink-200'}`}>
+                    <span className="block rounded-full bg-paper p-[2px]">
+                      <MemberAvatar member={c} size={52} />
+                    </span>
                   </span>
+                  {fresh && (
+                    <span
+                      data-testid="unseen-badge"
+                      className="absolute -right-1 -top-1 min-w-[22px] rounded-full bg-brand-600 px-1.5 text-center text-[12px] font-bold leading-[22px] text-white ring-2 ring-paper"
+                    >
+                      {unseenBadge(c.unseenCount)}
+                    </span>
+                  )}
                 </span>
                 <span className="w-full truncate text-center text-[12px] text-ink-700">
                   {c.displayName}
