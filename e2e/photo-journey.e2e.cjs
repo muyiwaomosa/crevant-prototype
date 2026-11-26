@@ -212,7 +212,8 @@ const makePhoto = (page, w, h) =>
   await pageP.goto(`${APP}/app`)
   await pageP.getByRole('textbox', { name: 'Write a post' }).fill(`Just text (${RUN})`)
   await pageP.getByRole('button', { name: 'Post', exact: true }).click()
-  await pageP.getByText(`Just text (${RUN})`).waitFor()
+  // The post card, not the text: the composer's textarea holds the same text until the post is saved.
+  await pageP.getByTestId('post').filter({ hasText: `Just text (${RUN})` }).first().waitFor()
   check('text-only posting still works', sql(`select media_kind is null from social.posts where body = 'Just text (${RUN})'`) === 't')
 
   // 3. Q sees both photos, opens the full photo, and reports one.
