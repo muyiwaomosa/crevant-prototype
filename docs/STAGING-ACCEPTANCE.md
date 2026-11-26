@@ -6,58 +6,67 @@ Production batch PB-1, which needs its own approval, is at the end.
 
 ## 0. Founder action guide (start here)
 
-Everything that needs you, in one place. **Sequential** steps depend on the one
-before; **independent** ones can be done any time, in any order.
+Only what is still outstanding. Done so far: every merged migration through
+20261215000000 is on staging (last run 45736045685, Nov 26 03:15 UTC, all
+staging checks passed), and the `staging` app branch is at the latest merge.
+
+**A. Needs you now (staging activation; none of it waits for the Supabase change)**
 
 | # | Action | Where | Depends on | Expected result | How Claude verifies |
 |---|---|---|---|---|---|
-| ✓ | Database deploy run 45677972966 (20261204000000 to 20261210000000) | | | **Done Nov 25, 20:34 UTC**: applied, every staging security and separation check passed | Read the run log |
-| ✓ | Database deploy run 45696762050 (20261211000000 and 20261212000000) | | | **Done Nov 25, 21:46 UTC**: applied, every staging security and separation check passed | Read the run log |
-| 2 | **Step A: open the staging app** (2 minutes) | https://splitpost-app-git-staging-crevant.vercel.app | Nothing | The sign-in page loads after your Vercel login | **Built**: the `staging` branch is at merged main (5a15fe2) and the address answers behind Vercel's login; Claude can't log in, so please confirm it loads, and that Preview has the staging Supabase variables (section 2, step A.2) |
-| 3 | **Step B: Resend sends staging email** (15 minutes plus DNS time) | Resend and Supabase, section 2 | Nothing (start now: DNS can take hours) | A password reset arrives from "Splitpost" | Asks you to confirm the email arrived |
-| 4 | **Step C: Supabase Auth** (10 minutes) | Supabase dashboard, section 2 | **Can be done now** (the account hook exists on staging since run 45677972966) | Signing up through a link works; a sign up without a link is refused | Runs the staging checks again |
-| 5 | **Step D: activate staging** (2 minutes) | Supabase SQL editor, section 2 | **After 2, 3 and 4** | You have a founder account, an invitation link and the moderator role | Checks registration is open on staging only |
-| ✓ | Merge of PR #114 (20261213000000 and 20261214000000, D7) | | | **Merged Nov 25, 22:06 UTC** on six green checks and successful Vercel builds | Done |
-| ✓ | Database deploy run 45710436593 (20261213000000 and 20261214000000) | | | **Done Nov 26, 00:47 UTC**: applied, every staging security and separation check passed | Read the run log |
-| 7 | **Set the staging Storage upload limit to at least 110 MB** (2 minutes) | Supabase dashboard, staging project, **Storage, Settings, Upload file size limit** | Independent (do any time before the device test) | The limit reads 110 MB or more | Confirms with you before the device test; a too-low limit shows as a clear upload error on the test page |
-| 8 | Hands-on acceptance, section 3 | The staging app | After 5 | Each row behaves as written; note anything that doesn't in Feedback | Fixes what you report and redeploys |
-| 9 | **The video device test**, `docs/video/DEVICE-TEST.md`: record and upload a 1 and a 5 minute clip on an iPhone and an Android phone, play them, copy the results; then record each result and the storage cap (50 GB proposed) in Control Center, Video posts | Your iPhone, an Android phone and a computer, on `/app/video-test` | **After 5 and 7** | A pass or fail per device | Reads the results; if the iPhone 5 minute conversion fails, proposes the 1080p fallback before anything is turned on |
-| 10 | Turn on **New video uploads** on staging | Control Center, Operational switches | After 9 passes | Members can post videos on staging (Production stays off) | Runs the video checks on staging |
-| 11 | PB-1 member Production operations, section 4 | Resend, Supabase, GitHub | Independent | Production email, drain key and health checks in place | Reruns the schedule and health checks |
-| 12 | **Approve the founder decisions database deploy** [run 45736045685](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45736045685) (20261215000000). PR #115 merged Nov 26, 01:28 UTC on six green checks; the `staging` app branch is at the merge (9270ea5) | GitHub, the run, **Review deployments, staging, Approve** | Nothing | The run is green | Reads the run log |
-| 13 | Confirm Supabase **project coverage and incremental cost**: the staging project `kpudeppgokpjhvaqrprn` is in the Pro organization and Database, Backups lists a daily backup (Pro is confirmed; recovery objectives approved Nov 26) | Supabase dashboard, Billing and Database, Backups | Independent | A backup is listed | Records it in the tracker |
+| A1 | **Open the staging app** and confirm the deployed version (2 minutes) | https://splitpost-app-git-staging-crevant.vercel.app, then View Source: `meta name="splitpost-commit"` | Nothing | The sign-in page loads after your Vercel login; the commit is the latest merge (the tracker header says which) | Claude can't pass Vercel's login, so please confirm, and that Preview has the staging Supabase variables (section 2, step A.2) |
+| A2 | **Resend sends staging email** (15 minutes plus DNS time) | Resend and Supabase, section 2, step B | Nothing (start now: DNS can take hours) | A password reset arrives from "Splitpost" | Asks you to confirm the email arrived |
+| A3 | **Supabase Auth** (10 minutes) | Supabase dashboard, section 2, step C | Nothing | Signing up through a link works; a sign up without a link is refused | Runs the staging checks again |
+| A4 | **Activate staging** (2 minutes) | Supabase SQL editor, section 2, step D | After A1 to A3 | You have a founder account, an invitation link and the moderator role | Checks registration is open on staging only |
+| A5 | **Storage upload limit of at least 110 MB** (2 minutes) | Supabase, staging, Storage, Settings, Upload file size limit | Nothing | The limit reads 110 MB or more | Confirms with you before the device test |
+| A6 | **Hands-on acceptance**, section 3 (Journeys 1 to 9) | The staging app | After A4 | Each row behaves as written; anything that doesn't goes in Feedback | Fixes what you report and redeploys |
+| A7 | **Video device test** (`docs/video/DEVICE-TEST.md`): iPhone Safari and Android Chrome, a 1 and a 5 minute clip each; record the results and the storage cap in Control Center | `/app/video-test` on both phones | After A4 and A5 | A pass or fail per device | Reads the results; proposes the 1080p fallback only if the iPhone fails |
+| A8 | **Real-device speed check** (Journey 9, row 61) | Your phone, Wi-Fi off | After A4 | Sign-in in about 2 s, Home in about 3 s | Reruns the measurement on any loading change |
+| A9 | Turn on **New video uploads** on staging | Control Center, Operational switches | After A7 passes | Members can post videos on staging (Production stays off) | Runs the video checks on staging |
+
+**B. Depends on the Supabase consolidation (`docs/INFRASTRUCTURE.md`)**
+
+| # | Action | Where | Depends on | Expected result | How Claude verifies |
+|---|---|---|---|---|---|
+| B1 | Decide the recommendation: move `crevant-staging` into the Splitpost Production (Pro) organization; retire `splitpost-members-rehearsal-v2` | `docs/INFRASTRUCTURE.md`, section 2 | Nothing | A decision | Updates this guide |
+| B2 | Transfer `crevant-staging` (no downtime) | Supabase, project Settings, General, Transfer project | B1, and Claude's baseline check | The project is in Splitpost Production; its reference is unchanged | Runs the staging checks within the hour |
+| B3 | **Backups and log retention on staging** | Supabase, staging, Database, Backups; Logs | The day after B2 | A daily backup is listed; logs keep 7 days | Records it in the tracker |
+| B4 | Delete `splitpost-members-rehearsal-v2` (irreversible) | Supabase | B1, and confirming the rehearsal is finished | The project is gone; compute charges drop | Confirms nothing refers to it |
+| B5 | Approve or amend the **deletion register** proposal (`docs/RECOVERY.md`) | This repository | Nothing | A decision | Builds it, then runs the recovery exercise |
+
+**C. Independent (any time)**
+
+| # | Action | Where | Expected result |
+|---|---|---|---|
+| C1 | PB-1 member Production operations, section 4 | Resend, Supabase, GitHub | Production email, drain key and health checks in place |
+| C2 | Legal review: Rewards Rules, the pilot privacy notice (including the media backup line), regulated financial products | `docs/policies/` | Reviewed text |
 
 ### Infrastructure status (Nov 26)
 
-Both **Vercel and Supabase are on Pro** (founder, Nov 26). No other subscription or system is planned for the pilot.
-
-* **Vercel:** Pro since Nov 25, after the free plan's limit of
-  100 deployments a day was reached on Nov 25. Every push builds three
-  projects (`crevant-prototype`, `splitpost`, `splitpost-app`), and
-  `splitpost-app` skips everything but the `staging` branch, and `splitpost`
-  skips branch previews too, so most pushes build only `crevant-prototype`. Claude batches
-  commits so each push carries a meaningful change. Pro includes a usage
-  allowance with charges beyond it; check the Vercel **Usage** page weekly for
-  build minutes, bandwidth and Function invocations (the app uses none today).
-  The main cost risk is bandwidth once testers use staging with photos and
-  video; video is served from Supabase Storage, not Vercel, so it does not
-  count against Vercel bandwidth.
-* **Supabase:** Pro (daily backups kept 7 days). Every migration up to
-  20261214000000 is applied on staging (run 45710436593, Nov 26 00:47 UTC, all
-  checks passed); 20261215000000 is in run 45736045685, waiting for approval.
-  Confirm the project coverage and incremental cost (step 13).
+* **Vercel:** Pro since Nov 25. Every push builds three projects
+  (`crevant-prototype`, `splitpost`, `splitpost-app`); `splitpost-app` skips
+  everything but the `staging` branch, and `splitpost` skips branch previews
+  too, so most pushes build only `crevant-prototype`. Claude batches commits.
+  Check the Vercel **Usage** page weekly; video is served from Supabase
+  Storage, not Vercel.
+* **Supabase:** two organizations. **Splitpost Production (Pro, $25 a month,
+  spend cap on)** holds member Production, the waitlist and the disposable
+  rehearsal project. **Crevant (Free)** holds `crevant-staging`, which
+  therefore has **no backups** and pauses after a week of inactivity until it
+  is moved (B1 to B3). Every merged migration through 20261215000000 is
+  applied on staging.
 * **Recovery:** approved pilot objectives, RPO 24 hours and RTO 4 hours (not
-  service commitments); no separate photo and video backup during the
-  controlled pilot, disclosed to creators in the composer; procedure in
+  service commitments), in force for staging after its transfer; no separate
+  photo and video backup during the controlled pilot, disclosed in the
+  composer; the deletion safeguard is not complete (B5). Procedure in
   `docs/RECOVERY.md`, drilled in every CI run.
-* **Staging app:** the `staging` branch is at 9908901 (PR #116 merged Nov 26).
 * **GitHub Actions:** six CI jobs per push (about 10 minutes of runner time).
 
 **Never done from here without separate authorization:** video on member
 Production, member Production registration, external pilot access, Production
 public previews, real money.
 
-After step 5, staging stays usable while development continues: each merged
+After A4, staging stays usable while development continues: each merged
 pull request gets its own small deploy for you to approve, and the `staging`
 app branch follows `main`, so you can accept features as they land.
 
@@ -65,15 +74,16 @@ app branch follows `main`, so you can accept features as they land.
 
 | Layer | Status | What you do |
 |---|---|---|
-| Database | Every merged migration, up to 20261214000000, applied Nov 26 at 00:47 (run 45710436593), all staging checks passed | Nothing |
-| Next database deploy | 20261215000000 (founder decisions), after PR #115 merges | Approve the one run when it appears |
-| Staging app (Vercel) | Builds the `staging` branch (at merged main); behind your Vercel login | Step A: confirm it loads and the Preview variables |
-| Email | Supabase's default sender: team addresses only, about two an hour | Step B |
-| Auth (sign up through links, the account hook, Splitpost emails) | Not configured | Step C (ready now) |
-| Testers can register; previews; a moderator | Closed / off / none | Step D |
+| Database | Every merged migration, up to 20261215000000, applied Nov 26 at 03:15 (run 45736045685), all staging checks passed | Nothing |
+| Next database deploy | None pending | Approve a run only when one appears |
+| Backups | None: staging is on the Free plan | B1 to B3 |
+| Staging app (Vercel) | Builds the `staging` branch (at merged main); behind your Vercel login | A1: confirm it loads, the commit and the Preview variables |
+| Email | Supabase's default sender: team addresses only, about two an hour | A2 |
+| Auth (sign up through links, the account hook, Splitpost emails) | Not configured | A3 (ready now) |
+| Testers can register; previews; a moderator | Closed / off / none | A4 |
 
 A deployed database is not a working staging app. Staging is fully functional
-once the deploy above is approved and steps A to D are done.
+once A1 to A4 are done.
 
 * **Staging app:** https://splitpost-app-git-staging-crevant.vercel.app (behind
   your Vercel login; built only from the `staging` branch, which Claude
@@ -102,7 +112,7 @@ once the deploy above is approved and steps A to D are done.
 | 20261212000000 | Privacy requests, account deletion, switches | Applied Nov 25 (run 45696762050) |
 | 20261213000000 | Video posts (uploads, playback and emergency controls, device tests) | Applied Nov 26 (run 45710436593) |
 | 20261214000000 | Release hardening (deletion with full history, advertiser thresholds, locks) | Applied Nov 26 (run 45710436593) |
-| 20261215000000 | Founder decisions: own-audience referrals recognized, moderator discipline escalated | Run 45736045685 (waiting for approval) |
+| 20261215000000 | Founder decisions: own-audience referrals recognized, moderator discipline escalated | Applied Nov 26 (run 45736045685) |
 
 ---
 
@@ -313,7 +323,7 @@ Allocation percentages are not shown to members until the Rewards Rules are lega
 |---|---|---|
 | 61 | On your phone with Wi-Fi off, in a private tab: open sign-in, sign in, scroll Home, open a post, like it (`docs/PERFORMANCE.md`, Real-device check) | Sign-in appears in about 2 seconds, Home with posts in about 3; nothing stutters or jumps |
 | 62 | Supabase, SQL editor (staging): paste `scripts/db/audit/reconciliation.sql` and run it | 12 rows, every `ok` is true (read-only; changes nothing) |
-| 63 | Supabase, Database, Backups | At least one daily backup is listed (Pro; `docs/RECOVERY.md`) |
+| 63 | Supabase, staging, Database, Backups (after the transfer, B2) | At least one daily backup is listed (`docs/RECOVERY.md`) |
 | 64 | As a creator, add a photo to a new post | Above the caption: "Keep your original. During the pilot, Splitpost does not keep a separate backup of photos and videos." |
 
 ---
