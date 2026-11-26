@@ -371,6 +371,7 @@ function fakeApi(
     settleCalls: [] as string[],
     queue: { members: [], holds: [], decisions: [] } as ProgressionQueue,
     decisions: [] as Array<{ memberId: string; decision: string; reason: string }>,
+    actions: [] as Array<Record<string, unknown>>,
   }
   // Feedback, with the database's rules.
   const feedbackPresent = opts.feedback !== 'absent'
@@ -1319,15 +1320,23 @@ function fakeApi(
         members: progression.queue.members.map((m) => (m.memberId === d.memberId && m.audience === d.audience ? { ...m, status: d.decision === 'revoked' ? 'revoked' : 'qualified' } : m)),
       }
     },
-    async founderPlaceHold() {
+    async founderPlaceHold(h) {
       requireFounder()
+      if (h.scope === 'account' && (h.justification ?? '').trim().length < 10) throw new AppApiError('justification_required')
+      progression.actions.push({ action: 'hold', ...h })
       return 1
     },
     async founderReleaseHold() {
       requireFounder()
     },
-    async founderCorrectRevenue() {
+    async founderCorrectRevenue(c) {
       requireFounder()
+      progression.actions.push({ action: 'correct_revenue', ...c })
+      return 1
+    },
+    async founderCorrectAllocation(c) {
+      requireFounder()
+      progression.actions.push({ action: 'correct_allocation', ...c })
       return 1
     },
     async founderSettleEligible(reason) {
@@ -4033,6 +4042,67 @@ describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () 
     expect(card).toMatch(/Creators \(4\)Members who published/)
     expect(card).toMatch(/Publish original posts: 1 \(25%\)/)
     expect(card).toMatch(/Qualified referrals: 7; at most 1 supporters can reach the referral goal/)
+  })
+})
+
+describe('progression governance (SP-PRG-001): holds and corrections in Control Center', () => {
+  it('places a targeted hold only after a review step, with the member message, and keeps the reason internal', async () => {
+    const f = fakeApi('me', { founder: true })
+    renderApp('/app/control', f.api)
+    const form = within(await screen.findByTestId('governance-form'))
+    fireEvent.change(form.getByLabelText('Member username'), { target: { value: '@creator_2' } })
+    fireEvent.change(form.getByLabelText('Revenue entry number'), { target: { value: '41' } })
+    fireEvent.change(form.getByLabelText('Reason (internal)'), { target: { value: 'refund dispute' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    expect(await form.findByText('Write the message the member will see.')).toBeTruthy()
+    fireEvent.change(form.getByLabelText('Message the member will see'), { target: { value: 'One advertising entry is being checked.' } })
+    fireEvent.change(form.getByLabelText('Evidence reference'), { target: { value: 'case-17' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    const confirm = within(await form.findByTestId('governance-confirm'))
+    expect(confirm.getByText(/Hold one revenue entry 41 for @creator_2\. The member will see: “One advertising entry is being checked\.” Nothing is taken/)).toBeTruthy()
+    expect(f.progression.actions).toEqual([])
+    fireEvent.click(confirm.getByRole('button', { name: 'Confirm and record' }))
+    expect(await screen.findByText('Hold recorded.')).toBeTruthy()
+    expect(f.progression.actions).toEqual([
+      {
+        action: 'hold',
+        memberId: 'c2',
+        scope: 'creator_entry',
+        revenueEntryId: 41,
+        settlementId: undefined,
+        reason: 'refund dispute',
+        evidenceRef: 'case-17',
+        justification: undefined,
+        memberMessage: 'One advertising entry is being checked.',
+      },
+    ])
+  })
+
+  it('an account-wide hold needs a justification; a refund is recorded as a negative compensating correction; cancel records nothing', async () => {
+    const f = fakeApi('me', { founder: true })
+    renderApp('/app/control', f.api)
+    const form = within(await screen.findByTestId('governance-form'))
+    fireEvent.change(form.getByLabelText('Action'), { target: { value: 'hold_account' } })
+    fireEvent.change(form.getByLabelText('Member username'), { target: { value: 'creator_3' } })
+    fireEvent.change(form.getByLabelText('Reason (internal)'), { target: { value: 'coordinated activity' } })
+    fireEvent.change(form.getByLabelText('Message the member will see'), { target: { value: 'Your account is being reviewed.' } })
+    fireEvent.change(form.getByLabelText('Why the risk cannot be isolated (justification)'), { target: { value: 'short' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    expect(await form.findByText(/needs a documented justification/)).toBeTruthy()
+    fireEvent.change(form.getByLabelText('Why the risk cannot be isolated (justification)'), { target: { value: 'Activity across all entries is affected' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    fireEvent.click(within(await form.findByTestId('governance-confirm')).getByRole('button', { name: 'Cancel' }))
+    expect(f.progression.actions).toEqual([])
+    fireEvent.change(form.getByLabelText('Action'), { target: { value: 'correct_entry' } })
+    fireEvent.change(form.getByLabelText('Revenue entry number'), { target: { value: '7' } })
+    fireEvent.change(form.getByLabelText('Amount in dollars (simulated)'), { target: { value: '25' } })
+    fireEvent.change(form.getByLabelText('Reason (internal)'), { target: { value: 'advertiser refund' } })
+    fireEvent.click(form.getByRole('button', { name: 'Review' }))
+    const confirm = within(await form.findByTestId('governance-confirm'))
+    expect(confirm.getByText(/Correct a revenue entry 7 for @creator_3: Advertiser refund \(reduces\), −\$25\.00 \(simulated\)\. A new compensating record/)).toBeTruthy()
+    fireEvent.click(confirm.getByRole('button', { name: 'Confirm and record' }))
+    expect(await screen.findByText('Correction recorded.')).toBeTruthy()
+    expect(f.progression.actions).toEqual([{ action: 'correct_revenue', entryId: 7, deltaCents: -2500, kind: 'refund', reason: 'advertiser refund', evidenceRef: undefined }])
   })
 })
 

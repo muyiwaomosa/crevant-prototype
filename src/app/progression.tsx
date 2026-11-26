@@ -490,6 +490,227 @@ function ReviewSection({ queue, onChanged }: { queue: ProgressionQueue; onChange
   )
 }
 
+type GovAction = 'hold_entry' | 'hold_allocation' | 'hold_account' | 'correct_entry' | 'correct_allocation'
+const GOV_LABEL: Record<GovAction, string> = {
+  hold_entry: 'Hold one revenue entry',
+  hold_allocation: 'Hold one month’s allocation',
+  hold_account: 'Hold the whole account',
+  correct_entry: 'Correct a revenue entry',
+  correct_allocation: 'Correct a month’s allocation',
+}
+type CorrectionKind = 'refund' | 'invalid_activity' | 'correction' | 'restoration'
+const KIND_LABEL: Record<CorrectionKind, string> = {
+  refund: 'Advertiser refund (reduces)',
+  invalid_activity: 'Invalid activity (reduces)',
+  correction: 'Correction',
+  restoration: 'Restoration after an appeal (adds)',
+}
+
+/**
+ * Holds and corrections (SP-PRG-001 PRG-06): one form, a review step that
+ * says exactly what will be recorded, then a confirmation. Every action
+ * needs a reason; holds need a message the member will see; an account-wide
+ * hold needs a justification. Uses only the founder functions; no balance
+ * can be edited directly.
+ */
+function GovernanceForm({ onChanged }: { onChanged: (note: string) => void }) {
+  const api = useAppApi()
+  const [action, setAction] = useState<GovAction>('hold_entry')
+  const [username, setUsername] = useState('')
+  const [target, setTarget] = useState('')
+  const [kind, setKind] = useState<CorrectionKind>('refund')
+  const [direction, setDirection] = useState<'decrease' | 'increase'>('decrease')
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  const [evidence, setEvidence] = useState('')
+  const [justification, setJustification] = useState('')
+  const [message, setMessage] = useState('')
+  const [pending, setPending] = useState<{ summary: string; memberId: string } | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+  const isHold = action.startsWith('hold')
+  const needsTarget = action !== 'hold_account'
+  const targetLabel = action === 'hold_entry' || action === 'correct_entry' ? 'Revenue entry number' : 'Month close (settlement) number'
+  const kinds: CorrectionKind[] =
+    action === 'correct_allocation' ? ['invalid_activity', 'correction', 'restoration'] : ['refund', 'invalid_activity', 'correction', 'restoration']
+  const cents = Math.round(Number(amount) * 100)
+  const signed = kind === 'refund' || kind === 'invalid_activity' ? -cents : kind === 'restoration' ? cents : direction === 'decrease' ? -cents : cents
+
+  async function review(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setProblem(null)
+    if (reason.trim().length < 3) return setProblem('Write the reason (3 characters or more).')
+    if (needsTarget && !/^\d+$/.test(target.trim())) return setProblem(`Enter the ${targetLabel.toLowerCase()}.`)
+    if (isHold && message.trim().length < 3) return setProblem('Write the message the member will see.')
+    if (action === 'hold_account' && justification.trim().length < 10)
+      return setProblem('An account-wide hold needs a documented justification (10 characters or more).')
+    if (!isHold && !(cents > 0)) return setProblem('Enter an amount in dollars, more than zero.')
+    let member
+    try {
+      member = await api.member(username.trim().replace(/^@/, ''))
+    } catch (err) {
+      return setError(err)
+    }
+    if (!member) return setProblem('No member has that username.')
+    const what = isHold
+      ? `${GOV_LABEL[action]}${needsTarget ? ` ${target.trim()}` : ''} for @${member.username}. The member will see: “${message.trim()}” Nothing is taken; release pauses until you release the hold.`
+      : `${GOV_LABEL[action]} ${target.trim()} for @${member.username}: ${KIND_LABEL[kind]}, ${signed < 0 ? '−' : '+'}$${(cents / 100).toFixed(2)} (simulated). A new compensating record; the original is not changed.`
+    setPending({ summary: what, memberId: member.id })
+  }
+
+  async function confirm() {
+    if (!pending) return
+    setError(null)
+    try {
+      const evidenceRef = evidence.trim() || undefined
+      if (action === 'hold_entry' || action === 'hold_allocation' || action === 'hold_account') {
+        await api.founderPlaceHold({
+          memberId: pending.memberId,
+          scope: action === 'hold_entry' ? 'creator_entry' : action === 'hold_allocation' ? 'consumer_allocation' : 'account',
+          revenueEntryId: action === 'hold_entry' ? Number(target) : undefined,
+          settlementId: action === 'hold_allocation' ? Number(target) : undefined,
+          reason: reason.trim(),
+          evidenceRef,
+          justification: action === 'hold_account' ? justification.trim() : undefined,
+          memberMessage: message.trim(),
+        })
+      } else if (action === 'correct_entry') {
+        await api.founderCorrectRevenue({ entryId: Number(target), deltaCents: signed, kind, reason: reason.trim(), evidenceRef })
+      } else {
+        await api.founderCorrectAllocation({
+          settlementId: Number(target),
+          memberId: pending.memberId,
+          deltaCents: signed,
+          kind: kind as 'invalid_activity' | 'correction' | 'restoration',
+          reason: reason.trim(),
+          evidenceRef,
+        })
+      }
+      setPending(null)
+      setReason('')
+      setEvidence('')
+      setJustification('')
+      setMessage('')
+      setAmount('')
+      onChanged(isHold ? 'Hold recorded.' : 'Correction recorded.')
+    } catch (err) {
+      setError(err)
+    }
+  }
+
+  return (
+    <form onSubmit={review} className="space-y-3 rounded-2xl bg-paper p-4" data-testid="governance-form">
+      <h3 className="font-bold text-ink-900">Holds and corrections</h3>
+      <p className="text-[13px] text-ink-600">Simulated amounts only. Every action is recorded with its reason and cannot be edited afterwards.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Action">
+          <select
+            value={action}
+            onChange={(e) => (
+              setAction(e.target.value as GovAction),
+              setPending(null),
+              setKind(e.target.value === 'correct_allocation' ? 'invalid_activity' : 'refund')
+            )}
+            className={control}
+          >
+            {(Object.keys(GOV_LABEL) as GovAction[]).map((a) => (
+              <option key={a} value={a}>
+                {GOV_LABEL[a]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Member username">
+          <input value={username} onChange={(e) => (setUsername(e.target.value), setPending(null))} className={control} autoCapitalize="none" />
+        </Field>
+        {needsTarget && (
+          <Field label={targetLabel}>
+            <input value={target} onChange={(e) => (setTarget(e.target.value), setPending(null))} inputMode="numeric" className={control} />
+          </Field>
+        )}
+        {!isHold && (
+          <>
+            <Field label="Kind">
+              <select value={kind} onChange={(e) => (setKind(e.target.value as CorrectionKind), setPending(null))} className={control}>
+                {kinds.map((k) => (
+                  <option key={k} value={k}>
+                    {KIND_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {kind === 'correction' && (
+              <Field label="Direction">
+                <select value={direction} onChange={(e) => (setDirection(e.target.value as 'decrease' | 'increase'), setPending(null))} className={control}>
+                  <option value="decrease">Decrease</option>
+                  <option value="increase">Increase</option>
+                </select>
+              </Field>
+            )}
+            <Field label="Amount in dollars (simulated)">
+              <input value={amount} onChange={(e) => (setAmount(e.target.value), setPending(null))} inputMode="decimal" className={control} />
+            </Field>
+          </>
+        )}
+        <Field label="Reason (internal)">
+          <input value={reason} onChange={(e) => (setReason(e.target.value), setPending(null))} maxLength={500} className={control} />
+        </Field>
+        <Field label="Evidence reference">
+          <input value={evidence} onChange={(e) => (setEvidence(e.target.value), setPending(null))} maxLength={200} className={control} />
+        </Field>
+        {action === 'hold_account' && (
+          <Field label="Why the risk cannot be isolated (justification)">
+            <input value={justification} onChange={(e) => (setJustification(e.target.value), setPending(null))} maxLength={500} className={control} />
+          </Field>
+        )}
+        {isHold && (
+          <Field label="Message the member will see">
+            <input value={message} onChange={(e) => (setMessage(e.target.value), setPending(null))} maxLength={500} className={control} />
+          </Field>
+        )}
+      </div>
+      {problem && <Message tone="error">{problem}</Message>}
+      {error !== null && <Message tone="error">{messageFor(error)}</Message>}
+      {pending ? (
+        <div className="space-y-2 rounded-xl border border-ink-200 bg-white p-3" data-testid="governance-confirm">
+          <p className="text-[14px] text-ink-800">{pending.summary}</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => void confirm()} className={buttonClass('danger', 'sm')}>
+              Confirm and record
+            </button>
+            <button type="button" onClick={() => setPending(null)} className={buttonClass('secondary', 'sm')}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="submit" className={buttonClass('primary', 'sm')}>
+          Review
+        </button>
+      )}
+    </form>
+  )
+}
+
+function AuditList({ queue }: { queue: ProgressionQueue }) {
+  if (queue.decisions.length === 0) return null
+  return (
+    <div className="space-y-2 rounded-2xl bg-paper p-4" data-testid="progression-audit">
+      <h3 className="font-bold text-ink-900">Recent decisions</h3>
+      <ul className="space-y-1 text-[13px] text-ink-800">
+        {queue.decisions.slice(0, 20).map((d, i) => (
+          <li key={`${d.decidedAt}-${i}`}>
+            {new Date(d.decidedAt).toLocaleString('en-US')}: {d.decision} @{d.username ?? 'member'} ({d.audience === 'creator' ? 'creator' : 'supporter'}).{' '}
+            {d.reason}
+            {d.evidenceRef ? ` Evidence: ${d.evidenceRef}.` : ''}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function Scorecard({ report }: { report: ProgressionReport }) {
   const pct = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` : 'not yet measured')
   const block = (title: string, part: ProgressionReport['creator'], def: string) => (
@@ -596,6 +817,8 @@ export function GoalsPanel() {
             />
           ))}
           {queue && <ReviewSection queue={queue} onChanged={changed} />}
+          <GovernanceForm onChanged={changed} />
+          {queue && <AuditList queue={queue} />}
           <div className="space-y-2 rounded-2xl bg-paper p-4">
             <h3 className="font-bold text-ink-900">Simulated settlement</h3>
             <p className="text-[13px] text-ink-600">
