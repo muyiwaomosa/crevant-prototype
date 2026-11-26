@@ -103,6 +103,7 @@ J.run(async (browser) => {
   const cyp = await person(browser)
   await signIn(cyp.page, email('c'))
   await nav(cyp.page).getByTitle('Profile').click()
+  await cyp.page.getByRole('link', { name: 'Edit profile' }).click()
   const prefs = cyp.page.getByTestId('ad-preferences')
   await prefs.waitFor()
   await prefs.getByLabel('Pets').selectOption('chosen')

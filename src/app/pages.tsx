@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bookmark, Check, Compass, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, Bookmark, Check, Compass, MessageCircle, MoreHorizontal, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import { LIMITS, cursorOf, type Comment, type FeedFilter, type Member, type Me, type Post, type PostCursor } from './api'
@@ -646,21 +646,24 @@ export function MemberPage() {
 }
 
 function MemberHeader({ member, onChange, about }: { member: Member; onChange: () => Promise<void>; about?: ReactNode }) {
+  // Approved design (P1): picture, name, bio, three counts, the relationship
+  // actions, then the posts. Report and block are in the "···" menu.
   return (
-    <Card className="p-5">
-      <div className="flex items-center gap-4">
-        <MemberAvatar member={member} size={64} />
-        <div className="min-w-0">
+    <Card className="relative p-5 text-center">
+      {!member.isMe && <MoreMenu member={member} onChange={onChange} />}
+      <div className="flex flex-col items-center gap-2">
+        <MemberAvatar member={member} size={80} />
+        <div className="min-w-0 max-w-full">
           <h1 className="truncate font-display text-2xl font-extrabold text-ink-900">{member.displayName}</h1>
           <p className="text-[15px] text-ink-500">@{member.username}</p>
         </div>
       </div>
-      {about}
-      <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm" data-testid="profile-counts">
+      <div className="text-left">{about}</div>
+      <dl className="mx-auto mt-4 grid max-w-sm grid-cols-3 gap-2 text-sm" data-testid="profile-counts">
         {(member.activeSupporterCount !== undefined
           ? [
               ['Followers', member.followerCount],
-              ['Clique', member.cliqueCount ?? 0],
+              ['In Cliques', member.cliqueCount ?? 0],
               ['Active Supporters', member.activeSupporterCount],
             ]
           : [
@@ -669,31 +672,62 @@ function MemberHeader({ member, onChange, about }: { member: Member; onChange: (
               ['Following', member.followingCount],
             ]
         ).map(([label, value]) => (
-          <div key={label}>
-            <dt className="text-ink-500">{label}</dt>
-            <dd className="font-semibold tabular-nums text-ink-900">{value}</dd>
+          <div key={label} className="flex flex-col-reverse">
+            <dt className="text-[12px] text-ink-500">{label}</dt>
+            <dd className="font-display text-xl font-extrabold tabular-nums text-ink-900">{value}</dd>
           </div>
         ))}
       </dl>
-      <div className="mt-4">
+      <div className="mt-4 flex justify-center">
         {member.isMe ? (
-          <Link to="/app/profile" className={buttonClass('secondary', 'sm')}>
+          <Link to="/app/profile?edit=1" className={buttonClass('secondary', 'sm')}>
             Edit your profile
           </Link>
         ) : (
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="flex flex-wrap items-start gap-2">
-              <RelationshipButtons member={member} onChange={onChange} size="md" source="profile" postsHref={member.postCount > 0 ? '#posts' : undefined} />
-              <SupportButton creator={member} />
-            </div>
-            <div className="flex flex-wrap items-center gap-1">
-              <ReportButton target="profile" targetId={member.id} name={member.displayName} />
-              <BlockButton memberId={member.id} name={member.displayName} onBlocked={() => void onChange()} />
-            </div>
+          <div className="flex flex-wrap items-start justify-center gap-2">
+            <RelationshipButtons member={member} onChange={onChange} size="md" source="profile" postsHref={member.postCount > 0 ? '#posts' : undefined} />
+            <SupportButton creator={member} />
           </div>
         )}
       </div>
     </Card>
+  )
+}
+
+/** "···": report and block, out of the way until needed. */
+function MoreMenu({ member, onChange }: { member: Member; onChange: () => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', close)
+    }
+  }, [open])
+  return (
+    <div ref={ref} className="absolute right-3 top-3">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={`More options for ${member.displayName}`}
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full text-ink-700 hover:bg-ink-100"
+      >
+        <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 flex min-w-44 flex-col items-stretch gap-1 rounded-2xl bg-white p-2 text-left shadow-lg ring-1 ring-ink-100" data-testid="profile-more">
+          <ReportButton target="profile" targetId={member.id} name={member.displayName} />
+          <BlockButton memberId={member.id} name={member.displayName} onBlocked={() => void onChange()} />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -853,18 +887,138 @@ export { CliquePage } from './relationships'
  * members see only the profile itself.
  */
 export function ProfilePage() {
+  const [params, setParams] = useSearchParams()
+  // Approved design (P1): your profile is the same top as others see, Edit
+  // profile and See as others do, one Your insights card, then your posts.
+  // Editing and the insight faces open one tap deeper (kept in the URL).
+  const editing = params.get('edit') === '1'
+  const insights = params.has('insights') || ['attention', 'retention', 'money'].includes(params.get('face') ?? '')
+  // A link straight to an insight face (?face=money) keeps the insights view when switching faces.
+  useEffect(() => {
+    if (params.has('face') && !params.has('insights')) {
+      const p = new URLSearchParams(params)
+      p.set('insights', '1')
+      setParams(p, { replace: true })
+    }
+  }, [params, setParams])
+  const back = (
+    <Link to="/app/profile" className="mb-3 inline-flex items-center gap-1 text-[14px] font-semibold text-brand-700" data-testid="profile-back">
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Your profile
+    </Link>
+  )
+  if (editing)
+    return (
+      <>
+        {back}
+        <PageHeader title="Edit your profile" subtitle="Your picture, name, bio and interests, and your settings." />
+        <ProfileFace />
+      </>
+    )
+  if (insights)
+    return (
+      <>
+        {back}
+        <PageHeader title="Your insights" subtitle="Only you see this. What happened, what it means, and what to do next." />
+        <FaceView
+          label="Your insights"
+          faces={[
+            { key: 'attention', label: 'Reach', content: <AttentionFace /> },
+            { key: 'retention', label: 'Connection', content: <RetentionFace /> },
+            { key: 'money', label: 'Earnings', content: <MoneyFace /> },
+          ]}
+        />
+      </>
+    )
+  return <ProfileHome />
+}
+
+function ProfileHome() {
+  const api = useAppApi()
+  const { profile } = useMyProfile()
+  const me = useLoad<Me>(() => api.me(), [api, profile.username, profile.displayName])
+  const member = useLoad(() => api.member(profile.username), [api, profile.username])
+  const posts = useLoad(async () => (member.data ? api.memberPosts(member.data.id) : []), [api, member.data?.id])
+  const insight = useLoad(() => api.creatorInsights(28).catch(() => null), [api])
+  const earnings = (insight.data?.money.simulated_by_month ?? []).reduce((n, m) => n + m.creator_cents, 0)
+  const { moderator } = useModeration()
+  const { founder } = useFeedbackAccess()
+  const settings: Array<[string, string]> = [
+    ['/app/clique', 'Your Clique'],
+    ['/app/saved', 'Saved posts'],
+    ['/app/notices', 'Notices'],
+    ['/app/account', 'Your account'],
+    ['/app/privacy', 'Your data and privacy'],
+    ['/app/advertise', 'Advertise with Splitpost'],
+    ...(moderator ? ([['/app/moderation', 'Moderation']] as Array<[string, string]>) : []),
+    ...(founder ? ([['/app/ads', 'Advertising'], ['/app/control', 'Control Center']] as Array<[string, string]>) : []),
+  ]
+  const memberId = member.data?.id
   return (
     <>
-      <PageHeader title="Your profile" subtitle="How people see you on Splitpost, and what's happening with your work." />
-      <FaceView
-        label="Your profile and insights"
-        faces={[
-          { key: 'profile', label: 'Profile', content: <ProfileFace /> },
-          { key: 'attention', label: 'Reach', content: <AttentionFace /> },
-          { key: 'retention', label: 'Connection', content: <RetentionFace /> },
-          { key: 'money', label: 'Earnings', content: <MoneyFace /> },
-        ]}
-      />
+      <div data-testid="profile-home">
+        <Card className="p-5 text-center">
+          <div className="flex flex-col items-center gap-2">
+            {member.data && <MemberAvatar member={member.data} size={80} />}
+            <h1 className="font-display text-2xl font-extrabold text-ink-900">{profile.displayName}</h1>
+            <p className="text-[15px] text-ink-500">
+              @{profile.username}
+              {me.data && ` · ${me.data.followerCount} ${me.data.followerCount === 1 ? 'follower' : 'followers'}`}
+            </p>
+          </div>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Link to="/app/profile?edit=1" className={buttonClass('primary', 'sm')}>
+              Edit profile
+            </Link>
+            <Link to={`/app/u/${profile.username}`} className={buttonClass('secondary', 'sm')}>
+              See as others do
+            </Link>
+          </div>
+        </Card>
+      </div>
+      <Link
+        to="/app/profile?insights=1"
+        className="mt-4 block rounded-3xl bg-white p-5 shadow-[0_1px_2px_rgb(19_25_27/0.06),0_0_0_1px_rgb(19_25_27/0.05)] transition hover:shadow-md"
+        data-testid="insights-card"
+      >
+        <span className="flex items-baseline justify-between">
+          <span className="font-bold text-ink-900">Your insights</span>
+          <span className="text-[12px] font-semibold text-ink-600">Only you see this</span>
+        </span>
+        <span className="mt-3 grid grid-cols-3 gap-2">
+          {[
+            ['Reach', insight.data ? String(insight.data.attention.reached) : 'Not yet'],
+            ['Connection', insight.data ? String(insight.data.retention.active_supporters) : 'Not yet'],
+            ['Earnings', insight.data ? `$${(earnings / 100).toFixed(2)}` : 'Not yet'],
+          ].map(([label, value]) => (
+            <span key={label} className="flex flex-col">
+              <span className="text-[12px] text-ink-600">{label}</span>
+              <span className="font-display text-xl font-extrabold tabular-nums text-ink-900">{value}</span>
+            </span>
+          ))}
+        </span>
+        <span className="mt-2 block text-[12px] text-ink-600">Earnings are simulated during the pilot. Open for what happened, what it means and what to do next.</span>
+      </Link>
+      <h2 id="posts" className="mb-3 mt-6 font-display text-lg font-bold text-ink-900">
+        Your posts
+      </h2>
+      {posts.data && posts.data.length === 0 && <Message tone="info">You haven&apos;t posted yet. Use Create to share your first post.</Message>}
+      {posts.data && posts.data.length > 0 && memberId && (
+        <PostList posts={posts.data} loadOlder={(before) => api.memberPosts(memberId, before)} onDeleted={(id) => posts.setData((d) => d?.filter((p) => p.id !== id))} />
+      )}
+      <nav aria-labelledby="settings-title" className="mt-6">
+        <h2 id="settings-title" className="mb-2 font-display text-lg font-bold text-ink-900">
+          Settings
+        </h2>
+        <ul className="divide-y divide-ink-100 overflow-hidden rounded-3xl bg-white ring-1 ring-ink-100">
+          {settings.map(([to, label]) => (
+            <li key={to}>
+              <Link to={to} className="flex min-h-12 items-center justify-between px-5 text-[15px] font-semibold text-ink-800 hover:bg-ink-50">
+                {label} <span aria-hidden="true">›</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </>
   )
 }
@@ -873,62 +1027,8 @@ function ProfileFace() {
   const api = useAppApi()
   const { profile, refresh } = useMyProfile()
   const me = useLoad<Me>(() => api.me(), [api, profile.username, profile.displayName])
-  const { moderator } = useModeration()
-  const { founder } = useFeedbackAccess()
   return (
     <>
-      {me.data && (
-        <Card className="mb-4 p-5">
-          <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-            {[
-              ['Posts', me.data.postCount],
-              ['Followers', me.data.followerCount],
-              ['Following', me.data.followingCount],
-              ['My Clique', me.data.cliqueCount],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <dt className="text-ink-500">{label}</dt>
-                <dd className="font-semibold tabular-nums text-ink-900">{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link to={`/app/u/${profile.username}`} className={buttonClass('secondary', 'sm')}>
-              <UserPlus className="h-4 w-4" aria-hidden="true" /> View your public page
-            </Link>
-            <Link to="/app/saved" className={buttonClass('secondary', 'sm')}>
-              <Bookmark className="h-4 w-4" aria-hidden="true" /> Saved
-            </Link>
-            <Link to="/app/account" className={buttonClass('secondary', 'sm')}>
-              Your account
-            </Link>
-            <Link to="/app/notices" className={buttonClass('secondary', 'sm')}>
-              Notices
-            </Link>
-            <Link to="/app/advertise" className={buttonClass('secondary', 'sm')}>
-              Advertise with Splitpost
-            </Link>
-            <Link to="/app/privacy" className={buttonClass('secondary', 'sm')}>
-              Your data and privacy
-            </Link>
-            {moderator && (
-              <Link to="/app/moderation" className={buttonClass('secondary', 'sm')}>
-                Moderation
-              </Link>
-            )}
-            {founder && (
-              <Link to="/app/ads" className={buttonClass('secondary', 'sm')}>
-                Advertising
-              </Link>
-            )}
-            {founder && (
-              <Link to="/app/control" className={buttonClass('secondary', 'sm')}>
-                Control Center
-              </Link>
-            )}
-          </div>
-        </Card>
-      )}
       {me.error !== null && <ErrorNote error={me.error} />}
       <div className="mb-4">
         <CreatorSetupCard />

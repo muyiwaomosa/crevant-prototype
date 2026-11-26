@@ -380,7 +380,7 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
         )}
         <div className="flex flex-col gap-2 sm:flex-row">
           {creating && (
-            <Link to="/app/profile" onClick={onDone} className={`${buttonClass('secondary')} w-full sm:w-auto`}>
+            <Link to="/app/profile?edit=1" onClick={onDone} className={`${buttonClass('secondary')} w-full sm:w-auto`}>
               Set up my creator profile
             </Link>
           )}

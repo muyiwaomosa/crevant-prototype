@@ -208,9 +208,11 @@ async function signIn(page, email) {
       const page = await ctx.newPage()
       await signIn(page, email('c'))
       await page.goto(`${APP}/app/profile`)
+      // P1: the profile shows one Your insights card; it opens the three insight faces.
+      await page.getByTestId('insights-card').click()
       await page.getByRole('tab', { name: 'Earnings' }).waitFor()
       const tabs = await page.getByRole('tab').allInnerTexts()
-      check('the Profile has the four approved faces', JSON.stringify(tabs) === JSON.stringify(['Profile', 'Reach', 'Connection', 'Earnings']), JSON.stringify(tabs))
+      check('Your insights has the three approved faces', JSON.stringify(tabs) === JSON.stringify(['Reach', 'Connection', 'Earnings']), JSON.stringify(tabs))
       await page.getByRole('tab', { name: 'Reach' }).click()
       const att = page.getByTestId('attention-face')
       await att.waitFor()

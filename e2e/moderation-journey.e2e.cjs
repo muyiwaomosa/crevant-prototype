@@ -173,7 +173,7 @@ async function signIn(page, email) {
   await pageA.goto(`${APP}/app/u/${A.username}`)
   await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
   await pageA.goto(`${APP}/app/profile`)
-  await pageA.getByRole('heading', { name: 'Your name' }).waitFor()
+  await pageA.getByRole('heading', { name: 'Settings' }).waitFor()
   check('the reported member sees no Moderation link', (await pageA.getByRole('link', { name: 'Moderation' }).count()) === 0)
   const leaks = seenByA.filter((t) => t.includes(B.id) || t.includes(B.username) || t.includes('content_reports') || t.includes('They threatened'))
   check(`nothing the reported member's app receives (${seenByA.length} responses) identifies the reporter or the report`, seenByA.length > 0 && leaks.length === 0, `${leaks.length} leaking`)

@@ -166,6 +166,7 @@ async function signIn(page, email) {
       await dialog.getByRole('button', { name: 'Done' }).click()
 
       await page.goto(`${APP}/app/u/gvb${RUN}`)
+      await page.getByRole('button', { name: 'More options for Bo Blocked' }).click()
       await page.getByRole('button', { name: 'Block Bo Blocked' }).click()
       const confirm = page.getByRole('dialog', { name: 'Block Bo Blocked?' })
       await confirm.waitFor()

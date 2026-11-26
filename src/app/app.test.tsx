@@ -2058,7 +2058,7 @@ describe('first-time setup and profile details (20261123000000)', () => {
     expect(await screen.findByRole('link', { name: 'Creator 1' })).toBeTruthy()
     expect(screen.queryByText('Browse by interest')).toBeNull()
     cleanup()
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     expect(await screen.findByRole('heading', { name: 'Your name' })).toBeTruthy()
     await waitFor(() => expect(screen.queryByText('Loading your details…')).toBeNull())
     expect(screen.queryByRole('heading', { name: 'About you' })).toBeNull()
@@ -2119,7 +2119,7 @@ describe('first-time setup and profile details (20261123000000)', () => {
   it('details are edited later from Profile', async () => {
     const f = fakeApi()
     f.setDetails('me', { identity: 'fan', bio: 'Old bio', topics: ['tech'] })
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     expect(await screen.findByRole('heading', { name: 'About you' })).toBeTruthy()
     expect((screen.getByRole('radio', { name: /Find creators I'll love/ }) as HTMLInputElement).checked).toBe(true)
     expect((screen.getByLabelText('Short bio') as HTMLTextAreaElement).value).toBe('Old bio')
@@ -2197,6 +2197,7 @@ describe('reporting and moderation (20261124000000)', () => {
   it('a threat or self-harm report says it is reviewed first, but not around the clock', async () => {
     const f = fakeApi()
     renderApp('/app/u/creator_2', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'More options for Creator 2' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Report Creator 2' }))
     const dialog = await screen.findByRole('dialog', { name: 'Report Creator 2' })
     fireEvent.click(within(dialog).getByRole('radio', { name: 'Self-harm' }))
@@ -2219,8 +2220,9 @@ describe('reporting and moderation (20261124000000)', () => {
   it('members who are not moderators see no Moderation link, and the page is not available', async () => {
     const f = fakeApi()
     renderApp('/app/profile', f.api)
-    await screen.findByRole('heading', { name: 'Your name' })
-    expect(screen.queryByRole('link', { name: 'Moderation' })).toBeNull()
+    await screen.findByRole('heading', { name: 'Settings' })
+    expect(screen.getAllByRole('link', { name: /Your account/ }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('link', { name: /Moderation/ })).toBeNull()
     cleanup()
     renderApp('/app/moderation', f.api)
     expect(await screen.findByText("This page isn't available")).toBeTruthy()
@@ -2423,7 +2425,7 @@ describe('profile pictures (20261125000000)', () => {
   it('the editor offers camera and gallery, refuses non-photos and huge files, and removes a picture after confirming', async () => {
     const f = fakeApi()
     f.pictures.set('me', 'https://pics.test/me.jpg')
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Change picture' }))
     const editor = within(await screen.findByTestId('avatar-editor'))
     const input = editor.getByLabelText('Choose a new photo', { selector: 'input' }) as HTMLInputElement
@@ -2477,7 +2479,7 @@ describe('profile pictures (20261125000000)', () => {
     expect(await screen.findByText('Still readable')).toBeTruthy()
     expect(document.querySelector('img[src^="https://pics.test"]')).toBeNull()
     cleanup()
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     expect(await screen.findByRole('heading', { name: 'Your name' })).toBeTruthy()
     expect(await screen.findByRole('heading', { name: 'About you' })).toBeTruthy()
   })
@@ -2486,7 +2488,7 @@ describe('profile pictures (20261125000000)', () => {
     const f = fakeApi()
     f.pictures.set('me', 'https://pics.test/me.jpg')
     f.failures.removeAvatar = new AppApiError('not_available')
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Change picture' }))
     const editor = within(await screen.findByTestId('avatar-editor'))
     fireEvent.click(editor.getByRole('button', { name: 'Remove picture' }))
@@ -2841,7 +2843,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     renderApp('/app/u/creator_1', fake.api)
     const counts = await screen.findByTestId('profile-counts')
     expect(counts.textContent).toMatch(/Followers1/)
-    expect(counts.textContent).toMatch(/Clique0/)
+    expect(counts.textContent).toMatch(/In Cliques0/)
     expect(counts.textContent).toMatch(/Active Supporters0/)
     fireEvent.click(await screen.findByTestId('support-button'))
     const sheet = within(await screen.findByRole('dialog', { name: "Show Creator you'd support their work" }))
@@ -2871,7 +2873,7 @@ describe('Discover, follow, add to Clique, read their posts', () => {
   it('your own profile tells your audience story: What happened, What it means, What to do next', async () => {
     const fake = fakeApi()
     fake.follows.add(fake.key('c1', 'me'))
-    renderApp('/app/profile', fake.api)
+    renderApp('/app/profile?edit=1', fake.api)
     const card = within(await screen.findByTestId('audience-insight'))
     expect(card.getByText('What happened')).toBeTruthy()
     expect(card.getByText('1 new follower this week, 1 more than last week.')).toBeTruthy()
@@ -3247,7 +3249,7 @@ describe('posts, comments and profiles', () => {
 
   it('profile edits are saved', async () => {
     const { api } = fakeApi()
-    renderApp('/app/profile', api)
+    renderApp('/app/profile?edit=1', api)
     const name = await screen.findByLabelText('Display name')
     fireEvent.change(name, { target: { value: 'Mia Chen' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
@@ -3891,7 +3893,7 @@ describe('previews and search measurement (20261204000000)', () => {
 
   it('public previews are opt-in: off until the creator reads what is shown and chooses to allow them', async () => {
     const fake = fakeApi()
-    renderApp('/app/profile', fake.api)
+    renderApp('/app/profile?edit=1', fake.api)
     const setting = within(await screen.findByTestId('public-previews-setting'))
     const box = setting.getByRole('checkbox', { name: 'Allow public previews of my posts' }) as HTMLInputElement
     expect(box.checked).toBe(false)
@@ -4267,6 +4269,7 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
   it('blocks from a profile after explaining what a block does, then shows the block with Unblock', async () => {
     const f = fakeApi()
     renderApp('/app/u/creator_2', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'More options for Creator 2' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Block Creator 2' }))
     const dialog = await screen.findByRole('dialog', { name: 'Block Creator 2?' })
     expect(dialog.textContent).toMatch(/won't see each other's profiles, posts or comments/)
@@ -4281,13 +4284,18 @@ describe('governance (20261206000000): blocking, notices, appeals and the enforc
     expect(f.governance.blockCalls[1]).toEqual({ id: 'c2', block: false })
   })
 
-  it('your profile lists the members you blocked, with Unblock, and links to your notices', async () => {
+  it('your profile settings link to your notices', async () => {
+    const f = fakeApi()
+    renderApp('/app/profile', f.api)
+    expect((await screen.findByRole('link', { name: /Notices/ })).getAttribute('href')).toBe('/app/notices')
+  })
+
+  it('your profile lists the members you blocked, with Unblock', async () => {
     const f = fakeApi()
     await f.api.block('c3')
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     const list = await screen.findByTestId('blocked-members')
     expect(list.textContent).toMatch(/Creator 3.*@creator_3/)
-    expect(screen.getByRole('link', { name: 'Notices' }).getAttribute('href')).toBe('/app/notices')
     fireEvent.click(within(list).getByRole('button', { name: 'Unblock' }))
     await waitFor(() => expect(screen.queryByTestId('blocked-members')).toBeNull())
   })
@@ -4639,7 +4647,7 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
   it('ad preferences are optional, editable and removable, and explain the separation from content interests', async () => {
     const f = fakeApi()
     f.ads.exclusions = [{ kind: 'campaign', target: 'c9', label: 'Budgetly: Plan your month', createdAt: new Date().toISOString() }]
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     const box = await screen.findByTestId('ad-preferences')
     expect(box.textContent).toMatch(/Optional.*content interests, follows\s+and searches are never used for ads.*full access/)
     fireEvent.change(within(box).getByLabelText('Software & apps'), { target: { value: 'chosen' } })
@@ -4808,12 +4816,12 @@ describe('intelligence (20261210000000): what happened, what it means, what to d
     ).toBe("Share Kofi's new post with someone who'd value it.")
   })
 
-  it('the Profile has four faces; Attention shows availability versus reach and where followers came from', async () => {
+  it('Your insights has three faces; Reach shows availability versus reach and where followers came from', async () => {
     const f = fakeApi()
     f.intel.creator = creatorInsightsFixture()
     renderApp('/app/profile?face=attention', f.api)
     const face = await screen.findByTestId('attention-face')
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Profile', 'Reach', 'Connection', 'Earnings'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Reach', 'Connection', 'Earnings'])
     expect(face.textContent).toMatch(/What happened.*What it means.*What to do next/)
     expect(face.textContent).toMatch(/Available\. Your posts were in every follower's Home\..*Reached\. Followers who actually viewed a post/)
     expect(face.textContent).toMatch(/Where your 4 new followers came from.*Discover.*3.*Search.*1/)
@@ -4943,7 +4951,7 @@ describe('unified account and progressive onboarding (20261211000000, 2026121200
 
   it('creator setup on Profile saves up to three posting topics and guides the first post', async () => {
     const f = fakeApi()
-    renderApp('/app/profile', f.api)
+    renderApp('/app/profile?edit=1', f.api)
     const setup = await screen.findByTestId('creator-setup')
     expect(within(setup).getByText(/Optional\. Every Splitpost account can post/)).toBeTruthy()
     fireEvent.click(await within(setup).findByRole('button', { name: 'Music' }))

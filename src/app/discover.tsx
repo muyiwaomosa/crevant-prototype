@@ -238,7 +238,7 @@ function ForYou({ topics }: { topics: Topic[] | null }) {
                   : 'No recent posts in your interests from people you don’t follow yet. Try a topic above, or add interests to your profile.'
               }
               action={
-                <Link to="/app/profile" className={buttonClass('secondary')}>
+                <Link to="/app/profile?edit=1" className={buttonClass('secondary')}>
                   Choose your interests
                 </Link>
               }
