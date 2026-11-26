@@ -74,3 +74,7 @@ APP_URL="http://127.0.0.1:$APP_PORT" node e2e/stakeholder-creator.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/stakeholder-consumer.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/stakeholder-advertiser.e2e.cjs
 APP_URL="http://127.0.0.1:$APP_PORT" node e2e/stakeholder-founder.e2e.cjs
+# With every journey's data in place: back it up, restore it into a new
+# database, and check counts, the financial and advertising reconciliation and
+# the member authorization audit on the restored copy.
+scripts/db/restore-drill.sh

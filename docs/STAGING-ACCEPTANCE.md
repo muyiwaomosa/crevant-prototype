@@ -24,7 +24,8 @@ before; **independent** ones can be done any time, in any order.
 | 9 | **The video device test**, `docs/video/DEVICE-TEST.md`: record and upload a 1 and a 5 minute clip on an iPhone and an Android phone, play them, copy the results; then record each result and the storage cap (50 GB proposed) in Control Center, Video posts | Your iPhone, an Android phone and a computer, on `/app/video-test` | **After 5 and 7** | A pass or fail per device | Reads the results; if the iPhone 5 minute conversion fails, proposes the 1080p fallback before anything is turned on |
 | 10 | Turn on **New video uploads** on staging | Control Center, Operational switches | After 9 passes | Members can post videos on staging (Production stays off) | Runs the video checks on staging |
 | 11 | PB-1 member Production operations, section 4 | Resend, Supabase, GitHub | Independent | Production email, drain key and health checks in place | Reruns the schedule and health checks |
-| 12 | **Approve the founder decisions database deploy** (20261215000000). The merge of PR #115 was authorized Nov 26; Claude merges it once its six checks and Vercel are green, then starts the run | GitHub, the run, **Review deployments, staging, Approve** | The merge | The run is green | Reads the run log, then moves the `staging` app branch to the merge |
+| 12 | **Approve the founder decisions database deploy** [run 45736045685](https://github.com/muyiwaomosa/crevant-prototype/actions/runs/45736045685) (20261215000000). PR #115 merged Nov 26, 01:28 UTC on six green checks; the `staging` app branch is at the merge (9270ea5) | GitHub, the run, **Review deployments, staging, Approve** | Nothing | The run is green | Reads the run log |
+| 13 | **Confirm the staging Supabase organization is on Pro** and that Database, Backups lists a backup; accept the proposed recovery objectives (`docs/RECOVERY.md`) | Supabase dashboard | Independent; before real testers | A backup is listed | Records it in the tracker |
 
 ### Infrastructure status (Nov 26)
 
@@ -40,8 +41,11 @@ before; **independent** ones can be done any time, in any order.
   video; video is served from Supabase Storage, not Vercel, so it does not
   count against Vercel bandwidth.
 * **Supabase staging:** every migration up to 20261214000000 applied (run
-  45710436593, Nov 26 00:47 UTC, all checks passed). 20261215000000 follows
-  the PR #115 merge.
+  45710436593, Nov 26 00:47 UTC, all checks passed). 20261215000000 is in
+  run 45736045685, waiting for approval.
+* **Backups:** restorable backups need Supabase Pro on the staging
+  organization (step 13). The recovery procedure and proposed objectives are
+  in `docs/RECOVERY.md`.
 * **GitHub Actions:** six CI jobs per push (about 10 minutes of runner time).
 
 **Never done from here without separate authorization:** video on member
@@ -93,7 +97,7 @@ once the deploy above is approved and steps A to D are done.
 | 20261212000000 | Privacy requests, account deletion, switches | Applied Nov 25 (run 45696762050) |
 | 20261213000000 | Video posts (uploads, playback and emergency controls, device tests) | Applied Nov 26 (run 45710436593) |
 | 20261214000000 | Release hardening (deletion with full history, advertiser thresholds, locks) | Applied Nov 26 (run 45710436593) |
-| 20261215000000 | Founder decisions: own-audience referrals recognized, moderator discipline escalated | After PR #115 merges |
+| 20261215000000 | Founder decisions: own-audience referrals recognized, moderator discipline escalated | Run 45736045685 (waiting for approval) |
 
 ---
 
@@ -297,6 +301,15 @@ Allocation percentages are not shown to members until the Rewards Rules are lega
 | 58 | As you, Control Center, Privacy requests: mark the copy done with a note; on the deletion, type a wrong username, then the right one | The wrong one is refused; the right one deletes the account, its posts and follows. My Split totals for everyone else are unchanged |
 | 59 | Control Center, Operational switches: turn advertising off with a reason; open Home as a member; turn it back on | No ads while off; the change and reason are listed; Video posts cannot be turned on yet |
 | 60 | Control Center, Registration: pause, then reopen, with a reason | Registration through links is refused while paused |
+
+### Journey 9. Release readiness: speed, recovery and integrity
+
+| # | Do this | Expect |
+|---|---|---|
+| 61 | On your phone with Wi-Fi off, in a private tab: open sign-in, sign in, scroll Home, open a post, like it (`docs/PERFORMANCE.md`, Real-device check) | Sign-in appears in about 2 seconds, Home with posts in about 3; nothing stutters or jumps |
+| 62 | Supabase, SQL editor (staging): paste `scripts/db/audit/reconciliation.sql` and run it | 12 rows, every `ok` is true (read-only; changes nothing) |
+| 63 | Supabase, Database, Backups | At least one daily backup is listed (needs Pro; `docs/RECOVERY.md`) |
+| 64 | Read `docs/RECOVERY.md` and decide on the proposed objectives | Recorded in the tracker |
 
 ---
 

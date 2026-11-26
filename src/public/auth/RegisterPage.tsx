@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { buttonClass } from '../../components/ui'
 import { useAuth } from '../../auth/AuthProvider'
 import { CAPTCHA_NEEDED, CaptchaBox, useCaptcha } from '../../auth/captcha'
+import { preloadMemberArea } from '../memberAreaChunk'
 import { AuthCard, Field, Message, Unavailable } from './AuthUi'
 import { passwordProblem } from './SetPasswordPage'
 import { REGISTRATION_CODE, rememberRegistrationCode, storedRegistrationCode } from '../../app/registration'
@@ -58,6 +59,7 @@ function onProductionHost(): boolean {
 }
 
 export function RegisterPage({ open = POLICIES_PUBLISHED || !onProductionHost() }: { open?: boolean } = {}) {
+  useEffect(() => preloadMemberArea(), [])
   const { status, client } = useAuth()
   const { code: fromLink } = useParams()
   const captcha = useCaptcha()

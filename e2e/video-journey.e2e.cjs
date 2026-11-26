@@ -51,6 +51,15 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`)
 }
 const sql = (q) => execFileSync('psql', [DB, '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', q]).toString().trim()
+// Switch changes made directly by this journey are recorded like any other
+// change, so the reconciliation's "matches its latest recorded change" check holds.
+const setSwitch = (features, on) => {
+  for (const f of features) {
+    sql(`update ops.feature_switches set enabled = ${on}, updated_at = now(), updated_by = 'journey' where feature = '${f}';
+         insert into ops.feature_switch_events (feature, enabled, reason, changed_by) values ('${f}', ${on}, 'Video journey test step', 'journey')`)
+  }
+}
+
 const admin = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' }
 
 async function createMember(tag, name, cohort) {
@@ -152,7 +161,7 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
   const browser = await chromium.launch({ args: ['--disable-features=LocalNetworkAccessChecks,BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights'] })
   try {
     // A clean start for this journey's switch (other journeys never turn video on).
-    sql("update ops.feature_switches set enabled = false where feature = 'video_posts'")
+    setSwitch(['video_posts'], false)
     const F = await founderAccount()
     const V = await createMember('v', 'Vera Video', 'creator')
     const W = await createMember('w', 'Wes Watcher', 'fan')
@@ -291,13 +300,13 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
       await screenChecks(page, 'Home with a video post')
       await ctx.close()
       // Separate controls: pausing new uploads keeps this video playing; playback has its own switch.
-      sql("update ops.feature_switches set enabled = false where feature = 'video_posts'")
+      setSwitch(['video_posts'], false)
       const keep = await (await fn(tV, 'video-links', { ids: [postId] })).json()
       check('pausing new uploads keeps the published video playing', Object.keys(keep.videos ?? {}).length === 1, JSON.stringify(keep))
-      sql("update ops.feature_switches set enabled = false where feature = 'video_playback'")
+      setSwitch(['video_playback'], false)
       const none = await (await fn(tV, 'video-links', { ids: [postId] })).json()
       check('switching playback off stops new playback links', Object.keys(none.videos ?? {}).length === 0)
-      sql("update ops.feature_switches set enabled = true where feature in ('video_posts', 'video_playback')")
+      setSwitch(['video_posts', 'video_playback'], true)
       check('issued playback links are counted for the founder (links and bytes, no viewers)',
         Number(sql('select coalesce(sum(links), 0) from ops.video_delivery_daily')) >= 1 && Number(sql('select coalesce(sum(video_bytes), 0) from ops.video_delivery_daily')) > 0)
     }
@@ -344,7 +353,7 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
       await ctx.close()
 
       // Pausing new uploads refuses the next upload at once.
-      sql("update ops.feature_switches set enabled = false where feature = 'video_posts'")
+      setSwitch(['video_posts'], false)
       const begin = await fn(tV, 'video-begin', { bytes: 1000, durationMs: 1000, purpose: 'post' })
       check('pausing new video uploads refuses uploads at once', begin.status === 403)
     }

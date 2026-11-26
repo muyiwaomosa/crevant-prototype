@@ -4223,6 +4223,52 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
     expect(f.ads.events.at(-1)).toEqual({ id: 'imp1', kind: 'hidden' })
   })
 
+  it('an ad counts as seen only after a second on screen in a tab the person is looking at', async () => {
+    const original = globalThis.IntersectionObserver
+    const callbacks: Array<{ el: Element; cb: IntersectionObserverCallback }> = []
+    globalThis.IntersectionObserver = class {
+      constructor(private cb: IntersectionObserverCallback) {}
+      observe(el: Element) {
+        callbacks.push({ el, cb: this.cb })
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return []
+      }
+    } as unknown as typeof IntersectionObserver
+    let visibility: DocumentVisibilityState = 'visible'
+    const desc = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility })
+    const setVisibility = (v: DocumentVisibilityState) => {
+      visibility = v
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+    try {
+      const f = fakeApi()
+      const post = f.seedPost('c1', 'A post about budgets')
+      f.ads.next = ad()
+      renderApp(`/app/post/${post}`, f.api)
+      const card = await screen.findByTestId('ad')
+      const slot = callbacks.find((c) => c.el === card || c.el.contains(card) || card.contains(c.el))!
+      const show = (ratio: number) => slot.cb([{ target: slot.el, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry], {} as IntersectionObserver)
+      show(1)
+      setVisibility('hidden') // the person switched tabs straight away
+      await new Promise((r) => setTimeout(r, 1300))
+      expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([])
+      setVisibility('visible')
+      show(0.3) // less than half on screen does not count
+      await new Promise((r) => setTimeout(r, 1300))
+      expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([])
+      show(0.8)
+      await waitFor(() => expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([{ id: 'imp1', kind: 'view' }]), { timeout: 2500 })
+    } finally {
+      globalThis.IntersectionObserver = original
+      if (desc) Object.defineProperty(document, 'visibilityState', desc)
+      else delete (document as { visibilityState?: unknown }).visibilityState
+    }
+  })
+
   it('the ad feedback buttons are at least 24px tall, so they stay apart when they wrap on a narrow phone (WCAG 2.5.8)', async () => {
     const f = fakeApi()
     const post = f.seedPost('c1', 'A post')

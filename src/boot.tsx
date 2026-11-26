@@ -1,4 +1,4 @@
-import { StrictMode, type ComponentType } from 'react'
+import { lazy, StrictMode, Suspense, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
 // Typefaces served from this site (Fontsource, SIL Open Font License), not
 // Google Fonts, so visitors' browsers contact no third party for them. Each
@@ -7,9 +7,11 @@ import '@fontsource-variable/inter'
 import '@fontsource-variable/archivo/wdth.css'
 import '@fontsource-variable/bricolage-grotesque/opsz.css'
 import './index.css'
-import App from './App'
 import { resolveEntry } from './entry'
 import { setRobotsMeta } from './public/robots'
+
+// The sample-data prototype is served only on the frozen demo address, so only it downloads that code.
+const App = lazy(() => import('./App'))
 
 /**
  * Starts the app. Shared by the full app (src/main.tsx) and the public site
@@ -30,5 +32,5 @@ export function boot(Public: ComponentType, { demoFallback = true }: { demoFallb
     // a member page goes to /app.
     window.history.replaceState(null, '', entry.redirectTo)
   }
-  createRoot(document.getElementById('root')!).render(<StrictMode>{entry.kind === 'public' || entry.kind === 'member' ? <Public /> : <App />}</StrictMode>)
+  createRoot(document.getElementById('root')!).render(<StrictMode>{entry.kind === 'public' || entry.kind === 'member' ? <Public /> : <Suspense fallback={null}><App /></Suspense>}</StrictMode>)
 }

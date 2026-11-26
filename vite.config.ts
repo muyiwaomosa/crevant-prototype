@@ -17,11 +17,11 @@ const SITE_EXCLUDED_ENV = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY']
  * and disallow everything, except in an approved Production build of the
  * public site with indexing approved (scripts/indexing.mjs).
  */
-function publicSiteBuild(): Plugin {
+function publicSiteBuild(): Plugin[] {
   let site = false
   let flags = { productionSite: false, allowIndexing: false }
   let memberApp = false
-  return {
+  const build: Plugin = {
     name: 'crevant-public-site-build',
     config(_config, env) {
       site = env.mode === 'site'
@@ -69,6 +69,26 @@ function publicSiteBuild(): Plugin {
       if (flags.allowIndexing) this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemapXml() })
     },
   }
+  // A member app build serves only sign in and the members area, so its page
+  // asks for the members area's code (src/app/MemberRoutes.tsx, loaded on
+  // demand elsewhere) alongside the main bundle instead of after it.
+  const memberPreload: Plugin = {
+    name: 'crevant-member-area-preload',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        if (!memberApp || !ctx.bundle) return
+        const chunks = Object.values(ctx.bundle).filter((c) => c.type === 'chunk')
+        const routes = chunks.find((c) => c.type === 'chunk' && c.name === 'MemberRoutes')
+        if (!routes || routes.type !== 'chunk') throw new Error('member app build: the members area chunk (MemberRoutes) was not found')
+        const entries = new Set(chunks.filter((c) => c.type === 'chunk' && c.isEntry).map((c) => c.fileName))
+        const files = [routes.fileName, ...routes.imports].filter((f) => !entries.has(f) && !html.includes(`/${f}`))
+        return files.map((f) => ({ tag: 'link', attrs: { rel: 'modulepreload', crossorigin: true, href: `/${f}` }, injectTo: 'head' as const }))
+      },
+    },
+  }
+  return [build, memberPreload]
 }
 
 export default defineConfig({
