@@ -119,4 +119,23 @@ from (select case when to_regclass('sim.creator_share_states') is null then 0
           where not exists (select 1 from sim.settlement_lines l where l.settlement_id = s.settlement_id and l.member_id is not distinct from s.member_id)
              or (s.member_id is not null and not exists (select 1 from sim.qualifications q where q.member_id = s.member_id and q.audience = 'consumer'))
              or (s.state = 'settled' and not exists (select 1 from sim.allocation_states e where e.settlement_id = s.settlement_id and e.member_id is not distinct from s.member_id and e.state = 'eligible' and e.id < s.id))) as n
-  $q$, false, true, '')))[1]::text::int end as bad) pg;
+  $q$, false, true, '')))[1]::text::int end as bad) pg
+union all
+-- Progression rules (20261218000000, SP-PRG-001): every released amount
+-- (creator share, allocation or allocation correction) belongs to a member
+-- the founder approved after review, and no correction leaves an entry or an
+-- allocation below zero. Counts only; passes where the migration is not applied.
+select 'every released amount followed a documented approval, and no correction goes below zero', pr.bad = 0,
+       case when pr.bad > 0 then pr.bad || ' problem(s)' end
+from (select case when to_regclass('sim.qualification_decisions') is null then 0
+                  else (xpath('/row/n/text()', query_to_xml($q$
+  select (select count(*) from sim.creator_share_states s join sim.revenue_entries r on r.id = s.revenue_entry_id
+          where r.creator_id is not null and not exists (select 1 from sim.qualification_decisions d where d.member_id = r.creator_id and d.audience = 'creator' and d.decision in ('approved', 'restored') and d.decided_at <= s.set_at))
+       + (select count(*) from sim.allocation_states s
+          where s.member_id is not null and not exists (select 1 from sim.qualification_decisions d where d.member_id = s.member_id and d.audience = 'consumer' and d.decision in ('approved', 'restored') and d.decided_at <= s.set_at))
+       + (select count(*) from sim.allocation_correction_states s join sim.allocation_corrections c on c.id = s.correction_id
+          where c.member_id is not null and not exists (select 1 from sim.qualification_decisions d where d.member_id = c.member_id and d.audience = 'consumer' and d.decision in ('approved', 'restored') and d.decided_at <= s.set_at))
+       + (select count(*) from sim.revenue_entries o where o.corrects is null and o.net_cents + coalesce((select sum(c.net_cents) from sim.revenue_entries c where c.corrects = o.id), 0) < 0)
+       + (select count(*) from sim.settlement_lines l where l.value_cents + coalesce((select sum(c.delta_cents) from sim.allocation_corrections c where c.settlement_id = l.settlement_id and c.member_id = l.member_id), 0) < 0) as n
+  $q$, false, true, '')))[1]::text::int end as bad) pr;
+

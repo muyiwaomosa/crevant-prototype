@@ -553,20 +553,40 @@ export type MyAdvertising = {
 /** Progression (20261217000000): goals and SIMULATED earnings by state. */
 export type GoalAudience = 'creator' | 'consumer'
 export type GoalStep = { metric: string; value: number; target: number | null }
-export type EarningsByState = { accumulatedCents: number; lockedCents: number; eligibleCents: number; settledCents: number }
+/** Simulated amounts, each in exactly one state; accumulated is their sum. */
+export type EarningsByState = { accumulatedCents: number; lockedCents: number; pausedCents: number; eligibleCents: number; settledCents: number }
+export type QualificationStatus = 'in_progress' | 'under_review' | 'qualified' | 'eligibility_paused' | 'revoked'
+export type ProgressJourney = { status: QualificationStatus; qualifiedAt: string | null; goalsSince: string | null; steps: GoalStep[] }
+export type ProgressNotice = { kind: 'hold' | 'revoked'; message: string; since: string; scope: string | null; audience: GoalAudience | null }
 export type MyProgress =
   | { enabled: false }
   | {
       enabled: true
       goodStanding: boolean
-      creator: { qualifiedAt: string | null; steps: GoalStep[] }
-      consumer: { qualifiedAt: string | null; steps: GoalStep[] }
+      creator: ProgressJourney
+      consumer: ProgressJourney
+      notices: ProgressNotice[]
       earnings: { creator: EarningsByState; consumer: EarningsByState }
     }
 export type FounderGoals = {
   catalogue: Record<GoalAudience, string[]>
   versions: Array<{ id: number; audience: GoalAudience; targets: Record<string, number>; reason: string; setAt: string }>
   qualified: Record<GoalAudience, number>
+}
+/** Progression rules (20261218000000): the founder's review queue and scorecard. */
+export type ProgressionQueue = {
+  members: Array<{ memberId: string; username: string | null; audience: GoalAudience; goalsMetAt: string; status: QualificationStatus }>
+  holds: Array<{ id: number; username: string | null; scope: string; revenueEntryId: number | null; settlementId: number | null; reason: string; placedAt: string }>
+  decisions: Array<{ username: string | null; audience: GoalAudience; decision: string; reason: string; evidenceRef: string | null; decidedAt: string }>
+}
+export type ProgressionReport = {
+  definitions: Record<string, string>
+  creator: { denominator: number; milestones: Record<string, number> }
+  consumer: { denominator: number; milestones: Record<string, number> }
+  statuses: Record<GoalAudience, Record<string, number>>
+  referrals: { qualifiedReferrals: number; membersWithTarget: number; theoreticalMaxQualifyingConsumers: number; note: string }
+  integrity: Record<string, number>
+  money: { heldCreatorCents: number; openPoolCents: number }
 }
 export type Features = { ads: boolean; sharing: boolean; videoPosts: boolean; videoPlayback: boolean; photos: boolean; rewards: boolean }
 export type SwitchFeature = 'ads' | 'sharing' | 'video_posts' | 'video_playback' | 'progression'
@@ -903,6 +923,13 @@ export interface AppApi {
   founderGoals(): Promise<FounderGoals | null>
   founderSetGoals(audience: GoalAudience, targets: Record<string, number>, reason: string): Promise<number>
   founderSettleEligible(reason: string): Promise<{ creatorEntries: number; consumerAllocations: number }>
+  /** Progression rules (20261218000000); null where they are not applied. */
+  founderProgressionQueue(): Promise<ProgressionQueue | null>
+  founderProgressionReport(): Promise<ProgressionReport | null>
+  founderDecideQualification(d: { memberId: string; audience: GoalAudience; decision: 'approved' | 'revoked' | 'restored'; reason: string; evidenceRef?: string; memberMessage?: string }): Promise<void>
+  founderPlaceHold(h: { memberId: string; scope: 'account' | 'creator_entry' | 'consumer_allocation'; revenueEntryId?: number; settlementId?: number; reason: string; evidenceRef?: string; justification?: string; memberMessage: string }): Promise<number>
+  founderReleaseHold(id: number, reason: string): Promise<void>
+  founderCorrectRevenue(c: { entryId: number; deltaCents: number; kind: 'refund' | 'invalid_activity' | 'correction' | 'restoration'; reason: string; evidenceRef?: string }): Promise<number>
   submitMemberRequest(kind: MemberRequestKind, details: string): Promise<number>
   myMemberRequests(): Promise<MemberRequest[] | null>
   withdrawMemberRequest(id: number): Promise<void>
@@ -1115,6 +1142,13 @@ const MESSAGES: Record<string, string> = {
   reason_required: 'Write a short reason first.',
   every_goal_needs_a_value: 'Give every goal a whole number of 1 or more.',
   unknown_goal: 'That goal is not in the list.',
+  goals_not_met: 'This member has not met every goal yet.',
+  decision_not_allowed: 'That decision does not follow from the current status.',
+  evidence_required: 'A revocation needs an evidence reference and a message to the member.',
+  justification_required: 'An account-wide hold needs a documented justification (10 characters or more).',
+  correction_too_large: 'That correction would take the amount below zero.',
+  pool_too_small: 'The open fan pool is too small for that restoration.',
+  on_hold: 'That amount is on hold.',
   video_not_ready: 'Video posts stay off until the iPhone and Android device tests have passed and the video storage cap is set.',
   videos_unavailable: "Video posts aren't available right now. You can still post text.",
   not_tester: 'Only the founder and testers can run the video device test.',
@@ -1250,15 +1284,22 @@ export function toMyProgress(r: Record<string, unknown>): MyProgress {
       value: num(s.value as number),
       target: s.target === null || s.target === undefined ? null : num(s.target as number),
     }))
-  const journey = (x: unknown) => {
+  const journey = (x: unknown): ProgressJourney => {
     const j = (x ?? {}) as Record<string, unknown>
-    return { qualifiedAt: (j.qualified_at as string | null) ?? null, steps: steps(j.steps) }
+    const st = String(j.status ?? '')
+    const status: QualificationStatus = (['in_progress', 'under_review', 'qualified', 'eligibility_paused', 'revoked'] as const).includes(st as QualificationStatus)
+      ? (st as QualificationStatus)
+      : j.qualified_at
+        ? 'qualified'
+        : 'in_progress'
+    return { status, qualifiedAt: (j.qualified_at as string | null) ?? null, goalsSince: (j.goals_since as string | null) ?? null, steps: steps(j.steps) }
   }
   const money = (x: unknown): EarningsByState => {
     const m = (x ?? {}) as Record<string, unknown>
     return {
       accumulatedCents: num(m.accumulated_cents as number),
       lockedCents: num(m.locked_cents as number),
+      pausedCents: num(m.paused_cents as number),
       eligibleCents: num(m.eligible_cents as number),
       settledCents: num(m.settled_cents as number),
     }
@@ -1269,6 +1310,13 @@ export function toMyProgress(r: Record<string, unknown>): MyProgress {
     goodStanding: r.good_standing !== false,
     creator: journey(r.creator),
     consumer: journey(r.consumer),
+    notices: ((r.notices as Array<Record<string, unknown>>) ?? []).map((n) => ({
+      kind: n.kind === 'revoked' ? 'revoked' : 'hold',
+      message: String(n.message ?? ''),
+      since: String(n.since ?? ''),
+      scope: (n.scope as string | null) ?? null,
+      audience: n.audience === 'creator' || n.audience === 'consumer' ? n.audience : null,
+    })),
     earnings: { creator: money(e.creator), consumer: money(e.consumer) },
   }
 }
@@ -2703,6 +2751,109 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     },
     async founderSetGoals(audience, targets, reason) {
       return num(await rpc<number>('app_founder_set_goals', { p_audience: audience, p_targets: targets, p_reason: reason }))
+    },
+    async founderProgressionQueue() {
+      const { data, error } = await client.rpc('app_founder_progression_queue')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_progression_queue')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      const rows = (k: string) => ((r[k] as Array<Record<string, unknown>>) ?? [])
+      return {
+        members: rows('members').map((m) => ({
+          memberId: String(m.member_id),
+          username: (m.username as string | null) ?? null,
+          audience: m.audience === 'consumer' ? 'consumer' : 'creator',
+          goalsMetAt: String(m.goals_met_at),
+          status: String(m.status) as QualificationStatus,
+        })),
+        holds: rows('holds').map((h) => ({
+          id: num(h.id as number),
+          username: (h.username as string | null) ?? null,
+          scope: String(h.scope),
+          revenueEntryId: h.revenue_entry_id == null ? null : num(h.revenue_entry_id as number),
+          settlementId: h.settlement_id == null ? null : num(h.settlement_id as number),
+          reason: String(h.reason ?? ''),
+          placedAt: String(h.placed_at),
+        })),
+        decisions: rows('decisions').map((d) => ({
+          username: (d.username as string | null) ?? null,
+          audience: d.audience === 'consumer' ? 'consumer' : 'creator',
+          decision: String(d.decision),
+          reason: String(d.reason ?? ''),
+          evidenceRef: (d.evidence_ref as string | null) ?? null,
+          decidedAt: String(d.decided_at),
+        })),
+      }
+    },
+    async founderProgressionReport() {
+      const { data, error } = await client.rpc('app_founder_progression_report')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_progression_report')) return null
+        throw toAppError(error)
+      }
+      const r = (data ?? {}) as Record<string, unknown>
+      const counts = (x: unknown) => Object.fromEntries(Object.entries((x ?? {}) as Record<string, unknown>).map(([k, v]) => [k, num(v as number)]))
+      const part = (x: unknown) => {
+        const p = (x ?? {}) as Record<string, unknown>
+        return { denominator: num(p.denominator as number), milestones: counts(p.milestones) }
+      }
+      const st = (r.statuses ?? {}) as Record<string, unknown>
+      const ref = (r.referrals ?? {}) as Record<string, unknown>
+      const money = (r.money ?? {}) as Record<string, unknown>
+      return {
+        definitions: Object.fromEntries(Object.entries((r.definitions ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])),
+        creator: part(r.creator),
+        consumer: part(r.consumer),
+        statuses: { creator: counts(st.creator), consumer: counts(st.consumer) },
+        referrals: {
+          qualifiedReferrals: num(ref.qualified_referrals as number),
+          membersWithTarget: num(ref.members_with_target as number),
+          theoreticalMaxQualifyingConsumers: num(ref.theoretical_max_qualifying_consumers as number),
+          note: String(ref.note ?? ''),
+        },
+        integrity: counts(r.integrity),
+        money: { heldCreatorCents: num(money.held_creator_cents as number), openPoolCents: num(money.open_pool_cents as number) },
+      }
+    },
+    async founderDecideQualification(d) {
+      await rpc('app_founder_decide_qualification', {
+        p_member: d.memberId,
+        p_audience: d.audience,
+        p_decision: d.decision,
+        p_reason: d.reason,
+        p_evidence_ref: d.evidenceRef ?? null,
+        p_member_message: d.memberMessage ?? null,
+      })
+    },
+    async founderPlaceHold(h) {
+      return num(
+        await rpc<number>('app_founder_place_hold', {
+          p_member: h.memberId,
+          p_scope: h.scope,
+          p_revenue_entry: h.revenueEntryId ?? null,
+          p_settlement: h.settlementId ?? null,
+          p_reason: h.reason,
+          p_evidence_ref: h.evidenceRef ?? null,
+          p_justification: h.justification ?? null,
+          p_member_message: h.memberMessage,
+        }),
+      )
+    },
+    async founderReleaseHold(id, reason) {
+      await rpc('app_founder_release_hold', { p_hold: id, p_reason: reason })
+    },
+    async founderCorrectRevenue(c) {
+      return num(
+        await rpc<number>('app_founder_correct_revenue', {
+          p_entry: c.entryId,
+          p_delta_cents: c.deltaCents,
+          p_kind: c.kind,
+          p_reason: c.reason,
+          p_evidence_ref: c.evidenceRef ?? null,
+        }),
+      )
     },
     async founderSettleEligible(reason) {
       const r = (await rpc<Record<string, unknown>>('app_founder_settle_eligible', { p_reason: reason })) ?? {}

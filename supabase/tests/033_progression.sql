@@ -34,8 +34,9 @@ begin
   if (select count(*) from pg_trigger where tgname in ('creator_share_states_guard', 'allocation_states_guard') and tgenabled <> 'D') <> 2 then
     bad := bad || 'the earnings state guard is missing or disabled'::text;
   end if;
-  -- No defaults: there is no goal value the migration set.
-  if exists (select 1 from sim.goal_versions where set_by not like 'founder:%') then
+  -- Goal values come only from the founder: set in Control Center, or the
+  -- benchmarks the founder approved in SP-PRG-001 (recorded by 20261218000000).
+  if exists (select 1 from sim.goal_versions where set_by not like 'founder:%' and set_by not like 'founder-approved:SP-PRG-001 %') then
     bad := bad || 'a goal value was set by something other than the founder'::text;
   end if;
   -- Progression never influences distribution: no feed, discovery, ranking or

@@ -5,8 +5,9 @@
 //  2. the founder switches it on and sets the creator goal values in the
 //     Control Center, each with a reason, recorded as a version;
 //  3. a creator sees her progress and her simulated share locked; once she
-//     meets every goal it unlocks, and the qualification is recorded once;
-//  4. the founder settles it (a simulated statement) and switches it off.
+//     meets every goal she is Under review, still locked;
+//  4. the founder approves her after review and settles (a simulated
+//     statement); she sees Qualified and Settled; the switch goes off again.
 // WCAG 2.2 AA, 320 and 390 px, no CSP violations. Run by scripts/e2e/auth-journey.sh.
 const { chromium } = require('playwright')
 const { execFileSync } = require('node:child_process')
@@ -177,6 +178,9 @@ async function signIn(page, email) {
     sql(`insert into social.follows (follower_id, creator_id) values ('${fern}', '${c}'), ('${gus}', '${c}')`)
     sql(`insert into social.clique_members (fan_id, creator_id) values ('${fern}', '${c}')`)
     sql(`insert into social.comments (post_id, author_id, body) values ('${post}', '${fern}', 'This picture made my whole morning better, thank you.')`)
+    // An earlier post, saved by Fern the week it went up: Fern returns in two weeks.
+    const older = sql(`insert into social.posts (author_id, body, created_at) values ('${c}', 'Harbour at dusk, journey ${RUN}', now() - interval '9 days') returning id`)
+    sql(`insert into social.saves (member_id, post_id, saved_at) values ('${fern}', '${older}', now() - interval '9 days')`)
     // Simulated content advertising revenue attributed to Cleo, in a month long past.
     const rev = await rpc(founderToken, 'app_founder_record_sim_revenue', { p_month: '2004-02-01', p_kind: 'content_ad', p_creator: c, p_post: post, p_net_cents: 10000, p_note: 'progression journey' })
     check('the founder records simulated revenue for Cleo', rev.status === 200, JSON.stringify(rev.body))
@@ -205,7 +209,10 @@ async function signIn(page, email) {
       check('the switch change is recorded with its reason',
         sql("select reason from ops.feature_switch_events where feature = 'progression' order by id desc limit 1") === 'progression journey: try the goals')
       const form = page.getByTestId('goal-form-creator')
-      for (const [label, v] of [['Publish original posts', '1'], ['Post in different weeks (last 6 weeks)', '1'], ['Reach genuine followers', '2'], ['Have active supporters (last 28 days)', '1'], ['Be in members’ Cliques', '2']]) {
+      // The approved SP-PRG-001 benchmarks are in force (20 posts, 100 followers, ...);
+      // this local journey records a test version Cleo can reach, as the founder could.
+      await form.getByText(/In force since .*: SP-PRG-001 v1\.0 approved creator benchmarks/).waitFor()
+      for (const [label, v] of [['Publish original posts', '1'], ['Post in different weeks (last 28 days)', '1'], ['Reach genuine followers', '2'], ['Be in members’ Cliques', '2'], ['Have supporters who come back (last 28 days)', '1']]) {
         await form.getByLabel(label).fill(v)
       }
       await form.getByLabel('Reason').fill('progression journey goals')
@@ -239,31 +246,52 @@ async function signIn(page, email) {
       await screenChecks(page, 'My Split with goals')
       sql(`insert into social.clique_members (fan_id, creator_id) values ('${gus}', '${c}')`)
       await page.reload()
-      await page.getByTestId('goals-creator').getByText('Goals met').waitFor()
+      await page.getByTestId('goals-creator-badge').getByText('Under review').waitFor()
       const e2 = (await page.getByTestId('earnings-creator').innerText()).replace(/\s+/g, ' ')
-      check('meeting every goal unlocks her share', /Locked \$0\.00 Unlocked \$40\.00/.test(e2), e2)
-      check('the qualification is recorded once', sql(`select count(*) from sim.qualifications where member_id = '${c}'`) === '1')
+      check('meeting every goal puts her Under review, her share still locked', /Locked \$40\.00 Unlocked \$0\.00/.test(e2), e2)
+      check('the goals-met record has its date and goal version', sql(`select count(*) from sim.qualifications where member_id = '${c}' and version_id = (select max(id) from sim.goal_versions where audience = 'creator')`) === '1')
       await ctx.close()
     }
 
-    // 4. The founder settles (simulated) and switches progression off again.
+    // 4. The founder approves after review, settles (simulated), and Cleo sees it.
     {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await signIn(page, f.email)
       await page.goto(`${APP}/app/control`)
+      const review = page.getByTestId('progression-review')
+      const row = review.getByTestId('review-row').filter({ hasText: `@pgc${RUN}` })
+      await row.waitFor()
+      await review.getByLabel('Decision reason').fill('integrity review passed (journey)')
+      await row.getByRole('button', { name: 'Approve' }).click()
+      await page.getByText(`Approved @pgc${RUN}.`).waitFor()
+      check('the approval is recorded with its reason', sql(`select reason from sim.qualification_decisions where member_id = '${c}' order by id desc limit 1`) === 'integrity review passed (journey)')
       const panel = page.getByTestId('goals-panel')
       await panel.getByLabel('Reason').last().fill('progression journey statement')
       await panel.getByRole('button', { name: 'Settle (simulated)' }).click()
       await panel.getByText(/Settled \(simulated\): \d+ creator share\(s\)/).waitFor()
       check('Cleo’s share is settled once, as a simulated statement',
         sql(`select count(*) from sim.creator_share_states s join sim.revenue_entries r on r.id = s.revenue_entry_id where r.creator_id = '${c}' and s.state = 'settled'`) === '1')
-      const sw = page.getByTestId('switches-panel')
-      await sw.getByLabel('Reason').fill('progression journey: done')
-      await sw.getByRole('button', { name: 'Turn progression off' }).click()
-      await sw.getByText('Progression: Off').waitFor()
+      await screenChecks(page, 'the Control Center with the review')
       await ctx.close()
     }
+    {
+      const ctx = await newContext(browser)
+      const page = await ctx.newPage()
+      await signIn(page, email('c'))
+      await page.goto(`${APP}/app/split`)
+      await page.getByTestId('goals-creator-badge').getByText('Qualified').waitFor()
+      const e3 = (await page.getByTestId('earnings-creator').innerText()).replace(/\s+/g, ' ')
+      check('Cleo sees Qualified and her share Settled (simulated)', /Locked \$0\.00 Unlocked \$0\.00 Settled \$40\.00/.test(e3), e3)
+      check('optional growth guidance is shown once qualified', /Keep growing \(optional\)/.test(await page.getByTestId('growth-creator').innerText()))
+      await screenChecks(page, 'My Split when qualified')
+      await ctx.close()
+    }
+    // Switch off again: progress hidden, records kept.
+    const off = await rpc(founderToken, 'app_founder_set_switch', { p_feature: 'progression', p_enabled: false, p_reason: 'progression journey: done' })
+    check('the founder switches progression off again; every record is kept', off.status === 204 || off.status === 200,
+      String(off.status))
+    check('records kept after switching off', sql(`select count(*) from sim.qualification_decisions where member_id = '${c}'`) === '1')
     check('nothing in the feed or discovery reads progression', sql("select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname ~ '^app_(feed|discover|home)' and p.prosrc ~ 'sim\\.(goal_|qualifications|creator_share_states|allocation_states)'") === '0')
     check('no Content Security Policy violations', csp.length === 0, csp.slice(0, 2).join(' | '))
   } catch (e) {

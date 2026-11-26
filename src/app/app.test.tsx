@@ -51,6 +51,8 @@ import {
   type FounderOverview,
   type FounderGoals,
   type MyProgress,
+  type ProgressionQueue,
+  type QualificationStatus,
 } from './api'
 import { MemberArea } from './MemberArea'
 import { ModerationAppealsPage, ModerationQueuePage, ModerationReportPage } from './moderation'
@@ -367,6 +369,8 @@ function fakeApi(
     goals: { catalogue: { creator: ['original_posts'], consumer: ['shares'] }, versions: [], qualified: { creator: 0, consumer: 0 } } as FounderGoals,
     setCalls: [] as Array<{ audience: string; targets: Record<string, number>; reason: string }>,
     settleCalls: [] as string[],
+    queue: { members: [], holds: [], decisions: [] } as ProgressionQueue,
+    decisions: [] as Array<{ memberId: string; decision: string; reason: string }>,
   }
   // Feedback, with the database's rules.
   const feedbackPresent = opts.feedback !== 'absent'
@@ -1289,6 +1293,42 @@ function fakeApi(
       const id = progression.goals.versions.length + 1
       progression.goals = { ...progression.goals, versions: [{ id, audience, targets, reason, setAt: '2026-11-26T10:00:00Z' }, ...progression.goals.versions] }
       return id
+    },
+    async founderProgressionQueue() {
+      requireFounder()
+      return progression.queue
+    },
+    async founderProgressionReport() {
+      requireFounder()
+      return {
+        definitions: { creator_denominator: 'Members who published', consumer_denominator: 'Active members' },
+        creator: { denominator: 4, milestones: { original_posts: 1 } },
+        consumer: { denominator: 10, milestones: { shares: 2 } },
+        statuses: { creator: { under_review: 1 }, consumer: {} },
+        referrals: { qualifiedReferrals: 7, membersWithTarget: 1, theoreticalMaxQualifyingConsumers: 1, note: 'Each referral counts once.' },
+        integrity: { open_holds: 0, account_holds: 0, revocations: 0, restorations: 0, revenue_corrections: 0, allocation_corrections: 0 },
+        money: { heldCreatorCents: 0, openPoolCents: 0 },
+      }
+    },
+    async founderDecideQualification(d) {
+      requireFounder()
+      if (d.reason.trim().length < 3) throw new AppApiError('reason_required')
+      progression.decisions.push({ memberId: d.memberId, decision: d.decision, reason: d.reason })
+      progression.queue = {
+        ...progression.queue,
+        members: progression.queue.members.map((m) => (m.memberId === d.memberId && m.audience === d.audience ? { ...m, status: d.decision === 'revoked' ? 'revoked' : 'qualified' } : m)),
+      }
+    },
+    async founderPlaceHold() {
+      requireFounder()
+      return 1
+    },
+    async founderReleaseHold() {
+      requireFounder()
+    },
+    async founderCorrectRevenue() {
+      requireFounder()
+      return 1
     },
     async founderSettleEligible(reason) {
       requireFounder()
@@ -3863,9 +3903,21 @@ describe('previews and search measurement (20261204000000)', () => {
   })
 })
 
-describe('progression (20261217000000): goals and simulated locked earnings', () => {
+describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () => {
   const steps = (xs: Array<[string, number, number | null]>) => xs.map(([metric, value, target]) => ({ metric, value, target }))
-  const money = (accumulatedCents: number, lockedCents: number, eligibleCents = 0, settledCents = 0) => ({ accumulatedCents, lockedCents, eligibleCents, settledCents })
+  const money = (accumulatedCents: number, lockedCents: number, eligibleCents = 0, settledCents = 0, pausedCents = 0) => ({
+    accumulatedCents,
+    lockedCents,
+    eligibleCents,
+    settledCents,
+    pausedCents,
+  })
+  const journey = (status: QualificationStatus, s: ReturnType<typeof steps>, qualifiedAt: string | null = null) => ({
+    status,
+    qualifiedAt,
+    goalsSince: '2026-11-26T10:00:00Z',
+    steps: s,
+  })
 
   it('with the switch off, My Split is unchanged and shows no goals', async () => {
     const fake = fakeApi()
@@ -3875,14 +3927,15 @@ describe('progression (20261217000000): goals and simulated locked earnings', ()
     expect(screen.queryByTestId('goals-consumer')).toBeNull()
   })
 
-  it('with goals not set, shows progress without targets and says nothing unlocks; earnings locked and simulated', async () => {
+  it('in progress: points bar, each milestone with progress and target, the next step, locked simulated earnings and the approved wording', async () => {
     const fake = fakeApi()
-    fake.rewards.points = { recognized: 970, redeemablePending: 0, redeemableApproved: 270, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 0 }
+    fake.rewards.points = { recognized: 970, redeemablePending: 0, redeemableApproved: 270, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 315 }
     fake.progression.my = {
       enabled: true,
       goodStanding: true,
-      creator: { qualifiedAt: null, steps: steps([['original_posts', 0, null]]) },
-      consumer: { qualifiedAt: null, steps: steps([['support_weeks', 2, null], ['shares', 1, null]]) },
+      creator: journey('in_progress', steps([['original_posts', 0, 20]])),
+      consumer: journey('in_progress', steps([['clique_creators', 10, 10], ['meaningful_engagements', 12, 30]])),
+      notices: [],
       earnings: { creator: money(0, 0), consumer: money(1240, 1240) },
     }
     renderApp('/app/split', fake.api)
@@ -3891,56 +3944,67 @@ describe('progression (20261217000000): goals and simulated locked earnings', ()
     // No posts and no creator earnings: only the supporter journey.
     expect(screen.queryByTestId('goals-creator')).toBeNull()
     const card = within(screen.getByTestId('goals-consumer'))
-    expect(screen.getByTestId('goals-consumer-status').textContent).toMatch(/have not been set yet, so nothing unlocks/)
-    expect(card.getAllByTestId('goal-step').map((x) => x.textContent)).toEqual([
-      'Support creators you value (last 6 weeks)2 weeks',
-      'Share posts by others (last 28 days)1 shares',
-    ])
-    const earn = within(screen.getByTestId('earnings-consumer'))
-    expect(earn.getByText('Simulated')).toBeTruthy()
-    expect(screen.getByTestId('earnings-consumer').textContent).toMatch(/Accumulated\$12\.40Locked\$12\.40Unlocked\$0\.00/)
-    expect(card.getByText(/Splitpost never takes them/)).toBeTruthy()
-    expect(screen.getByTestId('split-disclosure').textContent).toMatch(/nothing is paid out/i)
+    expect(screen.getByTestId('goals-consumer-badge').textContent).toBe('1 of 2')
+    expect(screen.getByTestId('goals-consumer-status').textContent).toBe('Next: comment, save or repost thoughtfully.')
+    expect(card.getAllByTestId('goal-step').map((x) => x.textContent)).toEqual(['Keep creators in your Clique (done)10 / 10', 'Comment, save or repost thoughtfully12 / 30'])
+    expect(card.getByText(/Goals in force since November 26, 2026/)).toBeTruthy()
+    expect(screen.getByTestId('earnings-consumer').textContent).toMatch(/Simulated.*Accumulated\$12\.40Locked\$12\.40Unlocked\$0\.00Settled\$0\.00/)
+    expect(screen.getByTestId('earnings-consumer').textContent).toMatch(/Estimated for your reward-eligible points this month: \$3\.15/)
+    expect(
+      card.getByText(
+        'Your legitimate allocated rewards remain attributed to you until you qualify, subject to applicable integrity and adjustment rules. All pilot amounts are simulated.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByTestId('split-progression').textContent).not.toMatch(/never takes/)
     // No split percentages are shown to members (legal review safeguard).
     expect(screen.getByTestId('split-progression').textContent).not.toMatch(/\d+\s*%/)
   })
 
-  it('shows creator goals with progress against targets and the next step; qualified journeys say unlocked', async () => {
+  it('shows Under review, Qualified with optional growth guidance, and a paused amount', async () => {
     const fake = fakeApi()
     fake.progression.my = {
       enabled: true,
       goodStanding: true,
-      creator: { qualifiedAt: null, steps: steps([['original_posts', 12, 10], ['active_supporters', 3, 5]]) },
-      consumer: { qualifiedAt: '2026-11-20T00:00:00Z', steps: steps([['shares', 4, 1]]) },
-      earnings: { creator: money(4000, 4000), consumer: money(500, 0, 500) },
+      creator: journey('under_review', steps([['original_posts', 20, 20]]), '2026-11-20T00:00:00Z'),
+      consumer: journey('qualified', steps([['external_shares', 5, 5]]), '2026-11-20T00:00:00Z'),
+      notices: [{ kind: 'hold', message: 'One advertising entry is being checked.', since: '2026-11-25T00:00:00Z', scope: 'creator_entry', audience: null }],
+      earnings: { creator: money(4000, 2000, 0, 0, 2000), consumer: money(500, 0, 500) },
     }
     renderApp('/app/split', fake.api)
-    const creator = within(await screen.findByTestId('goals-creator'))
-    expect(creator.getByText('1 of 2')).toBeTruthy()
-    expect(screen.getByTestId('goals-creator-status').textContent).toBe('Next: have active supporters (last 28 days).')
-    expect(creator.getAllByTestId('goal-step').map((x) => [x.getAttribute('data-met'), x.textContent])).toEqual([
-      ['true', 'Publish original posts (done)10 / 10'],
-      ['false', 'Have active supporters (last 28 days)3 / 5'],
-    ])
-    expect(screen.getByTestId('goals-consumer-status').textContent).toMatch(/earnings are unlocked\. Nothing is paid/)
+    expect((await screen.findByTestId('goals-creator-badge')).textContent).toBe('Under review')
+    expect(screen.getByTestId('goals-creator-status').textContent).toMatch(/met every goal\. We are checking it/)
+    const creator = within(screen.getByTestId('goals-creator'))
+    expect(creator.getByTestId('progress-notice').textContent).toMatch(/One advertising entry is being checked\. Nothing is taken/)
+    expect(screen.getByTestId('earnings-creator').textContent).toMatch(/Paused while under review: \$20\.00/)
+    expect(screen.getByTestId('goals-consumer-badge').textContent).toBe('Qualified')
     expect(screen.getByTestId('earnings-consumer').textContent).toMatch(/Locked\$0\.00Unlocked\$5\.00/)
+    expect(screen.getByTestId('growth-consumer').textContent).toMatch(/Keep growing \(optional\).*never depends on them/)
+    // A creator hold is not shown on the supporter card.
+    expect(within(screen.getByTestId('goals-consumer')).queryByTestId('progress-notice')).toBeNull()
   })
 
-  it('under a restriction, says nothing unlocks until it ends', async () => {
+  it('a revoked qualification tells the member why and how to appeal', async () => {
     const fake = fakeApi()
     fake.progression.my = {
       enabled: true,
-      goodStanding: false,
-      creator: { qualifiedAt: null, steps: [] },
-      consumer: { qualifiedAt: null, steps: steps([['shares', 1, 1]]) },
-      earnings: { creator: money(0, 0), consumer: money(0, 0) },
+      goodStanding: true,
+      creator: journey('revoked', steps([['original_posts', 20, 20]]), '2026-11-20T00:00:00Z'),
+      consumer: journey('in_progress', steps([['shares', 0, 5]])),
+      notices: [{ kind: 'revoked', message: 'Your creator qualification was revoked after a review.', since: '2026-11-25T00:00:00Z', scope: null, audience: 'creator' }],
+      earnings: { creator: money(4000, 4000), consumer: money(0, 0) },
     }
     renderApp('/app/split', fake.api)
-    expect((await screen.findByTestId('goals-consumer-status')).textContent).toMatch(/restriction is in force, nothing unlocks/)
+    expect((await screen.findByTestId('goals-creator-badge')).textContent).toBe('Qualification revoked')
+    expect(within(screen.getByTestId('goals-creator')).getByTestId('progress-notice').textContent).toMatch(/revoked after a review\. To appeal, send us a message through Feedback/)
   })
 
-  it('the founder sets goal values with a reason in the Control Center, and runs a simulated settlement', async () => {
+  it('the founder sets goals, approves a member under review and runs a simulated settlement; the scorecard is labelled', async () => {
     const f = fakeApi('me', { founder: true })
+    f.progression.queue = {
+      members: [{ memberId: 'cleo', username: 'cleo', audience: 'creator', goalsMetAt: '2026-11-25T00:00:00Z', status: 'under_review' }],
+      holds: [],
+      decisions: [],
+    }
     renderApp('/app/control', f.api)
     const form = within(await screen.findByTestId('goal-form-creator'))
     expect(form.getByText(/Not set\. Until every value is set, nobody on this journey qualifies/)).toBeTruthy()
@@ -3948,16 +4012,27 @@ describe('progression (20261217000000): goals and simulated locked earnings', ()
     fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'pilot goals v1' } })
     fireEvent.click(form.getByRole('button', { name: 'Save creator goals' }))
     expect(await form.findByText('Give every goal a whole number of 1 or more.')).toBeTruthy()
-    fireEvent.change(form.getByLabelText('Publish original posts'), { target: { value: '10' } })
+    fireEvent.change(form.getByLabelText('Publish original posts'), { target: { value: '20' } })
     fireEvent.click(form.getByRole('button', { name: 'Save creator goals' }))
-    expect(await screen.findByText(/In force since .*: pilot goals v1\. 0 qualified\./)).toBeTruthy()
-    expect(screen.getByText('Saved as a new version. Members already qualified stay qualified.')).toBeTruthy()
-    expect(f.progression.setCalls).toEqual([{ audience: 'creator', targets: { original_posts: 10 }, reason: 'pilot goals v1' }])
+    expect(await screen.findByText(/In force since .*: pilot goals v1\. 0 met\./)).toBeTruthy()
+    expect(f.progression.setCalls).toEqual([{ audience: 'creator', targets: { original_posts: 20 }, reason: 'pilot goals v1' }])
+    // Review: approve with a reason.
+    const review = within(await screen.findByTestId('progression-review'))
+    expect(review.getByTestId('review-row').textContent).toMatch(/@cleo · creator · Under review/)
+    fireEvent.change(review.getByLabelText('Decision reason'), { target: { value: 'integrity review passed' } })
+    fireEvent.click(review.getByRole('button', { name: 'Approve' }))
+    expect(await screen.findByText('Approved @cleo.')).toBeTruthy()
+    expect(f.progression.decisions).toEqual([{ memberId: 'cleo', decision: 'approved', reason: 'integrity review passed' }])
+    // Settlement.
     const panel = within(screen.getByTestId('goals-panel'))
     fireEvent.change(panel.getAllByLabelText('Reason').at(-1)!, { target: { value: 'November statement' } })
     fireEvent.click(panel.getByRole('button', { name: 'Settle (simulated)' }))
     expect(await panel.findByText(/Settled \(simulated\): 1 creator share\(s\) and 0 supporter allocation\(s\)\. Nothing is paid\./)).toBeTruthy()
     expect(f.progression.settleCalls).toEqual(['November statement'])
+    const card = screen.getByTestId('progression-scorecard').textContent
+    expect(card).toMatch(/Creators \(4\)Members who published/)
+    expect(card).toMatch(/Publish original posts: 1 \(25%\)/)
+    expect(card).toMatch(/Qualified referrals: 7; at most 1 supporters can reach the referral goal/)
   })
 })
 
