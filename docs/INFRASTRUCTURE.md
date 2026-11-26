@@ -100,6 +100,84 @@ database). The tracker, staging guide and recovery procedure now say so.
       also downtime-free unless its compute was raised above Nano (then about
       a minute's restart), and it loses backups again. Nothing else changes.
 
+## 2a. Transfer readiness baseline for `crevant-staging` (checked Nov 26)
+
+**Project identity.** `crevant-staging`, reference `kpudeppgokpjhvaqrprn`,
+US West, Nano, in the Crevant (Free) organization. The same reference is
+pinned in `config/supabase-projects.json` (`staging.ref`), in
+`supabase/functions/_shared/policy.ts` (generated) and in every staging
+workflow's target check (`scripts/db/verify-staging-target.sh`). A transfer
+keeps the reference, so none of these change.
+
+**What depends on it, and whether a transfer affects it** (from the
+repository; dashboard settings confirmed by the founder in step T1):
+
+| Dependency | Where | After the transfer |
+|---|---|---|
+| Database connection for the workflows | GitHub secret `STAGING_DATABASE_URL` (21 uses in 7 workflows) | Unchanged: the host, user and password stay the same |
+| Founder account id for activation | GitHub secret `STAGING_FOUNDER_ACCOUNT_ID` | Unchanged (Auth users move with the project) |
+| Staging app | Vercel `splitpost-app`, Preview environment for `staging`: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Unchanged: the API URL and keys stay the same |
+| Edge Functions `avatar` and `post-media`, and their secrets (`MEDIA_DRAIN_KEY`) | The project | Kept as they are, with their deployed versions |
+| Function deployments | `scripts/functions/deploy.mjs`, using the founder's own `supabase login` | Keeps working: the founder is a member of both organizations |
+| Scheduled photo and video cleanup (pg_cron job calling `post-media/drain`) | The database | Kept, and keeps running |
+| Auth settings, Site URL and redirect URLs, Resend SMTP sender | The project's Auth settings | Kept |
+| Storage buckets, files and the upload size limit | The project | Kept |
+| The Supabase GitHub integration | Not used: this repository deploys only through GitHub Actions | If it shows as connected, disconnect it first (a transfer prerequisite) |
+| Anything tied to the Crevant organization id | None found (`git grep` for organization ids and access tokens: nothing) | Nothing to change |
+
+**Access controls.** Both organizations: the founder only, with multi-factor
+authentication. On Pro, roles cover the whole organization, so anyone added
+later would see Production too (section 2, item 6). Claude has no
+dashboard access; it reaches staging only through the GitHub secrets above.
+
+**Cost.** About **$45 a month before and after** (section 2, item 8). The
+transfer itself adds staging's compute (Nano is billed as Micro in a paid
+organization, about $10); deleting the rehearsal project removes the same
+amount. Until the rehearsal project is deleted the total is about $55. No new
+subscription. The spend cap stays on.
+
+**Environment isolation after the move.** Staging and member Production
+keep separate databases, keys, Auth users, Storage, Edge Function secrets,
+GitHub environments and approval gates, and the functions refuse each
+other's origins (`supabase/functions/_shared/policy.ts`). Two things become
+shared, and both are acceptable for the pilot: the organization's usage
+quotas (staging video tests count against the same 250 GB egress as
+Production; Control Center's estimate shows it), and the organization's
+member list (the founder only).
+
+**Rehearsal project retirement readiness.** `splitpost-members-rehearsal-v2`
+(`zjyxtrrzwyvagfjqthin`) appears nowhere in code, configuration or workflows
+on `main`, only in this document. Nothing depends on it. It is deleted
+**only** after the founder confirms the rehearsal is finished and anything
+in it worth keeping has been exported, and authorizes the deletion
+explicitly (founder action T5).
+
+**Exact transfer steps** (founder, about 15 minutes; staging stays up):
+
+* **T1. Prerequisites (5 minutes).** Supabase dashboard: (a) Crevant
+  organization, Team: you are **Owner**. (b) Splitpost Production
+  organization, Team: you are a member with the same login. (c) Crevant,
+  Billing: no overdue invoice. (d) `crevant-staging`, Project Settings,
+  Integrations: if GitHub is connected, disconnect it. Tell Claude when done.
+* **T2. Baseline (Claude).** The staging checks run after migration
+  20261216000000 is applied serve as the before picture (all checks, the
+  project reference, the drain schedule notice).
+* **T3. Transfer (founder, 5 minutes).** `crevant-staging`, Project Settings,
+  General, **Transfer project**, choose **Splitpost Production**. Read the
+  added compute cost on the confirmation screen (about $10 a month), then
+  confirm. Expected: the project now shows under Splitpost Production, same
+  name and reference.
+* **T4. Verify (Claude, the same hour).** The staging checks again (same
+  results), the reference unchanged, the staging app signs in, the Edge
+  Functions answer (Verify Edge Functions, staging), and the cleanup job
+  still runs.
+* **T5. Next day (founder).** `crevant-staging`, Database, Backups: a daily
+  backup is listed. Only then, and only with your explicit go-ahead, delete
+  `splitpost-members-rehearsal-v2` (Project Settings, General, Delete
+  project). Deleting is irreversible.
+* **Rollback.** Transfer staging back to Crevant the same way. No downtime at
+  Nano; it loses daily backups again.
+
 ## 3. Backups and log retention after the change
 
 | Project | Daily backups | Retention | Logs (API, Postgres, Auth audit) |
