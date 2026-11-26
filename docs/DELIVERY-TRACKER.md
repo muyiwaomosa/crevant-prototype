@@ -9,7 +9,7 @@ merging approves its migration checksums under D7), **Deployed** (database on
 staging and the `staging` app at that commit), **Accepted** (the founder used it
 on staging and signed off).
 
-Infrastructure: Vercel Pro. Supabase: the Splitpost Production organization is on Pro (member Production, waitlist, rehearsal); `crevant-staging` is in the Crevant organization on **Free** (no backups) until the consolidation in `docs/INFRASTRUCTURE.md` is approved.
+Infrastructure: Vercel Pro; the staging app is deployed at 967b692 and the founder has signed in (Nov 26). Supabase: the Splitpost Production organization is on Pro (member Production, waitlist, rehearsal); `crevant-staging` is in the Crevant organization on **Free** (no backups) until the consolidation in `docs/INFRASTRUCTURE.md` is approved.
 
 Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 branch, fast-forwarded only to merged `main`). Founder actions and acceptance
@@ -53,6 +53,18 @@ steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 | PB-3 Release candidate fixes | Dec 20 | Not started |
 | PB-4 Open external access | Dec 23 | Not started; needs separate authorization |
 | Before wider commercial launch | Before PB-4 or any cohort beyond the controlled pilot | **Required:** a media backup and recovery approach for photos and videos (accepted as absent for the controlled pilot only, Nov 26); revisit point-in-time recovery |
+
+## Acceptance findings (open)
+
+Stages here: **Local** (local tests), **CI** (all six checks), **Staging**
+(deployed and checked by Claude), **Founder** (accepted by the founder on
+staging).
+
+| Finding | Local | CI | Staging | Founder | Status |
+|---|---|---|---|---|---|
+| Photo post, profile picture and feed photo calls fail with "We couldn't reach Splitpost" while text works (Nov 26) | Media journeys pass | Pass | Functions deployed and answering; they accept only the staging address pattern and refuse others without the permission header, which the browser reports as a connection error | Failed | **Investigating.** Leading cause: the address staging was opened on. Founder checks M1 to M3 (staging guide, section 0) confirm or rule it out |
+| A media service failure was shown as "check your connection" | Fixed: online, it now says the media service didn't answer (code MEDIA-UNREACHABLE) and logs the page address and function to the console | PR #118 | Not yet | Not yet | Fixed in PR #118 |
+| Text post, text post with a topic, sign-in | Pass | Pass | Deployed | **Accepted** Nov 26 | Done |
 
 ## Critical path to December 23
 

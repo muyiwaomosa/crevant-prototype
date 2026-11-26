@@ -14,7 +14,7 @@ staging checks passed), and the `staging` app branch is at the latest merge.
 
 | # | Action | Where | Depends on | Expected result | How Claude verifies |
 |---|---|---|---|---|---|
-| A1 | **Open the staging app** and confirm the deployed version (2 minutes) | https://splitpost-app-git-staging-crevant.vercel.app, then View Source: `meta name="splitpost-commit"` | Nothing | The sign-in page loads after your Vercel login; the commit is the latest merge (the tracker header says which) | Claude can't pass Vercel's login, so please confirm, and that Preview has the staging Supabase variables (section 2, step A.2) |
+| ✓ | Staging app deployed and founder signed in (Nov 26): Ignored Build Step allows `main` and `staging`; the `staging` branch has the staging Supabase URL and publishable key; Production keeps its own key; commit 967b692 redeployed to Preview | | | **Done** | Founder confirmed |
 | A2 | **Resend sends staging email** (15 minutes plus DNS time) | Resend and Supabase, section 2, step B | Nothing (start now: DNS can take hours) | A password reset arrives from "Splitpost" | Asks you to confirm the email arrived |
 | A3 | **Supabase Auth** (10 minutes) | Supabase dashboard, section 2, step C | Nothing | Signing up through a link works; a sign up without a link is refused | Runs the staging checks again |
 | A4 | **Activate staging** (2 minutes) | Supabase SQL editor, section 2, step D | After A1 to A3 | You have a founder account, an invitation link and the moderator role | Checks registration is open on staging only |
@@ -23,6 +23,31 @@ staging checks passed), and the `staging` app branch is at the latest merge.
 | A7 | **Video device test** (`docs/video/DEVICE-TEST.md`): iPhone Safari and Android Chrome, a 1 and a 5 minute clip each; record the results and the storage cap in Control Center | `/app/video-test` on both phones | After A4 and A5 | A pass or fail per device | Reads the results; proposes the 1080p fallback only if the iPhone fails |
 | A8 | **Real-device speed check** (Journey 9, row 61) | Your phone, Wi-Fi off | After A4 | Sign-in in about 2 s, Home in about 3 s | Reruns the measurement on any loading change |
 | A9 | Turn on **New video uploads** on staging | Control Center, Operational switches | After A7 passes | Members can post videos on staging (Production stays off) | Runs the video checks on staging |
+
+**M. Photo and profile picture failures (open, Nov 26): evidence only you can collect**
+
+Every photo, profile picture and feed photo call failed with "We couldn't reach
+Splitpost" while text posts worked. What Claude has checked: both staging
+media functions (`avatar`, `post-media`) are deployed and answer; they accept
+the staging address `https://splitpost-app-git-staging-crevant.vercel.app`
+(checked from a real browser with the app's own headers); and they **refuse
+any other address** by leaving out the permission header, which the browser
+then reports exactly as this connection error. Text posts go to the database
+API, which accepts any address, which is why they worked. So the leading
+cause is the address the app was opened on. These three checks confirm or
+rule it out:
+
+| # | Do this | Tell Claude |
+|---|---|---|
+| M1 | Note the **exact address** in the browser bar while signed in to staging | The address (it is not secret) |
+| M2 | With that page open: browser menu, Developer tools, **Console**; then add a photo and press Post | Any red line mentioning `functions/v1` or `CORS`, and, once PR #118 is deployed, the line starting `Splitpost: the post-media photo media function did not answer from` |
+| M3 | Supabase, `crevant-staging`, **Edge Functions**, `post-media`, **Logs** (or Invocations), for the minutes of a failed try | Whether there are `POST` requests at all, or only `OPTIONS` (no `POST` means the browser blocked them) |
+
+If the address differs from the staging address above, open staging at
+`https://splitpost-app-git-staging-crevant.vercel.app` and try a photo again.
+If you want a different address to work (for example your own staging
+domain), tell Claude which: it is added to the staging allow-list only,
+never to Production.
 
 **B. Depends on the Supabase consolidation (`docs/INFRASTRUCTURE.md`)**
 
@@ -43,7 +68,11 @@ staging checks passed), and the `staging` app branch is at the latest merge.
 
 ### Infrastructure status (Nov 26)
 
-* **Vercel:** Pro since Nov 25. Every push builds three projects
+* **Vercel:** Pro since Nov 25. `splitpost-app` now also builds `main`
+  (founder, Nov 26): its Production builds are still refused by the build
+  guard until member Production is approved, so each merge shows one refused
+  Production build there. Returning the Ignored Build Step to `staging` only
+  avoids that noise once staging no longer needs `main`. Every push builds three projects
   (`crevant-prototype`, `splitpost`, `splitpost-app`); `splitpost-app` skips
   everything but the `staging` branch, and `splitpost` skips branch previews
   too, so most pushes build only `crevant-prototype`. Claude batches commits.
@@ -210,6 +239,22 @@ Every change is recorded. To close staging again:
 ---
 
 ## 3. Acceptance tests, by stakeholder journey
+
+### Acceptance results so far (founder, on staging)
+
+| Date | What | Result | Finding |
+|---|---|---|---|
+| Nov 26 | Sign in to staging | **Accepted** | |
+| Nov 26 | Text post; text post with a topic | **Accepted** | |
+| Nov 26 | Photo post (twice, including a smaller photo) | **Failed** | "We couldn't reach Splitpost" after a correct local preview. Open: section 0, M1 to M3 |
+| Nov 26 | Profile picture upload | **Failed** | Same message. Open: M1 to M3 |
+| Nov 26 | An existing photo in the Home feed, also after refreshing | **Failed** | "This photo couldn't load". Open: M1 to M3 |
+
+Once the cause is fixed, the media rows to redo: profile picture upload,
+display, replace and remove; photo post publish, display and delete; both
+after refreshing and signing in again; another member sees the photo and a
+signed-out visitor does not; a post whose file is gone shows "couldn't load"
+without breaking the feed; text posting still works.
 
 Use a fresh email address for each new account, on desktop and phone. You need
 four accounts: **you** (founder and moderator), a **creator**, a **fan**, and a

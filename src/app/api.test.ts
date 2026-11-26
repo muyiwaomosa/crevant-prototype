@@ -388,7 +388,8 @@ describe('profile pictures when the avatar function is unavailable', () => {
       [{ status: 401, body: { error: 'not_signed_in' } }, 'not_signed_in'],
       [{ status: 400, body: { error: 'some internal detail' } }, 'unknown'],
       [{ status: 502 }, 'storage_unavailable'],
-      [new Error('Failed to fetch'), 'network'],
+      // No answer at all, while the device is online: the media service, not the member's connection.
+      [new Error('Failed to fetch'), 'media_unreachable'],
     ]
     for (const [answer, code] of cases) {
       const up = pictureClient(answer)
@@ -447,5 +448,46 @@ describe('foundation v2 (20261130000000): complete paging, adult confirmation, r
   it('reads the personal referral code, or nothing before the migration', async () => {
     expect(await fakeClient([{ data: '0123456789abcdef' }]).api.myReferralCode()).toBe('0123456789abcdef')
     expect(await fakeClient([{ error: { code: 'PGRST202', message: 'Could not find the function public.app_my_referral_link without parameters in the schema cache' } }]).api.myReferralCode()).toBeNull()
+  })
+})
+
+describe('a media function that never answers is not blamed on the connection', () => {
+  function mediaClient(error: unknown) {
+    const client = {
+      functions: { invoke: async () => ({ data: null, error }) },
+      storage: { from: () => ({ getPublicUrl: () => ({ data: { publicUrl: 'https://staging.example/storage/v1/object/public/x/x' } }) }) },
+    }
+    return createSupabaseApi(client as unknown as SupabaseClient, 'u1')
+  }
+  const fetchFailed = Object.assign(new Error('Failed to send a request to the Edge Function'), { name: 'FunctionsFetchError', context: new TypeError('Failed to fetch') })
+
+  it('online: photo, avatar and video calls say the media service did not answer, and text posting is unaffected', async () => {
+    const warn = console.warn
+    const seen: string[] = []
+    console.warn = (m: string) => void seen.push(m)
+    try {
+      const api = mediaClient(fetchFailed)
+      await expect(api.uploadPhoto(new Blob(['x'], { type: 'image/jpeg' }))).rejects.toMatchObject({ code: 'media_unreachable' })
+      await expect(api.uploadAvatar(new Blob(['x'], { type: 'image/jpeg' }))).rejects.toMatchObject({ code: 'media_unreachable' })
+      expect(await api.photoLinks(['p1'])).toEqual({})
+      expect(await api.avatarLinks(['c1'])).toEqual({})
+    } finally {
+      console.warn = warn
+    }
+    // The console says which function and from which address, never a token or a response body.
+    expect(seen.some((m) => /post-media photo media function did not answer from /.test(m))).toBe(true)
+    expect(seen.some((m) => /avatar urls media function did not answer/.test(m))).toBe(true)
+    expect(seen.join(' ')).not.toMatch(/Bearer|eyJ/)
+  })
+
+  it('offline: the same failure asks the member to check the connection', async () => {
+    const desc = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { onLine: false } })
+    try {
+      await expect(mediaClient(fetchFailed).uploadPhoto(new Blob(['x'], { type: 'image/jpeg' }))).rejects.toMatchObject({ code: 'network' })
+    } finally {
+      if (desc) Object.defineProperty(globalThis, 'navigator', desc)
+      else delete (globalThis as { navigator?: unknown }).navigator
+    }
   })
 })

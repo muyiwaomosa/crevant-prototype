@@ -1113,6 +1113,7 @@ const MESSAGES: Record<string, string> = {
   cannot_delete_founder: "A founder account can't be deleted here.",
   escalate_to_founder: 'Action against a moderator or the founder is decided by the founder. Hide the content if it is urgent, then let the founder know.',
   network: "We couldn't reach Splitpost. Check your connection and try again.",
+  media_unreachable: "Splitpost's photo and video service didn't answer, so nothing was saved. Your connection is fine, and text posts still work. Please try again in a moment; if it keeps happening, tell us (code MEDIA-UNREACHABLE).",
   unknown: 'Something went wrong. Please try again.',
 }
 
@@ -1243,6 +1244,21 @@ function toDiscoverMember(r: Record<string, unknown>, withDetails: boolean): Dis
   }
 }
 
+/**
+ * A media function call that never got an answer. "Check your connection" only
+ * when the device says it is offline; otherwise the media service itself did
+ * not answer (for example it refused this page's address, or failed before
+ * replying), which is not the member's connection. The browser console gets
+ * the page address and the function, never a token or response body.
+ */
+function mediaUnreachable(fn: string, error: unknown): AppApiError {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return new AppApiError('network')
+  const origin = typeof location !== 'undefined' ? location.origin : 'unknown'
+  const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+  console.warn(`Splitpost: the ${fn} media function did not answer from ${origin} (${detail.slice(0, 160)})`)
+  return new AppApiError('media_unreachable')
+}
+
 /** Reads the avatar function's error code from a failed invoke (never raw text). */
 async function functionError(error: unknown): Promise<AppApiError> {
   const ctx = (error as { context?: unknown })?.context
@@ -1261,7 +1277,7 @@ async function functionError(error: unknown): Promise<AppApiError> {
     }
     return new AppApiError(ctx.status >= 500 ? 'storage_unavailable' : 'unknown')
   }
-  return new AppApiError('network')
+  return mediaUnreachable('avatar', error)
 }
 
 /** The post-media function's refusals, in the app's words. */
@@ -1282,7 +1298,7 @@ async function photoFunctionError(error: unknown): Promise<AppApiError> {
     }
     return new AppApiError(ctx.status >= 500 ? 'photo_upload_failed' : 'unknown')
   }
-  return new AppApiError('network')
+  return mediaUnreachable('post-media photo', error)
 }
 
 function toMedia(v: unknown): PostMedia | null {
@@ -1314,7 +1330,7 @@ async function videoFunctionError(error: unknown): Promise<AppApiError> {
     }
     return new AppApiError(ctx.status >= 500 ? 'video_upload_failed' : 'unknown')
   }
-  return new AppApiError('network')
+  return mediaUnreachable('post-media video', error)
 }
 
 const tusMetadata = (m: Record<string, string>) =>
@@ -1820,6 +1836,7 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       if (ids.length === 0) return {}
       const { data, error } = await client.functions.invoke('avatar/urls', { body: { ids } })
       // No function yet (or any failure): everyone shows initials.
+      if (error && !((error as { context?: unknown }).context instanceof Response)) mediaUnreachable('avatar urls', error)
       if (error || !data || typeof data !== 'object') return {}
       const avatars = (data as { avatars?: Record<string, { url?: unknown; updatedAt?: unknown }> }).avatars ?? {}
       const base = client.storage.from('avatars').getPublicUrl('x').data.publicUrl.split('/object/')[0]
@@ -1905,6 +1922,7 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       if (ids.length === 0) return {}
       const { data, error } = await client.functions.invoke('post-media/links', { body: { ids } })
       // No function yet (or any failure): the post shows "couldn't load" with a retry.
+      if (error && !((error as { context?: unknown }).context instanceof Response)) mediaUnreachable('post-media links', error)
       if (error || !data || typeof data !== 'object') return {}
       const photos = (data as { photos?: Record<string, { feed?: unknown; full?: unknown }> }).photos ?? {}
       const base = client.storage.from('post-photos').getPublicUrl('x').data.publicUrl.split('/object/')[0]
