@@ -133,3 +133,37 @@ and start next.
    or approve automatically when no hold or open integrity case exists.
    Recommended: keep the review during the pilot.
 4. **D7:** approve migration `20261218000000_progression_rules.sql` at merge.
+
+## 9. Founder decisions (Nov 26, after review)
+
+The alignment is accepted in principle, subject to CI, staging validation and
+the remaining acceptance requirements.
+
+1. **Account deletion (pilot only):** a simulated balance closure policy.
+   Recognition points may be removed; unallocated eligible points cancelled
+   with auditable records; allocated simulated earnings closed through
+   auditable adjustments; cancelled amounts never become Splitpost revenue;
+   historical settlement reconciliation stays exact; consequences explained
+   before the member confirms. No precedent for real money (legal and
+   accounting review before any real financial activation). To implement in
+   migration 20261219000000, with the deletion flow, policy draft and tests.
+2. **Activation definitions:** the SP-PRG-001 creator, consumer and
+   advertiser definitions are approved; the previous consumer metric is kept
+   alongside for 30 days; definitions, effective dates, denominators and
+   comparability documented; the existing Intelligence Engine reused. To
+   implement in 20261219000000.
+3. **Qualification review:** manual approval stays for the pilot. The Control
+   Center will separate routine cases from cases needing investigation, show
+   milestones completed, routine checks passed, restrictions or integrity
+   concerns, why a decision is pending and the time waiting, and track review
+   volume, turnaround, rejections and workload; designed so routine cases
+   could later be approved automatically under a separately authorized policy
+   (not implemented). To implement in 20261219000000.
+4. **Migration 20261218000000:** conditionally approved for staging at
+   `09561250…bb9b`; merged after CI passed on the final commit with the
+   checksum verified and 20261217000000 applied to staging; applied to
+   staging through the protected workflow.
+5. **Control Center:** forms for targeted and account-wide holds and
+   corrections, with reasons, evidence, a confirmation step and the audit
+   list: done (PR #128).
+6. **V1, D1, P1:** critical priorities for December 10.
