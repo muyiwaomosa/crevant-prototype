@@ -253,7 +253,11 @@ J.run(async (browser) => {
   await fp.getByRole('button', { name: `Activate ${campaign}` }).click()
   await fp.getByRole('button', { name: `Pause ${campaign}` }).waitFor()
   check('the campaign is active for the approved advertiser', sql(`select c.status || '|' || a.status from ads.campaigns c join ads.advertisers a on a.id = c.advertiser_id where c.name = '${campaign}'`) === 'active|approved')
-  const imps = () => sql(`select count(*) from ads.impressions i join ads.campaigns c on c.id = i.campaign_id where c.name = '${campaign}' and i.member_id = '${vi}'`)
+  // Vi lands on Home after signing in, and Home has its own feed ad slot: whether that serve
+  // lands before she opens the post depends on timing. Count the post's slot (content) here,
+  // and every surface where nothing at all may be served.
+  const imps = () => sql(`select count(*) from ads.impressions i join ads.campaigns c on c.id = i.campaign_id where c.name = '${campaign}' and i.member_id = '${vi}' and i.surface = 'content'`)
+  const allImps = () => sql(`select count(*) from ads.impressions where member_id = '${vi}'`)
   const viewer = await person(browser)
   await signIn(viewer.page, email('v'))
   await viewer.page.bringToFront()
@@ -261,7 +265,7 @@ J.run(async (browser) => {
   const ad = viewer.page.getByTestId('ad')
   await ad.waitFor()
   check('Vi, who chose the category, sees the ad labelled Sponsored', flat(await ad.innerText()).toLowerCase().includes("sponsored · shown with gil grows's post") && imps() === '1')
-  check('the ad she saw counts as a valid impression', await sqlEventually(`select count(*) from ads.impressions i join ads.campaigns c on c.id = i.campaign_id where c.name = '${campaign}' and i.viewed_at is not null`, '1') === '1')
+  check('the ad she saw counts as a valid impression', await sqlEventually(`select count(*) from ads.impressions i join ads.campaigns c on c.id = i.campaign_id where c.name = '${campaign}' and i.surface = 'content' and i.viewed_at is not null`, '1') === '1')
 
   // ---------------------------------------------------------------------------
   step('6. Operational switches: advertising off (no ad served), then on, each with a reason')
@@ -280,12 +284,13 @@ J.run(async (browser) => {
   await switches.getByText('Advertising: Off').waitFor()
   check('ads are off, with the reason recorded', sql("select enabled from ops.feature_switches where feature = 'ads'") === 'f'
     && sql("select reason from ops.feature_switch_events where feature = 'ads' order by id desc limit 1") === 'Journey: pausing ads to review a complaint')
+  const servedBeforeOff = allImps()
   await viewer.page.goto(`${APP}/app/post/${posts[1]}`)
   await viewer.page.getByText(`Five snacks for after school ${RUN}`).first().waitFor()
   await sleep(1500)
-  check('while ads are off, no ad is shown and none is served', (await viewer.page.getByTestId('ad').count()) === 0 && imps() === '1')
+  check('while ads are off, no ad is shown and none is served', (await viewer.page.getByTestId('ad').count()) === 0 && allImps() === servedBeforeOff)
   const off = await rpc(tV, 'app_ad_for', { p_surface: 'content', p_post: posts[1] })
-  check('the database serves no ad while off, even when asked directly', off.status === 200 && Array.isArray(off.body) && off.body.length === 0 && imps() === '1')
+  check('the database serves no ad while off, even when asked directly', off.status === 200 && Array.isArray(off.body) && off.body.length === 0 && allImps() === servedBeforeOff)
   await screenChecks(fp, 'the Control Center with ads off')
   await switches.getByLabel('Reason', { exact: true }).fill('Journey: complaint reviewed, ads back on')
   await switches.getByRole('button', { name: 'Turn advertising on' }).click()
@@ -297,7 +302,7 @@ J.run(async (browser) => {
   await viewer.page.goto(`${APP}/app/post/${posts[1]}`)
   await viewer.page.getByTestId('ad').waitFor()
   check('with ads back on, the ad is served again', imps() === '2')
-  check('both impressions become valid once seen', await sqlEventually(`select count(*) from ads.impressions i join ads.campaigns c on c.id = i.campaign_id where c.name = '${campaign}' and i.viewed_at is not null`, '2') === '2')
+  check('both impressions become valid once seen', await sqlEventually(`select count(*) from ads.impressions i join ads.campaigns c on c.id = i.campaign_id where c.name = '${campaign}' and i.surface = 'content' and i.viewed_at is not null`, '2') === '2')
   await viewer.ctx.close()
 
   // ---------------------------------------------------------------------------
@@ -308,7 +313,9 @@ J.run(async (browser) => {
   await rep.waitFor()
   await rep.getByText(/Valid impressions/).first().waitFor()
   const tr = flat(await rep.innerText())
-  check('the report counts 2 valid impressions and 0 clicks, as in the database', /Valid impressions 2 /.test(tr) && /Outbound clicks 0 /.test(tr), tr)
+  // At least the two post impressions; a Home feed ad Vi saw on signing in also counts.
+  const valid = sql(`select count(*) from ads.impressions i join ads.campaigns c on c.id = i.campaign_id where c.name = '${campaign}' and i.viewed_at is not null`)
+  check('the report counts the valid impressions and 0 clicks, as in the database', Number(valid) >= 2 && tr.includes(`Valid impressions ${valid} `) && /Outbound clicks 0 /.test(tr), tr)
   check('audience and reach under 10 are withheld', /Eligible audience \(chose a matching category\) fewer than 10/.test(tr) && /Reach fewer than 10/.test(tr), tr)
   check('the report names no member', !tr.includes('Vi Viewer') && !tr.includes(user('v')) && !tr.includes(vi))
   await screenChecks(fp, 'the campaign report')
