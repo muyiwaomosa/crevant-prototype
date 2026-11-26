@@ -9,7 +9,7 @@ merging approves its migration checksums under D7), **Deployed** (database on
 staging and the `staging` app at that commit), **Accepted** (the founder used it
 on staging and signed off).
 
-Infrastructure: Vercel Pro; the staging app is deployed at 967b692 and the founder has signed in (Nov 26). Supabase: the Splitpost Production organization is on Pro (member Production, waitlist, rehearsal); `crevant-staging` is in the Crevant organization on **Free** (no backups) until the consolidation in `docs/INFRASTRUCTURE.md` is approved.
+Infrastructure: Vercel Pro; the staging app is deployed at 40a055b and founder acceptance has started (Nov 26). Supabase: the Splitpost Production organization is on Pro (member Production, waitlist, rehearsal); `crevant-staging` is in the Crevant organization on **Free** (no backups) until the consolidation in `docs/INFRASTRUCTURE.md` is approved.
 
 Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 branch, fast-forwarded only to merged `main`). Founder actions and acceptance
@@ -54,7 +54,7 @@ steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 | PB-4 Open external access | Dec 23 | Not started; needs separate authorization |
 | Before wider commercial launch | Before PB-4 or any cohort beyond the controlled pilot | **Required:** a media backup and recovery approach for photos and videos (accepted as absent for the controlled pilot only, Nov 26); revisit point-in-time recovery |
 
-## Acceptance findings (open)
+## Acceptance findings
 
 Stages here: **Local** (local tests), **CI** (all six checks), **Staging**
 (deployed and checked by Claude), **Founder** (accepted by the founder on
@@ -62,9 +62,10 @@ staging).
 
 | Finding | Local | CI | Staging | Founder | Status |
 |---|---|---|---|---|---|
-| Photo post, profile picture and feed photo calls fail with "We couldn't reach Splitpost" while text works (Nov 26) | Media journeys pass | Pass | Functions deployed and answering; they accept only the staging address pattern and refuse others without the permission header, which the browser reports as a connection error | Failed | **Investigating.** Leading cause: the address staging was opened on. Founder checks M1 to M3 (staging guide, section 0) confirm or rule it out |
-| A media service failure was shown as "check your connection" | Fixed: online, it now says the media service didn't answer (code MEDIA-UNREACHABLE) and logs the page address and function to the console | PR #118 | Not yet | Not yet | Fixed in PR #118 |
+| BUG-001 photo post, BUG-002 profile picture upload, BUG-003 existing feed photo: "We couldn't reach Splitpost" while text worked (Nov 26) | Media journeys pass | Pass | Functions deployed and answering | **Accepted** Nov 26 on the canonical staging URL: photo post, photo with caption and topic, photo after refreshing, profile picture upload and after refreshing, photo post deletion | **Resolved** in the tested staging environment. Likely cause, not conclusively verified: the app was opened on an address the media functions don't accept |
+| A media service failure was shown as "check your connection" | Fixed (code MEDIA-UNREACHABLE; console names the function and page address) | Pass | Deployed (PR #118, 40a055b) | Not exercised (no failure since) | Done |
 | Text post, text post with a topic, sign-in | Pass | Pass | Deployed | **Accepted** Nov 26 | Done |
+| Video readiness: post-media on staging runs 27b323a (before video) | Video journey passes | Pass | Bucket, switches and device-test rules in place | Not started | Founder: V1 (deploy at 40a055b), V2 (110 MB), V3 (device test), V4 (switch on) |
 
 ## Critical path to December 23
 
