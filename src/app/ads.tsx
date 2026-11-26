@@ -61,7 +61,8 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
     return api.adEvent(ad.impressionId, 'view').catch(() => undefined)
   }, [api, ad])
 
-  // A valid impression: at least half the ad visible for a second.
+  // A valid impression: at least half the ad visible for a second, on a page
+  // the person is looking at (a hidden tab or a locked phone stops the clock).
   useEffect(() => {
     if (!ad || !ref.current) return
     if (typeof IntersectionObserver === 'undefined') {
@@ -69,17 +70,28 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
       return
     }
     let timer: ReturnType<typeof setTimeout> | null = null
+    let inView = false
+    const stop = () => {
+      if (timer) clearTimeout(timer)
+      timer = null
+    }
+    const start = () => {
+      stop()
+      if (inView && document.visibilityState === 'visible') timer = setTimeout(() => void markViewed(), 1000)
+    }
     const io = new IntersectionObserver(
       ([e]) => {
-        if (e.isIntersecting && e.intersectionRatio >= 0.5) timer = setTimeout(() => void markViewed(), 1000)
-        else if (timer) clearTimeout(timer)
+        inView = e.isIntersecting && e.intersectionRatio >= 0.5
+        start()
       },
       { threshold: [0.5] },
     )
     io.observe(ref.current)
+    document.addEventListener('visibilitychange', start)
     return () => {
       io.disconnect()
-      if (timer) clearTimeout(timer)
+      document.removeEventListener('visibilitychange', start)
+      stop()
     }
   }, [ad, markViewed])
 

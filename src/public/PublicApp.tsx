@@ -1,3 +1,4 @@
+import { lazy, Suspense, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../auth/AuthProvider'
 import { PublicLayout } from './PublicLayout'
@@ -19,16 +20,27 @@ import { ConfirmPage } from './auth/ConfirmPage'
 import { SetPasswordPage } from './auth/SetPasswordPage'
 import { AccountPage } from './auth/AccountPage'
 import { RequireAuth } from './auth/AuthUi'
-import { MemberArea } from '../app/MemberArea'
-import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage, SavedPage } from '../app/pages'
-import { MySplitPage, RewardsReviewPage } from '../app/split'
-import { NoticesPage } from '../app/governance'
-import { AdsManagePage } from '../app/ads'
-import { ControlCenterPage } from '../app/insights'
-import { AdvertisePage, PrivacyPage as MemberPrivacyPage } from '../app/account'
-import { ModerationQueuePage, ModerationAppealsPage, ModerationReportPage } from '../app/moderation'
-import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from '../app/feedback'
-import { VideoTestPage } from '../app/video'
+import { MemberAreaBoundary, MemberAreaLoading } from './MemberAreaLoading'
+import { loadMemberRoutes, loadedMemberRoutes } from './memberAreaChunk'
+
+const LazyMemberRoutes = lazy(loadMemberRoutes)
+
+/**
+ * The members area: straight away when its code has already arrived (the
+ * usual case, since it starts downloading early), otherwise behind a short
+ * loading state. Skipping Suspense when it isn't needed also skips React's
+ * delay before revealing a suspended page.
+ */
+function MemberRoutes() {
+  // Chosen once: switching later would remount the whole members area.
+  const [Loaded] = useState(loadedMemberRoutes)
+  if (Loaded) return <Loaded />
+  return (
+    <Suspense fallback={<MemberAreaLoading />}>
+      <LazyMemberRoutes />
+    </Suspense>
+  )
+}
 
 /**
  * The public site, invited members' account pages and the members area
@@ -56,42 +68,23 @@ export function PublicRoutes() {
   return <MemberLinksContext.Provider value>{onMemberAppHost() ? <MemberHostRoutes /> : <AllRoutes />}</MemberLinksContext.Provider>
 }
 
-/** The members area (Release 1: the social core), with its own layout. */
+/**
+ * The members area (Release 1: the social core), with its own layout. Its
+ * code loads only when a member opens /app, so the landing page, sign in and
+ * public previews stay small.
+ */
 function memberAreaRoute() {
   return (
     <Route
-      path="app"
+      path="app/*"
       element={
         <RequireAuth>
-          <MemberArea />
+          <MemberAreaBoundary>
+            <MemberRoutes />
+          </MemberAreaBoundary>
         </RequireAuth>
       }
-    >
-      <Route index element={<FeedPage />} />
-      <Route path="discover" element={<DiscoverPage />} />
-      <Route path="new" element={<ComposePage />} />
-      <Route path="post/:id" element={<PostPage />} />
-      <Route path="u/:username" element={<MemberPage />} />
-      <Route path="clique" element={<CliquePage />} />
-      <Route path="saved" element={<SavedPage />} />
-      <Route path="split" element={<MySplitPage />} />
-      <Route path="split/review" element={<RewardsReviewPage />} />
-      <Route path="catch-up/:username" element={<CatchUpPage />} />
-      <Route path="profile" element={<ProfilePage />} />
-      <Route path="moderation" element={<ModerationQueuePage />} />
-      <Route path="moderation/appeals" element={<ModerationAppealsPage />} />
-      <Route path="moderation/:id" element={<ModerationReportPage />} />
-      <Route path="notices" element={<NoticesPage />} />
-      <Route path="ads" element={<AdsManagePage />} />
-      <Route path="control" element={<ControlCenterPage />} />
-      <Route path="advertise" element={<AdvertisePage />} />
-      <Route path="privacy" element={<MemberPrivacyPage />} />
-      <Route path="video-test" element={<VideoTestPage />} />
-      <Route path="feedback" element={<FeedbackPage />} />
-      <Route path="feedback/inbox" element={<FeedbackInboxPage />} />
-      <Route path="feedback/inbox/:id" element={<FeedbackEntryPage />} />
-      <Route path="*" element={<AppNotFound />} />
-    </Route>
+    />
   )
 }
 

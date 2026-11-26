@@ -9,6 +9,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { AuthCard, Field, Message, Spinner } from '../public/auth/AuthUi'
 import { AppApiProvider, ProfileProvider, useAppApi, useProfileGate } from './AppApiContext'
 import { ViewTrackerProvider } from './ViewTracker'
+import { usePageFocus } from './pageFocus'
 import { displayNameProblem, messageFor, usernameProblem, type AppApi, type MyDetails, type RegistrationOutcome } from './api'
 import { DetailsSetup, SETUP_STEPS, SetupProgress } from './profileDetails'
 import { ModerationProvider } from './moderation'
@@ -371,6 +372,7 @@ const NAV = [
 
 /** The tour's layout, for real members: sidebar on larger screens, tab bar on phones. */
 function MemberLayout({ username }: { username: string }) {
+  usePageFocus()
   return (
     <div className="min-h-dvh md:flex">
       <a

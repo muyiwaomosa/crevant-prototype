@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { buttonClass } from '../../components/ui'
 import { useAuth } from '../../auth/AuthProvider'
 import { safeNext } from '../../auth/safeNext'
+import { preloadMemberArea } from '../memberAreaChunk'
 import { AuthCard, Field, Message, Spinner, Unavailable } from './AuthUi'
 
 /**
@@ -12,6 +13,7 @@ import { AuthCard, Field, Message, Spinner, Unavailable } from './AuthUi'
  * whether an email address has an account.
  */
 export function SignInPage() {
+  useEffect(() => preloadMemberArea(), [])
   const { status, client } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
