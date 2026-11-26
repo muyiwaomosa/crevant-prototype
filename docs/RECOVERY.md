@@ -11,8 +11,11 @@ Everything financial is simulated during the pilot.
 > **Status (Nov 26): not yet in force for staging.** Staging is in the Crevant
 > organization on the **Free** plan, which has no backups. The objectives below
 > apply once it is moved into the Splitpost Production (Pro) organization
-> (`docs/INFRASTRUCTURE.md`). The deletion safeguard below is **not complete**:
-> today's records cannot reliably say what was deleted after a backup.
+> (`docs/INFRASTRUCTURE.md`). The deletion safeguard (below) is **built and
+> demonstrated on local Supabase**, and runs in every CI run. It counts as
+> complete only once the same exercise has passed on staging after its
+> transfer (on Free, Edge Function logs are kept 1 day and there are no
+> backups to restore).
 
 ## What protects what
 
@@ -73,16 +76,67 @@ founder's, in the Supabase and Vercel dashboards, unless marked Claude.
 2. **Decide the restore point** (15 minutes). Supabase, Database, Backups:
    choose the newest backup from before the problem. Note its time. Claude
    can tell from the run logs and the reconciliation which day is clean.
-3. **Restore** (about 30 to 60 minutes for a pilot-sized database). Restore
-   that backup from the dashboard. The project is unavailable while it runs.
-4. **Re-apply what must not come back** (30 minutes; mandatory). A restore brings back
-   anything deleted after the backup point, including accounts deleted on a
-   member's request. Re-delete every account and post deleted after the backup
-   time, from the deletion register's Storage copy (next section), and check
-   none is visible. **Until the deletion register exists, keep the restored app
-   restricted** (registration paused, sharing and advertising off) and
-   re-apply deletions from the request emails and Control Center notes, with
-   the founder confirming the list is complete before reopening.
+   **Only backups up to 6 days old** are used: Edge Function logs (the
+   fallback evidence in step 4) are kept 7 days on Pro, so an older backup
+   could predate the oldest log line. If an older backup is the only clean
+   one, step 4 can use only the live export; without it the app stays
+   restricted (step 4, "Fails safe").
+3. **Keep the deletion evidence, then restore** (10 minutes, then about 30
+   to 60 minutes for a pilot-sized database).
+   * **If the database still answers**, export its deletion register first,
+     because it is the complete list. SQL editor, then download the result:
+     `select json_agg(r order by r.id) from ops.deletion_register r where r.occurred_at > '<backup time>';`
+     Keep the file outside Supabase.
+   * Then restore the backup from the dashboard. The project is unavailable
+     while it runs.
+4. **Restrict, then re-apply what must not come back** (30 minutes;
+   mandatory). A restore brings back anything deleted after the backup,
+   including accounts deleted on a member's request, and it also puts the
+   **operational switches back** as they were at the backup.
+   * **First, restrict again:** Control Center, Operational switches:
+     registration off, advertising off, sharing off, video off, reason
+     "Recovery: reconciliation pending". The app stays like this until this
+     step is complete.
+   * **The evidence, in this order:**
+     1. The live export from step 3, if it was taken. It is complete: use it
+        as it is.
+     2. Otherwise (the database itself was lost), the function log: Supabase,
+        Logs, Edge Functions, `post-media`, filter `deletion_register` from
+        the backup time to now, download, then Claude converts it:
+        `node scripts/db/recovery/deletion-log-to-events.mjs <download> > events.json`.
+   * SQL editor: `select ops.reapply_deletions('<the events>'::jsonb, '<backup time>');`.
+     It deletes the accounts again, marks the posts and comments deleted
+     again, re-applies later restores, and skips anything from before the
+     backup. Running it again, or with both sources, changes nothing more.
+     Each re-applied deletion is itself recorded in the restored register.
+   * Check that none of the listed accounts exists and none of the listed
+     posts or comments is visible (Claude runs this from the list).
+   * **Fails safe.** Reopen only when the evidence is complete:
+     * with the live export: complete;
+     * with the log only: complete except for the residual risk below. The
+       founder then decides, in writing in the tracker, to reopen with that
+       risk, and posts the notice below. Until then the app stays
+       restricted;
+     * with neither (no export and no readable log): the app stays
+       restricted until account deletions are re-applied from the founder's
+       request records and the founder accepts that self-service content
+       deletions since the backup cannot be re-applied.
+
+   **Residual risk (log only).** Each completed deletion is reported at once
+   (the app calls post-media right after it) and again by the 15-minute
+   drain if that first report did not arrive. A deletion can be missing from
+   the log only if **both** failed: its immediate report (for example, the
+   member closed the app at that moment) and the scheduled drain before the
+   database was lost, so within about 15 minutes of the loss. Affected
+   paths:
+   * a member deleting their own post or comment: the request records do
+     **not** cover these. If any were missed they would reappear, so the
+     reopening notice asks members who deleted something in the
+     15 minutes before <time> to check it and delete it again;
+   * moderator hides and restores: re-done from the moderation queue
+     history;
+   * founder account deletions: re-done from the founder's request records
+     (each one is a recorded request).
 5. **Check** (30 minutes; Claude). Run the staging checks
    (`deploy-db-staging.yml`, plan mode) and the reconciliation. Both must pass.
    Claude compares the migration history with the repository and, if a
@@ -129,18 +183,18 @@ couldn't load"; their authors can delete and repost them.
 * **Deleted accounts and content must not come back after a recovery.**
   Reconciling deletions is mandatory before reopening, and if it cannot be
   done reliably the restored app stays restricted (switches off, registration
-  paused) until it is. See the next section: this safeguard is **not complete**
-  until the proposal there is built and demonstrated.
+  paused) until it is. See the last section: built and demonstrated locally; **complete**
+  once demonstrated on staging after its transfer.
 * **Infrastructure:** Vercel Pro and one Supabase Pro organization (founder).
   No further subscription or system is added for recovery.
 
-## Deletions after a backup: what exists today, and the proposal
+## Deletions after a backup: the deletion register
 
 A restore puts the database back as it was at the backup. Anything deleted
 since then comes back unless it is deleted again, so recovery needs a list of
 those deletions that **does not live in the restored database**.
 
-**What exists today, checked Nov 26:**
+**What existed before, checked Nov 26:**
 
 | Record | Captures | Survives a restore? | Enough? |
 |---|---|---|---|
@@ -155,41 +209,72 @@ Nothing existing reliably lists completed account and post deletions outside
 the database, and failed deletions are not recorded anywhere (the function
 either completes in one transaction or changes nothing).
 
-**Proposal (simplest reliable, existing infrastructure only), needs approval:**
+**What was built (migration `20261216000000`, needs D7 approval when merged):**
 
-1. A small append-only table, `ops.deletion_register`: what was deleted
-   (account or post), its id, and when. Written **in the same transaction** as
-   the deletion, by the founder deletion function, by post deletion and by
-   moderator removal, so it records exactly the deletions that completed. A
-   deletion that fails rolls back and leaves no row, so there is nothing
-   partial to reconcile. It holds ids and times only: no names, emails or
-   content.
-2. The existing 15-minute media drain (the scheduled call to the `post-media`
-   function) also copies any new register rows to a private Storage object,
-   `ops-deletions/<date>.ndjson`. Storage is **not** rolled back by a database
-   restore, so the copy survives it. Only the service key can read it.
-3. After a restore, before reopening: Claude reads the Storage copy, deletes
-   again every account and post it lists after the backup time, then checks
-   that none of them exists or is visible. Deletions in the last 15 minutes
-   before an incident may not have been copied yet. For that window the
-   procedure falls back to the request emails and Control Center notes, and
-   the app stays restricted until the founder confirms none is missing.
-4. Retention: kept for 30 days (four times the backup window), then removed by
-   the same drain. The privacy notice draft names this.
-5. **Demonstration before it counts as done:** a recovery exercise on local
-   Supabase (and then on staging, after its transfer): take a backup, delete
-   an account and a post, restore the backup, run the reconciliation, and show
-   that the account cannot sign in and the post is not visible, with the
-   result recorded here.
+1. `ops.deletion_register`: one row per completed deletion or restore of an
+   account, post or comment (kind, id, deleted or restored, time). Written by
+   triggers **in the same transaction** as the change, so it records exactly
+   the deletions that completed, whichever function made them (member post
+   deletion, moderator removal, founder account deletion). A deletion that
+   fails rolls back and leaves no row. Ids and times only: no names, emails or
+   content. Members cannot read it; history cannot be edited.
+2. The existing 15-minute drain (the scheduled `post-media` call) writes each
+   new row to the **Edge Function log** as a `deletion_register` line, then
+   marks it reported. Supabase keeps those logs outside the database (7 days
+   on Pro, the same as the backups), so a restore does not touch them.
+   *Correction to the earlier proposal:* a private Storage copy was proposed
+   first, but it would not survive a restore. Storage keeps its file index
+   (`storage.objects`) in the database, so a restore would make a newer copy
+   unreachable.
+3. `ops.reapply_deletions(events, backup_time)`: run by the founder in the SQL
+   editor (never members or the service key). It applies the logged events
+   after the backup in order, skips older ones, and is safe to repeat.
+4. Retention: register rows are removed by the drain 30 days after they are
+   logged (four times the backup window); log lines expire after 7 days. The
+   privacy notice draft names both.
+5. **Reported at once:** after any member, moderator or founder call that
+   deletes or restores an account, post or comment, the app asks
+   `post-media` (`/deletions`, signed-in members only, no input, returns a
+   count) to log the pending rows straight away. The 15-minute drain stays
+   as the retry. Logging a row twice is harmless.
+6. **Failed reporting is detectable:** a row not logged after 30 minutes
+   fails the reconciliation (`scripts/db/audit/reconciliation.sql`, "every
+   completed deletion reached the function log within 30 minutes") and shows
+   in the staging checks (032). A failed read or mark is logged
+   (`deletion_register_read_failed`, `deletion_register_mark_failed`).
+   Unreported rows are those with `reported_at` empty.
+7. **Private and auditable:** members cannot read the register or call its
+   functions; only the service key reports it, and only the founder can run
+   the reconciliation. Rows cannot be edited, and removed only 30 days
+   after being logged. The log lines hold ids and times only.
+8. **Residual risk** when only the log survives: see step 4 of the
+   procedure.
 
-This needs a migration (a D7 approval when merged) and a change to the
-`post-media` function. It adds no service or subscription.
+**Demonstration (Nov 26, local Supabase; also every CI run):**
+`scripts/db/recovery-exercise.sh` runs the real `post-media` drain in the Edge
+runtime, creates two members and their posts, takes a full backup, then
+deletes one account and the other member's post. The drain logs both. The
+backup is restored into a new database, and the exercise shows that, without
+reconciliation, the deleted account and post are back. It then reads the
+deletions from the function's log (not the database), runs
+`ops.reapply_deletions`, and checks that the account no longer exists (it
+cannot sign in), is not visible, and neither its posts nor the deleted post
+are visible. It also checks that the live register export names the
+same deletions as the log, that running the reconciliation again from the
+live export changes nothing, and that the re-applied deletions are recorded
+in the restored register. Result: **passed**. The Edge test checks that a
+member's post deletion is logged at once by `/deletions`. The database tests
+(`supabase/tests-local/290_deletion_register.sql`) also cover rolled-back
+deletions, later restores, older events, repeats and access.
+
+**Still to do before it counts as complete:** the same exercise on staging
+after its transfer to Pro, with the result recorded here.
 
 ## Founder actions this depends on
 
 * **Move `crevant-staging` into the Splitpost Production (Pro) organization**
   (`docs/INFRASTRUCTURE.md`, section 2, item 9). Until then staging has no
   backups.
-* **Approve or amend the deletion register proposal** above.
+* **Approve migration `20261216000000` (D7)** when its pull request is ready, then redeploy `post-media` to staging (`docs/STAGING-ACCEPTANCE.md`, section 0).
 * Keep the organization access to the founder only, with multi-factor
   authentication.

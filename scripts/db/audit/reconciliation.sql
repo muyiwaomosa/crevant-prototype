@@ -92,4 +92,14 @@ select 'no member saw one campaign more than its daily cap', caps.campaign_days_
        case when caps.campaign_days_over > 0 then caps.campaign_days_over || ' campaign-day(s)' end from caps
 union all
 select 'each operational switch matches its latest recorded change', switches.out_of_step = 0,
-       case when switches.out_of_step > 0 then switches.out_of_step || ' switch(es)' end from switches;
+       case when switches.out_of_step > 0 then switches.out_of_step || ' switch(es)' end from switches
+union all
+-- The deletion register (20261216000000, docs/RECOVERY.md): a completed deletion
+-- not yet in the function log after 30 minutes means reporting is failing.
+-- Counts only; passes where the migration is not applied.
+select 'every completed deletion reached the function log within 30 minutes', dr.waiting = 0,
+       case when dr.waiting > 0 then dr.waiting || ' deletion(s) not yet logged' end
+from (select case when to_regclass('ops.deletion_register') is null then 0
+                  else (xpath('/row/n/text()', query_to_xml(
+                          'select count(*) as n from ops.deletion_register where reported_at is null and occurred_at < pg_catalog.now() - interval ''30 minutes''',
+                          false, true, '')))[1]::text::int end as waiting) dr;

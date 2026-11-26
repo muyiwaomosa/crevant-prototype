@@ -41,9 +41,10 @@ steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 | Defects found in testing: a like tapped before a post card finished mounting was undone on screen; a second tap during "Skip the rest" could skip a setup step | Merged | PR #115; each with a unit test that fails without the fix | Acceptance |
 | Release hardening, part 2: first-load speed on emulated phones (sign-in 2.7 to 2.1 s on Slow 4G), database timings at 30 times pilot size, backup and restore drill in every CI run, financial and advertising reconciliation (12 checks), recovery procedure, recovery screen instead of blank pages, page titles and focus after navigation, ad views counted only in a visible tab | Merged | PR #116, Nov 26 (9908901); accepted by the founder; recovery objectives approved (RPO 24 h, RTO 4 h) | Staging app at 9908901; real-device check and acceptance (staging guide, Journey 9) |
 | Pilot media disclosure: "Keep your original" in the composer when a photo or video is attached; privacy notice draft line | Tested | PR #117; unit tests; photo, creator and video journeys | Merge, then acceptance (row 64) |
-| Recovery after a restore: deleted accounts and posts stay deleted | **Not started** (proposal) | Existing records found insufficient (`docs/RECOVERY.md`); deletion register proposed | Founder decision (B5), then build and a recovery exercise; not complete until demonstrated |
+| Recovery after a restore: deleted accounts and posts stay deleted (deletion register, migration 20261216000000; D7 approved Nov 26, conditional) | **Tested** | Register written in the same transaction as each deletion; reported to the Edge Function log at once after each deletion (`/deletions`) and retried by the 15-minute drain; a row unlogged after 30 minutes fails the reconciliation. Recovery: export the live register before restoring (complete), else the log; restrict again after the restore; reconciliation is idempotent; reopening rules fail safe; residual risk documented by path (`docs/RECOVERY.md`). Recovery exercise passes locally and in CI | PR #120 merge, staging apply, post-media deploy (action 1); exercise on staging after the transfer (action 7). Not complete until then |
+| Video journey failed once in CI (PR #120): no video post found right after posting | Fixed (test synchronization) | Cause shown: the wait for the post text also matched the composer, because React keeps a controlled textarea's text in sync with what is typed, so the database was read before the post was saved. The video and photo journeys now wait for the rendered post card. Not an app defect | Both journeys pass locally; CI on the next push |
 | Intermittent failure of the ad view unit test (once in about six full local runs) | **Open investigation** | Root cause not confirmed: React effect timing is suspected, not proven. The test now waits for the slot's observer and prints a timed trace on failure that separates a test synchronization problem from a real miscount | If it recurs, read the trace; validate real ad viewing during acceptance (Journey 6) |
-| Supabase consolidation: staging into the Pro organization (gains backups), rehearsal project retired | Not started (founder decision) | `docs/INFRASTRUCTURE.md`; about $45 a month before and after | Founder: B1 to B4 in the staging guide |
+| Supabase consolidation: staging into the Pro organization (gains backups and the 110 MB upload limit), rehearsal project retired | Baseline ready | Identity, dependencies, access, cost and isolation checked (`docs/INFRASTRUCTURE.md`, 2a): nothing depends on the organization; the rehearsal project has no dependants; about $45 a month after | Founder: actions 2, 3 and 7 (deletion only with explicit authorization) |
 | "See Splitpost" screenshots on the landing page | Not started | Needs the Dec 7 build | Take from staging after acceptance starts |
 
 | Production batch | Planned | Status |
@@ -65,27 +66,28 @@ staging).
 | BUG-001 photo post, BUG-002 profile picture upload, BUG-003 existing feed photo: "We couldn't reach Splitpost" while text worked (Nov 26) | Media journeys pass | Pass | Functions deployed and answering | **Accepted** Nov 26 on the canonical staging URL: photo post, photo with caption and topic, photo after refreshing, profile picture upload and after refreshing, photo post deletion | **Resolved** in the tested staging environment. Likely cause, not conclusively verified: the app was opened on an address the media functions don't accept |
 | A media service failure was shown as "check your connection" | Fixed (code MEDIA-UNREACHABLE; console names the function and page address) | Pass | Deployed (PR #118, 40a055b) | Not exercised (no failure since) | Done |
 | Text post, text post with a topic, sign-in | Pass | Pass | Deployed | **Accepted** Nov 26 | Done |
-| Video readiness: post-media on staging runs 27b323a (before video) | Video journey passes | Pass | Bucket, switches and device-test rules in place | Not started | Founder: V1 (deploy at 40a055b), V2 (110 MB), V3 (device test), V4 (switch on) |
+| Video readiness | Video journey passes | Pass | Bucket private, 110 MB, MP4 and JPEG; device-test page `/app/video-test` for the founder and testers only; video posts off and refused until both phone results and the cap are recorded; playback on. Staging post-media still runs 27b323a. **Found:** the Free plan caps the project upload limit at 50 MB, so the 110 MB limit needs the transfer first | Founder: actions 1, 3, 4, 5, 6 (video stays restricted until 5 passes) |
 
-## Critical path to December 23
+## Critical path to December 23 (updated Nov 26)
 
-1. **Working staging** (founder: steps A to D; the staging database is current with everything merged). This
-   is the main schedule risk: until it is done, no hands-on acceptance can
-   start. Everything else continues in parallel.
-2. **Video pull request** merged and deployed (needs the D7 approval), and the
-   staging Storage upload limit set to 110 MB.
-3. **Video device test** (founder, half a day), then video on staging.
-4. **Stakeholder journeys and release hardening** (about 5 days, in parallel
-   with 2 and 3).
-5. **Acceptance on staging** (founder), fixes, then PB-2 to PB-4 with their own
-   approvals.
+1. **Working staging:** done (founder signed in, media accepted Nov 26).
+2. **PR #120** (deletion register) merged and applied to staging (Claude),
+   then **one post-media deployment** (founder, action 1): video and deletion
+   reporting together.
+3. **Staging transfer to Pro** (founder, actions 2 and 3). New dependency:
+   the 110 MB upload limit (action 4), and so the video device test, cannot
+   be set on Free. It also brings the daily backups the staging recovery
+   exercise needs.
+4. **Video device test** (founder, half a day; action 5), then video on
+   staging (action 6).
+5. **Remaining acceptance** (founder, action 10), fixes, then PB-2 to PB-4
+   with their own approvals.
 
-**Assessment:** December 23 remains achievable if staging is working by
-December 2 and the device test happens by December 10. If staging slips past
-December 5, acceptance and fixes compress into the last two weeks; the
-recommendation then is to accept in two batches (core social and rewards first,
-advertising and intelligence second) rather than shorten security or financial
-testing.
+**Assessment:** December 23 remains achievable if the transfer happens by
+December 3 and the device test by December 10. The transfer is now the main
+schedule risk for video, because it gates the upload limit. If video slips,
+the pilot can open with photos and text first and video on staging later,
+which needs no change to the code.
 
 ## Genuinely outstanding against the approved MVP scope (Nov 26)
 

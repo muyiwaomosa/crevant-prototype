@@ -265,7 +265,8 @@ const objects = (where) => sql(`select count(*) from storage.objects where bucke
       await screenChecks(page, 'the composer with a video')
       await page.getByRole('textbox', { name: 'Write a post' }).first().fill(`A walk in the park ${RUN}`)
       await page.getByRole('button', { name: 'Post', exact: true }).first().click()
-      await page.getByText(`A walk in the park ${RUN}`).first().waitFor()
+      // The post card, not the text: the composer's textarea holds the same text until the post is saved.
+      await page.getByTestId('post').filter({ hasText: `A walk in the park ${RUN}` }).first().waitFor()
       postId = sql(`select id from social.posts where author_id = '${V.id}' and media_kind = 'video' order by created_at desc limit 1`)
       const row = sql(`select u.status || ' ' || u.codec || ' ' || u.width || 'x' || u.height || ' ' || round(u.duration_ms / 1000.0) || ' ' || u.purpose from social.post_media m join social.media_uploads u on u.id = m.upload_id where m.post_id = '${postId}'`)
       check('the video post is stored: published, H.264, 1280 x 720, 3 seconds, sent as it is', row === 'published avc1 1280x720 3 post', row)

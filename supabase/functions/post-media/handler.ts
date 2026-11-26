@@ -145,7 +145,39 @@ export async function drain(deps: Deps, source: 'scheduled' | 'request' | 'moder
   })
   if (!done.ok) deps.log('drain_record_failed', { source, deleted: deleted.length })
   if (failed.length) deps.log('drain_failures', { source, failed: failed.length })
+  await reportDeletions(deps, source)
   return { ok: done.ok, deleted: deleted.length, failed: failed.length }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+/**
+ * The deletion register (20261216000000, docs/RECOVERY.md): completed
+ * deletions and restores, written to this function's log, which Supabase keeps
+ * outside the database, so a database restore cannot take them back. Ids and
+ * times only. Rows are marked reported only after they are logged; a row that
+ * fails to log is simply reported on the next pass.
+ */
+export async function reportDeletions(deps: Deps, source: string): Promise<number> {
+  const r = await deps.serviceRpc('svc_deletion_register_unreported', { p_limit: 200 })
+  if (!r.ok) {
+    // Before 20261216000000 the function does not exist: nothing to report.
+    if (r.status !== 404) deps.log('deletion_register_read_failed', { source })
+    return 0
+  }
+  const rows = (Array.isArray(r.data) ? r.data : []) as Array<Record<string, unknown>>
+  const ids: number[] = []
+  for (const row of rows) {
+    if (typeof row.id !== 'number' || typeof row.target_id !== 'string' || !UUID_RE.test(row.target_id)
+        || !['account', 'post', 'comment'].includes(String(row.kind)) || !['deleted', 'restored'].includes(String(row.event))
+        || typeof row.occurred_at !== 'string') continue
+    deps.log('deletion_register', { id: row.id, kind: String(row.kind), target_id: row.target_id, change: String(row.event), occurred_at: row.occurred_at })
+    ids.push(row.id)
+  }
+  if (ids.length === 0) return 0
+  const marked = await deps.serviceRpc('svc_deletion_register_reported', { p_ids: ids })
+  if (!marked.ok) deps.log('deletion_register_mark_failed', { source, logged: ids.length })
+  return ids.length
 }
 
 export async function handle(req: Request, action: string, deps: Deps): Promise<Response> {
@@ -165,6 +197,16 @@ export async function handle(req: Request, action: string, deps: Deps): Promise<
   // Authentication first, for every member action, before reading the body or touching anything.
   if (!(await deps.verifyUser(token, key))) return json(401, { error: 'not_signed_in' })
   const asCaller = (fn: string, body: Record<string, unknown>) => deps.userRpc(token, fn, body, key)
+
+  if (action === 'deletions') {
+    // Right after a member, moderator or the founder deletes or restores an
+    // account, post or comment: write the deletion register to the log now
+    // instead of at the next scheduled drain (which still retries anything
+    // left). It reads nothing from the request and returns only a count; the
+    // rows are ids and times, and logging one twice is harmless.
+    const n = await reportDeletions(deps, 'request')
+    return json(200, { reported: n })
+  }
 
   if (action === 'photo') {
     const bytes = await readBody(req, MAX_INPUT_BYTES)

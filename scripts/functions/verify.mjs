@@ -28,7 +28,7 @@ import { sourceDigest } from './source-digest.mjs'
 
 export const ROUTES = {
   avatar: ['upload', 'remove', 'urls', 'cleanup'],
-  'post-media': ['photo', 'links', 'cleanup', 'mod-photo', 'mod-drain', 'check', 'drain'],
+  'post-media': ['photo', 'links', 'cleanup', 'deletions', 'mod-photo', 'mod-drain', 'check', 'drain'],
 }
 const PREVIEW = 'https://splitpost-app-git-main-crevant.vercel.app'
 const MEMBER_APP = 'https://app.splitpost.ca'

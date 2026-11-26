@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { AppApiError, createSupabaseApi, isMissingFunction, isMissingRequestIdVersion } from './api'
+import { AppApiError, DELETION_REGISTER_RPCS, createSupabaseApi, isMissingFunction, isMissingRequestIdVersion } from './api'
 
 // The exact answers local Supabase gave when the request id versions were not
 // deployed (PostgREST lists the parameters it searched for, alphabetically).
@@ -489,5 +489,58 @@ describe('a media function that never answers is not blamed on the connection', 
       if (desc) Object.defineProperty(globalThis, 'navigator', desc)
       else delete (globalThis as { navigator?: unknown }).navigator
     }
+  })
+})
+
+// The deletion register (docs/RECOVERY.md): a completed deletion or restore is
+// reported to the post-media log at once; the deletion never waits for it or fails because of it.
+describe('reporting deletions right away', () => {
+  function reportingClient(invoke: () => Promise<unknown>) {
+    const invoked: string[] = []
+    const rpcs: string[] = []
+    const client = {
+      async rpc(fn: string) {
+        rpcs.push(fn)
+        return { data: null, error: null }
+      },
+      functions: {
+        invoke(name: string) {
+          invoked.push(name)
+          return invoke()
+        },
+      },
+    }
+    return { api: createSupabaseApi(client as unknown as SupabaseClient, 'u1'), invoked, rpcs }
+  }
+
+  it('after a member deletes a post or comment, and after moderator and founder removals, it asks post-media to report', async () => {
+    const { api, invoked, rpcs } = reportingClient(async () => ({ data: { reported: 1 }, error: null }))
+    await api.deletePost('p1')
+    await api.deleteComment('c1')
+    await api.modRestore('r1')
+    expect(rpcs).toEqual(['app_delete_post', 'app_delete_comment', 'app_mod_restore'])
+    expect(invoked).toEqual(['post-media/deletions', 'post-media/deletions', 'post-media/deletions'])
+  })
+
+  it('does not report after calls that delete nothing', async () => {
+    const { api, invoked } = reportingClient(async () => ({ data: null, error: null }))
+    await api.modDismiss('r1')
+    expect(invoked).toEqual([])
+  })
+
+  it('a failed or unavailable report never fails the deletion', async () => {
+    const rejected = reportingClient(() => Promise.reject(new Error('Failed to fetch')))
+    await rejected.api.deletePost('p1') // rejects the test if the deletion fails
+    const thrown = reportingClient(() => {
+      throw new Error('functions unavailable')
+    })
+    await thrown.api.deleteComment('c1')
+  })
+
+  it('covers every function that deletes or restores an account, post or comment', () => {
+    expect([...DELETION_REGISTER_RPCS].sort()).toEqual([
+      'app_delete_comment', 'app_delete_post', 'app_founder_delete_member', 'app_mod_decide_appeal',
+      'app_mod_enforce', 'app_mod_hide', 'app_mod_lift', 'app_mod_restore',
+    ])
   })
 })

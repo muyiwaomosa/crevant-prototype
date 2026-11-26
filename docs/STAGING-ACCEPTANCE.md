@@ -6,55 +6,31 @@ Production batch PB-1, which needs its own approval, is at the end.
 
 ## 0. Founder action guide (start here)
 
-Only what is still outstanding. Done so far: every merged migration through
-20261215000000 is on staging (last run 45736045685, Nov 26 03:15 UTC, all
-staging checks passed), and the `staging` app branch is at the latest merge.
+One prioritized list of what is still yours, in order. Done so far: every
+merged migration through 20261215000000 is on staging (run 45736045685, all
+checks passed); founder media acceptance passed on Nov 26 (BUG-001 to 003
+closed); the deletion register is approved (D7, conditional) and goes to
+staging with PR #120.
 
-**Priority 1. Video readiness (in order)**
+**Why this order:** on the Free plan the project-wide upload limit cannot
+exceed 50 MB, so the 110 MB video limit (and the 5-minute device-test clips)
+needs staging on Pro first. The transfer also gives staging its daily
+backups, which the recovery exercise on staging needs.
 
-| # | Action | Where, exactly | Depends on | Expected result | How Claude verifies |
+| # | Action (time) | Exactly where and how | Depends on | Expected result | Claude then |
 |---|---|---|---|---|---|
-| V1 | **Deploy post-media to staging at the current approved code** (10 minutes). Staging runs commit 27b323a, from before video. On your computer, signed in with `supabase login`, with the pinned CLI 2.122.1 and Node 22, in a clean clone: `git fetch origin && git checkout 40a055bfd5b1712eafe812183a595e4f72182ed3`, then `node scripts/functions/deploy.mjs deploy --target staging --function post-media --commit 40a055bfd5b1712eafe812183a595e4f72182ed3 --operator founder --confirm "DEPLOY post-media TO kpudeppgokpjhvaqrprn"` (`docs/FUNCTIONS-DEPLOYMENT.md`) | Your computer | Nothing | The script prints `deployed, unverified` and a version number; send Claude the version | Runs **Verify Edge Functions** (staging, post-media, deployed, that commit and version), then opens the ledger PR whose merge is your approval |
-| V2 | **Storage upload limit of at least 110 MB** (2 minutes) | Supabase, `crevant-staging`, **Storage, Settings**, *Upload file size limit*: 110 MB or more, then Save | Nothing | The limit reads 110 MB or more (the `post-videos` bucket itself already allows 110 MB) | A too-low limit shows as a clear upload error on the test page |
-| V3 | **Video device test** (`docs/video/DEVICE-TEST.md`; half a day): iPhone Safari and Android Chrome, a 1 and a 5 minute clip each; then record each result and the storage cap (50 GB proposed) in Control Center, Video posts | `/app/video-test` on both phones | V1 and V2 | A pass or fail per device | Reads the results; proposes the 1080p fallback only if the iPhone fails |
-| V4 | Turn on **New video uploads** on staging | Control Center, Operational switches, with a reason | V3 passes (the server refuses otherwise) | Members can post videos on staging; Production stays off | Runs the video checks on staging |
-
-Already in place on staging: the private `post-videos` bucket (MP4 and JPEG,
-110 MB); video playback on; new video posts off until V3; device-test uploads
-allowed for the founder and testers while posts are off.
-
-**Priority 2. The rest of staging activation**
-
-| # | Action | Where | Depends on | Expected result | How Claude verifies |
-|---|---|---|---|---|---|
-| A2 | **Resend sends staging email**, if not done (15 minutes plus DNS time). Needed before other testers can register or reset passwords | Resend and Supabase, section 2, step B | Nothing | A password reset arrives from "Splitpost" | Asks you to confirm the email arrived |
-| A3 | **Supabase Auth**, if not done (10 minutes) | Supabase dashboard, section 2, step C | Nothing | Signing up through an invitation link works; a sign up without a link is refused | Runs the staging checks again |
-| A4 | **Activation:** you can sign in as founder (done Nov 26). Confirm you also have an invitation link and the moderator role | Supabase SQL editor, section 2, step D, only if either is missing | Nothing | Profile shows your invitation link; Moderation is available | Checks registration is open on staging only |
-
-**Priority 3. Hands-on acceptance (continuing)**
-
-| # | Action | Where | Expected result |
-|---|---|---|---|
-| A6 | The remaining journeys in section 3 (the media rows are accepted; see the results table) | The staging app | Each row behaves as written; anything that doesn't goes in Feedback |
-| A8 | Real-device speed check (Journey 9, row 61) | Your phone, Wi-Fi off | Sign-in in about 2 s, Home in about 3 s |
-
-**Priority 4. Decisions**
-
-| # | Decision | Where | Recommended |
-|---|---|---|---|
-| B1 | Supabase consolidation: move `crevant-staging` into Splitpost Production (it gains daily backups), then delete `splitpost-members-rehearsal-v2` | `docs/INFRASTRUCTURE.md` | Yes: about $45 a month before and after |
-| B5 | The deletion register (deleted accounts and posts stay deleted after a restore) | `docs/RECOVERY.md` | Yes: no new service; a migration (D7) and a post-media change |
-
-After B1: transfer the project (Supabase, `crevant-staging`, Settings, General,
-Transfer project), then the next day confirm Database, Backups lists a daily
-backup, then delete the rehearsal project.
-
-**Priority 5. Independent (any time)**
-
-| # | Action | Where | Expected result |
-|---|---|---|---|
-| C1 | PB-1 member Production operations, section 4 | Resend, Supabase, GitHub | Production email, drain key and health checks in place |
-| C2 | Legal review: Rewards Rules, the pilot privacy notice (including the media backup line), regulated financial products | `docs/policies/` | Reviewed text |
+| **1** | **Deploy post-media to staging** (10 min): video, the deletion register reporting and every fix since 27b323a, in one deployment | On your computer, signed in with `supabase login`, CLI 2.122.1, Node 22, in a clean clone: `git fetch origin && git checkout <PR #120 merge commit>`, then `node scripts/functions/deploy.mjs deploy --target staging --function post-media --commit <PR #120 merge commit> --operator founder --confirm "DEPLOY post-media TO kpudeppgokpjhvaqrprn"`. Claude sends the commit with the merge; it replaces the earlier V1 | PR #120 merged and its migration applied (Claude) | The script prints `deployed, unverified` and a version number; send it to Claude | Runs Verify Edge Functions (every route, including `/deletions`), opens the ledger PR (its merge is your approval), checks the cleanup job ran and a test deletion was reported at once |
+| **2** | **Transfer prerequisites** (5 min) | Supabase: Crevant, Team: you are Owner. Splitpost Production, Team: same login. Crevant, Billing: nothing overdue. `crevant-staging`, Project Settings, Integrations: disconnect GitHub if connected | Nothing | All four true; tell Claude | Records the baseline (`docs/INFRASTRUCTURE.md`, 2a) |
+| **3** | **Transfer `crevant-staging` to Splitpost Production** (5 min, no downtime) | `crevant-staging`, Project Settings, General, Transfer project, Splitpost Production; read the added compute (about $10 a month), confirm | 2 | Same name and reference, now under Splitpost Production | Within the hour: staging checks, sign-in, Edge Functions, cleanup job (T4) |
+| **4** | **Storage upload limit 110 MB** (2 min) | `crevant-staging`, Storage, Settings, *Global file size limit*: 110 MB, Save (the `post-videos` bucket already allows 110 MB; on Free it cannot go above 50 MB) | 3 | The limit reads 110 MB | A too-low limit shows as a clear upload error on the test page |
+| **5** | **Video device test** (half a day) | `/app/video-test` on the staging app, on an iPhone (Safari) and an Android phone (Chrome): a 1-minute and a 5-minute clip each (`docs/video/DEVICE-TEST.md`). Then Control Center, Video posts: record each result, and set the storage cap (50 GB proposed) | 4. Founder and testers only | A pass or fail per phone, recorded | Reads the results; proposes the 1080p fallback only if the iPhone fails |
+| **6** | **Turn on New video uploads (staging only)** | Control Center, Operational switches, with a reason | 5 passes and the cap is set (the server refuses otherwise) | Members can post videos on staging; Production stays off | Runs the video checks on staging |
+| **7** | **Next day: confirm backups, then decide on the rehearsal project** | `crevant-staging`, Database, Backups: one daily backup listed. Then, only if you are sure the Nov 22 rehearsal is finished and nothing in it is needed, tell Claude you authorize deleting `splitpost-members-rehearsal-v2` (or delete it: Project Settings, General, Delete project; irreversible) | 3, plus one day | A backup is listed; the total returns to about $45 a month after the deletion | Runs the recovery exercise on staging (completes the deletion safeguard) |
+| **8** | **Staging email and Auth**, if not done | Section 2, steps B and C (Resend, Supabase Auth) | Nothing | A password reset arrives from "Splitpost"; sign-up without an invitation link is refused | Runs the staging checks |
+| **9** | **Confirm your invitation link and moderator role** | Section 2, step D, only if either is missing | Nothing | Profile shows the link; Moderation is available | Checks registration is open on staging only |
+| **10** | **Remaining acceptance** (section 3; media rows already accepted, not repeated) | The staging app | 1 for video and deletion reporting | Each row behaves as written; anything else goes in Feedback | Fixes defects as reported |
+| **11** | **Real-device speed check** (Journey 9, row 61) | Your phone, Wi-Fi off | Nothing | Sign-in in about 2 s, Home in about 3 s | Investigates if slower |
+| **12** | Independent, any time: PB-1 member Production operations (section 4); legal review of the Rewards Rules, the pilot privacy notice (including the media backup line and the deletion register row) and regulated financial products (`docs/policies/`) | Resend, Supabase, GitHub; counsel | Nothing | Production email and health checks in place; reviewed text | Updates the drafts |
 
 ### Infrastructure status (Nov 26)
 
@@ -72,12 +48,12 @@ backup, then delete the rehearsal project.
   spend cap on)** holds member Production, the waitlist and the disposable
   rehearsal project. **Crevant (Free)** holds `crevant-staging`, which
   therefore has **no backups** and pauses after a week of inactivity until it
-  is moved (B1 to B3). Every merged migration through 20261215000000 is
+  is moved (actions 2, 3 and 7). Every merged migration through 20261215000000 is
   applied on staging.
 * **Recovery:** approved pilot objectives, RPO 24 hours and RTO 4 hours (not
   service commitments), in force for staging after its transfer; no separate
   photo and video backup during the controlled pilot, disclosed in the
-  composer; the deletion safeguard is not complete (B5). Procedure in
+  composer; the deletion safeguard is approved (D7) and demonstrated locally; it is complete after the staging exercise (action 7). Procedure in
   `docs/RECOVERY.md`, drilled in every CI run.
 * **GitHub Actions:** six CI jobs per push (about 10 minutes of runner time).
 
@@ -95,9 +71,9 @@ app branch follows `main`, so you can accept features as they land.
 |---|---|---|
 | Database | Every merged migration, up to 20261215000000, applied Nov 26 at 03:15 (run 45736045685), all staging checks passed | Nothing |
 | Next database deploy | None pending | Approve a run only when one appears |
-| Backups | None: staging is on the Free plan | B1 to B3 |
+| Backups | None: staging is on the Free plan | Actions 2, 3 and 7 |
 | Staging app (Vercel) | Builds the `staging` branch (at merged main); behind your Vercel login | A1: confirm it loads, the commit and the Preview variables |
-| Email | Supabase's default sender: team addresses only, about two an hour | A2 |
+| Email | Supabase's default sender: team addresses only, about two an hour | Action 8 |
 | Auth (sign up through links, the account hook, Splitpost emails) | Not configured | A3 (ready now) |
 | Testers can register; previews; a moderator | Closed / off / none | A4 |
 
