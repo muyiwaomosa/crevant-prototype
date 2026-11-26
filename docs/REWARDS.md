@@ -42,3 +42,11 @@ themselves (their own profile and content), the referrer earns
 way it happens once per referred member, only for the direct referrer (no
 downstream recruitment rewards), never for yourself, and only for adults with
 a verified email.
+
+The 20 points and the limit of 5 a day are **pilot parameters** (founder,
+Nov 26), kept until economic validation. They live in the `sim.point_rules`
+row for `own_audience_referral` in the current rule version, not in code, so
+changing them is a new rule version (an economic change, which needs founder
+approval and a reviewed migration) with no code change. Recognition points and
+redeemable referral points stay separate: recognition never enters the
+redeemable pool or a settlement.
