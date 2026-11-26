@@ -15,6 +15,32 @@ Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 branch, fast-forwarded only to merged `main`). Founder actions and acceptance
 steps: `docs/STAGING-ACCEPTANCE.md` (section 0 is the action guide).
 
+## Two workstreams (from Nov 26)
+
+**Workstream A: release readiness** (December 23 gates). Staging acceptance,
+real-device video test (in progress, founder), the staging recovery exercise
+(after the first daily backup), security and privacy validation, legal
+readiness, Production batches PB-1 to PB-4. Rows below.
+
+**Workstream B: product experience** (founder review, Nov 26;
+`docs/design/SP-REFINE-001.md`, previews
+https://claude.ai/artifact/LT9k8aSFrFMz6MxRqtsvQ9).
+
+| Item | Stage | Evidence | Next |
+|---|---|---|---|
+| H1 Home: one feed, Clique row with the approved rings and counts, catch-up then earlier posts (approved decision) | **Tested** | Unit suite (892) and the six affected journeys pass; a phone layout defect found and fixed (screen-reader text widened the page) | Merge after the full browser suite; then on staging |
+| V1 Visual fidelity: logo header, immersive post cards, Home without the composer | Proposed (preview 1) | Discrepancies listed in SP-REFINE-001, section 1 | Founder confirms the preview |
+| D1 Discover: search first, For you, People, Topics | Proposed (previews 2, 3) | | Founder confirms |
+| P1 Profile: public profile versus Your insights; Reach, Connection, Earnings | Proposed (previews 4, 5) | | Founder confirms |
+| F1 Connection framework: goals, private Connection Score, one points currency | Proposal | SP-REFINE-001, sections 5 and 7 | Founder decisions 3 and 6; recommended after December 23 |
+| F2 Creator qualification and locked earnings | Proposal | SP-REFINE-001, section 6 (accounting and legal implications) | Founder decisions 4 and 5; legal review |
+| F3 Interactive advertising (message comprehension) | Proposal | SP-REFINE-001, section 8 | Founder decision 7 |
+| L1 Landing page visual assets | Not started | Prepared from the approved screens once V1 lands; not published before approval | After V1 |
+
+**Impact on December 23:** H1, V1, D1 and P1 are about 7 working days of UI
+work with no database change; confirmed previews by December 1 keep
+December 23. F1 to F3 are not proposed for December 23.
+
 ## Deliverables
 
 | Deliverable | Stage | Evidence | Next step |
