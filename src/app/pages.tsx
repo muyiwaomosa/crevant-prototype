@@ -65,12 +65,15 @@ function PostList({
   loadOlder,
   onDeleted,
   hide,
+  grid = false,
 }: {
   posts: Post[]
   loadOlder: (before: PostCursor) => Promise<Post[]>
-  onDeleted: (id: string) => void
+  onDeleted?: (id: string) => void
   /** Posts already shown elsewhere on the page (Clique first): skipped here, but paging still continues after them. */
   hide?: Set<string>
+  /** Profiles (SP-DESIGN-002): a three-column grid that opens each post, with the same paging. */
+  grid?: boolean
 }) {
   const [older, setOlder] = useState<Post[]>([])
   const [done, setDone] = useState(posts.length < 20)
@@ -105,16 +108,26 @@ function PostList({
 
   return (
     <div className="space-y-3">
-      {shown.map((p) => (
-        <PostItem
-          key={p.id}
-          post={p}
-          onDeleted={(id) => {
-            setOlder((o) => o.filter((x) => x.id !== id))
-            onDeleted(id)
-          }}
-        />
-      ))}
+      {grid ? (
+        <ul className="grid grid-cols-3 gap-1 overflow-hidden rounded-[18px]" data-testid="profile-grid">
+          {shown.map((p) => (
+            <li key={p.id}>
+              <PostTile post={p} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        shown.map((p) => (
+          <PostItem
+            key={p.id}
+            post={p}
+            onDeleted={(id) => {
+              setOlder((o) => o.filter((x) => x.id !== id))
+              onDeleted?.(id)
+            }}
+          />
+        ))
+      )}
       {error !== null && <ErrorNote error={error} />}
       {!done && all.length > 0 && (
         <div className="flex justify-center pt-2">
@@ -773,26 +786,9 @@ export function MemberPage() {
               : `${m.displayName} hasn't posted yet. Follow them to see their posts on Home when they do.`}
         </Message>
       )}
-      {/* Approved design (SP-DESIGN-002): someone else's posts as a grid that opens each post; your own keep their edit and delete. */}
-      {posts.data && posts.data.length > 0 && !m.isMe && (
-        <ul className="grid grid-cols-3 gap-1 overflow-hidden rounded-[18px]" data-testid="profile-grid">
-          {posts.data.map((p) => (
-            <li key={p.id}>
-              <PostTile post={p} />
-            </li>
-          ))}
-        </ul>
-      )}
-      {posts.data && posts.data.length > 0 && m.isMe && (
-        <PostList
-          posts={posts.data}
-          loadOlder={(before) => api.memberPosts(m.id, before)}
-          onDeleted={(id) => {
-            posts.setData((d) => d?.filter((p) => p.id !== id))
-            void member.reload()
-          }}
-        />
-      )}
+      {/* Approved design (SP-DESIGN-002): posts as a grid that opens each post. The owner edits or deletes a post from its own page. */}
+      {posts.data && posts.data.length > 0 && <PostList grid posts={posts.data} loadOlder={(before) => api.memberPosts(m.id, before)} />}
+      {m.isMe && posts.data && posts.data.length > 0 && <p className="mt-3 text-[13px] text-ink-600">Open a post to edit or delete it.</p>}
     </>
   )
 }
@@ -1185,15 +1181,7 @@ function ProfileHome() {
           </Link>
         </div>
       )}
-      {posts.data && posts.data.length > 0 && memberId && (
-        <ul className="grid grid-cols-3 gap-1 overflow-hidden rounded-[18px]" data-testid="profile-grid">
-          {posts.data.map((p) => (
-            <li key={p.id}>
-              <PostTile post={p} />
-            </li>
-          ))}
-        </ul>
-      )}
+      {posts.data && posts.data.length > 0 && memberId && <PostList grid posts={posts.data} loadOlder={(before) => api.memberPosts(memberId, before)} />}
       <p className="mt-3 text-[13px] text-ink-600">Open a post to edit or delete it. Your Clique, saved posts, blocked members and privacy are in Settings.</p>
       <nav aria-labelledby="settings-title" className="mt-6">
         <h2 id="settings-title" className="mb-2 font-display text-lg font-bold text-ink-900">
