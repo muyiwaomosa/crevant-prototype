@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UX Refinements Preview</title>
+<!-- SP-UX-REFINE-001 design previews (UX-03, UX-04, UX-05). Design source only, not application code.
+     Sample people and numbers. Goal names and targets are the approved SP-PRG-001 v1.0 benchmarks. -->
+<style>
+@font-face{font-family:Archivo;src:url(../../../node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2) format('woff2');font-weight:100 900;font-stretch:62% 125%}
+@font-face{font-family:Inter;src:url(../../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2) format('woff2');font-weight:100 900}
+:root{--primary:#2447a6;--deep:#172f70;--seafoam:#a8d9cf;--sea-tint:#e7f4f1;--sea-text:#1f5e52;--green:#0f7a64;--apricot:#f6b888;--apricot-tint:#fef4ec;--apricot-text:#94481a;
+--ivory:#faf7f1;--card:#fff;--ink:#1b2430;--muted:#4e5a68;--line:#e9e4da;--blue-50:#eef2fb;--blue-100:#dce4f6;--muted-dark:#d3def3;
+--display:Archivo,'Arial Narrow',system-ui,sans-serif;--body:Inter,system-ui,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--body);color:var(--ink);background:#ece7dc;-webkit-font-smoothing:antialiased}
+.d{font-family:var(--display);font-stretch:108%;letter-spacing:-.02em}
+.board{padding:40px;display:flex;flex-direction:column;gap:48px}
+.board>h1{font:800 30px var(--display);font-stretch:108%}
+.board>p.lead{max-width:900px;color:var(--muted);font-size:15px;line-height:1.5;margin-top:-30px}
+.row{display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start}
+.cap{width:390px}
+.cap .label{font:700 14px var(--body);margin-bottom:4px}
+.cap .note{font:500 12.5px/1.45 var(--body);color:var(--muted);margin-bottom:12px;min-height:36px}
+.phone{width:390px;height:844px;border-radius:46px;background:var(--ivory);overflow:hidden;position:relative;box-shadow:0 0 0 9px #11161c,0 0 0 10px #2c333b,0 30px 60px -20px rgba(18,37,90,.45);display:flex;flex-direction:column}
+.status{height:44px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 30px 6px;font:600 15px var(--body);flex:none}
+.top{display:flex;align-items:center;justify-content:space-between;padding:6px 18px 8px}
+.brand{display:flex;align-items:center;gap:8px;font:850 21px var(--display);font-stretch:110%;letter-spacing:-.03em;color:var(--ink)}
+.brand i{width:28px;height:28px;border-radius:50%;background:var(--primary);display:inline-block;position:relative}
+.brand i:after{content:"";position:absolute;left:7px;right:7px;top:9px;height:9px;border-radius:3px;background:#fff;transform:skewY(-14deg)}
+.top small{font:600 13px var(--body);color:var(--primary)}
+.scroll{flex:1;min-height:0;overflow:hidden;padding:0 14px}
+.h1{font:800 26px var(--display);font-stretch:108%;letter-spacing:-.02em;margin:4px 4px 2px}
+.sub{font-size:13.5px;color:var(--muted);margin:0 4px 10px}
+.faces{background:#efe9de;border-radius:999px;padding:4px;display:flex;margin:0 0 12px}
+.faces span{flex:1;text-align:center;font:600 13.5px var(--body);color:var(--muted);padding:8px 0;border-radius:999px}
+.faces span.on{background:var(--primary);color:#fff;box-shadow:0 4px 12px -4px rgba(36,71,166,.6)}
+.card{background:var(--card);border-radius:24px;padding:16px;box-shadow:0 1px 2px rgba(19,25,27,.06),0 0 0 1px rgba(19,25,27,.05);margin-bottom:12px}
+.hero{background:var(--primary);color:#fff;border-radius:26px;padding:18px;margin-bottom:12px;box-shadow:0 18px 30px -20px rgba(23,47,112,.8)}
+.hero .k{font:600 13px var(--body);color:var(--muted-dark)}
+.hero .big{font:850 44px var(--display);font-stretch:106%;letter-spacing:-.03em;margin:2px 0 2px}
+.sim{display:inline-flex;align-items:center;gap:5px;background:var(--sea-tint);color:var(--sea-text);font:700 11px var(--body);border-radius:999px;padding:3px 9px}
+.hero .two{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.hero .two div{background:rgba(255,255,255,.1);border-radius:16px;padding:10px 12px}
+.hero .two b{display:block;font:800 21px var(--display);font-stretch:106%}
+.hero .two small{font:500 12px var(--body);color:var(--muted-dark)}
+.lockbar{margin-top:14px}
+.lockbar .bar{height:10px;border-radius:999px;background:rgba(255,255,255,.18);overflow:hidden;display:flex}
+.lockbar .bar i{display:block;height:100%}
+.lockbar .leg{display:flex;justify-content:space-between;font:600 12px var(--body);margin-top:6px;color:#fff}
+.lockbar .leg span{display:flex;align-items:center;gap:6px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.hero p.plain{font:500 13px/1.45 var(--body);color:#e7edf9;margin-top:12px}
+.more{display:flex;justify-content:space-between;align-items:center;font:700 13.5px var(--body);color:var(--primary)}
+.defs{margin-top:10px;display:grid;gap:9px}
+.defs div{font-size:13px;line-height:1.45;color:var(--muted)}
+.defs b{color:var(--ink)}
+.sech{display:flex;justify-content:space-between;align-items:baseline;margin:6px 4px 8px}
+.sech h3{font:800 17px var(--display);font-stretch:105%}
+.sech a{font:600 12.5px var(--body);color:var(--primary)}
+.goal{display:flex;gap:12px;align-items:center}
+.ringw{width:54px;height:54px;flex:none;position:relative}
+.ringw b{position:absolute;inset:0;display:grid;place-items:center;font:800 13px var(--display)}
+.goal .t{font:700 14.5px var(--body)}
+.goal .s{font:500 12.5px var(--body);color:var(--muted)}
+.next{margin-top:12px;background:var(--apricot-tint);border-radius:16px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.next span{font:600 13px/1.35 var(--body);color:#5a2a0b}
+.next span.btn{color:#fff;font:700 13px var(--body)}
+.btn{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:var(--primary);color:#fff;font:700 13px var(--body);padding:9px 14px;white-space:nowrap}
+.btn.sec{background:#fff;color:var(--primary);box-shadow:inset 0 0 0 1.5px var(--blue-100)}
+.btn.lg{padding:13px 18px;font-size:15px;width:100%}
+.steps{list-style:none;display:grid;gap:10px;margin-top:12px}
+.steps li{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;font-size:13.5px}
+.steps .c{width:22px;height:22px;border-radius:50%;background:#e6e1d6;display:grid;place-items:center;color:#fff;font:800 12px var(--body)}
+.steps .c.ok{background:var(--green)}
+.steps .n{font:600 12px var(--body);color:var(--muted);font-variant-numeric:tabular-nums}
+.pbar{grid-column:2/4;height:6px;border-radius:999px;background:#efe9de;overflow:hidden;margin-top:-4px}
+.pbar i{display:block;height:100%;background:var(--primary);border-radius:999px}
+.pbar i.ok{background:var(--green)}
+.go{grid-column:2/4;font:700 12.5px var(--body);color:var(--primary);margin-top:-4px}
+.done{background:var(--sea-tint);border-radius:20px;padding:14px;display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.done .badge{width:44px;height:44px;border-radius:50%;background:var(--green);display:grid;place-items:center;flex:none;box-shadow:0 0 0 5px #cdebe4}
+.done b{display:block;font:800 15px var(--display);font-stretch:105%;color:#173f37}
+.done span{font:500 12.5px/1.4 var(--body);color:var(--sea-text)}
+.act{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.act:first-of-type{border-top:0}
+.act .ic{width:34px;height:34px;border-radius:12px;background:var(--blue-50);display:grid;place-items:center;color:var(--primary);font:800 14px var(--body)}
+.act b{font:600 13.5px var(--body);display:block}
+.act small{font:500 12px var(--body);color:var(--muted)}
+.act .st{font:700 11px var(--body);border-radius:999px;padding:3px 8px;background:#efe9de;color:var(--muted)}
+.pts{display:flex;justify-content:space-between;align-items:baseline}
+.pts b{font:850 28px var(--display)}
+.toast{position:absolute;left:14px;right:14px;bottom:100px;background:#13203f;color:#fff;border-radius:18px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 20px 40px -14px rgba(0,0,0,.5)}
+.toast .badge{width:32px;height:32px;border-radius:50%;background:var(--green);display:grid;place-items:center;flex:none}
+.toast b{font:700 13.5px var(--body);display:block}
+.toast span{font:500 12px var(--body);color:#c9d4ea}
+.nav{height:84px;flex:none;background:rgba(250,247,241,.96);border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:flex-start;padding:10px 8px 0}
+.nav a{display:flex;flex-direction:column;align-items:center;gap:4px;font:600 10.5px var(--body);color:var(--muted);width:64px}
+.nav a i{width:24px;height:24px;border-radius:7px;border:2px solid currentColor;display:block}
+.nav a.on{color:var(--primary)}
+.nav a.cr i{width:48px;height:48px;border-radius:50%;background:var(--primary);border:0;margin-top:-6px}
+.post{background:#fff;border-radius:22px;padding:14px;box-shadow:0 1px 0 var(--line);margin-bottom:12px}
+.post .who{display:flex;gap:9px;align-items:center;margin-bottom:8px}
+.av{width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font:700 13px var(--body)}
+.post .who b{font:700 14px var(--body);display:block}
+.post .who small{font:500 12px var(--body);color:var(--muted)}
+.post p{font:600 16px/1.35 var(--body)}
+.tip{background:#fff;border-radius:20px;padding:14px;border:2px solid var(--blue-100);margin-bottom:12px;position:relative}
+.tip .k{font:800 11px var(--body);letter-spacing:.06em;color:var(--primary);text-transform:uppercase}
+.tip p{font:500 13.5px/1.45 var(--body);margin-top:4px}
+.tip .row2{display:flex;justify-content:flex-end;margin-top:8px}
+/* walkthrough */
+.wt{flex:1;display:flex;flex-direction:column;padding:8px 24px 30px}
+.wt .skip{align-self:flex-end;font:600 14px var(--body);color:var(--muted)}
+.wt .art{height:300px;border-radius:30px;margin:16px 0 26px;display:grid;place-items:center;position:relative;overflow:hidden}
+.wt h2{font:850 30px/1.08 var(--display);font-stretch:106%;letter-spacing:-.03em}
+.wt p{font:500 16px/1.5 var(--body);color:var(--muted);margin-top:12px}
+.wt .foot{margin-top:auto}
+.dots{display:flex;gap:6px;justify-content:center;margin-bottom:16px}
+.dots i{width:8px;height:8px;border-radius:999px;background:#d9d2c4;display:block}
+.dots i.on{width:22px;background:var(--primary)}
+.wt .fine{font:500 12.5px/1.4 var(--body);color:var(--muted);text-align:center;margin-top:10px}
+/* desktop */
+.desk{width:1280px;height:820px;border-radius:18px;background:var(--ivory);overflow:hidden;display:flex;box-shadow:0 0 0 1px #d6cfc2,0 30px 60px -24px rgba(18,37,90,.4)}
+.side{width:256px;border-right:1px solid var(--line);padding:26px 20px;display:flex;flex-direction:column;gap:6px}
+.side .brand{margin-bottom:28px}
+.side a{display:flex;align-items:center;gap:12px;font:600 15px var(--body);color:var(--muted);padding:12px 14px;border-radius:14px}
+.side a i{width:20px;height:20px;border-radius:6px;border:2px solid currentColor;display:block}
+.side a.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.side a.cr{background:var(--primary);color:#fff}
+.dmain{flex:1;padding:30px 48px;overflow:hidden}
+.dgrid{display:grid;grid-template-columns:1.15fr 1fr;gap:20px;max-width:960px}
+.legend{font-size:13px;color:var(--muted);line-height:1.5;max-width:960px}
+</style>
+</head>
+<body>
+<div class="board" id="board"></div>
+<script>
+const ring = (pct, color = '#2447a6', size = 54) => {
+  const r = 22, c = 2 * Math.PI * r
+  return `<svg width="${size}" height="${size}" viewBox="0 0 54 54"><circle cx="27" cy="27" r="${r}" fill="none" stroke="#efe9de" stroke-width="6"/><circle cx="27" cy="27" r="${r}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(c * pct).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 27 27)"/></svg>`
+}
+const check = (s = 14, c = '#fff') => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`
+const lock = (s = 12, c = '#fff') => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.6" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
+const chev = (open) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2447a6" stroke-width="2.6" stroke-linecap="round"><path d="${open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}"/></svg>`
+
+const topBar = `<div class="status"><span>9:41</span><span>●●● ▮</span></div><div class="top"><span class="brand"><i></i>splitpost</span><small>Feedback&nbsp;&nbsp;Your account</small></div>`
+const nav = (on) => `<div class="nav">${[['Home'], ['Discover'], ['', 'cr'], ['My Split'], ['Profile']].map(([n, c]) => `<a class="${c || ''} ${n === on ? 'on' : ''}"><i></i>${n}</a>`).join('')}</div>`
+const phone = (inner, on = 'My Split', extra = '') => `<div class="phone">${topBar}<div class="scroll">${inner}</div>${extra}${nav(on)}</div>`
+const cap = (label, note, body) => `<div class="cap"><div class="label">${label}</div><div class="note">${note}</div>${body}</div>`
+const faces = (on) => `<div class="faces">${['My Split', 'My Goals', 'My Activity'].map((f) => `<span class="${f === on ? 'on' : ''}">${f}</span>`).join('')}</div>`
+const head = (on) => `<div class="h1">My Split</div><div class="sub">What you've built, what's next, and how you got here.</div>${faces(on)}`
+
+const hero = `<div class="hero" data-k="hero">
+  <div style="display:flex;justify-content:space-between;align-items:center"><span class="k">Your split so far</span><span class="sim">Simulated</span></div>
+  <div class="big">$48.20</div>
+  <div class="two"><div><small>As a creator</small><b>$36.00</b></div><div><small>As a supporter</small><b>$12.20</b></div></div>
+  <div class="lockbar"><div class="bar"><i style="width:0%;background:#a8d9cf"></i><i style="width:100%;background:#f6b888"></i></div>
+    <div class="leg"><span><i class="dot" style="background:#a8d9cf"></i>Unlocked $0.00</span><span>${lock(12)} Locked $48.20</span></div></div>
+  <p class="plain">Locked means you've earned it, but it's held until you reach your goals. Reach them and it unlocks. During the pilot nothing is paid.</p>
+</div>`
+const explain = (open) => `<div class="card"><div class="more">What do these mean? ${chev(open)}</div>${open ? `<div class="defs">
+  <div><b>Your split</b> is everything you've accumulated on Splitpost: as a creator, from ads shown with your posts, and as a supporter, for helping creators grow.</div>
+  <div><b>Locked</b> is earned but held until you reach your goals for that journey.</div>
+  <div><b>Unlocked</b> is yours once your goals are met and checked.</div>
+  <div><b>Settled</b> is what a monthly statement has closed. You'll see it under My Activity.</div>
+  <div><b>Simulated</b> means these are practice amounts for the pilot. Points are not money and nothing is paid.</div></div>` : ''}</div>`
+const nextTeaser = `<div class="sech"><h3>Next for you</h3><a>All goals</a></div>
+<div class="card"><div class="goal"><div class="ringw">${ring(0.6)}<b>3/5</b></div><div><div class="t">Creator goals</div><div class="s">3 of 5 done. Unlocks your $36.00</div></div></div>
+<div class="next"><span>Publish 4 more original posts</span><span class="btn">Create post</span></div></div>`
+
+const goalsCreator = `<div class="card"><div class="goal"><div class="ringw">${ring(0.6)}<b>3/5</b></div><div><div class="t">Creator goals</div><div class="s">Reach all 5 to unlock $36.00</div></div></div>
+<ul class="steps">
+<li><span class="c ok">${check(12)}</span><span>Reach genuine followers</span><span class="n">100 / 100</span></li>
+<li><span class="c ok">${check(12)}</span><span>Be in members' Cliques</span><span class="n">5 / 5</span></li>
+<li><span class="c ok">${check(12)}</span><span>Post in different weeks</span><span class="n">3 / 3</span></li>
+<li><span class="c"></span><span>Publish original posts</span><span class="n">16 / 20</span><span class="pbar"><i style="width:80%"></i></span><span class="go">Create post →</span></li>
+<li><span class="c"></span><span>Have supporters who come back</span><span class="n">2 / 5</span><span class="pbar"><i style="width:40%"></i></span><span class="go">Post for your supporters →</span></li>
+</ul></div>`
+const goalsSupporter = `<div class="card"><div class="goal"><div class="ringw">${ring(0.33, '#0f7a64')}<b>2/6</b></div><div><div class="t">Supporter goals</div><div class="s">Reach all 6 to unlock $12.20</div></div></div>
+<ul class="steps">
+<li><span class="c ok">${check(12)}</span><span>Keep creators in your Clique</span><span class="n">10 / 10</span></li>
+<li><span class="c ok">${check(12)}</span><span>Support different creators</span><span class="n">3 / 3</span></li>
+<li><span class="c"></span><span>Comment, save or repost thoughtfully</span><span class="n">21 / 30</span><span class="pbar"><i style="width:70%"></i></span><span class="go">Find a post to support →</span></li>
+</ul><div class="more" style="margin-top:10px;font-size:12.5px">Show 3 more goals ${chev(false)}</div></div>`
+const completed = `<div class="done"><span class="badge">${check(22)}</span><div><b>Goal complete: Post in different weeks</b><span>3 of 3 weeks. That's 3 of your 5 creator goals done.</span></div></div>`
+
+const activity = `<div class="card"><div class="pts"><span style="font:700 15px var(--body)">Connection Points</span><b>264</b></div>
+<div style="font:500 12.5px/1.4 var(--body);color:var(--muted);margin-top:2px">Recognition for how you help creators grow. Not money.</div></div>
+<div class="sech"><h3>Recent contributions</h3><a>Full history</a></div>
+<div class="card">
+<div class="act"><span class="ic">C</span><div><b>Thoughtful comment</b><small>On a post by @amara · today</small></div><span class="st">Recognized</span></div>
+<div class="act"><span class="ic">S</span><div><b>Saved a post</b><small>@deshawn · yesterday</small></div><span class="st">Recognized</span></div>
+<div class="act"><span class="ic">R</span><div><b>Qualified referral</b><small>Jo joined and followed a creator</small></div><span class="st" style="background:#fef4ec;color:#94481a">Waiting for review</span></div>
+<div class="act"><span class="ic">↗</span><div><b>Shared outside Splitpost</b><small>@amara · Nov 24</small></div><span class="st">Recognized</span></div>
+</div>
+<div class="sech"><h3>Ways to contribute</h3><a>See all</a></div>
+<div class="card" style="font:500 13px/1.45 var(--body);color:var(--muted)">Comment thoughtfully, save, repost or share a post from a creator you value. Bring a friend who joins and follows a creator.</div>`
+
+const toastEx = `<div class="toast"><span class="badge">${check(16)}</span><div><b>Thoughtful comment recognized</b><span>It counts toward your supporter goals: 22 of 30.</span></div></div>`
+const postScreen = `<div class="post"><div class="who"><span class="av" style="background:#0f7a64">AM</span><div><b>Amara Mensah</b><small>@amara · 2h · Food &amp; cooking</small></div></div>
+<p>Tonight: a 20-minute lemon pasta. What's your weeknight go-to?</p>
+<div style="margin-top:12px;font:500 13.5px var(--body);color:var(--muted)">♡ 12&nbsp;&nbsp;&nbsp;💬 4&nbsp;&nbsp;&nbsp;🔖&nbsp;&nbsp;&nbsp;↗</div></div>
+<div class="card" style="font:500 13.5px var(--body)"><b style="font-size:13px">You</b><br>Mine is peanut noodles with whatever greens are left. Adding lemon zest next time!</div>`
+
+const desktop = (inner, on = 'My Split') => `<div class="desk"><div class="side"><span class="brand"><i></i>splitpost</span>${['Home', 'Discover', 'Create post', 'My Split', 'Profile', 'Send feedback'].map((n) => `<a class="${n === on ? 'on' : ''} ${n === 'Create post' ? 'cr' : ''}"><i></i>${n}</a>`).join('')}</div><div class="dmain">${inner}</div></div>`
+
+// ---------------------------------------------------------------- walkthrough
+const WT = [
+  ['#2447a6', 'Welcome to Splitpost', 'A social platform where the value you help create is shared. Creators earn from their audience, and supporters earn for helping the creators they value grow.', 'Next'],
+  ['#0f7a64', 'Build your Clique', 'Follow the creators you value, then choose the ones you want closest for your Clique. Their new posts come first on Home. You can change your Clique at any time.', 'Next'],
+  ['#f6b888', 'Contributions that count', 'A thoughtful comment, a save, a repost or a share helps a creator grow, and Splitpost recognizes it. Quick likes are welcome too; they just don\'t count toward your split.', 'Next'],
+  ['#3156b5', 'Connection Points and goals', 'Recognized contributions earn Connection Points. Your goals show what to do next. When you reach every goal for a journey, we check it and your split unlocks.', 'Next'],
+  ['#172f70', 'Your split, unlocked', 'My Split shows what you\'ve accumulated as a creator and as a supporter. It stays locked until you reach your goals. During the pilot everything is simulated: points are not money and nothing is paid.', 'Start exploring'],
+]
+const art = (i, color) => {
+  const parts = [
+    `<div style="display:flex;gap:-10px">${['#2447a6', '#0f7a64', '#f6b888'].map((c, k) => `<span class="av" style="width:84px;height:84px;font-size:26px;background:${c};margin-left:${k ? -18 : 0}px;border:4px solid #fff">${['AM', 'DJ', 'You'][k]}</span>`).join('')}</div>`,
+    `<div style="display:flex;gap:14px">${['AM', 'DJ', 'LT', '+'].map((t, k) => `<span style="width:64px;height:64px;border-radius:50%;padding:3px;background:conic-gradient(#f6b888,#a8d9cf,#f6b888)"><span class="av" style="width:100%;height:100%;background:${['#0f7a64', '#2447a6', '#94481a', '#c9c1b2'][k]};border:3px solid #fff">${t}</span></span>`).join('')}</div>`,
+    `<div style="display:grid;gap:10px;width:250px">${['Thoughtful comment', 'Saved a post', 'Shared outside Splitpost'].map((t) => `<div style="background:#fff;border-radius:16px;padding:10px 12px;display:flex;gap:10px;align-items:center;font:600 14px var(--body)"><span class="c" style="width:24px;height:24px;border-radius:50%;background:#0f7a64;display:grid;place-items:center">${check(13)}</span>${t}</div>`).join('')}</div>`,
+    `<div style="text-align:center;color:#fff"><div class="ringw" style="width:130px;height:130px;margin:0 auto">${ring(0.6, '#fff', 130).replace('#efe9de', 'rgba(255,255,255,.25)')}<b style="font-size:30px;color:#fff">3/5</b></div><div style="font:700 15px var(--body);margin-top:10px">goals done</div></div>`,
+    `<div style="color:#fff;text-align:center"><div style="font:600 14px var(--body);color:#d3def3">Your split so far</div><div style="font:850 54px var(--display)">$48.20</div><div style="display:flex;gap:8px;justify-content:center;margin-top:6px"><span class="sim">Simulated</span><span class="sim" style="background:#fef4ec;color:#94481a">${lock(11, '#94481a')} Locked</span></div></div>`,
+  ]
+  return `<div class="art" style="background:${i === 2 ? '#fef4ec' : i === 1 ? '#e7f4f1' : color}">${parts[i]}</div>`
+}
+const wtScreen = (i) => {
+  const [color, title, body, cta] = WT[i]
+  return `<div class="phone"><div class="status"><span>9:41</span><span>●●● ▮</span></div><div class="wt">
+<span class="skip">Skip</span>${art(i, color)}<h2>${title}</h2><p>${body}</p>
+<div class="foot"><div class="dots">${WT.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div><span class="btn lg">${cta}</span>
+${i === 4 ? '<div class="fine">You can see this again any time in Profile, Settings, How Splitpost works.</div>' : ''}</div></div></div>`
+}
+
+const board = document.getElementById('board')
+const section = (title, lead, items) => `<section><h1 class="d" style="font-size:24px;margin-bottom:6px">${title}</h1><p style="color:#4e5a68;font-size:14px;max-width:1100px;margin-bottom:22px;line-height:1.5">${lead}</p><div class="row">${items.join('')}</div></section>`
+
+board.innerHTML = `<h1>UX refinements: design previews for approval</h1>
+<p class="lead">UX-03 gamification visibility, UX-04 My Split redesign, UX-05 welcome walkthrough. Sample people and amounts. Goals and targets are the approved SP-PRG-001 v1.0 benchmarks; nothing here adds a point rule, a weight, a leaderboard, an incentive or a threshold.</p>
+${section('UX-04 My Split: phone', 'Three faces in the approved full-screen transition: My Split (what I have), My Goals (what to do), My Activity (what I did). The split is the first thing on screen, with creator and supporter apart, locked and unlocked apart, and Simulated on every amount.', [
+  cap('1. My Split (opens here)', 'Total first, then creator and supporter, then locked versus unlocked. One plain sentence explains locking. The next goal is one tap away.', phone(head('My Split') + hero + explain(false) + nextTeaser)),
+  cap('2. "What do these mean?" opened', 'Progressive disclosure: the terms are explained only when asked for, in plain language.', phone(head('My Split') + hero.replace(/<p class="plain">[\s\S]*?<\/p>/, '') + explain(true))),
+  cap('3. My Goals', 'Each journey as a ring and a list. Done goals are ticked; open ones show a bar and one next action. Supporter goals collapse to the first open ones.', phone(head('My Goals') + goalsCreator + goalsSupporter)),
+  cap('4. My Activity', 'Connection Points, then recent contributions with their status, then ways to contribute. The full history and settled statements sit one tap deeper.', phone(head('My Activity') + activity)),
+])}
+${section('UX-03 Recognition and progress: phone', 'Uses only what the engine already records. Recognition appears when the server records a contribution; a goal is celebrated once when it is met; every open goal has one clear next action.', [
+  cap('5. Immediate recognition', 'After a comment the server recognizes, a short message confirms it and shows progress on the goal it counts toward. Nothing appears for contributions that are not recognized.', phone('<div style="height:8px"></div>' + postScreen, 'Home', toastEx)),
+  cap('6. Goal complete', 'Shown once, at the top of My Goals, when a goal is first met. When every goal is met, it says the split is being checked and will unlock.', phone(head('My Goals') + completed + goalsCreator)),
+])}
+${section('UX-04 My Split: desktop', 'The same hierarchy on a wide screen: the split and the next goal side by side, faces above.', [
+  `<div><div class="cap" style="width:auto"><div class="label">7. My Split on desktop</div></div>${desktop(`<div style="max-width:960px"><div class="h1" style="margin-left:0">My Split</div><div class="sub" style="margin-left:0">What you've built, what's next, and how you got here.</div><div style="max-width:420px">${faces('My Split')}</div>
+  <div class="dgrid"><div>${hero}${explain(false)}</div><div><div class="sech" style="margin-top:0"><h3>Next for you</h3><a>All goals</a></div>${goalsCreator.replace('<ul class="steps">', '<ul class="steps" style="display:grid">')}</div></div></div>`)}</div>`,
+])}
+${section('UX-05 Welcome walkthrough: phone', 'Five short screens after first-time setup, each skippable. It reuses the existing first-time setup (already recorded once per account), and can be opened again from Profile, Settings, How Splitpost works.', WT.map((w, i) => cap(`${8 + i}. ${w[1]}`, i === 0 ? 'Skip on every screen ends the walkthrough.' : '', wtScreen(i))))}
+${section('UX-05 First-use tips', 'One dismissible tip, shown the first time a member opens My Split and the first time they open their Clique. "Got it" hides it for good on that device; the walkthrough stays available from Profile.', [
+  cap('13. My Split, first visit', '', phone(head('My Split') + `<div class="tip"><div class="k">New here</div><p>This is your split: what you've accumulated so far, simulated during the pilot. Locked amounts unlock when you reach your goals under My Goals.</p><div class="row2"><span class="btn sec">Got it</span></div></div>` + hero)),
+  cap('14. Clique, first visit', '', phone(`<div class="h1">Your Clique</div><div class="sub">The creators you choose to keep closest.</div><div class="tip"><div class="k">New here</div><p>Your Clique is the creators you want closest. Their new posts come first on Home, and supporting them counts toward your supporter goals. Add or remove people at any time.</p><div class="row2"><span class="btn sec">Got it</span></div></div>
+  <div class="card"><div class="post" style="box-shadow:none;padding:0;margin:0"><div class="who"><span class="av" style="background:#0f7a64">AM</span><div><b>Amara Mensah</b><small>@amara · in your Clique</small></div></div></div></div>`, 'Profile')),
+])}`
+</script>
+</body>
+</html>

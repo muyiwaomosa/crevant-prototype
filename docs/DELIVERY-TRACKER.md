@@ -9,7 +9,7 @@ merging approves its migration checksums under D7), **Deployed** (database on
 staging and the `staging` app at that commit), **Accepted** (the founder used it
 on staging and signed off).
 
-Infrastructure: Vercel Pro; the staging app is deployed at 40a055b and founder acceptance has started (Nov 26). Supabase: the Splitpost Production organization is on Pro (member Production, waitlist, rehearsal); `crevant-staging` is in the Crevant organization on **Free** (no backups) until the consolidation in `docs/INFRASTRUCTURE.md` is approved.
+Infrastructure (Nov 27): Vercel Pro; the staging app follows the `staging` branch, now at 12303fe (every merged pull request through #129). Supabase: one Splitpost Production organization on Pro holds staging (`crevant-staging`, daily backups), member Production, the waitlist and the rehearsal project. Every migration through 20261219000000 is applied on staging (run 50, Nov 27). Founder acceptance is under way: initial feedback Nov 27 (UX-01 to UX-05 below).
 
 Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 branch, fast-forwarded only to merged `main`). Founder actions and acceptance
@@ -42,6 +42,11 @@ https://claude.ai/artifact/LT9k8aSFrFMz6MxRqtsvQ9).
 | F2 Locked creator earnings (simulated) | **Approved**: append-only states; Splitpost never absorbs a locked amount | SP-REFINE-002, section 3 | Built in G3; deletion, dormancy, disqualification and legal treatment stay open |
 | F3 Consumer eligible points before qualification | **Option A approved** (include and lock) | SP-REFINE-002, section 4 | Built in G3 |
 | F4 Interactive advertising | **Approved as a controlled experiment** in principle | SP-REFINE-002, section 6 | After launch unless the founder asks otherwise |
+| UX-01 Home without settings | **Awaiting founder confirmation**: Home has no settings section in the current build; the account links near it are the desktop sidebar footer and the phone header, on every page. Proposal in `docs/design/ux-refine/SP-UX-REFINE-001.md` | Screens checked Nov 27 as founder and member | Founder confirms the block, then build (front end only) |
+| UX-02 Video readiness | **Confirmed gated**: the composer offers video only when the server reports video on; the switch refuses until both phone results pass and the cap is set | Staging check 029 | Founder: device test (shortest path in SP-UX-REFINE-001) |
+| UX-03 Recognition and progress visibility | **Proposed** (previews 5, 6) using the existing engine only; progression switch off on staging at run 50 | `docs/design/ux-refine/` | Founder approval, then build |
+| UX-04 My Split: My Split, My Goals, My Activity | **Proposed** (previews 1 to 4, 7: phone and desktop) | `docs/design/ux-refine/` | Founder approval, then build |
+| UX-05 Welcome walkthrough and first-use tips | **Proposed** with exact wording (previews 8 to 14) | `docs/design/ux-refine/SP-UX-REFINE-001.md` | Founder approval, then build |
 | L1 Landing page visual assets | Not started | Prepared from the approved screens once V1 lands; not published before approval | After V1 |
 
 **Impact on December 23:** H1, V1, D1 and P1 are about 7 working days of UI
@@ -124,20 +129,39 @@ schedule risk for video, because it gates the upload limit. If video slips,
 the pilot can open with photos and text first and video on staging later,
 which needs no change to the code.
 
-## Genuinely outstanding against the approved MVP scope (Nov 26)
+## Genuinely outstanding against the approved MVP scope (Nov 27)
 
-Everything else in the approved scope is built and merged. What remains:
+Everything else in the approved scope is built, merged and on staging. What
+remains, by kind:
 
-* **Hands-on acceptance on staging** (founder), once steps A to D are done.
-* **Video activation:** the device test (founder), then the switch on staging.
-  The iPhone 1080p fallback only if the test shows it is needed.
-* **Release hardening, part 2** (row above).
-* **"See Splitpost" screenshots** on the landing page, from staging.
-* **Legal and policy dependencies:** the Rewards Rules legal review (before
-  allocation percentages are shown to members), the pilot privacy notice and
-  policies in `docs/policies/` (before external invitations), and the
-  regulated financial products review (deferred).
-* **Production batches PB-1 to PB-4**, each with its own approval, and the
-  cohort plan for December 23 (N10).
+**Remaining development:** none beyond the refinements below. Open
+investigation: the intermittent ad view unit test (row above).
+
+**Experience refinements** (founder feedback Nov 27; front end only, no
+migration; about three days once approved, inside the December 10 interface
+target): UX-01 Home settings (needs the founder's confirmation of the block
+meant), UX-03 recognition and progress, UX-04 My Split, UX-05 walkthrough and
+first-use tips. Previews and wording in `docs/design/ux-refine/`.
+
+**Acceptance testing** (founder, on staging): the full member journey
+(`docs/FOUNDER-TESTING-GUIDE.md`) with progression on; the refinements once
+built; the real-device speed check (row 61).
+
+**Operational readiness:** the video device test, then video on staging
+(founder); the staging recovery exercise (needs the founder's written
+authorization for the in-place restore); PB-1 member Production operations
+(SMTP, drain key, health checks; awaiting approval); "See Splitpost"
+screenshots for the landing page from staging.
+
+**Legal dependencies:** the Rewards Rules review (before allocation
+percentages are shown to members), the pilot privacy notice and policies in
+`docs/policies/` (before external invitations), the regulated financial
+products review (deferred).
+
+**Production release activities:** PB-2 migrations and functions (Dec 16),
+PB-3 release candidate fixes (Dec 20), PB-4 external access (Dec 23), each
+with its own authorization, and the cohort plan (N10). Production activation,
+external pilot access and real financial transactions remain unauthorized
+until then.
 
 No new functionality is planned beyond these.
