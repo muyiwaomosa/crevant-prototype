@@ -25,7 +25,7 @@ export const DISCLOSURES = {
   invitationOnly: "Invitation-only, for adults 18 and older. Joining doesn't guarantee a place.",
   stillTesting: 'Features are still being built and tested.',
   creatorSupportTest: 'A few selected creators are testing direct support from their fans.',
-  adsAreDemos: 'Any ads you see are labelled demonstrations.',
+  adsAndRevenueTested: 'Sponsored content is clearly labelled. Advertising and future revenue sharing are being tested during the pilot, and all pilot earnings are simulated.',
   pilotStart: 'The 60 days begin when invited people can use Splitpost.',
   sampleData: 'Sample data',
   concept: 'Concept',

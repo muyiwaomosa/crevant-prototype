@@ -259,7 +259,9 @@ function chip(on: boolean) {
 /** Creators: people, those who share your interests first; browse by interest. */
 function Creators({ topics }: { topics: Topic[] | null }) {
   const api = useAppApi()
-  const [topic, setTopic] = useState('')
+  // First steps on Home can open People on the member's interest (SP-UX-002).
+  const [params] = useSearchParams()
+  const [topic, setTopic] = useState(() => params.get('interest') ?? '')
   const list = useAsync(() => api.discover('', topic || undefined), [api, topic])
   const mine = useAsync(async () => (await api.myDetails().catch(() => null))?.topics ?? [], [api])
   const topicLabel = topics?.find((t) => t.slug === topic)?.label

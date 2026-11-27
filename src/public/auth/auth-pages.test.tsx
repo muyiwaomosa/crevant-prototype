@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { AuthProvider } from '../../auth/AuthProvider'
@@ -243,6 +243,8 @@ describe('signed-in pages', () => {
   it('home reads only the member\'s own profile and says it is ready', async () => {
     const client = makeClient({ session: SESSION })
     renderAt('/app', client)
+    // A brand-new account sees the value-first welcome first (SP-UX-002).
+    fireEvent.click(within(await screen.findByTestId('welcome')).getByRole('button', { name: 'Skip' }))
     expect(await screen.findByText('Your profile is ready')).toBeTruthy()
     expect(client.from).toHaveBeenCalledWith('profiles')
     expect(client.calls.eq).toHaveBeenCalledWith('id', 'user-1')

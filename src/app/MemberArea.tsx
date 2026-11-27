@@ -18,6 +18,8 @@ import { MediaProvider } from './media'
 import { VideoProvider } from './video'
 import { AvatarProvider } from './avatars'
 import { PostMetaProvider } from './content'
+import { RecognitionProvider } from './recognition'
+import { WelcomeIntro, markWelcomeSeen, welcomeSeen } from './welcome'
 
 /**
  * The members area (/app): invited, signed-in members only (RequireAuth wraps
@@ -35,6 +37,7 @@ export function MemberArea({ api }: { api?: AppApi } = {}) {
 
 function Gate() {
   const { status, reload } = useProfileGate()
+  const [, setWelcomed] = useState(0)
   if (status.kind === 'loading') {
     return (
       <Frame>
@@ -68,7 +71,20 @@ function Gate() {
       </Frame>
     )
   }
-  if (status.kind === 'incomplete') return <SetupProfile onSaved={reload} createdAt={status.profile.createdAt} />
+  if (status.kind === 'incomplete') {
+    // SP-UX-002: someone who has never heard of Splitpost sees why it exists before any setup.
+    const id = status.profile.id
+    if (!welcomeSeen(id))
+      return (
+        <WelcomeIntro
+          onDone={() => {
+            markWelcomeSeen(id)
+            setWelcomed((n) => n + 1)
+          }}
+        />
+      )
+    return <SetupProfile onSaved={reload} createdAt={status.profile.createdAt} />
+  }
   return (
     <ProfileProvider value={{ profile: status.profile, refresh: reload }}>
       <AvatarProvider>
@@ -79,7 +95,9 @@ function Gate() {
               <MediaProvider>
                 <VideoProvider>
                   <ViewTrackerProvider userId={status.profile.id}>
-                    <MemberLayout username={status.profile.username} />
+                    <RecognitionProvider>
+                      <MemberLayout />
+                    </RecognitionProvider>
                   </ViewTrackerProvider>
                 </VideoProvider>
               </MediaProvider>
@@ -371,7 +389,7 @@ const NAV = [
 ]
 
 /** The tour's layout, for real members: sidebar on larger screens, tab bar on phones. */
-function MemberLayout({ username }: { username: string }) {
+function MemberLayout() {
   usePageFocus()
   return (
     <div className="min-h-dvh md:flex">
@@ -420,11 +438,8 @@ function MemberLayout({ username }: { username: string }) {
           ))}
           <SendFeedbackLink variant="sidebar" />
         </nav>
-        <div className="mt-auto space-y-2">
-          <p className="hidden text-[13px] font-semibold text-ink-700 lg:block">@{username}</p>
-          <Link to="/app/account" className="hidden text-[13px] font-semibold text-brand-700 underline underline-offset-2 lg:inline">
-            Your account
-          </Link>
+        {/* UX-01 (Nov 27): account settings live under Profile, Settings; the pilot disclosure stays. */}
+        <div className="mt-auto">
           <p className="hidden text-[11px] leading-snug text-ink-500 lg:block">Splitpost pilot. Invitation-only, for adults 18 and older.</p>
         </div>
       </aside>
@@ -435,12 +450,7 @@ function MemberLayout({ username }: { username: string }) {
             <Link to="/app" aria-label="Splitpost home">
               <Wordmark size="sm" />
             </Link>
-            <div className="flex items-center gap-4">
-              <SendFeedbackLink variant="header" />
-              <Link to="/app/account" className="text-[13px] font-semibold text-brand-700">
-                Your account
-              </Link>
-            </div>
+            <SendFeedbackLink variant="header" />
           </div>
         </header>
         <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[680px] px-4 pb-28 pt-5 outline-none sm:px-6 md:pb-12 md:pt-8">

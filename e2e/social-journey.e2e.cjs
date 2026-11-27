@@ -151,12 +151,41 @@ async function answered(page, fn, action) {
 // Sign in and choose a name, then the optional first-time setup
 // (20261123000000): `setup` gives the answers to enter, or null to use
 // "Skip the rest".
-async function signInAndSetUp(page, email, username, displayName, setup = null) {
+async function signInAndSetUp(page, email, username, displayName, setup = null, walkWelcome = false) {
   await page.goto(`${APP}/sign-in?next=%2Fapp`)
   await page.getByLabel('Email address', { exact: true }).fill(email)
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await page.waitForURL(`${APP}/app`)
+  // SP-UX-002: the value-first welcome comes first for a brand-new account.
+  const welcome = page.getByTestId('welcome')
+  await welcome.waitFor()
+  if (walkWelcome) {
+    const titles = [await welcome.getByRole('heading', { level: 1 }).innerText()]
+    let said = await welcome.innerText()
+    {
+      const v = await axe(page)
+      check('the first welcome face has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
+    }
+    for (let i = 0; i < 4; i++) {
+      await welcome.getByRole('button', { name: 'Continue' }).click()
+      titles.push(await welcome.getByRole('heading', { level: 1 }).innerText())
+      said += ' ' + (await welcome.innerText())
+    }
+    check('the welcome tells the story in five faces, benefit first',
+      JSON.stringify(titles) === JSON.stringify(["Don't just post. Get your split.", 'Your people. Your feed.', 'Your support counts.', 'Grow. Qualify. Earn.', 'Make it yours.']), titles.join(' | '))
+    check('every amount is said to be simulated, and nothing promises earnings', /simulated/i.test(said) && !/guarantee/i.test(said), said)
+    await page.waitForTimeout(500) // let the slide-in finish before measuring contrast
+    {
+      const v = await axe(page)
+      check('the welcome has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
+    }
+    await welcome.getByRole('button', { name: 'Back' }).click()
+    await welcome.getByRole('button', { name: 'Continue' }).click()
+    await welcome.getByRole('button', { name: 'Get started' }).click()
+  } else {
+    await welcome.getByRole('button', { name: 'Skip' }).click()
+  }
   await page.getByText('Your profile is ready').waitFor()
   await page.getByText('Step 1 of 6: Your name').waitFor()
   await page.getByLabel('Username').fill(username)
@@ -266,7 +295,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
   // 3. B finds A, follows, adds A to their Clique, likes and comments.
   const ctxB = await newContext(browser)
   const pageB = await ctxB.newPage()
-  await signInAndSetUp(pageB, emailB, userB, 'Bee Fan')
+  await signInAndSetUp(pageB, emailB, userB, 'Bee Fan', null, true)
   check("B skipped setup: B's details are empty, and setup is marked done", sql(`select coalesce(identity, '-') || '|' || coalesce(bio, '-') || '|' || (onboarded_at is not null) from social.profile_details where user_id = '${idB}'`) === '-|-|true')
   await pageB.getByText('Your feed is quiet').waitFor()
   check('B\'s feed is empty before following anyone', (await pageB.getByTestId('post').count()) === 0)
@@ -338,7 +367,11 @@ async function signInAndSetUp(page, email, username, displayName, setup = null) 
     const stored = rowsReport('social.comments', `author_id = '${idB}' and deleted_at is null`, 'id, created_at, post_id, left(body, 40) as body')
     check('after a reload, the comment count is still 1', await pageB.getByRole('link', { name: '1 comment' }).isVisible(), `page shows ${JSON.stringify(shown)}; stored ${stored.detail}`)
   }
-  const appStorage = await pageB.evaluate(() => Object.keys(localStorage).filter((k) => !/^sb-/.test(k)))
+  // Only the sign-in session and interface preferences (welcome seen, tips and first steps dismissed,
+  // milestones already acknowledged; SP-UX-002); never posts, likes, comments or follows.
+  const appStorage = await pageB.evaluate(() =>
+    Object.keys(localStorage).filter((k) => !/^sb-/.test(k) && !/^splitpost\.(welcome|tip|first-steps|goals-met)\./.test(k)),
+  )
   check('no social data is kept in browser storage', appStorage.length === 0, appStorage.join(','))
 
   // 4b. Unseen-first: A posts after B followed, so B sees A in the catch-up

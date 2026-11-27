@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import clsx from 'clsx'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Bookmark, Check, Compass, MessageCircle, MoreHorizontal, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
-import { LIMITS, cursorOf, type Comment, type FeedFilter, type Member, type Me, type Post, type PostCursor } from './api'
+import { LIMITS, cursorOf, type Comment, type FeedFilter, type Identity, type Member, type Me, type Post, type PostCursor, type Topic } from './api'
 import { FaceView } from '../components/FaceView'
 import { useAppApi, useMyProfile } from './AppApiContext'
+import { useRecognize } from './recognition'
+import { WelcomeIntro } from './welcome'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
 import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
@@ -170,6 +173,7 @@ function HomeFeed({
   return (
     <>
       {withStrip && <CliqueRow />}
+      {filter === 'all' && feed.data && !(feed.data.length === 0 && me.data?.followingCount === 0) && <StartHere quiet={false} />}
       {filter === 'clique' && (
         <div className="mb-3 flex justify-end">
           <Link to="/app/clique" className="text-[13px] font-semibold text-brand-700 underline underline-offset-2">
@@ -225,7 +229,7 @@ function HomeFeed({
           }
         />
       )}
-      {filter === 'all' && feed.data && feed.data.length === 0 && me.data && me.data.followingCount === 0 && <GettingStarted />}
+      {filter === 'all' && feed.data && feed.data.length === 0 && me.data && me.data.followingCount === 0 && <QuietFeed />}
       {filter === 'all' && feed.data && feed.data.length === 0 && me.error !== null && (
         <EmptyState
           icon={<Compass className="h-7 w-7" />}
@@ -506,37 +510,163 @@ function EarlierPosts({ member, posts }: { member: Member; posts: Post[] }) {
   )
 }
 
-/** First steps for a new member: find people, follow, choose a Clique. */
-function GettingStarted() {
-  const steps: Array<{ title: string; body: string; to: string; cta: string }> = [
-    { title: 'Find people', body: 'Browse Discover or search by name, then open a profile to read their posts.', to: '/app/discover', cta: 'Discover people' },
-    {
-      title: 'Follow them',
-      body: 'Their new posts appear here on Home, newest first. Nobody is added for you.',
-      to: '/app/discover',
-      cta: 'Find someone to follow',
-    },
-    {
-      title: 'Choose your Clique',
-      body: 'Choose the people you follow that you want closest. You can change them at any time.',
-      to: '/app/clique',
-      cta: 'Your Clique',
-    },
-  ]
+/**
+ * First steps (SP-UX-002, section 3): the existing guidance, tailored by the
+ * optional "What brings you here" answer and the member's interests, so the
+ * first five minutes lead to people worth following, a Clique, a first post
+ * or a first contribution. Each step ticks itself off from what the server
+ * reports; "Hide" puts it away, and it goes once every step is done.
+ */
+type FirstStep = { key: string; title: string; body: string; to?: string; cta?: string; done: boolean }
+
+export function firstSteps(input: {
+  identity: Identity | null
+  interest: { slug: string; label: string } | null
+  followingCount: number
+  cliqueCount: number
+  postCount: number
+  contributed: boolean | null
+}): FirstStep[] {
+  const { identity, interest, followingCount, cliqueCount, postCount, contributed } = input
+  const discover = interest ? `/app/discover?face=creators&interest=${encodeURIComponent(interest.slug)}` : '/app/discover'
+  const find: FirstStep = {
+    key: 'find',
+    title: 'Find people',
+    body: interest
+      ? `Start with people who post about ${interest.label}, then open a profile to read their posts.`
+      : 'Browse Discover or search by name, then open a profile to read their posts.',
+    to: discover,
+    cta: interest ? `Discover ${interest.label}` : 'Discover people',
+    done: followingCount > 0,
+  }
+  const follow: FirstStep = {
+    key: 'follow',
+    title: 'Follow them',
+    body: 'Follow three people you value. Their new posts appear here on Home, newest first. Nobody is added for you.',
+    done: followingCount >= 3,
+  }
+  const clique: FirstStep = {
+    key: 'clique',
+    title: 'Choose your Clique',
+    body: 'Choose the people you follow that you want closest. Their posts come first. You can change them at any time.',
+    to: '/app/clique',
+    cta: 'Your Clique',
+    done: cliqueCount > 0,
+  }
+  const post: FirstStep = {
+    key: 'post',
+    title: 'Publish your first post',
+    body: interest ? `Share something about ${interest.label}. Everyone who follows you sees it on their Home.` : 'Share something. Everyone who follows you sees it on their Home.',
+    to: '/app/new',
+    cta: 'Create a post',
+    done: postCount > 0,
+  }
+  const support: FirstStep = {
+    key: 'support',
+    title: 'Support a post you value',
+    body: 'Leave a thoughtful comment, save it or share it. It helps the creator grow, and it is recognized in My Split.',
+    done: contributed === true,
+  }
+  const steps = identity === 'creator' ? [post, find, clique] : identity === 'both' ? [find, follow, clique, post] : [find, follow, clique]
+  // The contribution step only where the server can say whether it happened.
+  return contributed === null ? steps : [...steps, support]
+}
+
+/** An empty Home for someone who follows nobody yet: the first steps, or a plain way in if they were hidden. */
+function QuietFeed() {
+  const { profile } = useMyProfile()
+  let hidden = false
+  try {
+    hidden = window.localStorage.getItem(`splitpost.first-steps.${profile.id}`) === 'hidden'
+  } catch {
+    hidden = false
+  }
+  if (!hidden) return <StartHere quiet />
   return (
+    <EmptyState
+      icon={<Compass className="h-7 w-7" />}
+      title="Your feed is quiet"
+      body="Follow people to see their posts here, newest first. Nobody is added to your feed for you."
+      action={
+        <Link to="/app/discover" className={buttonClass('primary')}>
+          Discover people
+        </Link>
+      }
+    />
+  )
+}
+
+function StartHere({ quiet }: { quiet: boolean }) {
+  const api = useAppApi()
+  const { profile } = useMyProfile()
+  const me = useLoad<Me>(() => api.me(), [api])
+  const details = useLoad(() => api.myDetails().catch(() => null), [api])
+  const points = useLoad(() => api.myPoints().catch(() => null), [api])
+  const topics = useLoad(async () => (await api.topics().catch(() => null)) ?? ([] as Topic[]), [api])
+  const key = `splitpost.first-steps.${profile.id}`
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return window.localStorage.getItem(key) === 'hidden'
+    } catch {
+      return false
+    }
+  })
+  if (!me.data || details.loading || points.loading) return quiet ? <Loading label="Loading your first steps…" /> : null
+  const slug = details.data?.topics[0]
+  const label = slug ? topics.data?.find((t) => t.slug === slug)?.label : undefined
+  const steps = firstSteps({
+    identity: details.data?.identity ?? null,
+    interest: slug && label ? { slug, label } : null,
+    followingCount: me.data.followingCount,
+    cliqueCount: me.data.cliqueCount,
+    postCount: me.data.postCount,
+    contributed: points.data ? points.data.recognized + points.data.redeemableApproved + points.data.redeemablePending > 0 : null,
+  })
+  const remaining = steps.filter((s) => !s.done).length
+  if (remaining === 0 || hidden) return null
+  function hide() {
+    try {
+      window.localStorage.setItem(key, 'hidden')
+    } catch {
+      // Hidden for this visit only.
+    }
+    setHidden(true)
+  }
+  return (
+    <section className="mb-4" aria-labelledby="first-steps-title" data-testid="first-steps">
     <Card className="p-5">
-      <h2 className="font-display text-lg font-bold text-ink-900">Your feed is quiet</h2>
-      <p className="mt-1 text-sm text-ink-600">Here's how to start. It takes a minute.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="first-steps-title" className="font-display text-lg font-bold text-ink-900">
+            {quiet ? 'Your feed is quiet' : 'Start here'}
+          </h2>
+          <p className="mt-1 text-sm text-ink-600">
+            {quiet ? "Here's how to start. It takes a minute." : `${steps.length - remaining} of ${steps.length} done. A few minutes to feel at home.`}
+          </p>
+        </div>
+        <button type="button" onClick={hide} className="shrink-0 rounded-full px-2 py-1 text-[13px] font-semibold text-ink-600 hover:text-ink-900">
+          Hide
+        </button>
+      </div>
       <ol className="mt-4 space-y-4">
         {steps.map((step, i) => (
-          <li key={step.title} className="flex gap-3">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-bold text-brand-700" aria-hidden="true">
-              {i + 1}
+          <li key={step.key} className="flex gap-3" data-done={step.done ? 'true' : 'false'}>
+            <span
+              className={clsx(
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+                step.done ? 'bg-[#0f7a64] text-white' : 'bg-brand-50 text-brand-700',
+              )}
+              aria-hidden="true"
+            >
+              {step.done ? <Check className="h-4 w-4" strokeWidth={3} /> : i + 1}
             </span>
             <div className="min-w-0">
-              <p className="font-semibold text-ink-900">{step.title}</p>
-              <p className="text-sm text-ink-600">{step.body}</p>
-              {i !== 1 && (
+              <p className={clsx('font-semibold', step.done ? 'text-ink-500 line-through' : 'text-ink-900')}>
+                {step.title}
+                {step.done && <span className="sr-only"> (done)</span>}
+              </p>
+              {!step.done && <p className="text-sm text-ink-600">{step.body}</p>}
+              {!step.done && step.to && step.cta && (
                 <Link to={step.to} className="mt-1 inline-block text-sm font-semibold text-brand-700 underline">
                   {step.cta}
                 </Link>
@@ -545,10 +675,13 @@ function GettingStarted() {
           </li>
         ))}
       </ol>
-      <div className="mt-5">
-        <SuggestedPeople heading="People you might like" limit={3} />
-      </div>
+      {quiet && (
+        <div className="mt-5">
+          <SuggestedPeople heading="People you might like" limit={3} />
+        </div>
+      )}
     </Card>
+    </section>
   )
 }
 
@@ -736,6 +869,7 @@ function MoreMenu({ member, onChange }: { member: Member; onChange: () => Promis
 
 export function PostPage() {
   const api = useAppApi()
+  const recognize = useRecognize()
   const navigate = useNavigate()
   const { id = '' } = useParams()
   const post = useLoad(() => api.post(id), [api, id])
@@ -767,6 +901,7 @@ export function PostPage() {
             rows={2}
             onSubmit={async (text, requestId) => {
               await api.addComment(p.id, text, requestId)
+              recognize()
               await Promise.all([comments.reload(), post.reload()])
             }}
           />
@@ -949,6 +1084,7 @@ function ProfileHome() {
     ['/app/account', 'Your account'],
     ['/app/privacy', 'Your data and privacy'],
     ['/app/advertise', 'Advertise with Splitpost'],
+    ['/app/welcome', 'How Splitpost works'],
     ...(moderator ? ([['/app/moderation', 'Moderation']] as Array<[string, string]>) : []),
     ...(founder ? ([['/app/ads', 'Advertising'], ['/app/control', 'Control Center']] as Array<[string, string]>) : []),
   ]
@@ -1070,4 +1206,15 @@ function NotFoundPanel({ what }: { what: string }) {
 
 export function AppNotFound() {
   return <NotFoundPanel what="This page" />
+}
+
+/** The welcome, again (SP-UX-002): from Profile, Settings, "How Splitpost works". */
+export function WelcomePage() {
+  const navigate = useNavigate()
+  return (
+    <>
+      <h1 className="sr-only">How Splitpost works</h1>
+      <WelcomeIntro onDone={() => navigate('/app/profile')} doneLabel="Done" />
+    </>
+  )
 }

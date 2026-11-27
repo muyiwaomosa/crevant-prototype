@@ -21,6 +21,12 @@ export interface StockPhoto {
   sourceUrl: string
   /** The photographer as credited on the Pexels page (verified by the founder on each listing). */
   photographer: string
+  /**
+   * Whether the founder has confirmed the listing, credit and licence. An
+   * unverified photo must be verified or replaced before the public site is
+   * published (SP-BRAND-002, decision 6).
+   */
+  verified: boolean
   licence: 'Pexels License'
   licenceUrl: 'https://www.pexels.com/license/'
 }
@@ -41,6 +47,7 @@ export const PHOTOS = {
     alt: 'A creator editing photos on a laptop at a bright desk at home, a camera on the table beside it.',
     sourceUrl: 'https://www.pexels.com/photo/focused-female-freelancer-editing-photos-on-laptop-7014401/',
     photographer: 'George Milton',
+    verified: true,
   }),
   teacherRecording: pexels({
     id: 'teacher-recording',
@@ -50,31 +57,39 @@ export const PHOTOS = {
     alt: 'A teacher recording a lesson to a camera on a tripod, notebook in hand.',
     sourceUrl: 'https://www.pexels.com/photo/teacher-recording-herself-teaching-9040544/',
     photographer: 'Alena Darmel',
+    verified: true,
   }),
-  metalworker: pexels({
-    id: 'metalworker',
-    base: '/media/landing/photos/metalworker',
-    widths: [640, 1200],
-    ratio: '4/3',
-    alt: 'A metalworker grinding a piece of steel in a crowded workshop, sparks flying.',
-    sourceUrl: 'https://www.pexels.com/photo/man-sitting-and-working-at-workshop-23638660/',
-    photographer: 'Yunus Tuğ',
-  }),
-  filmmaker: pexels({
-    id: 'filmmaker',
-    base: '/media/landing/photos/filmmaker',
+  supporterPhone: pexels({
+    id: 'supporter-phone',
+    base: '/media/landing/photos/supporter-phone',
     widths: [600, 960],
     ratio: '4/5',
-    alt: 'A filmmaker framing a shot with a cinema camera on a tripod, outdoors.',
-    sourceUrl: 'https://www.pexels.com/photo/young-filmmaker-operating-a-professional-camera-36181988/',
-    photographer: 'Director Chenchi',
+    alt: 'A person smiling at their phone, sitting at home in a soft sweater.',
+    sourceUrl: 'https://www.pexels.com/photo/smiling-woman-using-mobile-phone-at-home-6697318/',
+    /** Added Nov 27 (SP-BRAND-002). Files: supporter-phone-600.webp, supporter-phone-960.webp. */
+    photographer: 'To be verified on the Pexels listing',
+    verified: false,
+  }),
+  communityTable: pexels({
+    id: 'community-table',
+    base: '/media/landing/photos/community-table',
+    widths: [640, 1200],
+    ratio: '4/3',
+    alt: 'Friends laughing together around a table set with food and flowers, outdoors under string lights.',
+    sourceUrl: 'https://www.pexels.com/photo/a-group-of-friends-laughing-while-sitting-near-the-table-5738245/',
+    /** Added Nov 27 (SP-BRAND-002). Files: community-table-640.webp, community-table-1200.webp. */
+    photographer: 'To be verified on the Pexels listing',
+    verified: false,
   }),
 } as const
 
+/** Photos that must be verified on their Pexels listing, or replaced, before the public site is published. */
+export const PHOTOS_TO_VERIFY = Object.values(PHOTOS).filter((p) => !p.verified)
+
 export type PhotoKey = keyof typeof PHOTOS
 
-/** Which photo goes with each creator group in WHO WE'RE BUILDING FOR, in order. */
-export const CREATOR_GROUP_PHOTOS: readonly PhotoKey[] = ['creatorEditing', 'teacherRecording', 'metalworker']
+/** The photo for each group in WHO WE'RE BUILDING FOR, in order: creators, supporters. */
+export const WHO_PHOTOS: readonly PhotoKey[] = ['teacherRecording', 'supporterPhone']
 
 /**
  * The profile photo on the hero's sample post. Priya Raman is a fictional

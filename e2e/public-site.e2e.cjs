@@ -218,7 +218,7 @@ async function newContext(browser, options = {}) {
       await page.goto(`${BASE}/`)
 
       const ids = await page.locator('main section[id]').evaluateAll((els) => els.map((e) => e.id).join(','))
-      check(`${label}: the nine sections in order`, ids === 'hero,problem,building,paths,creators,split,vision,pilot,invitation', ids)
+      check(`${label}: the eight sections in order (SP-BRAND-002)`, ids === 'hero,why,who,what,how,account,pilot,invitation', ids)
       const extra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       check(`${label}: no sideways scrolling on the landing page`, extra <= 0, `${extra}px`)
       {
@@ -228,9 +228,9 @@ async function newContext(browser, options = {}) {
       }
       check(`${label}: no Crevant left on the landing page`, !/Crevant/i.test(await page.locator('body').innerText()))
 
-      const rows = await page.$$eval('[data-testid="creator-groups"] > li', (lis) => new Set(lis.map((li) => Math.round(li.getBoundingClientRect().top))).size)
-      const expectedRows = width < 768 ? 3 : 1
-      check(`${label}: the creator groups show ${expectedRows} row(s)`, rows === expectedRows, `rows=${rows}`)
+      const rows = await page.$$eval('#who article', (els) => new Set(els.map((el) => Math.round(el.getBoundingClientRect().top))).size)
+      const expectedRows = width < 768 ? 2 : 1
+      check(`${label}: creators and supporters show in ${expectedRows} row(s)`, rows === expectedRows, `rows=${rows}`)
 
       // The hero headline is exactly two lines, one sentence each, below 1024px.
       if (width < 1024) {
@@ -254,31 +254,29 @@ async function newContext(browser, options = {}) {
       )
       check(`${label}: every image loads (the founder photo; no stock photos until approved)`, imgs.length >= 1 && imgs.every((w) => w > 0), imgs.join(','))
 
-      const disclosures = await Promise.all(['hero-small-print', 'building-note', 'split-disclosures', 'vision-disclosure', 'pilot-details'].map((t) => page.getByTestId(t).isVisible()))
+      const disclosures = await Promise.all(
+        ['hero-small-print', 'what-disclosure', 'how-contribute-note', 'how-earn-note', 'pilot-details', 'invitation-disclosure'].map((t) => page.getByTestId(t).isVisible()),
+      )
       check(`${label}: each limitation is visible beside its claim, and the full pilot details near signup`, disclosures.every(Boolean))
 
-      // The three product illustrations: each fits the screen, its tag and headline show,
-      // and every numbered marker on the picture sits inside the visible phone screen.
-      const ills = await page.$$eval('[data-testid^="illustration-"]', (figs) =>
-        figs.map((f) => {
-          const r = f.getBoundingClientRect()
-          const screen = f.querySelector('.aspect-\\[9\\/18\\.5\\]')
-          const sr = screen && screen.getBoundingClientRect()
-          const markers = [...f.querySelectorAll('span[aria-hidden="true"].bg-sp-accent.absolute')].map((m) => m.getBoundingClientRect())
+      // HOW: five different screens from the app, each fully on screen with its callout, and labelled as sample data.
+      const screens = await page.$$eval('#how li[data-testid^="how-"]', (lis) =>
+        lis.map((li) => {
+          const vw = document.documentElement.clientWidth
+          const fig = li.querySelector('figure')
+          const parts = [fig.querySelector('img'), fig.querySelector('span[aria-hidden="true"]')].map((e) => e.getBoundingClientRect())
           return {
-            id: f.getAttribute('data-testid'),
-            fits: r.left >= 0 && r.right <= document.documentElement.clientWidth + 0.5,
-            tagged: !!f.querySelector('[data-testid="concept-tag"]') && !!f.querySelector('h3'),
-            markers: markers.length,
-            markersInside: !sr || markers.every((m) => m.left >= sr.left - 1 && m.right <= sr.right + 1 && m.top >= sr.top - 1 && m.bottom <= sr.bottom + 1),
+            id: li.getAttribute('data-testid'),
+            src: fig.querySelector('img').getAttribute('src'),
+            fits: parts.every((r) => r.left >= -0.5 && r.right <= vw + 0.5),
+            labelled: !!fig.querySelector('[data-testid="screen-label"]'),
           }
         }),
       )
-      check(`${label}: the three product illustrations are on the page`, ills.map((i) => i.id).join() === 'illustration-following,illustration-community,illustration-referral', ills.map((i) => i.id).join())
-      check(`${label}: each illustration fits the screen and carries its concept tag and headline`, ills.every((i) => i.fits && i.tagged), JSON.stringify(ills))
-      check(`${label}: every numbered marker sits inside its phone screen`, ills.filter((i) => i.id !== 'illustration-referral').every((i) => i.markers === 3 && i.markersInside), JSON.stringify(ills))
+      check(`${label}: the five app screens are on the page, all different`, screens.map((x) => x.id).join() === 'how-discover,how-connect,how-create,how-contribute,how-earn' && new Set(screens.map((x) => x.src)).size === 5, screens.map((x) => x.id).join())
+      check(`${label}: each screen and its callout fit the screen, and each is labelled as sample data`, screens.every((x) => x.fits && x.labelled), JSON.stringify(screens))
 
-      // The official logo, the same file everywhere: header, footer, the hero signature and the eight seams.
+      // The official logo, the same file everywhere: header, footer, the seven seams and the vision line.
       const logos = await page.$$eval('img[data-testid="splitpost-logo"]', (els) => els.map((e) => ({ src: e.getAttribute('src'), w: e.naturalWidth, box: Math.round(e.getBoundingClientRect().width), ratio: e.getBoundingClientRect().width / e.getBoundingClientRect().height })))
       check(`${label}: one logo file, used in the header, footer and every seam`, logos.length >= 8 && new Set(logos.map((l) => l.src)).size === 1 && logos.every((l) => l.w > 0), `${logos.length} logos, ${new Set(logos.map((l) => l.src)).size} sources`)
       check(`${label}: the logo keeps its proportions everywhere`, logos.every((l) => Math.abs(l.ratio - 1) < 0.02), logos.map((l) => l.ratio.toFixed(2)).join())
@@ -430,7 +428,7 @@ async function newContext(browser, options = {}) {
 
     // 5c3. Every "Discover Splitpost" button, on desktop and on a phone, from
     //      the homepage and from /join, opens the homepage introduction
-    //      ("What we're building") on this site, never the old sample tour.
+    //      ("Why Splitpost exists") on this site, never the old sample tour.
     for (const [label, options] of [
       ['desktop', { viewport: { width: 1280, height: 900 } }],
       ['phone', { ...devices['iPhone 13'] }],
@@ -446,19 +444,19 @@ async function newContext(browser, options = {}) {
           await page.goto(`${BASE}${start}`, { waitUntil: 'networkidle' })
           const link = page.getByRole('link', { name: 'Discover Splitpost', exact: true, includeHidden: true }).nth(i)
           const href = await link.evaluate((a) => a.href)
-          if (href !== `${new URL(BASE).origin}/#building`) failed.push(`${start} link ${i + 1} points to ${href}`)
+          if (href !== `${new URL(BASE).origin}/#why`) failed.push(`${start} link ${i + 1} points to ${href}`)
           await link.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {})
           if (!(await link.isVisible())) continue
           clicked++
           await link.click()
-          await page.waitForURL(`${BASE}/#building`, { timeout: 5000 }).catch(() => {})
-          const heading = page.locator('#building-title')
+          await page.waitForURL(`${BASE}/#why`, { timeout: 5000 }).catch(() => {})
+          const heading = page.locator('#why-title')
           await page.waitForTimeout(800)
           const box = await heading.boundingBox()
           const vh = page.viewportSize().height
           const inView = !!box && box.y < vh && box.y + box.height > 0
           const tour = await page.getByText('Sample tour.').count()
-          if (page.url() !== `${BASE}/#building` || !inView || tour) failed.push(`${start} link ${i + 1}: ${page.url()}${inView ? '' : ', introduction not on screen'}${tour ? ', showed the sample tour' : ''}`)
+          if (page.url() !== `${BASE}/#why` || !inView || tour) failed.push(`${start} link ${i + 1}: ${page.url()}${inView ? '' : ', introduction not on screen'}${tour ? ', showed the sample tour' : ''}`)
         }
       }
       check(`${label}: each of the ${clicked} visible Discover Splitpost buttons (homepage and /join) opens the introduction on this site`, clicked >= (label === 'phone' ? 2 : 3) && failed.length === 0, failed.join(' | '))
@@ -477,9 +475,9 @@ async function newContext(browser, options = {}) {
       const ctx = await newContext(browser, options)
       const page = await ctx.newPage()
       await page.goto(`${BASE}/`, { waitUntil: 'networkidle' })
-      const onScreen = async () => {
+      const onScreen = async (id = '#why-title') => {
         await page.waitForTimeout(700)
-        const box = await page.locator('#building-title').boundingBox()
+        const box = await page.locator(id).boundingBox()
         return !!box && box.y >= -5 && box.y < page.viewportSize().height
       }
       const hero = page.locator('[data-testid="hero-actions"]').getByRole('link', { name: 'Discover Splitpost' })
@@ -491,7 +489,7 @@ async function newContext(browser, options = {}) {
       results.push(['second Discover click', await onScreen()])
       await page.evaluate(() => window.scrollTo(0, 0))
       await page.getByRole('contentinfo').getByRole('link', { name: 'How It Works' }).click()
-      results.push(['footer How It Works', await onScreen()])
+      results.push(['footer How It Works', await onScreen('#how-title')])
       const missed = results.filter(([, ok]) => !ok).map(([n]) => n)
       check(`${label}: Discover Splitpost and How It Works scroll to the introduction on every click, not just the first`, missed.length === 0, missed.join(', '))
       await ctx.close()

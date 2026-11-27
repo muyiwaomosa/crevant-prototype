@@ -15,6 +15,7 @@ import {
   toPost,
   usernameProblem,
   type AppApi,
+  type PointsEntry,
   type CreatorSetup,
   type Inviter,
   type RegistrationSettings,
@@ -100,10 +101,20 @@ vi.mock('./videoPrep', async (importOriginal) => {
   }
 })
 import { clampOffset, coverScale, sourceRect } from './avatars'
-import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage, SavedPage } from './pages'
+import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPage, MemberPage, PostPage, ProfilePage, SavedPage, WelcomePage, firstSteps } from './pages'
 import { MySplitPage, RewardsReviewPage } from './split'
+import { recognitionText } from './recognition'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  window.localStorage.clear()
+})
+
+/** A brand-new account first sees the value-first welcome (SP-UX-002); these tests then skip it. */
+async function skipWelcome() {
+  const w = within(await screen.findByTestId('welcome'))
+  fireEvent.click(w.getByRole('button', { name: 'Skip' }))
+}
 
 // ---------------------------------------------------------------------------
 // An in-memory stand-in for the database functions, with the same rules.
@@ -1757,6 +1768,7 @@ function renderApp(path: string, api: AppApi) {
             <Route path="u/:username" element={<MemberPage />} />
             <Route path="clique" element={<CliquePage />} />
             <Route path="saved" element={<SavedPage />} />
+            <Route path="welcome" element={<WelcomePage />} />
             <Route path="split" element={<MySplitPage />} />
             <Route path="split/review" element={<RewardsReviewPage />} />
             <Route path="catch-up/:username" element={<CatchUpPage />} />
@@ -1863,9 +1875,50 @@ describe('pilot membership (20261122000000): signed in is not enough', () => {
     }
   })
 
+  it('a brand-new member first sees five value-first faces, with Back, Continue, Skip and Get started, once', async () => {
+    const { api } = fakeApi('me', { profile: { username: null, displayName: null } })
+    renderApp('/app', api)
+    const w = within(await screen.findByTestId('welcome'))
+    expect(w.getByRole('heading', { level: 1 }).textContent).toBe("Don't just post. Get your split.")
+    expect(w.getByTestId('welcome-note').textContent).toBe('During the pilot, every amount is simulated and nothing is paid.')
+    expect(w.queryByRole('button', { name: 'Back' })).toBeNull()
+    const titles = ["Don't just post. Get your split."]
+    for (let i = 0; i < 4; i++) {
+      fireEvent.click(w.getByRole('button', { name: 'Continue' }))
+      titles.push(w.getByRole('heading', { level: 1 }).textContent ?? '')
+    }
+    expect(titles).toEqual(["Don't just post. Get your split.", 'Your people. Your feed.', 'Your support counts.', 'Grow. Qualify. Earn.', 'Make it yours.'])
+    expect(screen.getByTestId('welcome').textContent).not.toMatch(/guarantee|\d+\s*%/i)
+    // The last face: Get started, no Skip; Back returns one face; the arrow keys move too.
+    expect(w.queryByRole('button', { name: 'Skip' })).toBeNull()
+    fireEvent.click(w.getByRole('button', { name: 'Back' }))
+    expect(w.getByRole('heading', { level: 1 }).textContent).toBe('Grow. Qualify. Earn.')
+    expect(w.getByTestId('welcome-note').textContent).toBe('Pilot earnings are simulated. Points are not money.')
+    fireEvent.keyDown(screen.getByTestId('welcome'), { key: 'ArrowRight' })
+    fireEvent.click(w.getByRole('button', { name: 'Get started' }))
+    expect(await screen.findByText('Your profile is ready')).toBeTruthy()
+    // Once seen, it is not shown again before setup.
+    cleanup()
+    renderApp('/app', api)
+    expect(await screen.findByText('Your profile is ready')).toBeTruthy()
+    expect(screen.queryByTestId('welcome')).toBeNull()
+  })
+
+  it('the welcome can be opened again from Profile, Settings, How Splitpost works', async () => {
+    const { api } = fakeApi()
+    renderApp('/app/profile', api)
+    await screen.findByRole('heading', { name: 'Settings' })
+    expect(screen.getByRole('link', { name: 'How Splitpost works' }).getAttribute('href')).toBe('/app/welcome')
+    cleanup()
+    renderApp('/app/welcome', api)
+    const w = within(await screen.findByTestId('welcome'))
+    expect(w.getByRole('heading', { level: 1 }).textContent).toBe("Don't just post. Get your split.")
+  })
+
   it('an active member with no profile yet goes on to choose one', async () => {
     const { api } = fakeApi('me', { profile: { username: null, displayName: null } })
     renderApp('/app', api)
+    await skipWelcome()
     expect(await screen.findByText('Your profile is ready')).toBeTruthy()
   })
 
@@ -1901,6 +1954,7 @@ describe('first visit: choosing a username and display name', () => {
   it('shows the profile is ready, validates the form, then opens the feed', async () => {
     const { api } = fakeApi('me', { profile: { username: null, displayName: null } })
     renderApp('/app', api)
+    await skipWelcome()
     expect(await screen.findByText('Your profile is ready')).toBeTruthy()
     expect(screen.getByText('mia@example.test')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'ad' } })
@@ -1928,6 +1982,7 @@ describe('first-time setup and profile details (20261123000000)', () => {
     f.setDetails('c1', { identity: 'creator', bio: 'Budget recipes.', followReason: 'A new recipe every week', topics: ['food', 'music'] })
     f.setDetails('c2', { identity: 'fan', topics: ['travel'] })
     renderApp('/app', f.api)
+    await skipWelcome()
     expect(await screen.findByText('Step 1 of 6: Your name')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'mia' } })
     fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Mia' } })
@@ -2065,6 +2120,7 @@ describe('first-time setup and profile details (20261123000000)', () => {
   it('on a database without profile details, the member goes straight in and nothing new is shown', async () => {
     const f = fakeApi('me', { profile: { username: null, displayName: null }, details: 'absent' })
     renderApp('/app', f.api)
+    await skipWelcome()
     fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'mia' } })
     fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Mia' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
@@ -2901,6 +2957,21 @@ describe('Discover, follow, add to Clique, read their posts', () => {
     expect(card.getByText(/Share your first post this week/)).toBeTruthy()
   })
 
+  it('first steps follow what brings the member here and their interests, and tick off from what the server reports', () => {
+    const base = { interest: { slug: 'food', label: 'Food & cooking' }, followingCount: 0, cliqueCount: 0, postCount: 0, contributed: false }
+    const fan = firstSteps({ ...base, identity: 'fan' })
+    expect(fan.map((s) => s.title)).toEqual(['Find people', 'Follow them', 'Choose your Clique', 'Support a post you value'])
+    expect(fan[0]).toMatchObject({ cta: 'Discover Food & cooking', to: '/app/discover?face=creators&interest=food' })
+    expect(firstSteps({ ...base, identity: 'creator' }).map((s) => s.title)).toEqual(['Publish your first post', 'Find people', 'Choose your Clique', 'Support a post you value'])
+    expect(firstSteps({ ...base, identity: 'creator' })[0].body).toBe('Share something about Food & cooking. Everyone who follows you sees it on their Home.')
+    expect(firstSteps({ ...base, identity: 'both' }).map((s) => s.key)).toEqual(['find', 'follow', 'clique', 'post', 'support'])
+    // No answer and no interests: the general steps.
+    expect(firstSteps({ ...base, identity: null, interest: null })[0]).toMatchObject({ cta: 'Discover people', to: '/app/discover' })
+    // Done from the server's counts; no contribution step where rewards cannot say.
+    const later = firstSteps({ ...base, identity: 'fan', followingCount: 3, cliqueCount: 1, contributed: null })
+    expect(later.map((s) => [s.key, s.done])).toEqual([['find', true], ['follow', true], ['clique', true]])
+  })
+
   it('a new member sees three first steps on Home; someone following quiet people sees a different message', async () => {
     const fake = fakeApi()
     renderApp('/app', fake.api)
@@ -3293,19 +3364,19 @@ describe('adult confirmation and My Split (foundation v2)', () => {
     expect(access.status).toBe('active')
   })
 
-  it('My Split has Overview, History and Opportunities; the simulated disclosure is always shown', async () => {
+  it('My Split has My Split, My Goals and My Activity; the simulated disclosure is always shown', async () => {
     const { api } = fakeApi()
     renderApp('/app/split', api)
     expect(await screen.findByRole('heading', { name: 'My Split' })).toBeTruthy()
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'History', 'Opportunities'])
-    expect(screen.getByTestId('split-disclosure').textContent).toMatch(/simulated.*no cash value.*nothing is paid out/i)
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['My Split', 'My Goals', 'My Activity'])
+    expect((await screen.findByTestId('split-disclosure')).textContent).toMatch(/simulated.*no cash value.*nothing is paid out/i)
     // No balances or amounts are shown before Connection Points exist.
     expect(screen.getByRole('tabpanel').textContent).not.toMatch(/\$\d|\d+ points/)
   })
 
-  it("Opportunities shows the member's personal referral link", async () => {
+  it("My Activity shows the member's personal referral link", async () => {
     const { api } = fakeApi()
-    renderApp('/app/split?face=opportunities', api)
+    renderApp('/app/split?face=activity', api)
     expect((await screen.findByTestId('referral-link')).textContent).toBe(`${window.location.origin}/register/0123456789abcdef`)
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy()
   })
@@ -3320,7 +3391,12 @@ describe('the members area', () => {
     // Five destinations (SP-SCOPE-001): Clique management moved into Home.
     for (const label of ['Home', 'Discover', 'Create', 'My Split', 'Profile']) expect(within(nav).getByTitle(label)).toBeTruthy()
     expect(within(nav).queryByTitle('Clique')).toBeNull()
-    expect(screen.getAllByRole('link', { name: 'Your account' })[0].getAttribute('href')).toBe('/app/account')
+    // UX-01: no account link in the sidebar or header; it is under Profile, Settings.
+    expect(screen.queryByRole('link', { name: 'Your account' })).toBeNull()
+    cleanup()
+    renderApp('/app/profile', api)
+    await screen.findByRole('heading', { name: 'Settings' })
+    expect(screen.getByRole('link', { name: 'Your account' }).getAttribute('href')).toBe('/app/account')
   })
 
   it('never mentions Connection Points, rewards or money in Release 1', async () => {
@@ -3968,7 +4044,7 @@ describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () 
     expect(screen.queryByTestId('goals-consumer')).toBeNull()
   })
 
-  it('in progress: points bar, each milestone with progress and target, the next step, locked simulated earnings and the approved wording', async () => {
+  it('My Split opens on the split: total, creator and supporter, unlocked and locked, simulated; then the next goal and one action', async () => {
     const fake = fakeApi()
     fake.rewards.points = { recognized: 970, redeemablePending: 0, redeemableApproved: 270, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 315 }
     fake.progression.my = {
@@ -3980,25 +4056,132 @@ describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () 
       earnings: { creator: money(0, 0), consumer: money(1240, 1240) },
     }
     renderApp('/app/split', fake.api)
-    const bar = await screen.findByTestId('points-bar')
-    expect(bar.textContent).toMatch(/1,240.*Recognition 970.*Reward eligible 270/)
-    // No posts and no creator earnings: only the supporter journey.
-    expect(screen.queryByTestId('goals-creator')).toBeNull()
-    const card = within(screen.getByTestId('goals-consumer'))
-    expect(screen.getByTestId('goals-consumer-badge').textContent).toBe('1 of 2')
-    expect(screen.getByTestId('goals-consumer-status').textContent).toBe('Next: comment, save or repost thoughtfully.')
-    expect(card.getAllByTestId('goal-step').map((x) => x.textContent)).toEqual(['Keep creators in your Clique (done)10 / 10', 'Comment, save or repost thoughtfully12 / 30'])
-    expect(card.getByText(/Goals in force since November 26, 2026/)).toBeTruthy()
+    const hero = await screen.findByTestId('split-hero')
+    expect(hero.textContent).toMatch(/Your split so far.*Simulated.*\$12\.40.*As a creator\$0\.00.*As a supporter\$12\.40.*Unlocked \$0\.00.*Locked \$12\.40/)
+    expect(hero.textContent).toMatch(/Locked amounts are held until you reach your goals.*nothing is paid/)
+    // The official Splitpost symbol, not a generic rewards icon.
+    expect(hero.querySelector('svg')).toBeTruthy()
+    const next = within(screen.getByTestId('next-for-you'))
+    expect(next.getByText('Supporter goals')).toBeTruthy()
+    expect(next.getByText(/1 of 2 done\. Unlocks \$12\.40 \(simulated\)/)).toBeTruthy()
+    expect(next.getByText('Comment, save or repost thoughtfully: 12 of 30')).toBeTruthy()
+    expect(next.getByRole('link', { name: 'Find a post to support' }).getAttribute('href')).toBe('/app')
+    // The terms and the breakdown sit behind "What do these mean?".
+    const explain = screen.getByTestId('split-explain')
+    expect(explain.textContent).toMatch(/Locked is accumulated but held until you reach your goals/)
     expect(screen.getByTestId('earnings-consumer').textContent).toMatch(/Simulated.*Accumulated\$12\.40Locked\$12\.40Unlocked\$0\.00Settled\$0\.00/)
     expect(screen.getByTestId('earnings-consumer').textContent).toMatch(/Estimated for your reward-eligible points this month: \$3\.15/)
-    expect(
-      card.getByText(
-        'Your legitimate allocated rewards remain attributed to you until you qualify, subject to applicable integrity and adjustment rules. All pilot amounts are simulated.',
-      ),
-    ).toBeTruthy()
+    expect(explain.textContent).toMatch(/Your legitimate allocated rewards remain attributed to you until you qualify, subject to applicable integrity and adjustment rules\. All pilot amounts are simulated\./)
+    // No posts and no creator earnings: no creator breakdown.
+    expect(screen.queryByTestId('earnings-creator')).toBeNull()
     expect(screen.getByTestId('split-progression').textContent).not.toMatch(/never takes/)
     // No split percentages are shown to members (legal review safeguard).
     expect(screen.getByTestId('split-progression').textContent).not.toMatch(/\d+\s*%/)
+  })
+
+  it('a new member with nothing yet sees $0.00 and a plain empty state, never a promise', async () => {
+    const fake = fakeApi()
+    fake.progression.my = {
+      enabled: true,
+      goodStanding: true,
+      creator: journey('in_progress', steps([['original_posts', 0, 20]])),
+      consumer: journey('in_progress', steps([['clique_creators', 0, 10]])),
+      notices: [],
+      earnings: { creator: money(0, 0), consumer: money(0, 0) },
+    }
+    renderApp('/app/split', fake.api)
+    const hero = await screen.findByTestId('split-hero')
+    expect(screen.getByTestId('split-total').textContent).toBe('$0.00')
+    expect(hero.textContent).toMatch(/Nothing yet\. Your split grows as you post and as you support the creators you value/)
+    expect(hero.textContent).not.toMatch(/guarantee|will earn/i)
+    expect(within(screen.getByTestId('next-for-you')).getByRole('link', { name: 'Choose your Clique' }).getAttribute('href')).toBe('/app/clique')
+  })
+
+  it('My Goals: each milestone with progress, target and one next action; Connection Points live in My Activity', async () => {
+    const fake = fakeApi()
+    fake.rewards.points = { recognized: 970, redeemablePending: 0, redeemableApproved: 270, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 315 }
+    fake.progression.my = {
+      enabled: true,
+      goodStanding: true,
+      creator: journey('in_progress', steps([['original_posts', 0, 20]])),
+      consumer: journey('in_progress', steps([['clique_creators', 10, 10], ['meaningful_engagements', 12, 30]])),
+      notices: [],
+      earnings: { creator: money(0, 0), consumer: money(1240, 1240) },
+    }
+    renderApp('/app/split?face=goals', fake.api)
+    const card = within(await screen.findByTestId('goals-consumer'))
+    expect(screen.queryByTestId('goals-creator')).toBeNull()
+    expect(screen.getByTestId('goals-consumer-badge').textContent).toBe('1 of 2')
+    expect(screen.getByTestId('goals-consumer-status').textContent).toBe('Next: comment, save or repost thoughtfully.')
+    expect(card.getAllByTestId('goal-step').map((x) => x.textContent)).toEqual([
+      'Keep creators in your Clique (done)10 / 10',
+      'Comment, save or repost thoughtfully12 / 30Find a post to support ',
+    ])
+    expect(card.getByText(/Reach every goal to unlock \$12\.40 \(simulated\)/)).toBeTruthy()
+    expect(card.getByText(/Goals in force since November 26, 2026/)).toBeTruthy()
+    cleanup()
+    renderApp('/app/split?face=activity', fake.api)
+    expect((await screen.findByTestId('activity-points')).textContent).toMatch(
+      /Connection Points1,240.*970 count your contribution and have no value\. 270 came from qualified referrals and share in the simulated rewards pool/,
+    )
+  })
+
+  it('recognition speaks only for a contribution the server recorded, and names the goal it moved', async () => {
+    const entry = (over: Partial<PointsEntry>): PointsEntry => ({ id: 9, action: 'save', points: 2, redeemable: false, status: 'recognized', createdAt: new Date().toISOString(), creator: null, postId: 'p1', ...over })
+    const progress = {
+      enabled: true as const,
+      goodStanding: true,
+      creator: journey('in_progress', steps([['original_posts', 0, 20]])),
+      consumer: journey('in_progress', steps([['meaningful_engagements', 22, 30]])),
+      notices: [],
+      earnings: { creator: money(0, 0), consumer: money(0, 0) },
+    }
+    expect(recognitionText(entry({}), progress)).toMatchObject({ title: 'Save recognized', detail: 'It counts toward your supporter goals: 22 of 30.' })
+    expect(recognitionText(entry({}), { enabled: false })).toMatchObject({ detail: 'It counts toward your Connection Points.' })
+    expect(recognitionText(entry({ status: 'reversal', points: -2 }), progress)).toBeNull()
+    expect(recognitionText(entry({ action: 'unknown_action' }), progress)).toBeNull()
+    expect(recognitionText(entry({ action: 'qualified_referral', status: 'pending_review' }), progress)).toMatchObject({ title: 'Referral recorded', detail: 'It counts once a quick review is done.' })
+    // In the app: a save the server recorded is acknowledged; a save it did not record is not.
+    const fake = fakeApi()
+    fake.follows.add(fake.key('me', 'c1'))
+    fake.seedPost('c1', 'Worth keeping')
+    fake.rewards.history = []
+    renderApp('/app?face=following', fake.api)
+    const card = within(await screen.findByTestId('post'))
+    fireEvent.click(await card.findByRole('button', { name: 'Save' }))
+    await card.findByRole('button', { name: 'Saved (tap to remove)' })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.queryByTestId('recognition')).toBeNull()
+    fireEvent.click(card.getByRole('button', { name: 'Saved (tap to remove)' }))
+    await card.findByRole('button', { name: 'Save' })
+    fake.rewards.history = [entry({ id: 10 })]
+    fireEvent.click(card.getByRole('button', { name: 'Save' }))
+    expect((await screen.findByTestId('recognition')).textContent).toMatch(/Save recognized.*It counts toward your Connection Points/)
+  })
+
+  it('a goal met since the member last looked is acknowledged once', async () => {
+    const fake = fakeApi()
+    const my = (value: number) => ({
+      enabled: true as const,
+      goodStanding: true,
+      creator: journey('in_progress', steps([['original_posts', 0, 20]])),
+      consumer: journey('in_progress', steps([['clique_creators', value, 10], ['meaningful_engagements', 12, 30]])),
+      notices: [],
+      earnings: { creator: money(0, 0), consumer: money(0, 0) },
+    })
+    window.localStorage.clear()
+    fake.progression.my = my(4)
+    renderApp('/app/split?face=goals', fake.api)
+    await screen.findByTestId('goals-consumer')
+    expect(screen.queryByTestId('goal-completed')).toBeNull()
+    cleanup()
+    fake.progression.my = my(10)
+    renderApp('/app/split?face=goals', fake.api)
+    expect((await screen.findByTestId('goal-completed')).textContent).toMatch(/Goal complete: Keep creators in your Clique.*1 of your 2 supporter goals done/)
+    cleanup()
+    renderApp('/app/split?face=goals', fake.api)
+    await screen.findByTestId('goals-consumer')
+    expect(screen.queryByTestId('goal-completed')).toBeNull()
   })
 
   it('shows Under review, Qualified with optional growth guidance, and a paused amount', async () => {
@@ -4012,13 +4195,16 @@ describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () 
       earnings: { creator: money(4000, 2000, 0, 0, 2000), consumer: money(500, 0, 500) },
     }
     renderApp('/app/split', fake.api)
+    expect((await screen.findByTestId('earnings-creator')).textContent).toMatch(/Paused while under review: \$20\.00/)
+    expect(screen.getByTestId('earnings-consumer').textContent).toMatch(/Locked\$0\.00Unlocked\$5\.00/)
+    expect(within(screen.getByTestId('next-for-you')).getByText(/You've met every creator goal\. We're checking it, then it unlocks\./)).toBeTruthy()
+    cleanup()
+    renderApp('/app/split?face=goals', fake.api)
     expect((await screen.findByTestId('goals-creator-badge')).textContent).toBe('Under review')
     expect(screen.getByTestId('goals-creator-status').textContent).toMatch(/met every goal\. We are checking it/)
     const creator = within(screen.getByTestId('goals-creator'))
     expect(creator.getByTestId('progress-notice').textContent).toMatch(/One advertising entry is being checked\. Nothing is taken/)
-    expect(screen.getByTestId('earnings-creator').textContent).toMatch(/Paused while under review: \$20\.00/)
     expect(screen.getByTestId('goals-consumer-badge').textContent).toBe('Qualified')
-    expect(screen.getByTestId('earnings-consumer').textContent).toMatch(/Locked\$0\.00Unlocked\$5\.00/)
     expect(screen.getByTestId('growth-consumer').textContent).toMatch(/Keep growing \(optional\).*never depends on them/)
     // A creator hold is not shown on the supporter card.
     expect(within(screen.getByTestId('goals-consumer')).queryByTestId('progress-notice')).toBeNull()
@@ -4034,7 +4220,7 @@ describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () 
       notices: [{ kind: 'revoked', message: 'Your creator qualification was revoked after a review.', since: '2026-11-25T00:00:00Z', scope: null, audience: 'creator' }],
       earnings: { creator: money(4000, 4000), consumer: money(0, 0) },
     }
-    renderApp('/app/split', fake.api)
+    renderApp('/app/split?face=goals', fake.api)
     expect((await screen.findByTestId('goals-creator-badge')).textContent).toBe('Qualification revoked')
     expect(within(screen.getByTestId('goals-creator')).getByTestId('progress-notice').textContent).toMatch(/revoked after a review\. To appeal, send us a message through Feedback/)
   })
@@ -4167,6 +4353,7 @@ describe('progression governance (SP-PRG-001): holds and corrections in Control 
 })
 
 describe('rewards (20261205000000): simulated Connection Points', () => {
+
   it('My Split shows recognized and redeemable points separately, and their value marked as simulated', async () => {
     const fake = fakeApi()
     fake.rewards.points = {
@@ -4183,7 +4370,7 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
     expect(box.getByText(/From qualified referrals\. 100 waiting for review\./)).toBeTruthy()
     expect(box.getByText('$20.00')).toBeTruthy()
     expect(box.getByText('Simulated')).toBeTruthy()
-    expect(screen.getByTestId('split-disclosure').textContent).toMatch(/simulated.*no cash value.*nothing is paid out/i)
+    expect((await screen.findByTestId('split-disclosure')).textContent).toMatch(/simulated.*no cash value.*nothing is paid out/i)
   })
 
   it('My Split keeps "How My Split works" to come back to after setup, with no percentages', async () => {
@@ -4197,7 +4384,7 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
     expect(intro.textContent).not.toMatch(/\d+\s*%/)
   })
 
-  it('the History face lists contributions newest first, with reversals shown', async () => {
+  it('My Activity lists contributions newest first, with reversals shown, and says which points have no value', async () => {
     const fake = fakeApi()
     fake.rewards.points = { recognized: 3, redeemablePending: 0, redeemableApproved: 0, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 0 }
     fake.rewards.history = [
@@ -4222,12 +4409,14 @@ describe('rewards (20261205000000): simulated Connection Points', () => {
         postId: 'p1',
       },
     ]
-    renderApp('/app/split?face=history', fake.api)
+    renderApp('/app/split?face=activity', fake.api)
     const list = within(await screen.findByTestId('points-history'))
     expect(list.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       expect.stringMatching(/Thoughtful comment.*Reversed.*Creator 1.*-2/),
       expect.stringMatching(/Reposted.*Recognized.*Creator 1.*\+5/),
     ])
+    // Not every Connection Point has value: recognition points are said to have none.
+    expect(screen.getByTestId('activity-points').textContent).toMatch(/3 count your contribution and have no value\. Only points from qualified referrals share in the simulated rewards pool/)
   })
 
   it('the founder reviews qualified referrals and sees the simulated reconciliation', async () => {
@@ -4555,6 +4744,37 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
     expect(f.ads.events.at(-1)).toEqual({ id: 'imp1', kind: 'hidden' })
   })
 
+  it('a finished ad observer can never count a view (the cause of the old intermittent failure)', async () => {
+    const original = globalThis.IntersectionObserver
+    const callbacks: Array<{ el: Element; cb: IntersectionObserverCallback }> = []
+    globalThis.IntersectionObserver = class {
+      constructor(private cb: IntersectionObserverCallback) {}
+      observe(el: Element) {
+        callbacks.push({ el, cb: this.cb })
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return []
+      }
+    } as unknown as typeof IntersectionObserver
+    try {
+      const f = fakeApi()
+      const post = f.seedPost('c1', 'A post about budgets')
+      f.ads.next = ad()
+      renderApp(`/app/post/${post}`, f.api)
+      const card = await screen.findByTestId('ad')
+      await waitFor(() => expect(callbacks.some((c) => c.el === card || c.el.contains(card) || card.contains(c.el))).toBe(true))
+      const stale = callbacks.find((c) => c.el === card || c.el.contains(card) || card.contains(c.el))!
+      cleanup() // the slot's effect is cleaned up: its observer is finished
+      stale.cb([{ target: stale.el, isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], {} as IntersectionObserver)
+      await new Promise((r) => setTimeout(r, 1300))
+      expect(f.ads.events.filter((e) => e.kind === 'view')).toEqual([])
+    } finally {
+      globalThis.IntersectionObserver = original
+    }
+  })
+
   it('an ad counts as seen only after a second on screen in a tab the person is looking at', async () => {
     const original = globalThis.IntersectionObserver
     const callbacks: Array<{ el: Element; cb: IntersectionObserverCallback }> = []
@@ -4592,12 +4812,13 @@ describe('advertising (20261208000000): labelled, explainable, controllable', ()
         const card = await screen.findByTestId('ad')
         note(`ad shown; observers so far ${callbacks.length}`)
         // The slot's observer is registered in an effect, which may run after the ad first appears.
-        const find = () => callbacks.find((c) => c.el === card || c.el.contains(card) || card.contains(c.el))
+        // Always the slot's current observer: if its effect runs again, the earlier observer is finished.
+        const find = () => [...callbacks].reverse().find((c) => c.el === card || c.el.contains(card) || card.contains(c.el))
         await waitFor(() => expect(find()).toBeTruthy())
-        const slot = find()!
         note(`slot observer found; observers ${callbacks.length}; card on page ${card.isConnected}`)
         const show = (ratio: number) => {
-          note(`show ${ratio}; card on page ${card.isConnected}; events ${JSON.stringify(f.ads.events)}`)
+          const slot = find()!
+          note(`show ${ratio}; observers ${callbacks.length}; card on page ${card.isConnected}; events ${JSON.stringify(f.ads.events)}`)
           slot.cb([{ target: slot.el, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry], {} as IntersectionObserver)
         }
         show(1)

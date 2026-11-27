@@ -223,7 +223,8 @@ describe('waitlist form', () => {
       await tokenReady()
       submit()
       const h = await screen.findByRole('heading', { level: 1, name: "You're on the list!" })
-      expect(document.activeElement).toBe(h)
+      // Focus moves just after the success screen renders; wait for it rather than racing it.
+      await waitFor(() => expect(document.activeElement).toBe(h))
       expect(h.getAttribute('tabindex')).toBe('-1')
     })
 

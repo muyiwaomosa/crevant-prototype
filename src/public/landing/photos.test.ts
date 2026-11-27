@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { CREATOR_GROUP_PHOTOS, PHOTOS, SAMPLE_AVATAR } from './photos'
+import { WHO_PHOTOS, PHOTOS, PHOTOS_TO_VERIFY, SAMPLE_AVATAR } from './photos'
 import { HOMEPAGE_COPY } from './copy'
 
 const PUBLIC = join(__dirname, '../../../public')
@@ -23,9 +23,9 @@ function webpSize(buf: Buffer): { width: number; height: number } {
 describe('homepage photos', () => {
   const photos = Object.values(PHOTOS)
 
-  it('has exactly the four approved slots: three creator groups and the vision', () => {
-    expect(photos.map((p) => p.id)).toEqual(['creator-editing', 'teacher-recording', 'metalworker', 'filmmaker'])
-    expect(CREATOR_GROUP_PHOTOS).toHaveLength(HOMEPAGE_COPY.creators.groups.length)
+  it('has exactly the four slots of SP-BRAND-002: why, creators, supporters and the vision', () => {
+    expect(photos.map((p) => p.id)).toEqual(['creator-editing', 'teacher-recording', 'supporter-phone', 'community-table'])
+    expect(WHO_PHOTOS).toHaveLength(HOMEPAGE_COPY.who.groups.length)
   })
 
   it.each(photos.map((p) => [p.id, p] as const))('%s records its Pexels source, credit and licence, and describes the activity', (_, p) => {
@@ -35,6 +35,7 @@ describe('homepage photos', () => {
     expect(p.sourceUrl).toMatch(/^https:\/\/www\.pexels\.com\/photo\/[a-z0-9-]+-\d+\/$/)
     expect(p.photographer.length).toBeGreaterThan(2)
     expect(p.photographer).not.toMatch(/pending/i)
+    expect(p.photographer).not.toBe('')
     expect(p.alt.length).toBeGreaterThan(30)
   })
 
@@ -52,13 +53,19 @@ describe('homepage photos', () => {
     },
   )
 
-  it('credits the verified photographer for each photo', () => {
+  it('credits the verified photographer for each photo, and marks the two new ones as awaiting the founder’s check', () => {
     expect(photos.map((p) => [p.sourceUrl.match(/-(\d+)\/$/)![1], p.photographer])).toEqual([
       ['7014401', 'George Milton'],
       ['9040544', 'Alena Darmel'],
-      ['23638660', 'Yunus Tuğ'],
-      ['36181988', 'Director Chenchi'],
+      // SP-BRAND-002 (Nov 27): to be confirmed on the Pexels listings before publication.
+      ['6697318', 'To be verified on the Pexels listing'],
+      ['5738245', 'To be verified on the Pexels listing'],
     ])
+  })
+
+  it('the asset register marks the two new photos unverified, to be verified or replaced before publication', () => {
+    expect(PHOTOS_TO_VERIFY.map((p) => p.id)).toEqual(['supporter-phone', 'community-table'])
+    for (const p of photos.filter((x) => x.verified)) expect(p.photographer).not.toMatch(/verified/i)
   })
 
   it('never names a model as a member, user or sample person, and never guesses who they are', () => {
@@ -72,7 +79,18 @@ describe('homepage photos', () => {
   it('ships no unused, retired or AI-generated images', () => {
     const used = new Set([...photos.flatMap((p) => p.widths.map((w) => `${p.base.split('/').pop()}-${w}.webp`)), SAMPLE_AVATAR.src.split('/').pop()])
     for (const f of readdirSync(join(MEDIA, 'photos'))) expect(used.has(f), `${f} is unused`).toBe(true)
-    for (const f of readdirSync(MEDIA)) expect(f === 'photos' || f === 'founder.jpg', `${f} is unused`).toBe(true)
+    for (const f of readdirSync(MEDIA)) expect(['photos', 'screens', 'founder.jpg'].includes(f), `${f} is unused`).toBe(true)
+  })
+
+  it('ships exactly the five app screens HOW shows, each small, portrait and free of metadata', () => {
+    const screens = HOMEPAGE_COPY.how.steps.map((s) => s.screen.split('/').pop())
+    expect(readdirSync(join(MEDIA, 'screens')).sort()).toEqual([...screens].sort())
+    for (const s of HOMEPAGE_COPY.how.steps) {
+      const buf = readFileSync(join(PUBLIC, s.screen))
+      expect(webpSize(buf), s.id).toEqual({ width: 780, height: 1688 })
+      expect(buf.length, s.id).toBeLessThan(90_000)
+      expect(buf.includes(Buffer.from('EXIF')), s.id).toBe(false)
+    }
   })
 
   it("records the sample creator's profile photo: licensed, small, square and never presented as Priya", () => {

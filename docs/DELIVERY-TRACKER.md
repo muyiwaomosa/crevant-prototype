@@ -9,7 +9,7 @@ merging approves its migration checksums under D7), **Deployed** (database on
 staging and the `staging` app at that commit), **Accepted** (the founder used it
 on staging and signed off).
 
-Infrastructure: Vercel Pro; the staging app is deployed at 40a055b and founder acceptance has started (Nov 26). Supabase: the Splitpost Production organization is on Pro (member Production, waitlist, rehearsal); `crevant-staging` is in the Crevant organization on **Free** (no backups) until the consolidation in `docs/INFRASTRUCTURE.md` is approved.
+Infrastructure (Nov 27): Vercel Pro; the staging app follows the `staging` branch, now at 12303fe (every merged pull request through #129). Supabase: one Splitpost Production organization on Pro holds staging (`crevant-staging`, daily backups), member Production, the waitlist and the rehearsal project. Every migration through 20261219000000 is applied on staging (run 50, Nov 27). Founder acceptance is under way: initial feedback Nov 27 (UX-01 to UX-05 below).
 
 Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 branch, fast-forwarded only to merged `main`). Founder actions and acceptance
@@ -36,12 +36,19 @@ https://claude.ai/artifact/LT9k8aSFrFMz6MxRqtsvQ9).
 | G1 Goals engine (versioned, founder-set values, no defaults) and G3 simulated locked earnings (locked, eligible, settled; consumer Option A) | **Built and tested**, behind the progression switch (off) | Migration 20261217000000: behaviour test 300 (7 checks), staging check 033, rollback (10 checks) in the rollback suite (125 pass), reconciliation invariant; full database suite passes | PR for review; founder D7 approval of the checksum at merge; then staging |
 | G2 creator progress, G4 consumer (supporter) progress, G5 simplified My Split, Control Center goals panel | **Built and tested**, behind the same switch | 6 unit tests (switch off unchanged, unset goals, progress and next step, restriction, founder goals and settlement); browser journey `progression-journey` passes (WCAG 2.2 AA, 320 and 390 px, no CSP violations) and leaves the switch off; the consumer and founder journeys pass after it | Same PR as G1 |
 | SP-PRG-001 Progression and Engagement Framework (approved Nov 26) | **Built and tested locally**, behind the switch (off) | `docs/SP-PRG-001.md`, alignment in `docs/SP-PRG-001-ALIGNMENT.md`. Migration 20261218000000: approved benchmarks recorded, metric definitions aligned (UTC weeks, eligible members, returning supporters, ledger-based engagement), review before release, targeted holds, compensating corrections, scorecard. Behaviour test 300 (8 blocks), staging checks 033 and 034, rollback suite 128 pass, 899 unit tests, journeys (rewards, progression, consumer, founder) pass | **Merged** (PR #127); **applied to staging** (run 49, checks 033 and 034 passed; progression switch off); Control Center forms in PR #128; decisions 1 to 3 approved (alignment, section 9) |
-| Migration 20261219000000: pilot balance closure on deletion, SP-PRG-001 activation definitions, routine versus flagged review triage | **Built and tested locally** (checksum `7e24ff72...49520176`) | Behaviour test 310 (3 blocks), staging check 035, rollback suite 131 pass, 904 unit tests, journeys pass | Awaiting D7 approval of the checksum, then merge and staging apply |
+| Migration 20261219000000: pilot balance closure on deletion, SP-PRG-001 activation definitions, routine versus flagged review triage | **Built and tested locally** (checksum `7e24ff72...49520176`) | Behaviour test 310 (3 blocks), staging check 035, rollback suite 131 pass, 904 unit tests, journeys pass | **D7 approved Nov 27; merged** (PR #129, 12303fe); **applied to staging** (run 50, all staging checks passed including 035; 0 closures; progression switch off) |
 | Post card Report menu | **Built**: Report moved into the post's "···" menu (other people's posts only) | Unit tests; moderation and photo journeys | With 20261219 PR |
 | F1 Connection framework | **Approved in principle**; weighted Connection Score, leaderboards, rankings and advanced achievements **deferred** (founder, Nov 26) | SP-REFINE-002, sections 1 and 5 | After launch |
 | F2 Locked creator earnings (simulated) | **Approved**: append-only states; Splitpost never absorbs a locked amount | SP-REFINE-002, section 3 | Built in G3; deletion, dormancy, disqualification and legal treatment stay open |
 | F3 Consumer eligible points before qualification | **Option A approved** (include and lock) | SP-REFINE-002, section 4 | Built in G3 |
 | F4 Interactive advertising | **Approved as a controlled experiment** in principle | SP-REFINE-002, section 6 | After launch unless the founder asks otherwise |
+| UX-01 Account links out of the sidebar and phone header | **Built** (approved Nov 27): account settings under Profile, Settings; Feedback and the pilot line kept | Unit tests; journeys | PR with SP-UX-002 |
+| UX-02 Video readiness | **Confirmed gated**; founder running the device tests | Staging check 029 | Founder |
+| UX-03 Recognition, goal progress, milestones, next actions | **Built** (approved direction): recognition only for server-recorded contributions; rings, bars, one action per goal; a met goal acknowledged once | Unit tests; progression, social journeys | PR with SP-UX-002; founder visual review |
+| UX-04 My Split: My Split, My Goals, My Activity | **Built** (approved direction): split first with the official symbol, creator and supporter, unlocked and locked, simulated; plain-language terms behind "What do these mean?"; empty states | Unit tests; progression, rewards, consumer journeys | Same |
+| SP-UX-002 Value-first welcome and tailored first steps | **Built, for final copy and visual review**: five faces before setup (Skip, Back, Continue, Get started; swipe, keys, reduced motion), again from Profile; first steps tailored by the goal answer and interests | Unit tests; social journey walks all five faces with an accessibility check; `docs/design/ux-refine/SP-UX-002.md` and `sp-ux-002-*.png` | Founder final review, then merge |
+| Intermittent ad view unit test | **Resolved**: a finished ad observer could start a view timer; it can no longer (regression test fails without the fix) | 12 repeated runs pass | Merged with the package |
+| SP-BRAND-002 Landing page (creators and supporters) | **Built and tested**: eight-section story with the exact copy, real app screens in HOW, two new licensed photos; 211 public-site browser checks pass | `docs/design/brand/SP-BRAND-002.md`; decisions 1 to 7 implemented Nov 27 (two sentences carry "future" for confirmation; two photos to verify) | Founder publication approval, then merge with SP-UX-002 (publishes the public site) |
 | L1 Landing page visual assets | Not started | Prepared from the approved screens once V1 lands; not published before approval | After V1 |
 
 **Impact on December 23:** H1, V1, D1 and P1 are about 7 working days of UI
@@ -78,7 +85,7 @@ to the previews confirmed first (SP-REFINE-002, section 2).
 | Pilot media disclosure: "Keep your original" in the composer when a photo or video is attached; privacy notice draft line | Tested | PR #117; unit tests; photo, creator and video journeys | Merge, then acceptance (row 64) |
 | Recovery after a restore: deleted accounts and posts stay deleted (deletion register, migration 20261216000000; D7 approved Nov 26, conditional) | **Merged** (PR #120, 74d41d7; migration applied to staging by run 45861107192) | Register written in the same transaction as each deletion; reported to the Edge Function log at once after each deletion (`/deletions`) and retried by the 15-minute drain; a row unlogged after 30 minutes fails the reconciliation. Recovery: export the live register before restoring (complete), else the log; restrict again after the restore; reconciliation is idempotent; reopening rules fail safe; residual risk documented by path (`docs/RECOVERY.md`). Recovery exercise passes locally and in CI | post-media v3 deployed and verified on staging (Nov 26). **Immediate reporting confirmed on staging:** the latest deletion reached the function log in 1 second (run 45878052395); the scheduled drain runs every 15 minutes. **Completeness** is now checked as well: staging check 032 fails on any post or comment deletion without a register row, any founder account deletion without its own register row (matched one by one), or any row not logged. Its first staging result comes with step 3 of the recovery exercise; not accepted until then. Then the exercise on staging after the transfer (action 7). Not complete until then. Incomplete evidence keeps a restored app restricted until resolved |
 | Video journey failed once in CI (PR #120): no video post found right after posting | Fixed (test synchronization) | Cause shown: the wait for the post text also matched the composer, because React keeps a controlled textarea's text in sync with what is typed, so the database was read before the post was saved. The video and photo journeys now wait for the rendered post card. Not an app defect | Both journeys pass locally; CI on the next push |
-| Intermittent failure of the ad view unit test (once in about six full local runs) | **Open investigation** | Root cause not confirmed: React effect timing is suspected, not proven. The test now waits for the slot's observer and prints a timed trace on failure that separates a test synchronization problem from a real miscount | If it recurs, read the trace; validate real ad viewing during acceptance (Journey 6) |
+| Intermittent failure of the ad view unit test | **Resolved Nov 27** (see the UX rows above) | Root cause found and fixed | None |
 | Supabase consolidation: staging into the Pro organization (daily backups, 7-day logs, 110 MB upload limit) | **Done** (founder, Nov 26) | Same project and reference after the transfer; Edge Functions verified again: post-media 454 checks (run 45878056710), avatar 225 checks (run 45878061367), 0 failures, same builds; staging checks run 45878052395 all passed after the transfer (database connectivity with full TLS verification, every security and separation check, 36 migrations matching, scheduled cleanup at 18:45). Global upload limit set to 110 MB (founder). Cost about $55 a month until the rehearsal project is retired, then about $45; no new subscription | Founder: action 7 (confirm the first daily backup). The rehearsal project stays until the recovery exercise has passed on staging, its dependencies are ruled out, and the founder explicitly approves deleting it |
 | "See Splitpost" screenshots on the landing page | Not started | Needs the Dec 7 build | Take from staging after acceptance starts |
 
@@ -124,20 +131,36 @@ schedule risk for video, because it gates the upload limit. If video slips,
 the pilot can open with photos and text first and video on staging later,
 which needs no change to the code.
 
-## Genuinely outstanding against the approved MVP scope (Nov 26)
+## Genuinely outstanding against the approved MVP scope (Nov 27)
 
-Everything else in the approved scope is built and merged. What remains:
+Everything else in the approved scope is built, merged and on staging. What
+remains, by kind:
 
-* **Hands-on acceptance on staging** (founder), once steps A to D are done.
-* **Video activation:** the device test (founder), then the switch on staging.
-  The iPhone 1080p fallback only if the test shows it is needed.
-* **Release hardening, part 2** (row above).
-* **"See Splitpost" screenshots** on the landing page, from staging.
-* **Legal and policy dependencies:** the Rewards Rules legal review (before
-  allocation percentages are shown to members), the pilot privacy notice and
-  policies in `docs/policies/` (before external invitations), and the
-  regulated financial products review (deferred).
-* **Production batches PB-1 to PB-4**, each with its own approval, and the
-  cohort plan for December 23 (N10).
+**Remaining development:** none. The intermittent ad view test is resolved.
+
+**Experience refinements:** UX-01, UX-03, UX-04 and SP-UX-002 are built and
+tested (front end only, no migration), awaiting the founder's final copy and
+visual review before merge, inside the December 10 interface target.
+
+**Acceptance testing** (founder, on staging): the full member journey
+(`docs/FOUNDER-TESTING-GUIDE.md`) with progression on; the refinements once
+built; the real-device speed check (row 61).
+
+**Operational readiness:** the video device test, then video on staging
+(founder); the staging recovery exercise (needs the founder's written
+authorization for the in-place restore); PB-1 member Production operations
+(SMTP, drain key, health checks; awaiting approval); "See Splitpost"
+screenshots for the landing page from staging.
+
+**Legal dependencies:** the Rewards Rules review (before allocation
+percentages are shown to members), the pilot privacy notice and policies in
+`docs/policies/` (before external invitations), the regulated financial
+products review (deferred).
+
+**Production release activities:** PB-2 migrations and functions (Dec 16),
+PB-3 release candidate fixes (Dec 20), PB-4 external access (Dec 23), each
+with its own authorization, and the cohort plan (N10). Production activation,
+external pilot access and real financial transactions remain unauthorized
+until then.
 
 No new functionality is planned beyond these.

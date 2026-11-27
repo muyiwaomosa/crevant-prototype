@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
-import { JOIN_PATH, REGISTRATION_OPEN, WAITLIST_CLOSED_COPY, WAITLIST_OPEN, waitlistCta } from '../../waitlist/status'
+import { JOIN_PATH, waitlistCta } from '../../waitlist/status'
 
 const copy = HOMEPAGE_COPY.invitation
 
@@ -18,7 +18,7 @@ export function Invitation() {
     <section id="invitation" aria-labelledby="invitation-title" className="relative isolate scroll-mt-16 overflow-hidden bg-sp-primary text-white">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(118deg,transparent_0_70%,var(--color-sp-secondary)_70%_100%)] opacity-90"
+        className="pointer-events-none absolute inset-0 -z-10 hidden bg-[linear-gradient(118deg,transparent_0_70%,var(--color-sp-secondary)_70%_100%)] opacity-90 md:block"
       />
       <div className="mx-auto max-w-6xl px-4 py-18 sm:px-6 sm:py-24 lg:py-28">
         <div className="min-w-0 max-w-3xl">
@@ -29,15 +29,17 @@ export function Invitation() {
             {copy.headline}
           </h2>
           <div data-testid="invitation-body" className="mt-6 max-w-xl space-y-1.5 text-[1.12rem] leading-relaxed sm:text-xl">
-            {copy.body.map((line, i) => (
-              <p key={line} className={i === 0 ? 'font-semibold text-sp-bg' : 'text-sp-muted-on-dark'}>
+            {copy.body.map((line) => (
+              <p key={line} className="text-sp-muted-on-dark">
                 {line}
               </p>
             ))}
           </div>
-          <p className="mt-5 max-w-xl text-[1.05rem] leading-relaxed text-sp-bg">{copy.shape}</p>
-          <p data-testid="invitation-close" className="mt-2 font-sp-display text-xl font-extrabold text-sp-accent">
-            {!WAITLIST_OPEN ? WAITLIST_CLOSED_COPY.close : REGISTRATION_OPEN ? copy.closeRegistration : copy.close}
+          <p data-testid="invitation-belief" className="mt-6 font-sp-display text-[clamp(1.8rem,5vw,2.4rem)] font-black text-sp-accent">
+            {copy.belief}
+          </p>
+          <p data-testid="invitation-close" className="mt-1 text-[1.1rem] font-semibold text-sp-bg">
+            {copy.close}
           </p>
           <Link
             to={JOIN_PATH}
@@ -45,6 +47,9 @@ export function Invitation() {
           >
             {waitlistCta()} <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
+          <p data-testid="invitation-disclosure" className="mt-4 max-w-xl text-sm leading-relaxed text-sp-muted-on-dark">
+            {copy.disclosure}
+          </p>
           <div data-testid="founder-signoff" className="mt-8 flex items-center gap-3">
             <img
               src="/media/landing/founder.jpg"
