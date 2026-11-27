@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { Check, X } from 'lucide-react'
 import { useAppApi } from './AppApiContext'
 import type { GoalStep, MyProgress, PointsEntry } from './api'
+import { useProgressContext } from './journey'
+import { goalText } from './progression'
 
 /**
  * Contribution recognition (UX-03, Nov 27). After a comment, save, repost or
@@ -30,12 +32,28 @@ const ACTION_GOAL: Record<string, string> = {
   qualified_referral: 'qualified_referrals',
 }
 
-type Shown = { id: number; title: string; detail: string }
-const Ctx = createContext<() => void>(() => {})
+type Shown = { id: number; title: string; detail: string; bar?: { value: number; target: number } }
+type Api = { recognize: () => void; published: () => void }
+const Ctx = createContext<Api>({ recognize: () => {}, published: () => {} })
 
 /** Call after a contribution succeeds; it checks with the server and says something only if it was recorded. */
 export function useRecognize() {
-  return useContext(Ctx)
+  return useContext(Ctx).recognize
+}
+
+/** Call after a post is published: it reads creator progress from the server and shows the step it moved. */
+export function usePublishedRecognition() {
+  return useContext(Ctx).published
+}
+
+/** The message after a new post: the creator goal for original posts, as the server now reports it. */
+export function publishedText(progress: MyProgress | null): Shown | null {
+  if (!progress?.enabled || progress.creator.status !== 'in_progress') return null
+  const step = progress.creator.steps.find((s) => s.metric === 'original_posts')
+  if (!step || step.target === null) return null
+  const v = Math.min(step.value, step.target)
+  if (step.value >= step.target) return { id: -1, title: 'Goal complete: publish original posts', detail: `${step.target} of ${step.target}. It counts toward your creator goals.`, bar: { value: v, target: step.target } }
+  return { id: -1, title: 'Post published', detail: `Creator goals: ${goalText(step.metric).label.toLowerCase()}, ${v} of ${step.target}.`, bar: { value: v, target: step.target } }
 }
 
 /** The message for one recorded entry: what was recognized and, if known, the goal it moved. */
@@ -47,7 +65,13 @@ export function recognitionText(entry: PointsEntry, progress: MyProgress | null)
   const metric = ACTION_GOAL[entry.action]
   if (progress?.enabled && metric && progress.consumer.status === 'in_progress') {
     const step: GoalStep | undefined = progress.consumer.steps.find((s) => s.metric === metric)
-    if (step && step.target !== null) detail = `It counts toward your supporter goals: ${Math.min(step.value, step.target)} of ${step.target}.`
+    if (step && step.target !== null)
+      return {
+        id: entry.id,
+        title: `${label} recognized`,
+        detail: `It counts toward your supporter goals: ${Math.min(step.value, step.target)} of ${step.target}.`,
+        bar: { value: Math.min(step.value, step.target), target: step.target },
+      }
   }
   return { id: entry.id, title: `${label} recognized`, detail }
 }
@@ -56,9 +80,16 @@ const WINDOW_MS = 2 * 60 * 1000
 
 export function RecognitionProvider({ children }: { children: ReactNode }) {
   const api = useAppApi()
+  const progressCtx = useProgressContext()
   const [shown, setShown] = useState<Shown | null>(null)
   const announced = useRef<Set<number>>(new Set())
   const timer = useRef<number | undefined>(undefined)
+
+  const show = useCallback((text: Shown) => {
+    setShown(text)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => setShown(null), 5000)
+  }, [])
 
   const recognize = useCallback(() => {
     const asked = Date.now()
@@ -68,22 +99,30 @@ export function RecognitionProvider({ children }: { children: ReactNode }) {
         const latest = rows.find((r) => !announced.current.has(r.id) && Math.abs(asked - Date.parse(r.createdAt)) < WINDOW_MS)
         if (!latest) return
         announced.current.add(latest.id)
-        const progress = await api.myProgress().catch(() => null)
+        // Refreshing the shared progress also moves the goal strip and the rest of the app.
+        const progress = progressCtx ? await progressCtx.refresh() : await api.myProgress().catch(() => null)
         const text = recognitionText(latest, progress)
         if (!text) return
-        setShown(text)
-        window.clearTimeout(timer.current)
-        timer.current = window.setTimeout(() => setShown(null), 5000)
+        show(text)
       } catch {
         // Recognition is a courtesy: never interrupt the member over it.
       }
     })()
-  }, [api])
+  }, [api, progressCtx, show])
+
+  const published = useCallback(() => {
+    void (async () => {
+      const progress = progressCtx ? await progressCtx.refresh() : await api.myProgress().catch(() => null)
+      const text = publishedText(progress)
+      if (text) show(text)
+    })()
+  }, [api, progressCtx, show])
+
 
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
   return (
-    <Ctx.Provider value={recognize}>
+    <Ctx.Provider value={{ recognize, published }}>
       {children}
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex justify-center px-4 md:bottom-6">
         {shown && (
@@ -97,6 +136,11 @@ export function RecognitionProvider({ children }: { children: ReactNode }) {
             <span className="min-w-0 flex-1">
               <span className="block text-[14px] font-semibold">{shown.title}</span>
               <span className="block text-[12.5px] text-[#c9d4ea]">{shown.detail}</span>
+              {shown.bar && (
+                <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-white/20" aria-hidden="true" data-testid="recognition-bar">
+                  <span className="block h-full rounded-full bg-[#a8d9cf]" style={{ width: `${Math.round((shown.bar.value / shown.bar.target) * 100)}%` }} />
+                </span>
+              )}
             </span>
             <button type="button" onClick={() => setShown(null)} className="rounded-full p-1 text-[#c9d4ea] hover:text-white" aria-label="Dismiss">
               <X className="h-4 w-4" aria-hidden="true" />

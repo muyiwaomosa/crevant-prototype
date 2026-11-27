@@ -142,10 +142,10 @@ export function SendFeedbackLink({ variant }: { variant: 'header' | 'sidebar' })
         to="/app/feedback"
         state={state}
         aria-label="Send feedback"
-        className="inline-flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-brand-700"
+        title="Send feedback"
+        className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink-900 shadow-[0_2px_8px_rgb(19_25_27/0.08)] ring-1 ring-ink-100"
       >
-        <MessageSquarePlus className="h-[18px] w-[18px]" aria-hidden="true" />
-        Feedback
+        <MessageSquarePlus className="h-5 w-5" aria-hidden="true" />
       </Link>
     )
   }

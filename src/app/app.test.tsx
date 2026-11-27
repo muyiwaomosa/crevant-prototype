@@ -3589,7 +3589,7 @@ describe('photo posts (Build 5.3)', () => {
   it('with photos off, posting is text only, exactly as before', async () => {
     const f = fakeApi()
     renderApp('/app/new', f.api)
-    await screen.findByRole('heading', { name: 'Create a post' })
+    await screen.findByRole('heading', { name: 'New post' })
     await act(async () => {})
     expect(screen.queryByRole('button', { name: 'Add photo' })).toBeNull()
     fireEvent.change(screen.getByRole('textbox', { name: 'Write a post' }), { target: { value: 'Words only' } })
