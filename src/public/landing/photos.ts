@@ -180,3 +180,28 @@ export const HERO_POST = {
 
 /** Every hero picture, for the register checks. */
 export const HERO_PICTURES = [HERO_POST.creator.avatar, HERO_POST.media, ...HERO_POST.community] as const
+
+/**
+ * Photos that appear inside the HOW screenshots (SP-BRAND-003). The screens
+ * were captured through the actual app on a local, isolated test database with
+ * a fictional demo community (never pilot data). Every profile picture and post
+ * photo in them is one of these verified Unsplash photos; the HERO_POST photos
+ * also appear (David Mitchell's post and picture). Names are fictional.
+ */
+export const DEMO_SCREEN_PHOTOS = [
+  ['Grace Adeyemi (profile)', 'https://unsplash.com/photos/a-smiling-woman-poses-in-front-of-a-wall-xSEFkIAopxA', 'Brooke Balentine'],
+  ['Samuel Okafor (profile)', 'https://unsplash.com/photos/man-in-maroon-suit-with-black-lapels-smiling-g9Et-rzQBkA', 'Jadon Johnson'],
+  ['Helen Brooks (profile)', 'https://unsplash.com/photos/woman-in-white-long-sleeve-shirt-smiling-RBtFAZXlJDA', 'Maria Lupan'],
+  ['Marcus Bell (profile)', 'https://unsplash.com/photos/a-man-wearing-a-blue-suit-and-white-shirt-xbB9xhLOc0I', 'Samson Balogun'],
+  ['Lena Park (profile)', 'https://unsplash.com/photos/a-woman-with-glasses-smiles-against-a-gray-background-s3aDHKxHZSc', 'Vitaly Gariev'],
+  ['Nina Patel (profile)', 'https://unsplash.com/photos/woman-in-gray-and-yellow-pussybow-top-_5_CBVCLBsY', 'Christina @ wocintechchat.com M'],
+  ['Jordan Lee (profile)', 'https://unsplash.com/photos/a-smiling-young-man-in-a-dark-blue-sweater-rifCUO-4X8k', 'Josias Garibay'],
+  ['Priya Shah (profile)', 'https://unsplash.com/photos/smiling-woman-in-white-and-black-checkered-dress-shirt-MQ2xYBHImKM', 'Compagnons'],
+  ['Tom Walker (profile)', 'https://unsplash.com/photos/man-wearing-white-v-neck-shirt-iFgRcqHznqg', 'Joseph Gonzalez'],
+  ['Ben Carter (profile)', 'https://unsplash.com/photos/man-wearing-grey-jacket-v7Jja2ChN6s', 'Ryan Hoffman'],
+  ['Grace: Bible and mug', 'https://unsplash.com/photos/green-ceramic-mug-beside-book-4eWwSxaDhe4', 'Aaron Burden'],
+  ['Samuel: candle and journal', 'https://unsplash.com/photos/white-candle-on-white-ruled-paper-beside-white-ceramic-mug-6Ahp8-YMoww', 'Sixteen Miles Out'],
+  ['Helen: open notebook', 'https://unsplash.com/photos/open-notebook-with-pen-and-pencils-on-desk-n9AaeihA9HI', 'Clay Banks'],
+  ['Marcus: laptop and notebook', 'https://unsplash.com/photos/laptop-phone-and-notebook-on-a-wooden-desk-Qw_WS6EFY00', 'Jakub Żerdzicki'],
+  ['Lena: shop stock check', 'https://unsplash.com/photos/woman-reviews-inventory-in-a-clothing-store-Pvaaeer8kws', 'Vitaly Gariev'],
+].map(([use, sourceUrl, photographer]) => ({ use, sourceUrl, photographer, verified: true, verification: UNSPLASH_CHECK_BRAND3, ...LICENCES.Unsplash }))
