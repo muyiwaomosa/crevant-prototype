@@ -26,10 +26,15 @@ is in `docs/ACCEPTANCE-CHECKLIST.md`.
 
 ## A. Before you start (5 minutes)
 
-1. **Check staging is the latest build.** Open staging, View Source (or on a
-   phone, open `view-source:` before the address), and find
-   `<meta name="splitpost-commit" content="00ee129" />`. Any other value
-   means Vercel has not finished deploying; wait a minute and reload.
+1. **Check staging is the latest build (live deployment verification).**
+   Always in a **private window** (signed in to Vercel there): open
+   `view-source:` followed by the staging address, and find
+   `<meta name="splitpost-commit" content="00ee129" />`. A normal window can
+   show a cached older page (on Nov 27 it showed `9d17683` while the address
+   was serving `00ee129`). Any other value in a private window means Vercel
+   has not finished deploying; wait a minute and reload. This check is
+   required at the start of every acceptance session and after every
+   deployment, on staging and on app.splitpost.ca.
 2. The read-only database check already passed (run 52, Nov 27): staging
    isolation, every migration through 20261219, the switches. Nothing to do.
 3. **Turn on progression for staging.** Control Center, Operational switches,
