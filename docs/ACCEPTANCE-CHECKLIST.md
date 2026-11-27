@@ -1,9 +1,21 @@
-# MVP acceptance checklist (Nov 27)
+# MVP acceptance and release readiness checklist (Nov 27)
 
-One list for completing, validating and releasing the approved MVP. No new
+The single list for completing, validating and releasing the approved MVP.
+It replaces separate status reports: findings, readiness and gates are all
+recorded here. The aim is to release as soon as the MVP is demonstrably
+ready; the planned dates are latest dates, not waiting points. No new
 features, redesigns or scope changes are planned; a change is made only if
 acceptance finds a material issue. Every production, security, financial,
 legal and external pilot approval gate stays in place.
+
+**Three kinds of verification**, kept apart throughout:
+
+* **Automated:** technical checks Claude runs or CI runs on every change
+  (tests, journeys, security and separation checks, deployment checks).
+* **Founder acceptance:** you using the product on real devices and deciding
+  it is acceptable.
+* **External validation:** people outside the team (counsel, prospective
+  members, the pilot cohort). Claude cannot stand in for these.
 
 **Who:** **You** means the founder has to do it (a click, a decision, a
 signature or hands-on testing). **Claude** means Claude does it and reports
@@ -12,7 +24,7 @@ back. **Done** items have their evidence beside them.
 Staging: https://splitpost-app-git-staging-crevant.vercel.app at `6023da7`.
 Hands-on steps: `docs/FOUNDER-TESTING-GUIDE.md`.
 
-## A. Staging ready for acceptance
+## A. Staging ready for acceptance (automated, with three founder clicks)
 
 | # | Item | Who | Status |
 |---|---|---|---|
@@ -23,7 +35,7 @@ Hands-on steps: `docs/FOUNDER-TESTING-GUIDE.md`.
 | A5 | Progression switched on for staging, with a reason | You (founder-only control in Control Center) | To do, 1 minute |
 | A6 | Safeguards unchanged with progression on: simulated amounts only, manual qualification approval with a reason, holds and daily caps, no cash movement, no 40:20:40 percentages shown, no unrestricted balance editing, no automatic qualification | Claude (code and tests); you see it during B | **Done** in code and CI; confirmed by you in B9 and B12 |
 
-## B. The member journey (hands-on, about 90 minutes)
+## B. The member journey (founder acceptance, about 90 minutes)
 
 Each row is a step in the testing guide. Claude's automated journeys already
 cover each one in CI on every change (green on `d6d4e53`, which has
@@ -44,9 +56,9 @@ exactly the same files as `6023da7`); your pass is the acceptance on real device
 | B11 | Welcome again from Profile, Settings, How Splitpost works | You | unit tests |
 | B12 | Control Center: review queue, Routine or Flagged, manual approval with a reason, Activation | You (laptop) | founder journey |
 | B13 | Deletion preview: balances closed, the pilot rule explained | You (don't send unless you mean to) | privacy journey; behaviour test 310 |
-| B14 | Defects sent through Feedback | You report; Claude fixes material issues only | |
+| B14 | Defects sent through Feedback | You report; Claude classifies them in section H and fixes P0 and P1 at once | |
 
-## C. Quality checks
+## C. Quality checks (automated, except C6 and C7)
 
 | # | Item | Who | Status |
 |---|---|---|---|
@@ -58,7 +70,7 @@ exactly the same files as `6023da7`); your pass is the acceptance on real device
 | C6 | Real-device speed check on your phone | You | To do during B |
 | C7 | Reduced motion on a real phone | You | To do during B1 |
 
-## D. Operational readiness
+## D. Operational readiness (automated, with founder authorizations)
 
 | # | Item | Who | Status |
 |---|---|---|---|
@@ -69,7 +81,7 @@ exactly the same files as `6023da7`); your pass is the acceptance on real device
 | D5 | Security and authorization review fixes | Claude | **Done** (migration 20261214, on staging) |
 | D6 | Public site in production reflects the merged landing page and verified photos | Claude | **Done** (www.splitpost.ca serves `6023da7`; all five replacement photos match byte for byte) |
 
-## E. Legal (before the gates they protect)
+## E. Legal (external validation, before the gates they protect)
 
 | # | Item | Who | Before |
 |---|---|---|---|
@@ -83,7 +95,46 @@ exactly the same files as `6023da7`); your pass is the acceptance on real device
 |---|---|---|---|
 | F1 | PB-2 migrations and functions to Production | You authorize; Claude runs | Dec 16 |
 | F2 | PB-3 release candidate fixes | Claude; you accept | Dec 20 |
-| F3 | PB-4 external pilot access and the cohort plan | You authorize | Dec 23 |
+| F3 | PB-4 external pilot access and the cohort plan | You authorize | Dec 23 at the latest |
+
+**Ready to release** means: sections A to D complete, no open P0 or P1, every
+open P2 either fixed or accepted by you for the pilot, the legal items for
+the chosen gate done, and your authorization for that gate. If that happens
+before a planned date, the step moves earlier.
+
+## G. External business validation
+
+| # | Item | Who | When |
+|---|---|---|---|
+| G1 | Prospective members' response to the landing page (the trigger for revisiting its frozen messaging and design) | You (conversations, waitlist) | From publication |
+| G2 | Pilot cohort feedback on the member journey | Pilot members, through Feedback | After PB-4 |
+
+## H. Findings during acceptance
+
+Every finding gets a severity and a next step. Claude resolves P0 and P1
+immediately within the authorized scope (no new features, no scope change,
+no gate bypassed); P2 is ordered by its effect on the pilot experience; P3
+goes to the post-launch backlog.
+
+| Severity | Meaning | Handling |
+|---|---|---|
+| **P0** | Critical security, privacy, financial integrity or data loss issue | Fixed immediately; you are told at once |
+| **P1** | A core stakeholder journey is broken or cannot be completed | Fixed immediately |
+| **P2** | Significant usability, clarity or performance issue | Prioritized by pilot impact; fixed or accepted by you before release |
+| **P3** | Minor cosmetic issue or future enhancement | Post-launch backlog |
+
+**Open findings**
+
+| ID | Severity | Found in | Finding | Status |
+|---|---|---|---|---|
+| | | | None yet | |
+
+**Post-launch backlog (P3 and deferred items)**
+
+| ID | Item | Source |
+|---|---|---|
+| BL-1 | Weighted Connection Score, leaderboards, rankings, advanced achievements | Deferred by the founder, Nov 26 (F1) |
+| BL-2 | Interactive advertising as a controlled experiment | Approved in principle, after launch (F4) |
 
 Production activation, external pilot access and real financial transactions
 remain unauthorized until their gates are approved. The landing page
