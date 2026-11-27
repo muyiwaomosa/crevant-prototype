@@ -17,7 +17,7 @@
 
 import { DISCLOSURES } from './claims'
 
-export type CopyStatus = 'final' | 'approved-in-principle'
+export type CopyStatus = 'final' | 'approved-in-principle' | 'proposed'
 
 export const HOMEPAGE_COPY = {
   hero: {
@@ -123,12 +123,20 @@ export const HOMEPAGE_COPY = {
     status: 'final' as CopyStatus,
     eyebrow: 'How Splitpost works',
     headline: 'A better split starts with a better connection.',
+    /**
+     * SP-BRAND-003: each step now opens with a recognizable problem before
+     * the approved hook and body. The problem lines are Claude's drafts,
+     * NOT founder approved; they are replaced by the founder's final copy
+     * before publication, and this flips to 'final' only then.
+     */
+    problemStatus: 'proposed' as CopyStatus,
     steps: [
       {
         id: 'discover',
         number: '01',
         label: 'Discover',
         title: 'Find your people.',
+        problem: 'Endless feeds show you what keeps you scrolling, not who is worth knowing.',
         body: [
           'Discover creators who share your interests and create content that matters to you.',
           'Find people worth following, not just content worth scrolling past.',
@@ -142,6 +150,7 @@ export const HOMEPAGE_COPY = {
         number: '02',
         label: 'Connect',
         title: 'Keep your people close.',
+        problem: 'The people you care about most get lost in everything else.',
         body: [
           'Follow the creators you value and add your favourites to your Clique.',
           'Their new posts come first, so you can stay connected to the people who matter most.',
@@ -155,6 +164,7 @@ export const HOMEPAGE_COPY = {
         number: '03',
         label: 'Create',
         title: 'Share what makes you valuable.',
+        problem: "You post and post, and rarely know what actually brings people back.",
         body: [
           'Teach, inspire, entertain or share what you know.',
           'Build a community around your content and understand what keeps people coming back.',
@@ -168,6 +178,7 @@ export const HOMEPAGE_COPY = {
         number: '04',
         label: 'Contribute',
         title: 'Make your support count.',
+        problem: 'Your support helps creators grow, but it usually goes unseen.',
         body: [
           'Support the creators you value through meaningful engagement and by helping their communities grow.',
           'Earn Connection Points for eligible contributions and track your progress.',
@@ -182,6 +193,7 @@ export const HOMEPAGE_COPY = {
         number: '05',
         label: 'Earn',
         title: 'Get your split.',
+        problem: 'On most platforms, the people who help content succeed rarely share in its success.',
         body: [
           'Whether you create content or help creators grow, work towards qualifying for a future share of eligible content revenue.',
           'During the pilot, you can track your simulated split, see your progress and know what to do next.',

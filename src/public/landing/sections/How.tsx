@@ -5,7 +5,9 @@ import { Eyebrow } from '../ui/Story'
 const copy = HOMEPAGE_COPY.how
 
 /**
- * Section 5, HOW (SP-BRAND-002): the main product demonstration. Five steps,
+ * Section 5, HOW (SP-BRAND-002, structured per SP-BRAND-003): each of the
+ * five steps reads hook (the title), a recognizable problem, how Splitpost
+ * answers it (the approved body), then a realistic screen. Five steps,
  * each with a different screen from the actual Splitpost app (Discover, Home
  * with the Clique row, a creator's profile and insights, a recognized
  * contribution, My Split), captured with illustrative sample people and
@@ -37,7 +39,10 @@ export function How() {
                 <h3 id={`how-${s.id}-title`} className="mt-2 font-sp-display text-[clamp(1.8rem,5vw,2.6rem)] font-black leading-tight [font-stretch:104%]">
                   {s.title}
                 </h3>
-                <div className="mt-4 max-w-md space-y-3 text-[1.06rem] leading-relaxed">
+                <p data-testid={`how-${s.id}-problem`} className="mt-4 max-w-md border-l-[3px] border-sp-accent pl-3.5 text-[1.02rem] font-semibold italic leading-snug text-sp-muted">
+                  {s.problem}
+                </p>
+                <div data-testid={`how-${s.id}-solution`} className="mt-4 max-w-md space-y-3 text-[1.06rem] leading-relaxed">
                   {s.body.map((p) => (
                     <p key={p}>{p}</p>
                   ))}
