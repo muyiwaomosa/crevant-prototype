@@ -127,7 +127,12 @@ goes to the post-launch backlog.
 
 | ID | Severity | Found in | Finding | Status |
 |---|---|---|---|---|
-| | | | None yet | |
+| UAT-001-1 | P2 | Founder acceptance, Nov 27 (SP-UAT-001) | Landing page mobile hero too crowded: value proposition comes after a text-heavy split-post illustration | Preview ready (simplified picture, value proposition under the headline); build on approval. Specific exception to the landing page freeze; no other section changes |
+| UAT-001-2 | P1 | Founder acceptance, Nov 27 | Video unavailable | Root cause: not a defect or deployment issue; uploads are closed by design until both phone device tests pass and the storage cap is set. Remaining: device tests (founder or tester with phones), record results, 50 GB cap, switch on (founder); then Claude verifies (check 029, video journey) |
+| UAT-001-3 | P2, blocks the interface milestone | Founder acceptance, Nov 27 | Interface does not match the approved designs | Comparison done for Home, Discover, Create, My Split, Profile and onboarding. Causes: little media on staging (photo posting founder-only, video off) and real gaps in post cards, avatars, Discover hero, Profile layout and the Create composer. Remediation to the approved references, front end only; waiting for founder confirmation of deployment and references |
+| UAT-001-4 | P2 | Founder acceptance, Nov 27 | Gamification and progression not obvious | Preview ready: next goal under the split, My Goals as a path, goal strip on Home, progress in recognition messages; existing goals, rules and economics only. Build on approval |
+
+**Interface milestone:** not accepted until UAT-001-1, -3 and -4 are resolved and reviewed by the founder. Design review with previews: `docs/design/uat/SP-UAT-001.md`.
 
 **Post-launch backlog (P3 and deferred items)**
 
