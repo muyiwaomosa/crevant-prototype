@@ -28,11 +28,19 @@ describe('homepage photos', () => {
     expect(WHO_PHOTOS).toHaveLength(HOMEPAGE_COPY.who.groups.length)
   })
 
-  it.each(photos.map((p) => [p.id, p] as const))('%s records its Pexels source, credit and licence, and describes the activity', (_, p) => {
-    expect(p.source).toBe('Pexels')
-    expect(p.licence).toBe('Pexels License')
-    expect(p.licenceUrl).toBe('https://www.pexels.com/license/')
-    expect(p.sourceUrl).toMatch(/^https:\/\/www\.pexels\.com\/photo\/[a-z0-9-]+-\d+\/$/)
+  /** The register's source, listing and licence, checked together for each source. */
+  const SOURCES = {
+    Pexels: { licence: 'Pexels License', licenceUrl: 'https://www.pexels.com/license/', listing: /^https:\/\/www\.pexels\.com\/photo\/[a-z0-9-]+-\d+\/$/ },
+    Unsplash: { licence: 'Unsplash License', licenceUrl: 'https://unsplash.com/license', listing: /^https:\/\/unsplash\.com\/photos\/[a-z0-9-]+-[A-Za-z0-9_-]{11}$/ },
+  } as const
+
+  it.each(photos.map((p) => [p.id, p] as const))('%s records its source, credit and licence, and describes the activity', (_, p) => {
+    const src = SOURCES[p.source]
+    expect(p.licence).toBe(src.licence)
+    expect(p.licenceUrl).toBe(src.licenceUrl)
+    expect(p.sourceUrl).toMatch(src.listing)
+    if (p.source === 'Unsplash') expect(p.photographerUrl).toMatch(/^https:\/\/unsplash\.com\/@[a-z0-9_]+$/)
+    expect(p.verification.length).toBeGreaterThan(20)
     expect(p.photographer.length).toBeGreaterThan(2)
     expect(p.photographer).not.toMatch(/pending/i)
     expect(p.photographer).not.toBe('')
@@ -53,19 +61,22 @@ describe('homepage photos', () => {
     },
   )
 
-  it('credits the verified photographer for each photo, and marks the two new ones as awaiting the founder’s check', () => {
-    expect(photos.map((p) => [p.sourceUrl.match(/-(\d+)\/$/)![1], p.photographer])).toEqual([
-      ['7014401', 'George Milton'],
-      ['9040544', 'Alena Darmel'],
-      // SP-BRAND-002 (Nov 27): to be confirmed on the Pexels listings before publication.
-      ['6697318', 'To be verified on the Pexels listing'],
-      ['5738245', 'To be verified on the Pexels listing'],
+  it('credits the verified photographer for each photo', () => {
+    expect(photos.map((p) => [p.sourceUrl, p.photographer])).toEqual([
+      ['https://www.pexels.com/photo/focused-female-freelancer-editing-photos-on-laptop-7014401/', 'George Milton'],
+      ['https://www.pexels.com/photo/teacher-recording-herself-teaching-9040544/', 'Alena Darmel'],
+      // SP-BRAND-002 decision 6 (Nov 27): the two unverifiable Pexels photos were replaced.
+      ['https://unsplash.com/photos/a-woman-sitting-on-a-couch-looking-at-her-cell-phone-TRkyQgyb4c0', 'Ninthgrid'],
+      ['https://unsplash.com/photos/outdoor-dinner-party-with-oud-UrzN-8K1PCE', 'Considerate Agency'],
     ])
   })
 
-  it('the asset register marks the two new photos unverified, to be verified or replaced before publication', () => {
-    expect(PHOTOS_TO_VERIFY.map((p) => p.id)).toEqual(['supporter-phone', 'community-table'])
-    for (const p of photos.filter((x) => x.verified)) expect(p.photographer).not.toMatch(/verified/i)
+  it('publishes no unverified asset: every photo and the sample avatar are verified on their listing', () => {
+    expect(PHOTOS_TO_VERIFY).toEqual([])
+    for (const p of [...photos, SAMPLE_AVATAR]) {
+      expect(p.verified, p.id).toBe(true)
+      expect(p.photographer, p.id).not.toMatch(/verif|pending|to be/i)
+    }
   })
 
   it('never names a model as a member, user or sample person, and never guesses who they are', () => {
@@ -94,9 +105,11 @@ describe('homepage photos', () => {
   })
 
   it("records the sample creator's profile photo: licensed, small, square and never presented as Priya", () => {
-    expect(SAMPLE_AVATAR.source).toBe('Pexels')
-    expect(SAMPLE_AVATAR.licence).toBe('Pexels License')
-    expect(SAMPLE_AVATAR.sourceUrl).toBe('https://www.pexels.com/photo/1239291/')
+    expect(SAMPLE_AVATAR.source).toBe('Unsplash')
+    expect(SAMPLE_AVATAR.licence).toBe('Unsplash License')
+    expect(SAMPLE_AVATAR.licenceUrl).toBe('https://unsplash.com/license')
+    expect(SAMPLE_AVATAR.sourceUrl).toBe('https://unsplash.com/photos/a-young-woman-with-dark-wavy-hair-smiles-brightly-smiling-HVbaH3p9B8k')
+    expect(SAMPLE_AVATAR.photographer).toBe('IMANA')
     const buf = readFileSync(join(PUBLIC, SAMPLE_AVATAR.src))
     expect(webpSize(buf)).toEqual({ width: SAMPLE_AVATAR.size, height: SAMPLE_AVATAR.size })
     expect(buf.length).toBeLessThan(10_000)
