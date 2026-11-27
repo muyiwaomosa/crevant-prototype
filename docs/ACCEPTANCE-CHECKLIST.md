@@ -30,7 +30,7 @@ Hands-on steps: `docs/FOUNDER-TESTING-GUIDE.md`.
 |---|---|---|---|
 | A1 | Staging fast-forwarded to main `6023da7` (SP-UX-002, UX-01 to UX-04, landing page) | Claude | **Done** Nov 27 |
 | A2 | No database change between the previous staging commit and `6023da7`, so no migration is needed | Claude | **Done** (no `supabase/` differences) |
-| A3 | Read-only staging check: isolation from Production, migrations through 20261219, security and separation checks, switch states (run 52) | You approve the gate; Claude reads the result | Waiting for your approval |
+| A3 | Read-only staging check: isolation from Production, migrations through 20261219, security and separation checks, switch states (run 52) | You approve the gate; Claude reads the result | **Done** Nov 27 13:27 (run 46003719199): approved project, all 38 migrations applied through 20261219, every security and separation check passed; progression off at that time, 0 qualifications |
 | A4 | Staging serves `6023da7` (View Source: `splitpost-commit`) | You (staging is behind Vercel sign-in) | To do, 1 minute |
 | A5 | Progression switched on for staging, with a reason | You (founder-only control in Control Center) | To do, 1 minute |
 | A6 | Safeguards unchanged with progression on: simulated amounts only, manual qualification approval with a reason, holds and daily caps, no cash movement, no 40:20:40 percentages shown, no unrestricted balance editing, no automatic qualification | Claude (code and tests); you see it during B | **Done** in code and CI; confirmed by you in B9 and B12 |
