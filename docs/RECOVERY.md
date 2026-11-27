@@ -232,6 +232,10 @@ the steps below in between.
   it has, store the current value again after the restore.
 * Claude is available for steps 3, 8, 9 and 10.
 
+The SQL editor queries for steps 1, 3, 5, 8, 9 and 10 are ready in
+`scripts/db/recovery/staging-exercise.sql`, with placeholders for the backup
+time and the two ids.
+
 1. **Backup** (founder). `crevant-staging`, Database, Backups: note the exact
    time of the newest daily backup (T, with its time zone) and confirm the
    device test prerequisite above.
