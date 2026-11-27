@@ -114,9 +114,11 @@ We may hold a referral for review before recognizing it, and investigate pattern
 
 ## Part C: Simulated fan pool and point valuation
 
-### 10. The economic model
+### 10. The economic model (approved internally; percentages not shown to pilot members)
 
-Of **eligible net content-associated advertising revenue**:
+**What pilot members see:** simulated amounts only: a creator's simulated earnings, the simulated fan pool estimate for eligible points, and their Locked or Unlocked status. The app does not show the allocation percentages below during the pilot.
+
+**The approved internal model,** used to calculate those simulated amounts. Of **eligible net content-associated advertising revenue**:
 
 * 40% is allocated to the creator whose content the ad was associated with,
 * 20% to one platform-wide fan pool,
@@ -125,6 +127,8 @@ Of **eligible net content-associated advertising revenue**:
 General feed advertising revenue (ads not associated with a specific creator's content) goes 100% to Splitpost.
 
 **Eligible net revenue** means revenue actually attributable to content-associated campaigns, after refunds, credits and direct third-party costs.
+
+> **Review note:** Whether, when and how the percentages are disclosed to members is for counsel's advice (questions 12 and 33) and needs Rewards Rules for allocation percentages before any percentage is shown (checklist L2).
 
 > **Review note:** The definition of eligible net revenue needs founder and counsel review (what counts as a direct third-party cost, timing of recognition, treatment of unpaid invoices).
 
@@ -146,7 +150,7 @@ Each month we run a simulated settlement: reconcile revenue, fund the simulated 
 
 ### 13. What creators see
 
-Creators can see simulated earnings attributed to their content from content-associated advertising, calculated at the 40% creator share of eligible net revenue.
+Creators can see simulated earnings attributed to their content from content-associated advertising. The amount is calculated with the internal creator share (section 10); the percentage itself is not shown during the pilot.
 
 ### 14. What creators should know
 
@@ -185,3 +189,30 @@ Changes to the point table, limits, economic split or valuation method are versi
 ### 18. Future real rewards
 
 Any future real-money redemption, creator payouts or support payments would require: legal review, new terms, any required registrations, tax handling and member consent. Nothing in these rules promises that such a program will exist.
+
+---
+
+## Part G: Goals, qualification and locked value (simulated)
+
+Added Nov 27 so these rules describe what the pilot app does today (approved framework SP-PRG-001, live in the pilot app with progression switched on). **Review note:** see question 49.
+
+### 19. Goals and qualification
+
+* Creators and supporters each have a one-time set of goals. Meeting all of them, while in good standing, makes you **eligible for qualification review** (shown as Under review). You become **Qualified** only when that integrity review succeeds and Splitpost approves it. It is never automatic.
+* Creator goals: 20 original posts; posts in 3 different weeks within 28 days; 100 genuine followers; 5 members keeping you in their Clique; 5 returning active supporters.
+* Supporter goals: 10 creators in your Clique; 30 meaningful engagements across at least 3 creators; 4 active supporting weeks within 28 days; 5 eligible external shares; 5 qualified referrals.
+* Only genuine activity counts: deleted or removed content, self-activity, duplicates, reposts (for creator posts), impressions, plain scrolling and ad views do not.
+* Qualification is a one-time milestone. Falling below a goal later does not remove it, and there are no recurring quotas. Advertising revenue or minimum earnings are never a goal.
+
+### 20. Locked and unlocked simulated value
+
+* From your first day, simulated value can build up for you: a creator's attributed share, and for supporters, the value of their redemption-eligible points in the monthly pool.
+* Until your qualification is approved, that simulated value is shown as **Locked**. Once it is approved after integrity review, it is shown as **Unlocked**. Statements show it as **Settled**. **Paid** is not available during the pilot.
+* Locked or unlocked, it is simulated. Nothing is held for you, released, withdrawn or paid, and none of it is a balance owed to you.
+
+### 21. Integrity holds and review
+
+* Suspicious activity leads to review, not an assumption of guilt. A hold restricts only the affected simulated value where possible, and an account-wide hold needs a documented reason. A hold is not confiscation.
+* Qualification can be revoked only by a documented, appealable decision when confirmed fraud was essential to it, never because your activity later drops. A successful appeal restores it.
+* Corrections are made with new, auditable entries; history is never silently changed.
+* If the pilot closes or you delete your account, simulated balances end as described in the Terms of Use and the Member Privacy Notice.

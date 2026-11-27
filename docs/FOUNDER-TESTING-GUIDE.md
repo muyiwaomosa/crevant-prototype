@@ -2,7 +2,9 @@
 
 **One URL:** https://splitpost-app-git-staging-crevant.vercel.app
 
-Updated Nov 27 for staging at commit `00ee129`: the approved MVP with the
+Updated Nov 27 for staging at commit `787c465` (the member app; a later
+docs-only commit can show instead, and the checklist header names the
+current one): the approved MVP with the
 SP-UAT-001 remediation (approved interface restored, gamification visible
 throughout the app). One procedure covers every area you accept: **interface,
 onboarding, gamification, My Split, publishing and video**. Part A prepares
@@ -29,24 +31,19 @@ is in `docs/ACCEPTANCE-CHECKLIST.md`.
 1. **Check staging is the latest build (live deployment verification).**
    Always in a **private window** (signed in to Vercel there): open
    `view-source:` followed by the staging address, and find
-   `<meta name="splitpost-commit" content="00ee129" />`. A normal window can
+   `<meta name="splitpost-commit" content="..." />` with the commit named at
+   the top of `docs/ACCEPTANCE-CHECKLIST.md`. A normal window can
    show a cached older page (on Nov 27 it showed `9d17683` while the address
    was serving `00ee129`). Any other value in a private window means Vercel
    has not finished deploying; wait a minute and reload. This check is
    required at the start of every acceptance session and after every
    deployment, on staging and on app.splitpost.ca.
-2. The read-only database check already passed (run 52, Nov 27): staging
-   isolation, every migration through 20261219, the switches. Nothing to do.
-3. **Turn on progression for staging.** Control Center, Operational switches,
-   **Progression**, with a reason such as "founder acceptance, Nov 27". It is
-   a founder-only control by design, so only your signed-in session can
-   change it. The approved SP-PRG-001 v1.0 goals are already recorded, so
-   goals start counting as soon as it is on. This affects staging only.
-   Production and ordinary pilot members are not touched, and every
-   safeguard stays in place: amounts are simulated, qualification approval
-   is a manual click with a reason, holds and daily caps apply, and no cash
-   can move.
-4. **Optional, to test the media-led experience with testers: let staging
+2. The staging database checks already passed (run 46062877363, Nov 27):
+   staging isolation, every migration through 20261220, the switches
+   (progression on). Nothing to do: progression is already on in staging and
+   in member Production, verified independently, so there is no switch to
+   change before you start.
+3. **Optional, to test the media-led experience with testers: let staging
    testers post photos.** Photo posting is founder-only by default
    (`photos_audience = founder`), so testers can only post text. Widening it
    is a server-only, recorded action with an explicit phrase, on **staging
@@ -93,11 +90,11 @@ publishing loop with progression on.
 |---|---|---|
 | C1 | As the founder, + then Add photo: pick a photo from your phone, add a caption and a topic, Post | The photo preview with "Keep your original" beside it; after Post, the post opens with the photo, and the creator goal message with its new count |
 | C2 | Refresh, then open Home as the tester | The photo still shows; the post is first on the tester's Home with your picture and name |
-| C3 | As the tester, try to post a photo | Founder-only by default: the tester can post text, not photos, unless you widened it in step A4 |
+| C3 | As the tester, try to post a photo | Founder-only by default: the tester can post text, not photos, unless you widened it in step A3 |
 | C4 | As the founder, delete the photo post from its "···" menu | It disappears for both of you; Claude can confirm the files are cleaned up within 15 minutes |
 | C5 | Change your profile picture, then refresh | The new picture on Profile, on your posts and in the tester's Clique row |
 
-## D. Video device validation (optional since Nov 27; for diagnosis)
+## D. Video device validation (optional since Nov 27; for diagnosis. Video is already accepted in Production, so skip this part)
 
 Since the founder's release decision (Nov 27, migration 20261220000000) these
 tests no longer gate video: the switch needs only the 50 GB cap. Use them to
@@ -145,8 +142,6 @@ accepted by you before release.
 ## When you are done
 
 * Send any defects through Feedback; Claude picks them up from the inbox.
-* Leave progression on for further staging testing, or turn it off with a
-  reason. Either way, nothing reaches ordinary members or Production.
 * Reduced motion: with your phone's Reduce Motion setting on, the walkthrough
   changes faces without sliding.
 * Reference screenshots: `docs/design/ux-refine/` (walkthrough, first steps,

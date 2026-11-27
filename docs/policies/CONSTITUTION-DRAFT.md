@@ -28,7 +28,7 @@ These principles are the test we apply to product, economic and policy decisions
 
 **3.3 Simplicity of experience.** One account, one app, a small number of clear destinations, and one Home with Clique content first. A creator is also a member; a member can become a creator.
 
-**3.4 Fair economic participation.** The value from content-associated advertising is shared under a published model: 40% to the creator, 20% to one platform-wide fan pool, and 40% to Splitpost, of eligible net content-associated advertising revenue. General feed advertising revenue goes 100% to Splitpost. During the pilot, all of these allocations are simulated.
+**3.4 Fair economic participation.** The value from content-associated advertising is shared under an approved model: 40% to the creator, 20% to one platform-wide fan pool, and 40% to Splitpost, of eligible net content-associated advertising revenue. General feed advertising revenue goes 100% to Splitpost. During the pilot, all of these allocations are simulated, and members see simulated amounts, not the percentages. **Review note:** whether this section is published to members while the percentages are not shown in the app is for counsel's advice (Rewards Rules, section 10).
 
 **3.5 Authentic contributions.** We recognize real participation, not spam, manipulation or recruitment. Rewards come only from direct contributions; there are no multi-level or recruitment commissions, and nobody pays to participate.
 
