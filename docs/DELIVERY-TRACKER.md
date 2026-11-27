@@ -46,9 +46,9 @@ https://claude.ai/artifact/LT9k8aSFrFMz6MxRqtsvQ9).
 | UX-02 Video readiness | **Confirmed gated**; founder running the device tests | Staging check 029 | Founder |
 | UX-03 Recognition, goal progress, milestones, next actions | **Built** (approved direction): recognition only for server-recorded contributions; rings, bars, one action per goal; a met goal acknowledged once | Unit tests; progression, social journeys | PR with SP-UX-002; founder visual review |
 | UX-04 My Split: My Split, My Goals, My Activity | **Built** (approved direction): split first with the official symbol, creator and supporter, unlocked and locked, simulated; plain-language terms behind "What do these mean?"; empty states | Unit tests; progression, rewards, consumer journeys | Same |
-| SP-UX-002 Value-first welcome and tailored first steps | **Built, for final copy and visual review**: five faces before setup (Skip, Back, Continue, Get started; swipe, keys, reduced motion), again from Profile; first steps tailored by the goal answer and interests | Unit tests; social journey walks all five faces with an accessibility check; `docs/design/ux-refine/SP-UX-002.md` and `sp-ux-002-*.png` | Founder final review, then merge |
+| SP-UX-002 Value-first welcome and tailored first steps | **Merged and on staging** (PR #130, `6023da7`): five faces before setup (Skip, Back, Continue, Get started; swipe, keys, reduced motion), again from Profile; first steps tailored by the goal answer and interests | Unit tests; social journey walks all five faces with an accessibility check; `docs/design/ux-refine/SP-UX-002.md` and `sp-ux-002-*.png` | Founder final review, then merge |
 | Intermittent ad view unit test | **Resolved**: a finished ad observer could start a view timer; it can no longer (regression test fails without the fix) | 12 repeated runs pass | Merged with the package |
-| SP-BRAND-002 Landing page (creators and supporters) | **Ready for publication approval**: eight-section story with the exact copy, real app screens in HOW, every photo verified and licensed; 213 public-site browser checks pass | `docs/design/brand/SP-BRAND-002.md`; decisions 1 to 7 implemented and approved Nov 27 ("future" approved; unverifiable photos and the sample avatar replaced with verified Unsplash photos) | Founder publication approval, then merge with SP-UX-002 (publishes the public site). After publication: messaging and design frozen until meaningful feedback from prospective members |
+| SP-BRAND-002 Landing page (creators and supporters) | **Published and complete** (PRs #130 and #131; www.splitpost.ca serves `6023da7`), frozen until market feedback: eight-section story with the exact copy, real app screens in HOW, every photo verified and licensed; 213 public-site browser checks pass | `docs/design/brand/SP-BRAND-002.md`; decisions 1 to 7 implemented and approved Nov 27 ("future" approved; unverifiable photos and the sample avatar replaced with verified Unsplash photos) | Founder publication approval, then merge with SP-UX-002 (publishes the public site). After publication: messaging and design frozen until meaningful feedback from prospective members |
 | L1 Landing page visual assets | Not started | Prepared from the approved screens once V1 lands; not published before approval | After V1 |
 
 **Impact on December 23:** H1, V1, D1 and P1 are about 7 working days of UI
@@ -138,13 +138,15 @@ remains, by kind:
 
 **Remaining development:** none. The intermittent ad view test is resolved.
 
-**Experience refinements:** UX-01, UX-03, UX-04 and SP-UX-002 are built and
-tested (front end only, no migration), awaiting the founder's final copy and
-visual review before merge, inside the December 10 interface target.
+**Experience refinements:** UX-01, UX-03, UX-04 and SP-UX-002 are merged
+(PR #130) and on staging at `6023da7` (Nov 27). SP-BRAND-002 is published
+and complete; its messaging and design are frozen until meaningful market
+feedback.
 
 **Acceptance testing** (founder, on staging): the full member journey
-(`docs/FOUNDER-TESTING-GUIDE.md`) with progression on; the refinements once
-built; the real-device speed check (row 61).
+(`docs/FOUNDER-TESTING-GUIDE.md`) with progression on, and the real-device
+speed check. The consolidated list of what needs the founder and what Claude
+completes is `docs/ACCEPTANCE-CHECKLIST.md`.
 
 **Operational readiness:** the video device test, then video on staging
 (founder); the staging recovery exercise (needs the founder's written
