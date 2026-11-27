@@ -97,7 +97,11 @@ publishing loop with progression on.
 | C4 | As the founder, delete the photo post from its "···" menu | It disappears for both of you; Claude can confirm the files are cleaned up within 15 minutes |
 | C5 | Change your profile picture, then refresh | The new picture on Profile, on your posts and in the tester's Clique row |
 
-## D. Video device validation (half a day; can be another day)
+## D. Video device validation (optional since Nov 27; for diagnosis)
+
+Since the founder's release decision (Nov 27, migration 20261220000000) these
+tests no longer gate video: the switch needs only the 50 GB cap. Use them to
+diagnose a phone members report problems with.
 
 Video uploads stay off until this passes; everything else works without it.
 The full procedure is `docs/video/DEVICE-TEST.md`. In short:

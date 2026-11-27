@@ -716,7 +716,8 @@ function fakeApi(
       requireFounder()
       const latest: Partial<Record<DeviceKind, { device: DeviceKind; passed: boolean; notes: string | null; at: string }>> = {}
       for (const t of video.tests) latest[t.device] = t
-      const ready = latest.iphone_safari?.passed === true && latest.android_chrome?.passed === true && video.capBytes !== null
+      // Since 20261220000000 (the founder's release decision) only the cap gates video; device tests are diagnostic.
+      const ready = video.capBytes !== null
       return {
         enabled: video.on,
         playbackEnabled: video.playback,
@@ -1387,8 +1388,7 @@ function fakeApi(
       requireFounder()
       if (reason.trim().length < 3) throw new AppApiError('reason_required')
       if (feature === 'video_posts' && enabled) {
-        const last = (d: DeviceKind) => [...video.tests].reverse().find((t) => t.device === d)?.passed === true
-        if (!last('iphone_safari') || !last('android_chrome') || video.capBytes === null) throw new AppApiError('video_not_ready')
+        if (video.capBytes === null) throw new AppApiError('video_not_ready')
         video.on = true
       }
       if (feature === 'video_posts' && !enabled) video.on = false
@@ -5471,7 +5471,27 @@ describe('video posts (20261213000000)', () => {
     expect(screen.queryByRole('button', { name: 'Choose a video' })).toBeNull()
   })
 
-  it('the founder records both phone tests and the cap; only then can video posts be switched on', async () => {
+  it('release decision (20261220000000): with the cap set and no device test, the founder can switch video uploads on; without the cap, not', async () => {
+    const f = fakeApi('me', { founder: true })
+    renderApp('/app/control', f.api)
+    const panel = await screen.findByTestId('video-readiness-panel')
+    const sw = await screen.findByTestId('switches-panel')
+    const turnOn = () => within(sw).getByRole('button', { name: 'Turn new video uploads on' }) as HTMLButtonElement
+    expect(within(panel).getByText(/Device tests are optional/)).toBeTruthy()
+    expect(turnOn().disabled).toBe(true)
+    fireEvent.change(within(panel).getByLabelText('Video storage cap (GB)'), { target: { value: '50' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save cap' }))
+    expect(await within(panel).findByText('Video storage cap saved.')).toBeTruthy()
+    await waitFor(() => expect(turnOn().disabled).toBe(false))
+    fireEvent.change(within(sw).getByLabelText('Reason'), { target: { value: 'Video released as part of the MVP' } })
+    fireEvent.click(turnOn())
+    expect(await within(sw).findByText('New video uploads: On')).toBeTruthy()
+    expect(f.video.on).toBe(true)
+    // No device test was created along the way.
+    expect(f.video.tests).toHaveLength(0)
+  })
+
+  it('the founder records device tests for diagnosis and sets the cap; the cap is what lets video posts be switched on', async () => {
     const f = fakeApi('me', { founder: true })
     renderApp('/app/control', f.api)
     const panel = await screen.findByTestId('video-readiness-panel')
@@ -5491,6 +5511,7 @@ describe('video posts (20261213000000)', () => {
     fireEvent.click(within(panel).getByRole('radio', { name: 'Passed' }))
     fireEvent.click(within(panel).getByRole('button', { name: 'Record result' }))
     await waitFor(() => expect(f.video.tests).toHaveLength(3))
+    // Device tests alone never switch video on: the cap is still needed.
     expect(turnOn().disabled).toBe(true)
     fireEvent.change(within(panel).getByLabelText('Video storage cap (GB)'), { target: { value: '50' } })
     fireEvent.click(within(panel).getByRole('button', { name: 'Save cap' }))

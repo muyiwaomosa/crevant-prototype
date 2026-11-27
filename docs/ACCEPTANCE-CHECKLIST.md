@@ -43,7 +43,7 @@ the public landing page). Acceptance procedure: `docs/FOUNDER-TESTING-GUIDE.md`.
 |---|---|---|---|
 | 1 | Confirm staging serves `00ee129` and switch progression on (T1, T2) | 5 min | Nov 30 |
 | 2 | Hands-on acceptance of the member journey (T3) | 2 h | Dec 5 |
-| 3 | Video device tests, record results, 50 GB cap, video on for staging (T4) | half a day | Dec 10 |
+| 3 | Video release (T4): merge the migration PR (D7), approve its staging and member Production runs, set the 50 GB cap and switch New video uploads on | 30 min | With PB-3 |
 | 4 | Engage counsel with the policy pack (L1) | 1 h to send | **Dec 1** |
 | 5 | Approve PB-1 member Production operations (O1) | 1 h | Dec 5 |
 | 6 | Authorize and run the staging recovery exercise with Claude (O2) | 1 h | Dec 12 |
@@ -79,7 +79,7 @@ true first.
 | T1 | Staging serves the accepted build (live deployment verification) | **Done** Nov 27: the canonical staging address serves `00ee129` (private window). A normal window had shown a cached `9d17683`; no deployment or configuration change was needed | Founder | None | 1 min | In a **private window**, View Source shows `splitpost-commit` = the expected commit. Required at every acceptance session and after every deployment, on staging and on app.splitpost.ca |
 | T2 | Progression on for staging | **Done** Nov 27 (founder confirmation); independent confirmation folded into the next read-only staging check | Founder | T1 | 1 min | Control Center shows Progression on, with your reason; the next staging check shows the switch on |
 | T3 | **Interface milestone**: hands-on acceptance of interface, onboarding, gamification, My Split and publishing (closes UAT-001-3 and UAT-001-4) | Built, automated checks green; **awaiting your acceptance** | Founder; Claude fixes findings | T1, T2 | 2 h, plus fixes | Every step of parts B and C of the testing guide behaves as written on your phone and laptop; no open P0 or P1; each P2 fixed or accepted by you; you record "accepted" here |
-| T4 | **Video device validation** (closes UAT-001-2) | Ready since Nov 26; no results recorded yet | Founder (tests); Claude (verification) | T1 | half a day; Claude 30 min | iPhone Safari and Android Chrome each pass the 1 and 5 minute clips (`docs/video/DEVICE-TEST.md`), results recorded in Control Center, cap set to 50 GB, video uploads switched on for staging only; Claude's check 029 and video checks pass. **Fallback:** if a phone fails, the pilot opens with text and photos and video follows, with no code change |
+| T4 | **Video release** (closes UAT-001-2) | **Changed by founder decision, Nov 27:** device testing is no longer an activation gate (approved change to the video release criteria; migration 20261220000000). Device tests stay available and recorded for diagnosis; none was recorded or changed by the decision | Founder (switch on); Claude (migration, checks, verification) | Migration merged (D7) and applied to staging and member Production | 30 min | The 50 GB cap is set and New video uploads is on in member Production with a reason; check 036 passes; limits, server file checks, moderation, cleanup and the separate playback switch unchanged; members get video when the pilot opens (no separate step) |
 | T5 | Real-device speed and reduced motion | Emulated checks done (sign-in 2.1 s, landing 1.24 s on Slow 4G) | Founder | T3 (same session) | 10 min | Sign-in about 2 s and Home about 3 s on your phone with Wi-Fi off; with Reduce Motion on, the walkthrough changes faces without sliding |
 | T6 | Release candidate regression | Green at `ac40597` | Claude | Any fix merged | 2 h each time | Full CI green (unit, types, build, secret scan, database, separation, reconciliation, 20 browser journeys with WCAG 2.2 AA, public site and launch rehearsal) at the exact commit PB-2 and PB-3 use |
 
@@ -122,7 +122,7 @@ its immediate reporting, recovery objectives approved (RPO 24 h, RTO 4 h).
 |---|---|---|---|
 | **Legal review (L1) not started** | **High, flagged now** | The pilot documents must be reviewed before invitations, and counsel's lead time is outside our control. Without them, O7 cannot happen on Dec 23 | Counsel engaged by Dec 1 with the pack and the blocking questions; sign-off by Dec 18 |
 | Founder acceptance (T3) still to do | Medium | Findings need fix time before PB-2 on Dec 16 | T3 by Dec 5 leaves a week for fixes |
-| Video device tests (T4) | Medium, contained | A failure on either phone holds video back | The pilot opens with text and photos; video later with no code change |
+| Video compatibility (T4) | Medium, accepted | Without device tests, some phones may hit conversion, upload or playback problems | Founder decision Nov 27: found and fixed from pilot feedback; device test page kept for diagnosis; clear error messages; uploads can be paused without hiding published videos |
 | PB-1 approval (O1) | Low | PB-2's post-media step needs the Production drain key | Approve by Dec 5 |
 | Recovery exercise (O2) | Low | Needs a daily backup after T4 and a quiet hour | Run between T4 and Dec 12 |
 
@@ -140,7 +140,7 @@ enhancement (post-launch backlog).
 |---|---|---|---|
 | UAT-001-1 | P2 | Landing page mobile hero too crowded | **Accepted and closed** Nov 27 (SP-BRAND-003, live at `ac40597`) |
 | BRAND-003 | P2 | Mobile hero hierarchy, logo-inspired illustration, realistic screenshots, HOW problem statements | **Accepted and closed** Nov 27 (PR #134, live at `ac40597`). Landing freeze reinstated |
-| UAT-001-2 | P1 | Video unavailable | Not a defect: gated until T4 |
+| UAT-001-2 | P1 | Video unavailable | **Resolved by decision** Nov 27: video released without a device-test gate (T4); activation through the release process |
 | UAT-001-3 | P2, blocks the interface milestone | Interface did not match the approved designs | Built and merged (`00ee129`); **awaiting T3** |
 | UAT-001-4 | P2 | Gamification and progression not obvious | Built and merged (`00ee129`); **awaiting T3** |
 | UAT-001-5 | P2 | Profile tab label mismatch (WCAG 2.5.3) | **Resolved** |
