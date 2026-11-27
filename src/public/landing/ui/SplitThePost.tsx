@@ -11,7 +11,8 @@ import { HERO_POST } from '../photos'
  * upper piece is an authentic-looking Splitpost image post (a fictional
  * sample creator, labelled SAMPLE: picture, name, a short title and the four
  * actions, with no counts) and the lower piece is the community whose
- * contributions help it succeed. The cut follows the logo's geometry: it
+ * contributions help it succeed. The caption under it is the founder's
+ * signature line, with a note that the people shown are illustrative. The cut follows the logo's geometry: it
  * rises by 0.169 of the width from left to right (4.05 over 24 in the logo),
  * so the picture reads as the mark at any size. No money, amounts,
  * percentages or engagement figures.
@@ -96,18 +97,24 @@ export function SplitThePost({ className }: { className?: string }) {
                   />
                 ))}
               </div>
-              <div className="mt-3 flex justify-center gap-5 text-sp-ink/80">
+              <div className="mt-3.5 flex justify-center gap-5 text-sp-ink/80">
                 <MessageCircle className="h-4 w-4" />
                 <Bookmark className="h-4 w-4" />
                 <Send className="h-4 w-4" />
                 <Users className="h-4 w-4" />
               </div>
-              <p className="mt-3 text-center font-sp-display text-[15px] font-extrabold">{split.communityTag}</p>
             </div>
           </div>
         </div>
       </div>
-      <figcaption className="sr-only">{split.caption}</figcaption>
+      <figcaption className="mt-5 text-center">
+        <span data-testid="hero-caption" className="block font-sp-display text-[1.05rem] font-extrabold text-sp-bg">
+          {split.caption}
+        </span>
+        <span data-testid="hero-illustrative" className="mt-1 block text-[12px] leading-snug text-sp-muted-on-dark">
+          {split.note}
+        </span>
+      </figcaption>
     </figure>
   )
 }

@@ -43,10 +43,10 @@ export const HOMEPAGE_COPY = {
    * SP-UAT-001): a fictional creator, labelled SAMPLE, shown as a photo post.
    * No sample text, statistics or comments.
    */
-  /** The hero picture (SP-BRAND-003): the founder's mockup wording. */
+  /** The hero picture (SP-BRAND-003): the founder's signature caption, and a note that the people are illustrative. */
   split: {
-    communityTag: 'Grown by the community.',
-    caption: 'A sample post by a fictional creator, above, and the community that helps it grow, below, split on the diagonal of the Splitpost logo. The people shown are models, not Splitpost members.',
+    caption: 'Created by one. Grown by many.',
+    note: 'Illustrative sample: a fictional creator and stock photos of models, not Splitpost members.',
   },
 
   why: {
@@ -124,20 +124,15 @@ export const HOMEPAGE_COPY = {
     status: 'final' as CopyStatus,
     eyebrow: 'How Splitpost works',
     headline: 'A better split starts with a better connection.',
-    /**
-     * SP-BRAND-003: each step now opens with a recognizable problem before
-     * the approved hook and body. The problem lines are Claude's drafts,
-     * NOT founder approved; they are replaced by the founder's final copy
-     * before publication, and this flips to 'final' only then.
-     */
-    problemStatus: 'proposed' as CopyStatus,
+    /** SP-BRAND-003: each step opens with a recognizable problem, then the approved hook and body. Founder-approved wording, Nov 27. */
+    problemStatus: 'final' as CopyStatus,
     steps: [
       {
         id: 'discover',
         number: '01',
         label: 'Discover',
         title: 'Find your people.',
-        problem: 'Endless feeds show you what keeps you scrolling, not who is worth knowing.',
+        problem: "Creating valuable content doesn't guarantee that the people who need it will ever discover it.",
         body: [
           'Discover creators who share your interests and create content that matters to you.',
           'Find people worth following, not just content worth scrolling past.',
@@ -151,7 +146,7 @@ export const HOMEPAGE_COPY = {
         number: '02',
         label: 'Connect',
         title: 'Keep your people close.',
-        problem: 'The people you care about most get lost in everything else.',
+        problem: "You've built an audience, yet you still have to compete for the attention of people who already chose to follow you.",
         body: [
           'Follow the creators you value and add your favourites to your Clique.',
           'Their new posts come first, so you can stay connected to the people who matter most.',
@@ -165,7 +160,7 @@ export const HOMEPAGE_COPY = {
         number: '03',
         label: 'Create',
         title: 'Share what makes you valuable.',
-        problem: "You post and post, and rarely know what actually brings people back.",
+        problem: "You invest your time, knowledge and creativity into content, but turning that effort into a sustainable income remains unpredictable.",
         body: [
           'Teach, inspire, entertain or share what you know.',
           'Build a community around your content and understand what keeps people coming back.',
@@ -179,7 +174,7 @@ export const HOMEPAGE_COPY = {
         number: '04',
         label: 'Contribute',
         title: 'Make your support count.',
-        problem: 'Your support helps creators grow, but it usually goes unseen.',
+        problem: "You help your favourite creators grow by engaging with their content, sharing it and introducing them to others, yet your contributions often go unrecognized.",
         body: [
           'Support the creators you value through meaningful engagement and by helping their communities grow.',
           'Earn Connection Points for eligible contributions and track your progress.',
@@ -194,7 +189,7 @@ export const HOMEPAGE_COPY = {
         number: '05',
         label: 'Earn',
         title: 'Get your split.',
-        problem: 'On most platforms, the people who help content succeed rarely share in its success.',
+        problem: "Creators and their communities work together to make content successful, but the opportunity to benefit financially is rarely shared between them.",
         body: [
           'Whether you create content or help creators grow, work towards qualifying for a future share of eligible content revenue.',
           'During the pilot, you can track your simulated split, see your progress and know what to do next.',

@@ -61,8 +61,9 @@ const APPROVED_GUARANTEE_SENTENCES = [
   "Joining the waitlist doesn't guarantee an invitation to the pilot.",
   'Participation does not guarantee earnings or rewards.',
 ]
-// No approved sentence needs an exception from the copy rules (SP-BRAND-002 decisions, Nov 27).
-const APPROVED_PROBLEM_SENTENCES: string[] = []
+// Founder-approved problem lines that use a word the copy rules otherwise ban, exact sentence only.
+// SP-BRAND-003 (Nov 27): the HOW Discover problem. It says discovery isn't guaranteed; it promises nothing.
+const APPROVED_PROBLEM_SENTENCES: string[] = ["Creating valuable content doesn't guarantee that the people who need it will ever discover it."]
 /** Every block of visible text in an element, for the claims checker. */
 const blocks = (el: Element) => [...el.querySelectorAll('h1, h2, h3, p, li, span, a, figcaption')].map((e) => norm(e).trim()).filter(Boolean)
 
@@ -127,7 +128,7 @@ describe('HOOK', () => {
   it('pictures shared value: a sample creator post above, the community below, with no money (SP-BRAND-003)', () => {
     const scene = hero().querySelector('[data-testid="hero-scene"]')!
     expect(norm(scene)).toContain(HERO_POST.creator.name)
-    expect(norm(scene)).toContain('Grown by the community.')
+    expect(norm(scene.querySelector('[data-testid="hero-caption"]'))).toBe('Created by one. Grown by many.')
     expect(norm(scene)).toContain('Sample')
     expect(norm(scene)).not.toMatch(/[$£€%]|earn|cash|payout/i)
   })
@@ -144,11 +145,21 @@ describe('HOOK', () => {
     expect(scene.querySelector('[data-testid="gold-seam"] line')!.getAttribute('y1')).not.toBe(scene.querySelector('[data-testid="gold-seam"] line')!.getAttribute('y2'))
     // Only the name, role, sample tag, short title and community line carry words; no counts.
     const visible = norm(scene.querySelector('[aria-hidden="true"]'))
-    const words = [HERO_POST.creator.name, HERO_POST.creator.role, 'Sample', HERO_POST.title, HOMEPAGE_COPY.split.communityTag]
+    const words = [HERO_POST.creator.name, HERO_POST.creator.role, 'Sample', HERO_POST.title]
     expect(words.reduce((v, w) => v.replace(w, ''), visible).trim()).toBe('')
     expect(visible.replace(HERO_POST.title, '')).not.toMatch(/\d/)
     // A distinct photo: never the WHY section's.
     expect(scene.querySelector('img[data-photo="creator-editing"]')).toBeNull()
+  })
+  it('captions the picture once with the signature line, and says the people are illustrative (SP-BRAND-003)', () => {
+    const page = norm(landing())
+    expect(page.split('Created by one. Grown by many.').length - 1).toBe(1)
+    expect(norm(hero().querySelector('[data-testid="hero-illustrative"]'))).toBe(
+      'Illustrative sample: a fictional creator and stock photos of models, not Splitpost members.',
+    )
+    // The caption is visible text, not only for screen readers, and the drawing itself repeats none of it.
+    expect(hero().querySelector('[data-testid="hero-caption"]')!.closest('.sr-only')).toBeNull()
+    expect(norm(hero().querySelector('[data-testid="hero-scene"] [aria-hidden="true"]'))).not.toMatch(/grown|created by/i)
   })
   it('puts the value proposition after the headline, then the picture, the supporting message, the actions and the disclosure (SP-BRAND-003)', () => {
     const order = [
@@ -225,9 +236,15 @@ describe('HOW (the product demonstration)', () => {
       expect(norm(li.querySelector(`[data-testid="how-${s.id}-problem"]`))).toBe(s.problem)
     }
   })
-  it('keeps the problem lines marked as proposed until the founder supplies the final copy', () => {
-    // Flip to 'final' only with the founder's approved wording (SP-BRAND-003).
-    expect(HOMEPAGE_COPY.how.problemStatus).toBe('proposed')
+  it("uses the founder's approved problem lines, word for word (SP-BRAND-003)", () => {
+    expect(HOMEPAGE_COPY.how.problemStatus).toBe('final')
+    expect(HOMEPAGE_COPY.how.steps.map((s) => s.problem)).toEqual([
+      "Creating valuable content doesn't guarantee that the people who need it will ever discover it.",
+      "You've built an audience, yet you still have to compete for the attention of people who already chose to follow you.",
+      'You invest your time, knowledge and creativity into content, but turning that effort into a sustainable income remains unpredictable.',
+      'You help your favourite creators grow by engaging with their content, sharing it and introducing them to others, yet your contributions often go unrecognized.',
+      'Creators and their communities work together to make content successful, but the opportunity to benefit financially is rarely shared between them.',
+    ])
   })
   it('says beside Contribute that Connection Points are not money, and beside Earn that every amount is simulated', () => {
     expect(norm(sec().querySelector('[data-testid="how-contribute-note"]'))).toBe('Connection Points recognize your contributions. They are not money and have no cash value.')
@@ -440,7 +457,7 @@ describe('copy rules', () => {
   it('"guarantee" appears only in the approved disclaimers', () => {
     const t = norm(landing())
     const count = (t.match(/guarantee/gi) || []).length
-    const approved = APPROVED_GUARANTEE_SENTENCES.reduce((n, s) => n + t.split(s).length - 1, 0)
+    const approved = [...APPROVED_GUARANTEE_SENTENCES, ...APPROVED_PROBLEM_SENTENCES].reduce((n, s) => n + t.split(s).length - 1, 0)
     expect(count).toBe(approved)
   })
 })
