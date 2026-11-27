@@ -239,14 +239,14 @@ async function splitBreakdown(page, APP) {
       const e = await splitBreakdown(page, APP)
       const hero = (await page.getByTestId('split-hero').innerText()).replace(/\s+/g, ' ')
       check('My Split opens on her split: $40.00 as a creator, locked, Simulated', /Simulated/.test(hero) && /\$40\.00/.test(hero) && /Locked \$40\.00/.test(hero), hero)
-      check('Next for you names her nearest goal and one action', /Be in members’ Cliques: 4 of 5/.test(await page.getByTestId('next-for-you').innerText()))
+      check('Next for you names her nearest goal and one action', /Be in members’ Cliques: 1 of 2/.test(await page.getByTestId('next-for-you').innerText()) && (await page.getByTestId('next-for-you').getByRole('link', { name: 'Post something your supporters will value' }).count()) === 1)
+      check('no allocation percentage is shown', !/\d+\s*%/.test(await page.getByTestId('split-progression').innerText()))
       await page.goto(`${APP}/app/split?face=goals`)
       const card = page.getByTestId('goals-creator')
       await card.waitFor()
       const t = (await card.innerText()).replace(/\s+/g, ' ')
       check('Cleo sees 4 of 5 creator goals and the next step', /4 of 5/.test(t) && /Next: be in members’ cliques\./.test(t), t)
       check('her simulated share is accumulated and locked, marked Simulated', /Simulated/i.test(e) && /Accumulated \$40\.00 Locked \$40\.00 Unlocked \$0\.00/.test(e), e)
-      check('no allocation percentage is shown', !/\d+\s*%/.test(await page.getByTestId('split-progression').innerText()))
       // Optional, for a person to look at (SHOTS=<directory>); never in CI.
       if (process.env.SHOTS) {
         await page.setViewportSize({ width: 390, height: 1400 })
