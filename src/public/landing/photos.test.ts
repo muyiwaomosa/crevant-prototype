@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { WHO_PHOTOS, PHOTOS, PHOTOS_TO_VERIFY, SAMPLE_AVATAR } from './photos'
+import { WHO_PHOTOS, PHOTOS, PHOTOS_TO_VERIFY, HERO_POST, HERO_PICTURES } from './photos'
 import { HOMEPAGE_COPY } from './copy'
 
 const PUBLIC = join(__dirname, '../../../public')
@@ -71,9 +71,9 @@ describe('homepage photos', () => {
     ])
   })
 
-  it('publishes no unverified asset: every photo and the sample avatar are verified on their listing', () => {
+  it('publishes no unverified asset: every photo and every hero picture is verified on its listing', () => {
     expect(PHOTOS_TO_VERIFY).toEqual([])
-    for (const p of [...photos, SAMPLE_AVATAR]) {
+    for (const p of [...photos, ...HERO_PICTURES]) {
       expect(p.verified, p.id).toBe(true)
       expect(p.photographer, p.id).not.toMatch(/verif|pending|to be/i)
     }
@@ -88,7 +88,11 @@ describe('homepage photos', () => {
   })
 
   it('ships no unused, retired or AI-generated images', () => {
-    const used = new Set([...photos.flatMap((p) => p.widths.map((w) => `${p.base.split('/').pop()}-${w}.webp`)), SAMPLE_AVATAR.src.split('/').pop()])
+    const used = new Set([
+      ...[...photos, HERO_POST.media].flatMap((p) => p.widths.map((w) => `${p.base.split('/').pop()}-${w}.webp`)),
+      HERO_POST.creator.avatar.src.split('/').pop(),
+      ...HERO_POST.community.map((c) => c.src.split('/').pop()),
+    ])
     for (const f of readdirSync(join(MEDIA, 'photos'))) expect(used.has(f), `${f} is unused`).toBe(true)
     for (const f of readdirSync(MEDIA)) expect(['photos', 'screens', 'founder.jpg'].includes(f), `${f} is unused`).toBe(true)
   })
@@ -104,15 +108,31 @@ describe('homepage photos', () => {
     }
   })
 
-  it("records the sample creator's profile photo: licensed, small, square and never presented as Priya", () => {
-    expect(SAMPLE_AVATAR.source).toBe('Unsplash')
-    expect(SAMPLE_AVATAR.licence).toBe('Unsplash License')
-    expect(SAMPLE_AVATAR.licenceUrl).toBe('https://unsplash.com/license')
-    expect(SAMPLE_AVATAR.sourceUrl).toBe('https://unsplash.com/photos/a-young-woman-with-dark-wavy-hair-smiles-brightly-smiling-HVbaH3p9B8k')
-    expect(SAMPLE_AVATAR.photographer).toBe('IMANA')
-    const buf = readFileSync(join(PUBLIC, SAMPLE_AVATAR.src))
-    expect(webpSize(buf)).toEqual({ width: SAMPLE_AVATAR.size, height: SAMPLE_AVATAR.size })
-    expect(buf.length).toBeLessThan(10_000)
-    expect(buf.includes(Buffer.from('EXIF'))).toBe(false)
+  it('records every hero picture: licensed Unsplash photos, credited, small and free of metadata', () => {
+    for (const p of HERO_PICTURES) {
+      expect(p.source, p.id).toBe('Unsplash')
+      expect(p.licence, p.id).toBe('Unsplash License')
+      expect(p.licenceUrl, p.id).toBe('https://unsplash.com/license')
+      expect(p.sourceUrl, p.id).toMatch(/^https:\/\/unsplash\.com\/photos\//)
+      expect(p.photographerUrl, p.id).toMatch(/^https:\/\/unsplash\.com\/@/)
+    }
+    for (const p of [HERO_POST.creator.avatar, ...HERO_POST.community]) {
+      const buf = readFileSync(join(PUBLIC, p.src))
+      expect(webpSize(buf), p.id).toEqual({ width: 160, height: 160 })
+      expect(buf.length, p.id).toBeLessThan(10_000)
+      expect(buf.includes(Buffer.from('EXIF')), p.id).toBe(false)
+    }
+    for (const w of HERO_POST.media.widths) {
+      const buf = readFileSync(join(PUBLIC, `${HERO_POST.media.base}-${w}.webp`))
+      expect(webpSize(buf)).toEqual({ width: w, height: (w * 10) / 16 })
+      expect(buf.length).toBeLessThan(60_000)
+      expect(buf.includes(Buffer.from('EXIF'))).toBe(false)
+    }
   })
+
+  it('keeps the hero picture distinct from every other photo on the page (SP-BRAND-003)', () => {
+    const elsewhere = new Set(photos.map((p) => p.sourceUrl))
+    for (const p of HERO_PICTURES) expect(elsewhere.has(p.sourceUrl), p.id).toBe(false)
+  })
+
 })

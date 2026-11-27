@@ -299,10 +299,16 @@ async function newContext(browser, options = {}) {
         const lb = box(line)
         const tilted = [...scene.querySelectorAll('*')].some((el) => { const t = getComputedStyle(el).transform; return t !== 'none' && !/^matrix\(1, 0, 0, 1,/.test(t) })
         const outside = [...scene.querySelectorAll('*')].filter((el) => { const b = box(el); return b.width > 0 && (b.left < 0 || b.right > vw) }).length
-        return { vw, tilted, outside, left: Math.round(Math.min(creator.left, community.left)), right: Math.round(vw - Math.max(creator.right, community.right)), line: [Math.round(lb.left), Math.round(lb.right)], pieces: [Math.round(Math.min(creator.left, community.left)), Math.round(Math.max(creator.right, community.right))] }
+        const top = (id) => box(document.querySelector(`[data-testid="${id}"]`)).top
+        const order = ['hero-value', 'hero-scene', 'hero-support', 'hero-actions', 'hero-small-print'].map(top)
+        const clips = [...scene.querySelectorAll('[style*="clip-path"]')].map((el) => getComputedStyle(el).clipPath)
+        const diagonal = clips.length === 2 && clips.every((c) => c.startsWith('polygon(')) && lb.height > 8
+        return { vw, tilted, outside, stacked: order.every((y, i) => i === 0 || y > order[i - 1]), diagonal, left: Math.round(Math.min(creator.left, community.left)), right: Math.round(vw - Math.max(creator.right, community.right)), line: [Math.round(lb.left), Math.round(lb.right)], pieces: [Math.round(Math.min(creator.left, community.left)), Math.round(Math.max(creator.right, community.right))] }
       })
       check(`${width}px: the hero's two post pieces stay upright`, !r.tilted, JSON.stringify(r))
       check(`${width}px: the hero's pieces fit on screen with a margin on both sides`, r.outside === 0 && r.left >= 16 && r.right >= 16, JSON.stringify(r))
+      check(`${width}px: value proposition, picture, supporting message, actions, then the disclosure, top to bottom (SP-BRAND-003)`, r.stacked, JSON.stringify(r))
+      check(`${width}px: the two pieces are cut on the logo's diagonal, not a horizontal divider`, r.diagonal, JSON.stringify(r))
       check(`${width}px: the apricot line stays within the pieces`, r.line[0] >= r.pieces[0] && r.line[1] <= r.pieces[1], JSON.stringify(r))
       await ctx.close()
     }
