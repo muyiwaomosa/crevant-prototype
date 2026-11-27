@@ -194,3 +194,19 @@ export function DiscoverGoalHint() {
     </Link>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Onboarding: the first steps introduce the journey they start.
+
+export function JourneyIntro() {
+  const p = useProgressContext()?.progress
+  if (!p || !p.enabled || p.consumer.status !== 'in_progress' || !journeyProgress(p.consumer).set) return null
+  return (
+    <p className="mt-1 text-[13px] text-ink-700" data-testid="journey-intro">
+      These steps also start your supporter goals.{' '}
+      <Link to="/app/split?face=goals" className="font-semibold text-brand-700 underline">
+        See your goals
+      </Link>
+    </p>
+  )
+}

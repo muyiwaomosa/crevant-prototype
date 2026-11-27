@@ -11,6 +11,7 @@ import { useAppApi, useMyProfile } from './AppApiContext'
 import { ContributionInsight } from './insights'
 import { MySplitIntro } from './onboarding'
 import { EarningsRow, GoalRing, NEXT_ACTION, ProgressCards, creatorJourneyShown, goalText, journeyProgress, useMyProgress } from './progression'
+import { remainingText, suggestNext, whyItMatters } from './journey'
 
 /**
  * My Split (SP-DESIGN-002). IP-1 delivers the destination, its three faces and
@@ -127,6 +128,7 @@ function SplitFace() {
         This is your split: what you've accumulated so far, simulated during the pilot. Locked amounts unlock when you reach your goals under My Goals.
       </FirstUseTip>
       <SplitHero creator={e.creator} supporter={e.consumer} />
+      <NextForYou progress={progress} />
       <details className="group rounded-3xl bg-white p-5 shadow-[0_1px_2px_rgb(19_25_27/0.06),0_0_0_1px_rgb(19_25_27/0.05)]" data-testid="split-explain">
         <summary className="flex cursor-pointer list-none items-center justify-between text-[14px] font-bold text-brand-700">
           What do these mean? <ChevronDown className="h-4 w-4 transition group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
@@ -173,7 +175,6 @@ function SplitFace() {
           </p>
         )}
       </details>
-      <NextForYou progress={progress} />
       <Disclosure />
       <FounderReviewLink />
     </div>
@@ -225,58 +226,62 @@ function SplitHero({ creator, supporter }: { creator: EarningsByState; supporter
   )
 }
 
-/** The nearest open goal and one action (UX-03): the journey closest to done first. */
+/**
+ * Your next goal (UX-03, SP-UAT-001): directly under the split, the open goal
+ * closest to done across your journeys, with what's left, why it matters and
+ * one action. A suggestion, not an order: the approved goals can be met in any
+ * order. Every number is the server's.
+ */
 function NextForYou({ progress }: { progress: Extract<MyProgress, { enabled: true }> }) {
+  const s = suggestNext(progress)
   const journeys = ([
-    ['creator', 'Creator goals', progress.creator, progress.earnings.creator],
-    ['consumer', 'Supporter goals', progress.consumer, progress.earnings.consumer],
-  ] as const)
-    .filter(([a]) => a === 'consumer' || creatorJourneyShown(progress))
-    .map(([audience, title, j, e]) => ({ audience, title, j, e, ...journeyProgress(j) }))
-  const open = journeys
-    .filter((x) => x.j.status === 'in_progress' && x.set && x.next)
-    .sort((a, b) => b.done / b.total - a.done / a.total)[0]
-  const review = journeys.find((x) => x.j.status === 'under_review')
+    ['creator', progress.creator],
+    ['consumer', progress.consumer],
+  ] as const).filter(([a]) => a === 'consumer' || creatorJourneyShown(progress))
+  const review = journeys.find(([, j]) => j.status === 'under_review')
+  const action = s ? NEXT_ACTION[s.step.metric] : undefined
   return (
-    <section aria-labelledby="next-for-you" data-testid="next-for-you">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h2 id="next-for-you" className="font-display text-[17px] font-extrabold text-ink-900">
-          Next for you
+    <section aria-labelledby="next-for-you" data-testid="next-for-you" className="rounded-[26px] bg-[#fdeee2] p-5">
+      <div className="flex items-baseline justify-between">
+        <h2 id="next-for-you" className="text-[12px] font-bold uppercase tracking-[0.12em] text-[#94481a]">
+          Your next goal
         </h2>
         <Link to="/app/split?face=goals" className="text-[13px] font-semibold text-brand-700">
           All goals
         </Link>
       </div>
-      <Card className="p-4">
-        {open && open.next ? (
-          <>
-            <div className="flex items-center gap-3">
-              <GoalRing done={open.done} total={open.total} tone={open.audience === 'creator' ? 'brand' : 'green'} />
-              <div className="min-w-0">
-                <p className="font-bold text-ink-900">{open.title}</p>
-                <p className="text-[12.5px] text-ink-600">
-                  {open.done} of {open.total} done.
-                  {open.e.lockedCents + open.e.pausedCents > 0 ? ` Unlocks ${simulatedDollars(open.e.lockedCents + open.e.pausedCents)} (simulated).` : ''}
-                </p>
-              </div>
+      {s ? (
+        <>
+          <div className="mt-3 flex items-center gap-3">
+            <GoalRing done={s.done} total={s.total} tone={s.audience === 'creator' ? 'brand' : 'green'} size={56} />
+            <div className="min-w-0">
+              <p className="font-display text-[18px] font-extrabold leading-snug text-ink-900">{s.title}</p>
+              <p className="text-[12.5px] text-ink-700">
+                {s.done} of {s.total} done.{s.unlockCents > 0 ? ` Unlocks ${simulatedDollars(s.unlockCents)} (simulated).` : ''}
+              </p>
             </div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#fef4ec] px-3 py-2.5">
-              <span className="text-[13.5px] font-semibold text-[#5a2a0b]">
-                {goalText(open.next.metric).label}: {Math.min(open.next.value, open.next.target ?? 0)} of {open.next.target}
-              </span>
-              {NEXT_ACTION[open.next.metric] && (
-                <Link to={NEXT_ACTION[open.next.metric].to} className={buttonClass('primary', 'sm')}>
-                  {NEXT_ACTION[open.next.metric].label}
-                </Link>
-              )}
-            </div>
-          </>
-        ) : review ? (
-          <p className="text-[14px] text-ink-800">You've met every {review.audience === 'creator' ? 'creator' : 'supporter'} goal. We're checking it, then it unlocks.</p>
-        ) : (
-          <p className="text-[14px] text-ink-800">You're up to date. Keep supporting the creators you value; My Goals shows where you stand.</p>
-        )}
-      </Card>
+          </div>
+          <p className="mt-4 text-[14.5px] font-semibold text-ink-900">
+            {goalText(s.step.metric).label}: {Math.min(s.step.value, s.step.target)} of {s.step.target}
+          </p>
+          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#f3dcc8]" aria-hidden="true">
+            <div className="h-full rounded-full bg-brand-600" style={{ width: `${Math.round((Math.min(s.step.value, s.step.target) / s.step.target) * 100)}%` }} />
+          </div>
+          <p className="mt-1.5 text-[13px] font-semibold text-[#5a2a0b]">{remainingText(s.step)}</p>
+          <p className="mt-2 text-[13px] leading-relaxed text-ink-700" data-testid="next-why">
+            {whyItMatters(s)}
+          </p>
+          {action && (
+            <Link to={action.to} className={`${buttonClass('primary', 'sm')} mt-3 h-11 px-5`}>
+              {action.label}
+            </Link>
+          )}
+        </>
+      ) : review ? (
+        <p className="mt-2 text-[14px] text-ink-800">You've met every {review[0] === 'creator' ? 'creator' : 'supporter'} goal. We're checking it, then it unlocks.</p>
+      ) : (
+        <p className="mt-2 text-[14px] text-ink-800">You're up to date. Keep supporting the creators you value; My Goals shows where you stand.</p>
+      )}
     </section>
   )
 }
@@ -460,6 +465,7 @@ function ActivityFace() {
         </Card>
         </div>
       )}
+      <Achievements />
       <section aria-labelledby="activity-history">
         <h2 id="activity-history" className="mb-2 font-display text-[17px] font-extrabold text-ink-900">
           Your contributions
@@ -468,6 +474,52 @@ function ActivityFace() {
       </section>
       <Opportunities />
     </div>
+  )
+}
+
+/**
+ * Achievements (SP-UAT-001): the goals the server reports as met, and
+ * qualification, kept with the record of what you did. Nothing is predicted
+ * and nothing new is awarded: these are the approved goals, as they stand.
+ */
+function Achievements() {
+  const progress = useMyProgress()
+  if (!progress?.enabled) return null
+  const rows = (
+    [
+      ['creator', 'Creator', progress.creator],
+      ['consumer', 'Supporter', progress.consumer],
+    ] as const
+  ).flatMap(([a, who, j]) => {
+    if (a === 'creator' && !creatorJourneyShown(progress)) return []
+    const qualified = j.status === 'qualified' || j.status === 'eligibility_paused'
+    const met = j.steps.filter((s) => s.target !== null && s.value >= s.target).map((s) => ({ key: `${a}:${s.metric}`, text: `${who} goal met: ${goalText(s.metric).label.replace(/ \(last 28 days\)/, '')}` }))
+    return qualified ? [{ key: `${a}:qualified`, text: `Qualified as a ${who.toLowerCase()}${j.qualifiedAt ? `, ${new Date(j.qualifiedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}` : ''}` }, ...met] : met
+  })
+  return (
+    <section aria-labelledby="activity-achievements" data-testid="achievements">
+      <h2 id="activity-achievements" className="mb-2 font-display text-[17px] font-extrabold text-ink-900">
+        Your achievements
+      </h2>
+      {rows.length === 0 ? (
+        <div className="rounded-3xl bg-[#e7f4f1] p-4 text-[14px] text-[#173f37]">
+          Your first goal met will be recorded here. <Link to="/app/split?face=goals" className="font-semibold underline">See your goals</Link>
+        </div>
+      ) : (
+        <Card className="p-0">
+          <ul className="divide-y divide-ink-100">
+            {rows.map((r) => (
+              <li key={r.key} className="flex items-center gap-3 px-4 py-3 text-[14px] text-ink-900">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#0f7a64] text-white" aria-hidden="true">
+                  <Check className="h-4 w-4" strokeWidth={3} />
+                </span>
+                {r.text}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </section>
   )
 }
 

@@ -8,7 +8,7 @@ import { LIMITS, cursorOf, type Comment, type FeedFilter, type Identity, type Me
 import { FaceView } from '../components/FaceView'
 import { useAppApi, useMyProfile } from './AppApiContext'
 import { usePublishedRecognition, useRecognize } from './recognition'
-import { HomeGoalStrip } from './journey'
+import { HomeGoalStrip, JourneyIntro } from './journey'
 import { PostTile, tintFor } from './tiles'
 import { WelcomeIntro } from './welcome'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
@@ -646,6 +646,7 @@ function StartHere({ quiet }: { quiet: boolean }) {
           <p className="mt-1 text-sm text-ink-600">
             {quiet ? "Here's how to start. It takes a minute." : `${steps.length - remaining} of ${steps.length} done. A few minutes to feel at home.`}
           </p>
+          <JourneyIntro />
         </div>
         <button type="button" onClick={hide} className="shrink-0 rounded-full px-2 py-1 text-[13px] font-semibold text-ink-600 hover:text-ink-900">
           Hide
