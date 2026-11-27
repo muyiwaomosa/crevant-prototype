@@ -105,6 +105,7 @@ export function PostVideo({ post, bleed = false }: { post: Post; bleed?: boolean
   const ref = useRef<HTMLVideoElement>(null)
   const resumeAt = useRef<number | null>(null)
   const retried = useRef(false)
+  const [broken, setBroken] = useState(false)
   useEffect(() => {
     ctx.request(post.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -112,8 +113,12 @@ export function PostVideo({ post, bleed = false }: { post: Post; bleed?: boolean
   const entry = ctx.get(post.id)
   const links = !entry || entry.state === 'loading' ? undefined : entry.links
   // An expired link (or a dropped connection): ask once for a fresh one and carry on where it stopped.
+  // A second failure with a fresh link is a real playback failure: say so, with a way to try again.
   function failed() {
-    if (retried.current) return
+    if (retried.current) {
+      setBroken(true)
+      return
+    }
     retried.current = true
     resumeAt.current = ref.current?.currentTime ?? null
     ctx.request(post.id, true)
@@ -140,14 +145,33 @@ export function PostVideo({ post, bleed = false }: { post: Post; bleed?: boolean
             </button>
           </div>
         )}
+        {links && broken && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-ink-100 p-4 text-center text-sm text-ink-700" role="alert" data-testid="post-video-error">
+            <VideoOff className="h-6 w-6" aria-hidden="true" />
+            <p>This video couldn't play. Check your connection and try again. If it keeps happening, report it with Send feedback.</p>
+            <button
+              type="button"
+              onClick={() => {
+                retried.current = false
+                setBroken(false)
+                ctx.request(post.id, true)
+              }}
+              className={buttonClass('secondary', 'sm')}
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Try again
+            </button>
+          </div>
+        )}
         {links && (
           <video
             ref={ref}
-            src={links.src}
+            // Without a poster, the browser shows the first frame instead of a blank player: it reads only
+            // the start of the file (metadata), never the whole video, until the member presses play.
+            src={links.poster ? links.src : `${links.src}#t=0.1`}
             poster={links.poster ?? undefined}
             controls
             playsInline
-            preload="none"
+            preload={links.poster ? 'none' : 'metadata'}
             aria-label={label}
             className="absolute inset-0 h-full w-full bg-ink-900 object-contain"
             onError={failed}
@@ -619,18 +643,18 @@ export function VideoReadinessPanel() {
           <div>
             <dt className="text-ink-500">Delivered, last 7 days (estimate)</dt>
             <dd className="font-semibold text-ink-900">
-              {formatMb(s.delivery7d.videoBytes)} over {s.delivery7d.links} {s.delivery7d.links === 1 ? 'play' : 'plays'}
+              {formatMb(s.delivery7d.videoBytes)} across {s.delivery7d.links} video {s.delivery7d.links === 1 ? 'link' : 'links'} issued
             </dd>
           </div>
           <div>
             <dt className="text-ink-500">Delivered, last 30 days (estimate)</dt>
             <dd className="font-semibold text-ink-900">
-              {formatMb(s.delivery30d.videoBytes)} over {s.delivery30d.links} {s.delivery30d.links === 1 ? 'play' : 'plays'}
+              {formatMb(s.delivery30d.videoBytes)} across {s.delivery30d.links} video {s.delivery30d.links === 1 ? 'link' : 'links'} issued
             </dd>
           </div>
         </dl>
         <p className="text-[13px] text-ink-600">
-          Delivery is an upper estimate: each started play counts the whole video. Exact bandwidth is on the Supabase project's Usage page. Turn uploads and playback on or
+          Delivery is an upper estimate, not a play count: a link is issued when a video post is shown (and again after a refresh or a retry), and each counts the whole video, whether or not it is played. Exact bandwidth is on the Supabase project's Usage page. Turn uploads and playback on or
           off separately under Operational switches.
         </p>
         {share >= 0.8 ? (

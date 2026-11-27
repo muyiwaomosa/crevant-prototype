@@ -133,11 +133,12 @@ test('the three rules are otherwise identical: the same policy apart from connec
   assert.deepEqual(cspOf(elsewhere)['img-src'], ["'self'", 'data:', 'blob:', STAGING])
   assert.deepEqual(cspOf(site)['img-src'], ["'self'", 'data:', 'blob:'])
   assert.deepEqual(cspOf(app)['img-src'], ["'self'", 'data:', 'blob:', ...MEMBER])
-  // Video posts (20261213000000) stream from signed Storage links: Previews (staging) only. www.splitpost.ca and
-  // app.splitpost.ca keep media from the site and blob links until video is approved for member Production.
+  // Video posts (20261213000000) stream from signed Storage links. Previews: staging. app.splitpost.ca: the member
+  // project, since the video release decision (20261220000000, Nov 27): without it every member video is blocked by
+  // the browser and the player stays blank. www.splitpost.ca has no video and is unchanged.
   assert.deepEqual(cspOf(elsewhere)['media-src'], ["'self'", 'blob:', STAGING])
   assert.deepEqual(cspOf(site)['media-src'], ["'self'", 'blob:'])
-  assert.deepEqual(cspOf(app)['media-src'], ["'self'", 'blob:'])
+  assert.deepEqual(cspOf(app)['media-src'], ["'self'", 'blob:', ...MEMBER])
   const without = (rule) => ({ ...cspOf(rule), 'connect-src': null, 'img-src': null, 'media-src': null })
   assert.deepEqual(without(site), without(elsewhere))
   assert.deepEqual(without(app), without(elsewhere))

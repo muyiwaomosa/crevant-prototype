@@ -474,6 +474,8 @@ test('app.splitpost.ca gets its own host-specific policy: no Supabase host until
   const expected = REFS.memberProduction ? [`https://${REFS.memberProduction}.supabase.co`] : []
   assert.deepEqual(directive('connect-src'), ["'self'", ...expected])
   assert.deepEqual(directive('img-src'), ["'self'", 'data:', 'blob:', ...expected])
+  // Video posts play from signed links on the member project (released Nov 27, 20261220000000).
+  assert.deepEqual(directive('media-src'), ["'self'", 'blob:', ...expected])
   assert.ok(!csps[0].includes(REFS.staging), 'the staging project is never reachable from the member Production address')
   assert.ok(!csps[0].includes(REFS.production), 'the Production waitlist project is never reachable from the member app address')
   for (const [k, v] of [['X-Frame-Options', 'DENY'], ['X-Content-Type-Options', 'nosniff'], ['Referrer-Policy', 'strict-origin-when-cross-origin']]) {

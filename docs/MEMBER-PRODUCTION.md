@@ -334,3 +334,5 @@ connection strings.
 | 2026-11-27 | PB-2 apply (founder authorized; restore point 10:00:34 UTC) | run 46050706596 | `1fa2e7a` | 20 applied and recorded; 35 member checks passed, 0 skipped |
 | 2026-11-27 | Check after PB-2 | run 46051191624 | `1fa2e7a` | Passed |
 | 2026-11-27 | post-media v3 deployed (founder) and verified | run 46051971520 | `1fa2e7a` | 455 passed, 0 failed; avatar v1 re-verified (run 46051975445, 226 passed) |
+| 2026-11-27 | Video release decision dry run | run 46063637097 | `7c0411a` | Exactly 20261220000000 |
+| 2026-11-27 | Video release decision apply (founder approved; daily backup 10:00:34 UTC, within the approved 24 hour objective; the migration changes no data) | run 46064254403 | `7c0411a` | Applied and recorded; member checks passed, 0 skipped; check 036 passed (cap not yet set, uploads off, playback on, 0 device test records) |

@@ -698,7 +698,7 @@ function fakeApi(
       if (!video.playback) return out
       for (const id of ids) {
         const p = posts.find((x) => x.id === id && !x.deleted && x.media?.kind === 'video')
-        if (p) out[id] = { src: `https://videos.test/${id}.mp4`, poster: `https://videos.test/${id}-poster.jpg` }
+        if (p) out[id] = { src: `https://videos.test/${id}.mp4`, poster: p.media?.kind === 'video' && p.media.poster ? `https://videos.test/${id}-poster.jpg` : null }
       }
       return out
     },
@@ -5441,6 +5441,36 @@ describe('video posts (20261213000000)', () => {
     expect(f.video.calls.length).toBe(before)
   })
 
+  it('a video without a poster shows its first frame, not a blank player; a failure that survives a fresh link says so, and Try again recovers', async () => {
+    const f = fakeApi('me', { video: true })
+    const links = f.api.videoLinks.bind(f.api)
+    f.api.videoLinks = async (ids) => Object.fromEntries(Object.entries(await links(ids)).map(([id, l]) => [id, { ...l, poster: null }]))
+    renderApp('/app/new', f.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add video' }))
+    chooseVideo()
+    expect(await screen.findByText(/Ready to post: 0:20/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    let player = (await screen.findByTestId('post-video-player')) as HTMLVideoElement
+    // Only the start of the file (metadata) loads, so the browser can draw the first frame; never autoplay.
+    expect(player.getAttribute('src')).toMatch(/^https:\/\/videos\.test\/p\d+\.mp4#t=0\.1$/)
+    expect(player.getAttribute('preload')).toBe('metadata')
+    expect(player.hasAttribute('poster')).toBe(false)
+    expect(player.hasAttribute('autoplay')).toBe(false)
+    // The first error asks once for a fresh link; a second one is a real failure, shown with a way forward.
+    const before = f.video.calls.filter((c) => c.startsWith('links:')).length
+    fireEvent.error(player)
+    await waitFor(() => expect(f.video.calls.filter((c) => c.startsWith('links:')).length).toBe(before + 1))
+    player = (await screen.findByTestId('post-video-player')) as HTMLVideoElement
+    expect(screen.queryByTestId('post-video-error')).toBeNull()
+    fireEvent.error(player)
+    const alert = await screen.findByTestId('post-video-error')
+    expect(alert.textContent).toMatch(/This video couldn't play\. Check your connection and try again/)
+    fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(screen.queryByTestId('post-video-error')).toBeNull())
+    await waitFor(() => expect(f.video.calls.filter((c) => c.startsWith('links:')).length).toBe(before + 2))
+    expect(await screen.findByTestId('post-video-player')).toBeTruthy()
+  })
+
   it('the device test page: testers check, convert and upload privately, see the times, play the clip and copy the results', async () => {
     const f = fakeApi('me', { tester: true })
     renderApp('/app/video-test', f.api)
@@ -5478,6 +5508,10 @@ describe('video posts (20261213000000)', () => {
     const sw = await screen.findByTestId('switches-panel')
     const turnOn = () => within(sw).getByRole('button', { name: 'Turn new video uploads on' }) as HTMLButtonElement
     expect(within(panel).getByText(/Device tests are optional/)).toBeTruthy()
+    // The delivery estimate counts issued links, never claims them as plays.
+    expect(within(panel).getByText('28.6 MB across 3 video links issued')).toBeTruthy()
+    expect(within(panel).getByText(/not a play count/)).toBeTruthy()
+    expect(within(panel).queryByText(/over \d+ plays?/)).toBeNull()
     expect(turnOn().disabled).toBe(true)
     fireEvent.change(within(panel).getByLabelText('Video storage cap (GB)'), { target: { value: '50' } })
     fireEvent.click(within(panel).getByRole('button', { name: 'Save cap' }))
