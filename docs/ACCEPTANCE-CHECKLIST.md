@@ -93,7 +93,7 @@ exactly the same files as `6023da7`); your pass is the acceptance on real device
 
 | # | Item | Who | Planned |
 |---|---|---|---|
-| F1 | PB-2 migrations and functions to Production | You authorize; Claude runs | Dec 16 |
+| F1 | PB-2 migrations and functions to member Production (`docs/PB-2-RUNBOOK.md`) | You authorize; Claude prepares and reads results | Dec 16 at the latest; ready to run on authorization |
 | F2 | PB-3 release candidate fixes | Claude; you accept | Dec 20 |
 | F3 | PB-4 external pilot access and the cohort plan | You authorize | Dec 23 at the latest |
 
