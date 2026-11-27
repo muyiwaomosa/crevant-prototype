@@ -33,6 +33,17 @@
       "approvedBy": "founder",
       "approvedAt": "2026-11-26",
       "verifyRunId": 45862869246
+    },
+    {
+      "target": "member-production",
+      "ref": "brfdqkondnnzsguailcc",
+      "function": "post-media",
+      "commit": "1fa2e7aa4b243019d69ec8ded901a1a40b3117c8",
+      "version": 3,
+      "build": "1fa2e7aa4b243019d69ec8ded901a1a40b3117c8.ded92eff6f22f8d5622cfc422358ee2f4233b2d409be43a48bb1bdbe60881c11",
+      "approvedBy": "founder",
+      "approvedAt": "2026-11-27",
+      "verifyRunId": 46051971520
     }
   ]
 }

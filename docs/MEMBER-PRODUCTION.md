@@ -329,3 +329,8 @@ connection strings.
 | Date | Step | Run or record | Commit | Result |
 | --- | --- | --- | --- | --- |
 | | | | | |
+| 2026-11-27 | Read-only check before PB-2 | run 46048050246 | `1fa2e7a` | Passed: identity marker, activated, launch gate on, founder only |
+| 2026-11-27 | PB-2 dry run | run 46048509500 | `1fa2e7a` | Exactly the 20 migrations 20261130 to 20261219 |
+| 2026-11-27 | PB-2 apply (founder authorized; restore point 10:00:34 UTC) | run 46050706596 | `1fa2e7a` | 20 applied and recorded; 35 member checks passed, 0 skipped |
+| 2026-11-27 | Check after PB-2 | run 46051191624 | `1fa2e7a` | Passed |
+| 2026-11-27 | post-media v3 deployed (founder) and verified | run 46051971520 | `1fa2e7a` | 455 passed, 0 failed; avatar v1 re-verified (run 46051975445, 226 passed) |
