@@ -1,7 +1,8 @@
 -- TEST ONLY (throwaway databases). The video release decision (20261220000000),
 -- as real signed-in accounts calling the same functions the app calls:
--- New video uploads need the storage cap, not device tests; every other
--- video safeguard is unchanged; no device test is created or changed.
+-- New video uploads need the storage cap, not device tests (shown with both
+-- phones' latest result a failure, recorded inside this rolled-back
+-- transaction); every other video safeguard is unchanged.
 --
 --   F = ...b1e01 founder   M = ...b1e02 member
 \set ON_ERROR_STOP on
@@ -33,27 +34,31 @@ update ops.member_launch_settings set founder_user_id = '00000000-0000-4000-8000
 select ops.grant_member_access('00000000-0000-4000-8000-0000000b1e01', 'founder', 'vrd-test');
 select ops.grant_member_access('00000000-0000-4000-8000-0000000b1e02', 'fan', 'vrd-test');
 update ops.media_settings set video_storage_cap_bytes = null where id;
+do $$
+begin
+  -- Video off to start with (earlier tests may have left it on; all of this is rolled back).
+  perform pg_temp.as_member('1');
+  execute 'set local role authenticated';
+  perform public.app_founder_set_switch('video_posts', false, 'release decision test: start off');
+  -- The latest result on both phones is a failure, so the old rule (20261213000000) would refuse.
+  perform public.app_founder_record_device_test('iphone_safari', false, 'release decision test: failed on purpose');
+  perform public.app_founder_record_device_test('android_chrome', false, 'release decision test: failed on purpose');
+  execute 'reset role';
+end $$;
 create temp table vrd_before as select count(*) as n from ops.video_device_tests;
 do $$
 declare
   st jsonb;
 begin
-  if (select n from vrd_before) <> 0 then
-    raise exception 'FAIL: expected no device tests here (found %); run on a freshly reset database', (select n from vrd_before);
-  end if;
-  if ops.feature_on('video_posts') then
-    perform set_config('vrd.was_on', 'true', true);
-  end if;
-
-  -- Without the cap, the switch still refuses, and members can't upload.
+  -- Without the cap, the switch still refuses.
   perform pg_temp.as_member('1');
   execute 'set local role authenticated';
   perform pg_temp.expect_error('select public.app_founder_set_switch(''video_posts'', true, ''release decision'')', 'video_not_ready', 'turning video on without the storage cap');
-  -- With the cap and no device test at all, it turns on.
+  -- With the cap, and both phones' latest device test failed, it turns on: device tests no longer gate it.
   perform public.app_founder_set_video_cap(50);
   st := public.app_founder_video_status();
   if not (st->>'ready')::boolean or (st->>'cap_bytes')::bigint <> 53687091200 then
-    raise exception 'FAIL: with the cap set and no device tests the video gate should be ready: %', st;
+    raise exception 'FAIL: with the cap set the video gate should be ready whatever the device tests say: %', st;
   end if;
   perform public.app_founder_set_switch('video_posts', true, 'Video released as part of the MVP (founder decision)');
   if not (public.app_features()->>'video_posts')::boolean then
@@ -83,10 +88,10 @@ begin
   perform pg_temp.expect_error('select * from public.app_video_upload_begin(5000000, 20000, ''post'')', 'videos_unavailable', 'an upload while video is off');
   execute 'reset role';
 
-  -- No device test was created or changed.
+  -- Switching, uploading and the gate created or changed no device test.
   if (select count(*) from ops.video_device_tests) <> (select n from vrd_before) then
     raise exception 'FAIL: device test records changed';
   end if;
-  raise notice 'PASS: video release decision: New video uploads need the storage cap and no device test; limits, the switch, member access and the device test records are unchanged';
+  raise notice 'PASS: video release decision: New video uploads need the storage cap, and turn on even when both phones' latest device test failed; limits, the switch, member access and the device test records are unchanged';
 end $$;
 rollback;
