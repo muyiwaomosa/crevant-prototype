@@ -111,22 +111,72 @@ export type PhotoKey = keyof typeof PHOTOS
 /** The photo for each group in WHO WE'RE BUILDING FOR, in order: creators, supporters. */
 export const WHO_PHOTOS: readonly PhotoKey[] = ['teacherRecording', 'supporterPhone']
 
-/**
- * The profile photo on the hero's sample post. Priya Raman is a fictional
- * sample creator: this is a stock photo of a model, who is not Priya, not a
- * Splitpost member and does not endorse Splitpost. Shown small and circular,
- * decorative (the post is labelled SAMPLE and the figure caption says so).
- */
-export const SAMPLE_AVATAR = {
-  id: 'priya-avatar',
-  src: '/media/landing/photos/priya-avatar-160.webp',
+const UNSPLASH_CHECK_BRAND3 =
+  'Listing read Nov 27 (SP-BRAND-003): photographer as credited, "Free to use under the Unsplash License" (not Unsplash+), no "Sponsored by" line. Downloaded from the listing\'s images.unsplash.com file; checked for logos and text at the size shown.'
+
+/** A small round portrait in the hero picture: a stock model, decorative, never presented as a member. */
+export interface HeroPortrait {
+  id: string
+  src: string
+  size: 160
+  source: 'Unsplash'
+  sourceUrl: string
+  photographer: string
+  photographerUrl: string
+  verified: boolean
+  verification: string
+  licence: 'Unsplash License'
+  licenceUrl: 'https://unsplash.com/license'
+}
+const portrait = (id: string, file: string, sourceUrl: string, photographer: string, photographerUrl: string): HeroPortrait => ({
+  id,
+  src: `/media/landing/photos/${file}-160.webp`,
   size: 160,
-  /** Replaced Nov 27: the earlier Pexels avatar's credit could not be verified. */
   source: 'Unsplash',
-  sourceUrl: 'https://unsplash.com/photos/a-young-woman-with-dark-wavy-hair-smiles-brightly-smiling-HVbaH3p9B8k',
-  photographer: 'IMANA',
-  photographerUrl: 'https://unsplash.com/@imanaindia',
+  sourceUrl,
+  photographer,
+  photographerUrl,
   verified: true,
-  verification: UNSPLASH_CHECK,
+  verification: UNSPLASH_CHECK_BRAND3,
   ...LICENCES.Unsplash,
+})
+
+/**
+ * The hero picture (SP-BRAND-003): one sample post by a fictional creator,
+ * David Mitchell, labelled SAMPLE, and the community below it. Every picture
+ * is a stock photo of a model who is not a Splitpost member and does not
+ * endorse Splitpost. The post photo and its profile picture are crops of the
+ * same listing; none of these photos is used anywhere else on the page (the
+ * WHY section keeps its own).
+ */
+export const HERO_POST = {
+  creator: {
+    name: 'David Mitchell',
+    role: 'Personal Development',
+    avatar: portrait('hero-creator', 'hero-creator', 'https://unsplash.com/photos/Yf_kyVn-k8s', 'Cody Board', 'https://unsplash.com/@codypboard'),
+  },
+  media: {
+    id: 'hero-podcast',
+    base: '/media/landing/photos/hero-podcast',
+    widths: [640, 960] as const,
+    width: 960,
+    height: 600,
+    source: 'Unsplash' as const,
+    sourceUrl: 'https://unsplash.com/photos/Yf_kyVn-k8s',
+    photographer: 'Cody Board',
+    photographerUrl: 'https://unsplash.com/@codypboard',
+    verified: true,
+    verification: UNSPLASH_CHECK_BRAND3,
+    ...LICENCES.Unsplash,
+  },
+  title: '3 habits that changed my life.',
+  community: [
+    portrait('community-1', 'community-1', 'https://unsplash.com/photos/woman-in-white-crew-neck-shirt-smiling-IF9TK5Uy-KI', 'Jake Nackos', 'https://unsplash.com/@jakenackos'),
+    portrait('community-2', 'community-2', 'https://unsplash.com/photos/man-in-black-dress-shirt-wearing-black-framed-eyeglasses-_ObjhzjnMmc', 'Olawale Munna', 'https://unsplash.com/@shattathecreator'),
+    portrait('community-3', 'community-3', 'https://unsplash.com/photos/smiling-woman-with-long-dark-hair-against-colorful-wall-ZoSb5J3jU28', 'Vitaly Gariev', 'https://unsplash.com/@silverkblack'),
+    portrait('community-4', 'community-4', 'https://unsplash.com/photos/elderly-man-with-glasses-smiling-at-the-camera-oZ3zejPLEg8', 'Vitaly Gariev', 'https://unsplash.com/@silverkblack'),
+  ],
 } as const
+
+/** Every hero picture, for the register checks. */
+export const HERO_PICTURES = [HERO_POST.creator.avatar, HERO_POST.media, ...HERO_POST.community] as const

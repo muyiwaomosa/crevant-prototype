@@ -43,9 +43,10 @@ export const HOMEPAGE_COPY = {
    * SP-UAT-001): a fictional creator, labelled SAMPLE, shown as a photo post.
    * No sample text, statistics or comments.
    */
+  /** The hero picture (SP-BRAND-003): the founder's mockup wording. */
   split: {
-    creatorTag: 'Created by Priya',
-    communityTag: 'Grown by her community',
+    communityTag: 'Grown by the community.',
+    caption: 'A sample post by a fictional creator, above, and the community that helps it grow, below, split on the diagonal of the Splitpost logo. The people shown are models, not Splitpost members.',
   },
 
   why: {

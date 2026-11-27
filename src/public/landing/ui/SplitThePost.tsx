@@ -32,7 +32,7 @@ export function SplitThePost({ className }: { className?: string }) {
         <div data-testid="split-creator-piece" className="relative z-10 [filter:drop-shadow(0_22px_28px_rgb(0_0_0/0.38))]">
           <div className="overflow-hidden rounded-[24px] bg-sp-bg text-sp-ink" style={{ clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${RISE}), 0 100%)` }}>
             <div className="flex items-center gap-2.5 px-4 pb-3 pt-3.5">
-              <img src={p.creator.avatar} width={160} height={160} alt="" decoding="async" className="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-white" />
+              <img data-photo={p.creator.avatar.id} src={p.creator.avatar.src} width={160} height={160} alt="" decoding="async" className="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-white" />
               <div className="min-w-0 leading-tight">
                 <p className="truncate text-[14px] font-bold">{p.creator.name}</p>
                 <p className="truncate text-[12px] text-sp-muted">{p.creator.role}</p>
@@ -42,9 +42,9 @@ export function SplitThePost({ className }: { className?: string }) {
             </div>
             <img
               data-photo={p.media.id}
-              src={p.media.src}
-              srcSet={p.media.srcSet}
-              sizes="(min-width: 1024px) 432px, 384px"
+              src={`${p.media.base}-640.webp`}
+              srcSet={p.media.widths.map((w) => `${p.media.base}-${w}.webp ${w}w`).join(', ')}
+              sizes="(min-width: 1024px) 432px, min(384px, 92vw)"
               width={p.media.width}
               height={p.media.height}
               alt=""
