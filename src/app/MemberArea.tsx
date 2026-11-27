@@ -7,7 +7,7 @@ import { Wordmark } from '../components/Wordmark'
 import { buttonClass } from '../components/ui'
 import { useAuth } from '../auth/AuthProvider'
 import { AuthCard, Field, Message, Spinner } from '../public/auth/AuthUi'
-import { AppApiProvider, ProfileProvider, useAppApi, useProfileGate } from './AppApiContext'
+import { AppApiProvider, ProfileProvider, useAppApi, useMyProfile, useProfileGate } from './AppApiContext'
 import { ViewTrackerProvider } from './ViewTracker'
 import { usePageFocus } from './pageFocus'
 import { displayNameProblem, messageFor, usernameProblem, type AppApi, type MyDetails, type RegistrationOutcome } from './api'
@@ -16,9 +16,10 @@ import { ModerationProvider } from './moderation'
 import { FeedbackProvider, SendFeedbackLink } from './feedback'
 import { MediaProvider } from './media'
 import { VideoProvider } from './video'
-import { AvatarProvider } from './avatars'
+import { AvatarProvider, PictureAvatar } from './avatars'
 import { PostMetaProvider } from './content'
 import { RecognitionProvider } from './recognition'
+import { ProgressProvider } from './journey'
 import { WelcomeIntro, markWelcomeSeen, welcomeSeen } from './welcome'
 
 /**
@@ -95,9 +96,11 @@ function Gate() {
               <MediaProvider>
                 <VideoProvider>
                   <ViewTrackerProvider userId={status.profile.id}>
-                    <RecognitionProvider>
-                      <MemberLayout />
-                    </RecognitionProvider>
+                    <ProgressProvider>
+                      <RecognitionProvider>
+                        <MemberLayout />
+                      </RecognitionProvider>
+                    </ProgressProvider>
                   </ViewTrackerProvider>
                 </VideoProvider>
               </MediaProvider>
@@ -391,6 +394,7 @@ const NAV = [
 /** The tour's layout, for real members: sidebar on larger screens, tab bar on phones. */
 function MemberLayout() {
   usePageFocus()
+  const { profile } = useMyProfile()
   return (
     <div className="min-h-dvh md:flex">
       <a
@@ -465,7 +469,7 @@ function MemberLayout() {
               key={item.to}
               to={item.to}
               end={item.end}
-              aria-label={item.label}
+              aria-label={item.primary ? item.label : undefined}
               className={({ isActive }) =>
                 clsx('flex h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold', isActive ? 'text-ink-900' : 'text-ink-500')
               }
@@ -475,6 +479,14 @@ function MemberLayout() {
                   <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-600 text-white shadow-sm">
                     <item.icon className="h-6 w-6" strokeWidth={2.6} />
                   </span>
+                ) : item.to === '/app/profile' ? (
+                  <>
+                    {/* Approved design: your own photo (or initials) for Profile. */}
+                    <span className={clsx('rounded-full', isActive ? 'ring-2 ring-brand-600 ring-offset-2' : 'ring-1 ring-ink-200')}>
+                      <PictureAvatar id={profile.id} name={profile.displayName} size={24} />
+                    </span>
+                    {item.label}
+                  </>
                 ) : (
                   <>
                     <item.icon className={clsx('h-[22px] w-[22px]', isActive && 'text-brand-600')} strokeWidth={isActive ? 2.4 : 2} />

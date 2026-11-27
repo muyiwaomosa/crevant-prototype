@@ -7,7 +7,9 @@ import { Message, Spinner } from '../public/auth/AuthUi'
 import { LIMITS, cursorOf, type Comment, type FeedFilter, type Identity, type Member, type Me, type Post, type PostCursor, type Topic } from './api'
 import { FaceView } from '../components/FaceView'
 import { useAppApi, useMyProfile } from './AppApiContext'
-import { useRecognize } from './recognition'
+import { usePublishedRecognition, useRecognize } from './recognition'
+import { HomeGoalStrip, JourneyIntro } from './journey'
+import { PostTile, tintFor } from './tiles'
 import { WelcomeIntro } from './welcome'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
 import { useViewsSent } from './ViewTracker'
@@ -63,12 +65,15 @@ function PostList({
   loadOlder,
   onDeleted,
   hide,
+  grid = false,
 }: {
   posts: Post[]
   loadOlder: (before: PostCursor) => Promise<Post[]>
-  onDeleted: (id: string) => void
+  onDeleted?: (id: string) => void
   /** Posts already shown elsewhere on the page (Clique first): skipped here, but paging still continues after them. */
   hide?: Set<string>
+  /** Profiles (SP-DESIGN-002): a three-column grid that opens each post, with the same paging. */
+  grid?: boolean
 }) {
   const [older, setOlder] = useState<Post[]>([])
   const [done, setDone] = useState(posts.length < 20)
@@ -103,16 +108,26 @@ function PostList({
 
   return (
     <div className="space-y-3">
-      {shown.map((p) => (
-        <PostItem
-          key={p.id}
-          post={p}
-          onDeleted={(id) => {
-            setOlder((o) => o.filter((x) => x.id !== id))
-            onDeleted(id)
-          }}
-        />
-      ))}
+      {grid ? (
+        <ul className="grid grid-cols-3 gap-1 overflow-hidden rounded-[18px]" data-testid="profile-grid">
+          {shown.map((p) => (
+            <li key={p.id}>
+              <PostTile post={p} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        shown.map((p) => (
+          <PostItem
+            key={p.id}
+            post={p}
+            onDeleted={(id) => {
+              setOlder((o) => o.filter((x) => x.id !== id))
+              onDeleted?.(id)
+            }}
+          />
+        ))
+      )}
       {error !== null && <ErrorNote error={error} />}
       {!done && all.length > 0 && (
         <div className="flex justify-center pt-2">
@@ -173,6 +188,7 @@ function HomeFeed({
   return (
     <>
       {withStrip && <CliqueRow />}
+      {filter === 'all' && <HomeGoalStrip />}
       {filter === 'all' && feed.data && !(feed.data.length === 0 && me.data?.followingCount === 0) && <StartHere quiet={false} />}
       {filter === 'clique' && (
         <div className="mb-3 flex justify-end">
@@ -643,6 +659,7 @@ function StartHere({ quiet }: { quiet: boolean }) {
           <p className="mt-1 text-sm text-ink-600">
             {quiet ? "Here's how to start. It takes a minute." : `${steps.length - remaining} of ${steps.length} done. A few minutes to feel at home.`}
           </p>
+          <JourneyIntro />
         </div>
         <button type="button" onClick={hide} className="shrink-0 rounded-full px-2 py-1 text-[13px] font-semibold text-ink-600 hover:text-ink-900">
           Hide
@@ -692,17 +709,13 @@ export function ComposePage() {
   const api = useAppApi()
   const navigate = useNavigate()
   const photos = usePhotosEnabled()
+  const published = usePublishedRecognition()
   return (
     <>
-      <PageHeader
-        title="Create a post"
-        subtitle={`${photos ? 'Text, or one photo with an optional caption.' : 'Text posts for now.'} Everyone who follows you will see it in their feed.`}
-      />
-      <div className="mb-4">
-        <FirstPostGuide />
-      </div>
+      {/* Approved design (SP-DESIGN-002): one full-screen composer, Post at the top right. */}
       <Card className="p-4 sm:p-5">
         <PostComposer
+          variant="full"
           label="Write a post"
           placeholder="What do you want to share?"
           rows={6}
@@ -714,9 +727,18 @@ export function ComposePage() {
                 : api.createPost(text, requestId))
             await categorize(api, id, topic)
             navigate(`/app/post/${id}`)
+            // Verified creator progress, read back from the server.
+            published()
           }}
         />
       </Card>
+      <p className="mt-3 px-1 text-[13px] text-ink-600">
+        {photos ? 'Text, or one photo with an optional caption.' : 'Text posts for now.'} Everyone who follows you will see it in their feed. Pick a topic so
+        people who care about it can find it in Discover.
+      </p>
+      <div className="mt-4">
+        <FirstPostGuide />
+      </div>
     </>
   )
 }
@@ -764,64 +786,65 @@ export function MemberPage() {
               : `${m.displayName} hasn't posted yet. Follow them to see their posts on Home when they do.`}
         </Message>
       )}
-      {posts.data && posts.data.length > 0 && (
-        <PostList
-          posts={posts.data}
-          loadOlder={(before) => api.memberPosts(m.id, before)}
-          onDeleted={(id) => {
-            posts.setData((d) => d?.filter((p) => p.id !== id))
-            void member.reload()
-          }}
-        />
-      )}
+      {/* Approved design (SP-DESIGN-002): posts as a grid that opens each post. The owner edits or deletes a post from its own page. */}
+      {posts.data && posts.data.length > 0 && <PostList grid posts={posts.data} loadOlder={(before) => api.memberPosts(m.id, before)} />}
+      {m.isMe && posts.data && posts.data.length > 0 && <p className="mt-3 text-[13px] text-ink-600">Open a post to edit or delete it.</p>}
     </>
   )
 }
 
 function MemberHeader({ member, onChange, about }: { member: Member; onChange: () => Promise<void>; about?: ReactNode }) {
-  // Approved design (P1): picture, name, bio, three counts, the relationship
-  // actions, then the posts. Report and block are in the "···" menu.
+  // Approved design (SP-DESIGN-002, P1): an open header with a cover band, the
+  // picture over it, name, bio and three counts, then the relationship actions.
+  // Report and block are in the "···" menu. The band is the member's brand
+  // tint with the split diagonal, so it is designed without a cover photo.
+  const t = tintFor(member.id)
   return (
-    <Card className="relative p-5 text-center">
+    <Card className="relative overflow-hidden p-0">
+      <div aria-hidden="true" className="relative h-24 sm:h-28" style={{ background: t.bg }}>
+        <span className="absolute inset-0 bg-[linear-gradient(118deg,transparent_0_56%,rgb(36_71_166/0.10)_56%_100%)]" />
+      </div>
       {!member.isMe && <MoreMenu member={member} onChange={onChange} />}
-      <div className="flex flex-col items-center gap-2">
-        <MemberAvatar member={member} size={80} />
-        <div className="min-w-0 max-w-full">
-          <h1 className="truncate font-display text-2xl font-extrabold text-ink-900">{member.displayName}</h1>
+      <div className="px-5 pb-5">
+        <div className="relative z-10 -mt-12 inline-block rounded-full ring-4 ring-white sm:-mt-14">
+          <MemberAvatar member={member} size={88} />
+        </div>
+        <div className="mt-2 min-w-0 max-w-full">
+          <h1 className="truncate font-display text-[26px] font-extrabold leading-tight text-ink-900">{member.displayName}</h1>
           <p className="text-[15px] text-ink-500">@{member.username}</p>
         </div>
-      </div>
-      <div className="text-left">{about}</div>
-      <dl className="mx-auto mt-4 grid max-w-sm grid-cols-3 gap-2 text-sm" data-testid="profile-counts">
-        {(member.activeSupporterCount !== undefined
-          ? [
-              ['Followers', member.followerCount],
-              ['In Cliques', member.cliqueCount ?? 0],
-              ['Active Supporters', member.activeSupporterCount],
-            ]
-          : [
-              ['Posts', member.postCount],
-              ['Followers', member.followerCount],
-              ['Following', member.followingCount],
-            ]
-        ).map(([label, value]) => (
-          <div key={label} className="flex flex-col-reverse">
-            <dt className="text-[12px] text-ink-500">{label}</dt>
-            <dd className="font-display text-xl font-extrabold tabular-nums text-ink-900">{value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="mt-4 flex justify-center">
-        {member.isMe ? (
-          <Link to="/app/profile?edit=1" className={buttonClass('secondary', 'sm')}>
-            Edit your profile
-          </Link>
-        ) : (
-          <div className="flex flex-wrap items-start justify-center gap-2">
-            <RelationshipButtons member={member} onChange={onChange} size="md" source="profile" postsHref={member.postCount > 0 ? '#posts' : undefined} />
-            <SupportButton creator={member} />
-          </div>
-        )}
+        <div>{about}</div>
+        <dl className="mt-4 grid max-w-sm grid-cols-3 gap-2 text-sm" data-testid="profile-counts">
+          {(member.activeSupporterCount !== undefined
+            ? [
+                ['Followers', member.followerCount],
+                ['In Cliques', member.cliqueCount ?? 0],
+                ['Active Supporters', member.activeSupporterCount],
+              ]
+            : [
+                ['Posts', member.postCount],
+                ['Followers', member.followerCount],
+                ['Following', member.followingCount],
+              ]
+          ).map(([label, value]) => (
+            <div key={label} className="flex flex-col-reverse">
+              <dt className="text-[12px] text-ink-500">{label}</dt>
+              <dd className="font-display text-xl font-extrabold tabular-nums text-ink-900">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="mt-4">
+          {member.isMe ? (
+            <Link to="/app/profile?edit=1" className={buttonClass('secondary', 'sm')}>
+              Edit your profile
+            </Link>
+          ) : (
+            <div className="flex flex-wrap items-start gap-2">
+              <RelationshipButtons member={member} onChange={onChange} size="md" source="profile" postsHref={member.postCount > 0 ? '#posts' : undefined} />
+              <SupportButton creator={member} />
+            </div>
+          )}
+        </div>
       </div>
     </Card>
   )
@@ -850,7 +873,7 @@ function MoreMenu({ member, onChange }: { member: Member; onChange: () => Promis
         aria-expanded={open}
         aria-label={`More options for ${member.displayName}`}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-full text-ink-700 hover:bg-ink-100"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-ink-800 shadow-sm hover:bg-white"
       >
         <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
       </button>
@@ -1091,56 +1114,75 @@ function ProfileHome() {
   const memberId = member.data?.id
   return (
     <>
-      <div data-testid="profile-home">
-        <Card className="p-5 text-center">
-          <div className="flex flex-col items-center gap-2">
-            {member.data && <MemberAvatar member={member.data} size={80} />}
-            <h1 className="font-display text-2xl font-extrabold text-ink-900">{profile.displayName}</h1>
-            <p className="text-[15px] text-ink-500">
-              @{profile.username}
-              {me.data && ` · ${me.data.followerCount} ${me.data.followerCount === 1 ? 'follower' : 'followers'}`}
-            </p>
-          </div>
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Link to="/app/profile?edit=1" className={buttonClass('primary', 'sm')}>
-              Edit profile
-            </Link>
-            <Link to={`/app/u/${profile.username}`} className={buttonClass('secondary', 'sm')}>
-              See as others do
-            </Link>
-          </div>
-        </Card>
+      {/* Approved design (SP-REFINE-001, preview 5): picture and name, two actions, the cobalt insights card, then a grid of posts. */}
+      <div data-testid="profile-home" className="flex items-center gap-4">
+        {member.data && <MemberAvatar member={member.data} size={76} />}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-display text-[26px] font-extrabold leading-tight text-ink-900">{profile.displayName}</h1>
+          <p className="truncate text-[15px] text-ink-500">
+            @{profile.username}
+            {me.data && ` · ${me.data.followerCount} ${me.data.followerCount === 1 ? 'follower' : 'followers'}`}
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link to="/app/profile?edit=1" className={clsx(buttonClass('secondary', 'sm'), 'h-11 px-4')}>
+          Edit profile
+        </Link>
+        <Link to={`/app/u/${profile.username}`} className={clsx(buttonClass('secondary', 'sm'), 'h-11 px-4')}>
+          See as others do
+        </Link>
       </div>
       <Link
         to="/app/profile?insights=1"
-        className="mt-4 block rounded-3xl bg-white p-5 shadow-[0_1px_2px_rgb(19_25_27/0.06),0_0_0_1px_rgb(19_25_27/0.05)] transition hover:shadow-md"
+        className="relative mt-4 block overflow-hidden rounded-[22px] bg-brand-600 p-5 text-white shadow-[0_18px_30px_-22px_rgba(23,47,112,0.9)] transition hover:bg-brand-700"
         data-testid="insights-card"
       >
-        <span className="flex items-baseline justify-between">
-          <span className="font-bold text-ink-900">Your insights</span>
-          <span className="text-[12px] font-semibold text-ink-600">Only you see this</span>
+        <span aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(118deg,transparent_0_60%,rgb(255_255_255/0.06)_60%_100%)]" />
+        <span className="relative flex items-baseline justify-between">
+          <span className="font-display text-[18px] font-extrabold">Your insights</span>
+          <span className="text-[12px] font-semibold text-[#d3def3]">Only you see this</span>
         </span>
-        <span className="mt-3 grid grid-cols-3 gap-2">
+        <span className="relative mt-3 grid grid-cols-3 gap-2">
           {[
             ['Reach', insight.data ? String(insight.data.attention.reached) : 'Not yet'],
             ['Connection', insight.data ? String(insight.data.retention.active_supporters) : 'Not yet'],
             ['Earnings', insight.data ? `$${(earnings / 100).toFixed(2)}` : 'Not yet'],
           ].map(([label, value]) => (
-            <span key={label} className="flex flex-col">
-              <span className="text-[12px] text-ink-600">{label}</span>
-              <span className="font-display text-xl font-extrabold tabular-nums text-ink-900">{value}</span>
+            <span key={label} className="flex flex-col rounded-2xl bg-white/12 px-3 py-2.5">
+              <span className="text-[12px] text-[#d3def3]">{label}</span>
+              <span
+                className={clsx(
+                  'font-display font-extrabold tabular-nums',
+                  value === 'Not yet' ? 'text-[15px] leading-7 text-white/85' : 'text-xl',
+                  label === 'Earnings' && insight.data && 'text-sp-accent',
+                )}
+              >
+                {value}
+              </span>
             </span>
           ))}
         </span>
-        <span className="mt-2 block text-[12px] text-ink-600">Earnings are simulated during the pilot. Open for what happened, what it means and what to do next.</span>
+        <span className="relative mt-2 block text-[12px] text-[#d3def3]">
+          {insight.data
+            ? 'Earnings are simulated during the pilot. Open for what happened, what it means and what to do next.'
+            : 'Your insights begin with your first post.'}
+        </span>
       </Link>
       <h2 id="posts" className="mb-3 mt-6 font-display text-lg font-bold text-ink-900">
         Your posts
       </h2>
-      {posts.data && posts.data.length === 0 && <Message tone="info">You haven&apos;t posted yet. Use Create to share your first post.</Message>}
-      {posts.data && posts.data.length > 0 && memberId && (
-        <PostList posts={posts.data} loadOlder={(before) => api.memberPosts(memberId, before)} onDeleted={(id) => posts.setData((d) => d?.filter((p) => p.id !== id))} />
+      {posts.data && posts.data.length === 0 && (
+        <div className="rounded-[22px] bg-[#fde6d3] p-5 text-[#5a2a0b]" data-testid="profile-posts-empty">
+          <p className="font-display text-[20px] font-extrabold leading-snug">Your posts will live here.</p>
+          <p className="mt-1 text-[14px]">Share what you know. Everyone who follows you sees it on their Home.</p>
+          <Link to="/app/new" className={clsx(buttonClass('primary', 'sm'), 'mt-3 h-11 px-5')}>
+            Create your first post
+          </Link>
+        </div>
       )}
+      {posts.data && posts.data.length > 0 && memberId && <PostList grid posts={posts.data} loadOlder={(before) => api.memberPosts(memberId, before)} />}
+      <p className="mt-3 text-[13px] text-ink-600">Open a post to edit or delete it. Your Clique, saved posts, blocked members and privacy are in Settings.</p>
       <nav aria-labelledby="settings-title" className="mt-6">
         <h2 id="settings-title" className="mb-2 font-display text-lg font-bold text-ink-900">
           Settings

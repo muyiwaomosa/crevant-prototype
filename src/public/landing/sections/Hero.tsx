@@ -18,8 +18,9 @@ const focusRing = 'focus-visible:outline focus-visible:outline-3 focus-visible:o
  * the gap: what the creator made and what her community grew, the shared
  * value, not money.
  *
- * Phones: headline, picture, then the words, actions and small print, so the
- * picture shows in the first screen. From lg up: text left, picture right.
+ * Phones (SP-UAT-001): headline, then the value proposition, actions and
+ * small print, then the picture with room around it, so the promise is read
+ * first. From lg up: text left, picture right.
  */
 export function Hero() {
   const memberLinks = useMemberLinks()
@@ -39,7 +40,7 @@ export function Hero() {
   )
   const rest = (
     <>
-      <div data-testid="hero-body" className="mt-6 max-w-[34rem] space-y-3 text-[1.1rem] leading-relaxed sm:text-lg">
+      <div data-testid="hero-body" className="mt-5 max-w-[34rem] space-y-3 text-[1.1rem] leading-relaxed sm:text-lg">
         <p className="font-semibold text-sp-bg">{copy.body[0]}</p>
         <p className="text-sp-muted-on-dark">{copy.body[1]}</p>
       </div>
@@ -81,12 +82,12 @@ export function Hero() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(118deg,transparent_0_62%,rgb(255_255_255/0.035)_62%_100%)]"
       />
-      <div className="mx-auto grid max-w-6xl px-4 pb-12 pt-5 [grid-template-areas:'title'_'scene'_'rest'] sm:px-6 sm:pb-20 sm:pt-10 lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[1fr_auto_auto_1fr] lg:gap-x-14 lg:pb-24 lg:pt-16 lg:[grid-template-areas:'top_scene'_'title_scene'_'rest_scene'_'end_scene']">
+      <div className="mx-auto grid max-w-6xl px-4 pb-12 pt-5 [grid-template-areas:'title'_'rest'_'scene'] sm:px-6 sm:pb-20 sm:pt-10 lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[1fr_auto_auto_1fr] lg:gap-x-14 lg:pb-24 lg:pt-16 lg:[grid-template-areas:'top_scene'_'title_scene'_'rest_scene'_'end_scene']">
         <div className="min-w-0 [grid-area:title]">{headline}</div>
-        <div className="mt-5 min-w-0 [grid-area:scene] sm:mt-8 lg:mt-0 lg:self-center">
+        <div className="min-w-0 [grid-area:rest]">{rest}</div>
+        <div className="mt-14 min-w-0 [grid-area:scene] sm:mt-16 lg:mt-0 lg:self-center">
           <SplitThePost />
         </div>
-        <div className="mt-1 min-w-0 [grid-area:rest] lg:mt-0">{rest}</div>
       </div>
     </section>
   )

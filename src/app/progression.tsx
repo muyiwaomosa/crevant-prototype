@@ -146,12 +146,18 @@ export function PointsBar({ recognized, redeemable }: { recognized: number; rede
   )
 }
 
-function StepRow({ step }: { step: GoalStep }) {
+function StepRow({ step, suggested = false }: { step: GoalStep; suggested?: boolean }) {
   const t = goalText(step.metric)
   const met = step.target !== null && step.value >= step.target
   const action = NEXT_ACTION[step.metric]
   return (
-    <li data-testid="goal-step" data-met={met ? 'true' : 'false'}>
+    <li
+      data-testid="goal-step"
+      data-met={met ? 'true' : 'false'}
+      data-suggested={suggested ? 'true' : undefined}
+      className={suggested ? '-mx-2 rounded-2xl bg-[#fdeee2] px-2 py-2' : undefined}
+    >
+    {suggested && <p className="mb-1 ml-[32px] text-[11px] font-bold uppercase tracking-[0.1em] text-[#94481a]">Suggested next</p>}
     <div className="flex items-center gap-2.5 text-[14px]">
       <span
         className={`inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${met ? 'bg-[#0f7a64] text-white' : 'bg-ink-200'}`}
@@ -172,6 +178,9 @@ function StepRow({ step }: { step: GoalStep }) {
         <div className="h-1.5 overflow-hidden rounded-full bg-[#efe9de]" aria-hidden="true">
           <div className="h-full rounded-full bg-brand-600" style={{ width: `${Math.round((Math.min(step.value, step.target) / step.target) * 100)}%` }} />
         </div>
+        <p className="mt-1 text-[12px] text-ink-600">
+          {Math.max(0, step.target - step.value)} more to go
+        </p>
         {action && (
           <Link to={action.to} className="mt-1 inline-flex items-center gap-0.5 text-[13px] font-semibold text-brand-700" data-testid="goal-action">
             {action.label} <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -180,6 +189,44 @@ function StepRow({ step }: { step: GoalStep }) {
       </div>
     )}
     </li>
+  )
+}
+
+/**
+ * The journey as a path (SP-UAT-001): what is left, in any order (the goals
+ * can be pursued together, so nothing is locked behind another), with the one
+ * closest to done suggested; then what is done. Values and targets are the
+ * server's.
+ */
+function GoalPath({ steps }: { steps: GoalStep[] }) {
+  const open = steps.filter((s) => s.target === null || s.value < s.target)
+  const done = steps.filter((s) => s.target !== null && s.value >= s.target)
+  const suggested = open
+    .filter((s): s is GoalStep & { target: number } => s.target !== null && s.target > 0)
+    .sort((a, b) => b.value / b.target - a.value / a.target)[0]?.metric
+  return (
+    <div className="mt-3 space-y-3">
+      {open.length > 0 && (
+        <div>
+          <h3 className="text-[12px] font-bold uppercase tracking-[0.1em] text-ink-600">To do, in any order</h3>
+          <ul className="mt-2 space-y-2.5">
+            {open.map((s) => (
+              <StepRow key={s.metric} step={s} suggested={s.metric === suggested && open.length > 1} />
+            ))}
+          </ul>
+        </div>
+      )}
+      {done.length > 0 && (
+        <div data-testid="goals-done">
+          <h3 className="text-[12px] font-bold uppercase tracking-[0.1em] text-[#0f5b4c]">Done</h3>
+          <ul className="mt-2 space-y-2.5">
+            {done.map((s) => (
+              <StepRow key={s.metric} step={s} />
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -285,11 +332,7 @@ function GoalCard({
           </p>
         ))}
         {showSteps && (
-          <ul className="mt-3 space-y-2.5">
-            {journey.steps.map((s) => (
-              <StepRow key={s.metric} step={s} />
-            ))}
-          </ul>
+          <GoalPath steps={journey.steps} />
         )}
         {journey.status === 'in_progress' && journey.goalsSince && set && (
           <p className="mt-2 text-[12px] text-ink-600">

@@ -9,6 +9,8 @@ import { ErrorNote, PostItem } from './components'
 import { FaceView } from '../components/FaceView'
 import { PersonSummary } from './profileDetails'
 import { useTopicList } from './content'
+import { PostTile } from './tiles'
+import { DiscoverGoalHint } from './journey'
 
 /**
  * Discover (SP-DESIGN-001: "find new value"), value and intent based
@@ -110,9 +112,10 @@ function DiscoverHome({ onOpen }: { onOpen: (face: 'for-you' | 'creators' | 'con
   const posts = useAsync(() => api.discoverPosts(), [api])
   // Someone new: never a person already followed.
   const hero = people.data?.find((m) => !m.followedByMe)
-  const few = (posts.data ?? []).slice(0, 3)
+  const few = (posts.data ?? []).slice(0, 4)
   return (
     <div className="space-y-5" data-testid="discover-home">
+      <DiscoverGoalHint />
       <nav aria-label="Ways into Discover" className="grid grid-cols-3 gap-2">
         {WAYS_IN.map((w, i) => (
           <button
@@ -134,7 +137,7 @@ function DiscoverHome({ onOpen }: { onOpen: (face: 'for-you' | 'creators' | 'con
           <h2 id="discover-hero-title" className="mb-2 text-[15px] font-bold text-ink-900">
             Someone you might value
           </h2>
-          <PersonSummary member={hero} topics={topics} myTopics={mine.data} onChange={people.reload} source="discover" />
+          <PersonSummary member={hero} topics={topics} myTopics={mine.data} onChange={people.reload} source="discover" variant="hero" />
         </section>
       )}
       {few.length > 0 && (
@@ -147,7 +150,20 @@ function DiscoverHome({ onOpen }: { onOpen: (face: 'for-you' | 'creators' | 'con
               See more
             </button>
           </div>
-          <PostResults posts={few} empty={null} />
+          {/* Approved design: a two-column grid; photos fill their tile, text posts are set on their tint. */}
+          <ul className="grid grid-cols-2 gap-3">
+            {few.map((p) => (
+              <li key={p.id} className="min-w-0">
+                <PostTile post={p} className="rounded-2xl shadow-[0_1px_2px_rgb(19_25_27/0.06)]" />
+                <p className="mt-1.5 truncate text-[13px] font-semibold text-ink-900">{p.author.displayName}</p>
+                {p.reason && (
+                  <p className="flex items-start gap-1 text-[12px] leading-snug text-ink-600" data-testid="discover-reason">
+                    <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-brand-700" aria-hidden="true" /> {p.reason}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       {people.data && people.data.length === 0 && posts.data !== undefined && few.length === 0 && (

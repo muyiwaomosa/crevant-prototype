@@ -9,6 +9,14 @@ import type { Creator } from '../types'
 // visitor's own upload), otherwise initials on a colour generated from a hue.
 // If the picture fails to load, the initials show instead.
 
+/** Apricot, seafoam, cobalt and sand tints, each with ink that reads on it (WCAG AA). */
+const INITIAL_TINTS = [
+  ['#f6d9c4', '#5a2a0b'],
+  ['#cfe7df', '#173f37'],
+  ['#dce4f6', '#172f70'],
+  ['#efe4cf', '#46391c'],
+] as const
+
 export function Avatar({
   name,
   hue,
@@ -49,13 +57,14 @@ export function Avatar({
     <span
       aria-hidden="true"
       data-avatar="initials"
-      className={clsx('inline-grid shrink-0 place-items-center rounded-full font-display font-bold text-white', className)}
+      className={clsx('inline-grid shrink-0 place-items-center rounded-full font-display font-extrabold', className)}
       style={{
         width: size,
         height: size,
-        fontSize: Math.max(11, size * 0.38),
-        background: `linear-gradient(135deg, hsl(${hue} 62% 46%), hsl(${(hue + 40) % 360} 70% 36%))`,
-        boxShadow: 'inset 0 0 0 1.5px rgb(255 255 255 / 0.25)',
+        fontSize: Math.max(11, size * 0.36),
+        // SP-UAT-001: a member without a photo gets one of the brand tints with ink initials, not an arbitrary colour.
+        background: INITIAL_TINTS[hue % INITIAL_TINTS.length][0],
+        color: INITIAL_TINTS[hue % INITIAL_TINTS.length][1],
       }}
     >
       {initials}

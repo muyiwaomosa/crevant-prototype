@@ -370,7 +370,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
   // Only the sign-in session and interface preferences (welcome seen, tips and first steps dismissed,
   // milestones already acknowledged; SP-UX-002); never posts, likes, comments or follows.
   const appStorage = await pageB.evaluate(() =>
-    Object.keys(localStorage).filter((k) => !/^sb-/.test(k) && !/^splitpost\.(welcome|tip|first-steps|goals-met)\./.test(k)),
+    Object.keys(localStorage).filter((k) => !/^sb-/.test(k) && !/^splitpost\.(welcome|tip|first-steps|goals-met|goalstrip)\./.test(k)),
   )
   check('no social data is kept in browser storage', appStorage.length === 0, appStorage.join(','))
 
@@ -457,10 +457,13 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
   )
 
   // 7. A sees B's comment on their post, and only A can delete the post.
+  // A's profile shows posts as a grid (SP-DESIGN-002, SP-UAT-001); A opens the post from it, where the owner's actions live.
   await pageA.goto(`${APP}/app/u/${userA}`)
-  await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
-  check('A sees one comment on their post', await pageA.getByRole('link', { name: '1 comment' }).isVisible())
+  await pageA.getByTestId('post-tile').filter({ hasText: postText }).click()
   const postCard = pageA.getByTestId('post').filter({ hasText: postText })
+  await postCard.waitFor()
+  check('A sees one comment on their post', /(^|\D)1 comment(?!s)/.test(await postCard.textContent()))
+  check('A sees B’s comment under it', (await pageA.getByTestId('comment').count()) === 1)
   await postCard.getByRole('button', { name: 'Delete post' }).click()
   await postCard.getByRole('button', { name: 'Delete', exact: true }).click()
   await postCard.waitFor({ state: 'detached' })

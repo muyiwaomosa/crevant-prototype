@@ -13,6 +13,7 @@ import { PictureAvatar } from './avatars'
 import { PostPhoto } from './media'
 import { PostVideo } from './video'
 import { EditPost, PostMetaLine, SaveRepostButtons, ShareButton } from './content'
+import { tintFor } from './tiles'
 
 export function MemberAvatar({ member, size = 40 }: { member: MemberSummary; size?: number }) {
   return <PictureAvatar id={member.id} name={member.displayName} size={size} />
@@ -153,8 +154,12 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
           <p
             className={clsx(
               'mt-3 whitespace-pre-wrap break-words',
-              display ? 'font-display text-[20px] font-extrabold leading-snug text-ink-900' : 'text-[15px] leading-relaxed text-ink-800',
+              display
+                ? 'rounded-[20px] px-5 py-6 font-display text-[22px] font-extrabold leading-snug sm:px-6 sm:py-7 sm:text-[24px]'
+                : 'text-[15px] leading-relaxed text-ink-800',
             )}
+            // SP-UAT-001: a short text post is the content, so it gets the approved display face on its own brand tint.
+            style={display ? { background: tintFor(post.id).bg, color: tintFor(post.id).fg } : undefined}
             data-display={display ? 'true' : undefined}
           >
             {body}
@@ -438,7 +443,7 @@ export function RelationshipButtons({
             type="button"
             disabled={busy}
             onClick={() => run(() => api.unfollow(member.id), { followedByMe: false, inMyClique: false }, `You unfollowed ${name}.`)}
-            className={buttonClass('secondary', size)}
+            className={buttonClass('primary', size)}
           >
             <Check className="h-4 w-4" aria-hidden="true" /> Following<span className="sr-only">{` (${name}, tap to unfollow)`}</span>
           </button>
@@ -460,12 +465,13 @@ export function RelationshipButtons({
               onClick={() =>
                 run(() => api.cliqueRemove(member.id), { followedByMe: true, inMyClique: false }, `Removed from your Clique. You still follow ${name}.`)
               }
-              className={buttonClass('secondary', size)}
+              className={clsx(buttonClass('secondary', size), 'bg-[#fde6d3] text-[#5a2a0b] ring-[#f6b888] hover:bg-[#fbd9bd]')}
             >
               <Check className="h-4 w-4" aria-hidden="true" /> In your Clique<span className="sr-only">{` (${name}, tap to remove)`}</span>
             </button>
           ) : (
-            !prompt && addToClique(buttonClass('secondary', size))
+            // Approved design: Join Clique in the Clique's apricot.
+            !prompt && addToClique(clsx(buttonClass('secondary', size), 'bg-sp-accent text-ink-900 ring-0 hover:bg-[#f3a970]'))
           ))}
         {busy && (
           <span className="text-sm text-ink-500" aria-hidden="true">

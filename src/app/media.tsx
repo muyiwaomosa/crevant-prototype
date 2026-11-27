@@ -10,7 +10,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Clapperboard, ImagePlus, ImageOff, RefreshCw, X } from "lucide-react";
+import { Clapperboard, ImagePlus, ImageOff, RefreshCw, Users, X } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Card, Modal, buttonClass } from "../components/ui";
 import { Message, Spinner } from "../public/auth/AuthUi";
 import {
@@ -21,7 +22,8 @@ import {
   type PhotoLinks,
   type Post,
 } from "./api";
-import { useAppApi } from "./AppApiContext";
+import { useAppApi, useMyProfile } from "./AppApiContext";
+import { PictureAvatar } from "./avatars";
 import { ErrorNote, When } from "./components";
 import { preparePhoto } from "./photoPrep";
 import { TopicSelect, useTopicList } from "./content";
@@ -315,12 +317,15 @@ export function PostComposer({
   placeholder,
   rows = 3,
   onPost,
+  variant = "inline",
 }: {
   label: string;
   placeholder: string;
   rows?: number;
   /** Returns once the post is stored. requestId stays the same for a retry of the same post. */
   onPost: (post: NewPost) => Promise<void>;
+  /** "full": Create's full-screen composer (SP-DESIGN-002): close, New post and Post along the top, then the author. */
+  variant?: "inline" | "full";
 }) {
   // One composer whatever the switch says, so text typed while the status
   // loads is never lost; Add photo appears only while photos are on. Without a
@@ -335,6 +340,7 @@ export function PostComposer({
       onPost={onPost}
       photosEnabled={enabled}
       videoEnabled={videoEnabled}
+      variant={variant}
     />
   );
 }
@@ -346,6 +352,7 @@ function PhotoComposer({
   onPost,
   photosEnabled,
   videoEnabled,
+  variant,
 }: {
   label: string;
   placeholder: string;
@@ -353,8 +360,11 @@ function PhotoComposer({
   onPost: (post: NewPost) => Promise<void>;
   photosEnabled: boolean;
   videoEnabled: boolean;
+  variant: "inline" | "full";
 }) {
   const api = useAppApi();
+  const full = variant === "full";
+  const { profile } = useMyProfile();
   const textId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
   // Video posts (20261213000000): one video, prepared and uploaded as soon as it is chosen.
@@ -473,8 +483,43 @@ function PhotoComposer({
     }
   }
 
+  const submitButton = (
+    <button
+      type="submit"
+      disabled={cannotPost}
+      className={full ? clsx(buttonClass("primary", "sm"), "h-11 px-5 text-[15px]") : buttonClass("primary", "sm")}
+    >
+      {stage === "uploading"
+        ? "Uploading photo…"
+        : stage === "posting"
+          ? "Sending…"
+          : "Post"}
+    </button>
+  );
+
   return (
-    <form onSubmit={submit} className="space-y-3" noValidate>
+    <form onSubmit={submit} className={clsx("space-y-3", full && "relative")} noValidate>
+      {full && (
+        <>
+          <div className="-mx-1 flex items-center justify-between gap-3" data-testid="composer-bar">
+            <Link to="/app" aria-label="Close" className="grid h-11 w-11 place-items-center rounded-full bg-white text-ink-800 ring-1 ring-ink-100 hover:bg-ink-50">
+              <X className="h-5 w-5" aria-hidden="true" />
+            </Link>
+            <h1 className="font-display text-[22px] font-extrabold text-ink-900">New post</h1>
+            {/* Room for Post, which sits here visually but comes last in reading and Tab order. */}
+            <span className="h-11 w-[84px]" aria-hidden="true" />
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <PictureAvatar id={profile.id} name={profile.displayName} size={44} />
+            <div className="min-w-0 leading-tight">
+              <p className="truncate font-semibold text-ink-900">{profile.displayName}</p>
+              <p className="flex items-center gap-1 text-[13px] text-ink-600">
+                <Users className="h-3.5 w-3.5" aria-hidden="true" /> Available to all your followers
+              </p>
+            </div>
+          </div>
+        </>
+      )}
       {photosEnabled && (
         <input
           ref={fileRef}
@@ -558,7 +603,11 @@ function PhotoComposer({
         placeholder={
           photo || withVideo ? "Add a caption (optional)" : placeholder
         }
-        className="block w-full resize-y rounded-2xl border border-ink-200 bg-white px-4 py-3 text-[15px] leading-relaxed text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+        className={
+          full
+            ? "block w-full resize-y rounded-2xl border border-transparent bg-white px-4 py-3 text-[18px] leading-relaxed text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+            : "block w-full resize-y rounded-2xl border border-ink-200 bg-white px-4 py-3 text-[15px] leading-relaxed text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+        }
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -595,17 +644,7 @@ function PhotoComposer({
             {length}/{LIMITS.post}
           </span>
         </div>
-        <button
-          type="submit"
-          disabled={cannotPost}
-          className={buttonClass("primary", "sm")}
-        >
-          {stage === "uploading"
-            ? "Uploading photo…"
-            : stage === "posting"
-              ? "Sending…"
-              : "Post"}
-        </button>
+        {full ? <span className="absolute right-0 top-0">{submitButton}</span> : submitButton}
       </div>
       {stage === "reading" && <Spinner label="Preparing your photo…" />}
       {stage === "uploading" && (
@@ -829,4 +868,11 @@ export function PhotoStoragePanel({ founder }: { founder: boolean }) {
       </p>
     </Card>
   );
+}
+
+/** A photo post's picture, cropped to fill a grid tile (Discover, Profile). Decorative: the tile's link names the post. */
+export function PhotoThumb({ post }: { post: Post }) {
+  const { links } = usePhotoLinks(post.id);
+  if (!links) return <span className="absolute inset-0 animate-pulse bg-ink-100" aria-hidden="true" />;
+  return <img src={links.feed} alt="" aria-hidden="true" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />;
 }

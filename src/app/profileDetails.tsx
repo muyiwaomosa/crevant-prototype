@@ -544,6 +544,7 @@ export function PersonSummary({
   onChange,
   myTopics,
   source = 'discover',
+  variant = 'card',
 }: {
   member: DiscoverMember
   topics: Topic[] | null | undefined
@@ -551,9 +552,47 @@ export function PersonSummary({
   myTopics?: string[]
   /** Where a follow from this card starts (20261204000000 adds 'search'). */
   source?: FollowSource
+  /** Discover's first recommendation: the approved visual hero card (SP-REFINE-001, SP-UAT-001). */
+  variant?: 'card' | 'hero'
 }) {
   const profile = `/app/u/${member.username}`
   const d = member.details
+  if (variant === 'hero')
+    return (
+      <div className="overflow-hidden rounded-[26px] bg-white shadow-[0_10px_30px_-18px_rgb(23_47_112/0.55),0_0_0_1px_rgb(19_25_27/0.05)]" data-testid="discover-hero-card">
+        <div className="relative isolate overflow-hidden bg-brand-600 px-5 pb-5 pt-6 text-white">
+          {/* The brand's split diagonal, as on the website heroes: designed without needing a photo. */}
+          <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(118deg,transparent_0_58%,rgb(255_255_255/0.07)_58%_100%)]" />
+          <span aria-hidden="true" className="absolute -right-10 -top-10 -z-10 h-40 w-40 rounded-full bg-sp-accent/25" />
+          <Link to={profile} aria-hidden="true" tabIndex={-1} className="inline-block rounded-full ring-4 ring-white/90">
+            <MemberAvatar member={member} size={64} />
+          </Link>
+          <p className="mt-3 font-display text-[26px] font-extrabold leading-tight">
+            <Link to={profile} className="hover:underline">
+              {member.displayName}
+            </Link>
+          </p>
+          <p className="text-[13px] text-[#d3def3]">
+            @{member.username} · {member.postCount} {member.postCount === 1 ? 'post' : 'posts'} · {member.followerCount}{' '}
+            {member.followerCount === 1 ? 'follower' : 'followers'}
+          </p>
+          {d?.bio && <p className="mt-2 text-[15px] leading-relaxed text-white">{d.bio}</p>}
+          {(member.sharedTopics ?? 0) > 0 && (
+            <p className="mt-3 inline-flex rounded-full bg-white/15 px-3 py-1 text-[12.5px] font-semibold ring-1 ring-white/30">
+              Shares {member.sharedTopics} of your interests
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:justify-between">
+          <RelationshipButtons member={member} onChange={onChange} source={source} postsHref={member.postCount > 0 ? `${profile}#posts` : undefined} />
+          {member.postCount > 0 && (
+            <Link to={`${profile}#posts`} aria-label={`See posts by ${member.displayName}`} className="text-sm font-semibold text-brand-700 underline sm:mt-1.5">
+              See posts
+            </Link>
+          )}
+        </div>
+      </div>
+    )
   return (
     <Card className="p-4">
       <div className="flex min-w-0 items-center gap-3">

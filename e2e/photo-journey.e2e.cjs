@@ -148,11 +148,13 @@ const makePhoto = (page, w, h) =>
       box(form.getByRole('button', { name: 'Post', exact: true })),
     ])
     const vw = pageP.viewportSize().width
+    // Post sits at the top right of the full-screen composer (SP-DESIGN-002, SP-UAT-001), above the photo,
+    // and stays last in Tab order (checked below).
     return img.y + img.height <= change.y && change.y + change.height <= caption.y && remove.y + remove.height <= caption.y
-      && caption.y + caption.height <= post.y && change.height >= 44 && remove.height >= 44
+      && post.y + post.height <= img.y && change.height >= 44 && remove.height >= 44
       && [img, change, remove, caption, post].every((b) => b.x >= 0 && b.x + b.width <= vw)
   }
-  check('at 390px: photo, then Change photo and Remove photo (44px targets), then the caption, then Post', await layout())
+  check('at 390px: Post at the top, then the photo, Change photo and Remove photo (44px targets), then the caption', await layout())
   // Keyboard: from Change photo, Tab moves to Remove photo, then the caption,
   // then the optional topic (20261202000000), then Post.
   {
@@ -268,17 +270,18 @@ const makePhoto = (page, w, h) =>
   check('Q reports the photo post', sql(`select count(*) from ops.content_reports where target_id = '${firstPost}'`) === '1')
 
   // 4. P deletes both photo posts; the reported one is kept as evidence, the other is deleted.
-  await pageP.goto(`${APP}/app/u/${P.username}`)
-  for (const name of ['A white square on a sunset gradient']) {
-    const card = pageP.getByTestId('post').filter({ has: pageP.getByRole('img', { name }) })
+  // The profile shows posts as a grid (SP-DESIGN-002, SP-UAT-001): P opens each one from it and deletes it on its own page.
+  const widePost = sql(`select id from social.posts where body = 'Wide one (${RUN})'`)
+  for (const id of [firstPost, widePost]) {
+    await pageP.goto(`${APP}/app/u/${P.username}`)
+    await pageP.locator(`[data-testid="post-tile"][href="/app/post/${id}"]`).click()
+    await pageP.waitForURL(`${APP}/app/post/${id}`)
+    const card = pageP.getByTestId('post')
     await card.getByRole('button', { name: 'Delete post' }).click()
     await card.getByRole('button', { name: 'Delete', exact: true }).click()
+    await pageP.waitForURL(`${APP}/app`)
   }
-  const wide = pageP.getByTestId('post').filter({ hasText: `Wide one (${RUN})` })
-  await wide.getByRole('button', { name: 'Delete post' }).click()
-  await wide.getByRole('button', { name: 'Delete', exact: true }).click()
   await pageP.waitForTimeout(1500)
-  const widePost = sql(`select id from social.posts where body = 'Wide one (${RUN})'`)
   check('the unreported photo\'s files are deleted by the server after the delete',
     sql(`select count(*) from storage.objects o join social.media_uploads u on o.name in (u.full_path, u.feed_path) join social.post_media m on m.upload_id = u.id where m.post_id = '${widePost}'`) === '0')
   check('the reported photo\'s files are kept as evidence',

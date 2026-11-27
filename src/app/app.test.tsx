@@ -3399,6 +3399,22 @@ describe('the members area', () => {
     expect(screen.getByRole('link', { name: 'Your account' }).getAttribute('href')).toBe('/app/account')
   })
 
+  it('names every phone tab by its purpose; Profile shows your picture and is still named "Profile" (WCAG 2.5.3, SP-UAT-001)', async () => {
+    const { api } = fakeApi()
+    renderApp('/app', api)
+    await screen.findByRole('heading', { name: 'Home' })
+    const navs = screen.getAllByRole('navigation', { name: 'Main' })
+    const phone = navs[navs.length - 1]
+    // The picture (or initials) is decorative: the visible word is the name, so speech and sight match.
+    const profile = within(phone).getByRole('link', { name: 'Profile' })
+    expect(profile.getAttribute('href')).toBe('/app/profile')
+    expect(profile.getAttribute('aria-label')).toBeNull()
+    expect(profile.querySelector('[aria-hidden="true"]')).toBeTruthy()
+    // Create has no visible words, so it keeps an explicit name.
+    expect(within(phone).getByRole('link', { name: 'Create' }).getAttribute('href')).toBe('/app/new')
+    for (const name of ['Home', 'Discover', 'My Split']) expect(within(phone).getByRole('link', { name })).toBeTruthy()
+  })
+
   it('never mentions Connection Points, rewards or money in Release 1', async () => {
     const { api, seedPost, follows, key } = fakeApi()
     seedPost('c1', 'Hello')
@@ -3589,7 +3605,7 @@ describe('photo posts (Build 5.3)', () => {
   it('with photos off, posting is text only, exactly as before', async () => {
     const f = fakeApi()
     renderApp('/app/new', f.api)
-    await screen.findByRole('heading', { name: 'Create a post' })
+    await screen.findByRole('heading', { name: 'New post' })
     await act(async () => {})
     expect(screen.queryByRole('button', { name: 'Add photo' })).toBeNull()
     fireEvent.change(screen.getByRole('textbox', { name: 'Write a post' }), { target: { value: 'Words only' } })
@@ -4044,6 +4060,37 @@ describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () 
     expect(screen.queryByTestId('goals-consumer')).toBeNull()
   })
 
+  it('Home carries a compact next-step strip from the server’s progress, one tap from the action, and hides for the day (SP-UAT-001)', async () => {
+    window.localStorage.clear()
+    const fake = fakeApi()
+    fake.progression.my = {
+      enabled: true,
+      goodStanding: true,
+      creator: journey('in_progress', steps([['original_posts', 0, 20]])),
+      consumer: journey('in_progress', steps([['clique_creators', 10, 10], ['meaningful_engagements', 21, 30]])),
+      notices: [],
+      earnings: { creator: money(0, 0), consumer: money(0, 0) },
+    }
+    renderApp('/app', fake.api)
+    const strip = within(await screen.findByTestId('goal-strip'))
+    expect(strip.getByText('Supporter goals: 1 of 2')).toBeTruthy()
+    expect(strip.getByText(/Next: comment, save or repost thoughtfully · 21 of 30/)).toBeTruthy()
+    expect(strip.getByRole('link', { name: 'Find a post to support' }).getAttribute('href')).toBe('/app')
+    fireEvent.click(strip.getByRole('button', { name: 'Hide for today' }))
+    expect(screen.queryByTestId('goal-strip')).toBeNull()
+    cleanup()
+    renderApp('/app', fake.api)
+    await screen.findAllByTestId('post').catch(() => undefined)
+    expect(screen.queryByTestId('goal-strip')).toBeNull()
+    // With the switch off, nothing appears.
+    cleanup()
+    window.localStorage.clear()
+    const off = fakeApi()
+    renderApp('/app', off.api)
+    await act(async () => {})
+    expect(screen.queryByTestId('goal-strip')).toBeNull()
+  })
+
   it('My Split opens on the split: total, creator and supporter, unlocked and locked, simulated; then the next goal and one action', async () => {
     const fake = fakeApi()
     fake.rewards.points = { recognized: 970, redeemablePending: 0, redeemableApproved: 270, settled: 0, simulatedPointValueCents: 0, simulatedValueCents: 315 }
@@ -4113,10 +4160,13 @@ describe('progression (SP-PRG-001): goals, statuses and simulated earnings', () 
     expect(screen.queryByTestId('goals-creator')).toBeNull()
     expect(screen.getByTestId('goals-consumer-badge').textContent).toBe('1 of 2')
     expect(screen.getByTestId('goals-consumer-status').textContent).toBe('Next: comment, save or repost thoughtfully.')
+    // SP-UAT-001: the path shows what is left (in any order, with what remains) first, then what is done.
     expect(card.getAllByTestId('goal-step').map((x) => x.textContent)).toEqual([
+      'Comment, save or repost thoughtfully12 / 3018 more to goFind a post to support ',
       'Keep creators in your Clique (done)10 / 10',
-      'Comment, save or repost thoughtfully12 / 30Find a post to support ',
     ])
+    expect(card.getByText('To do, in any order')).toBeTruthy()
+    expect(within(card.getByTestId('goals-done')).getByText(/Keep creators in your Clique/)).toBeTruthy()
     expect(card.getByText(/Reach every goal to unlock \$12\.40 \(simulated\)/)).toBeTruthy()
     expect(card.getByText(/Goals in force since November 26, 2026/)).toBeTruthy()
     cleanup()

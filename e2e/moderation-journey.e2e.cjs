@@ -173,7 +173,7 @@ async function signIn(page, email) {
   const pageA = await ctxA.newPage()
   await signIn(pageA, A.email)
   await pageA.goto(`${APP}/app/u/${A.username}`)
-  await pageA.getByTestId('post').filter({ hasText: postText }).waitFor()
+  await pageA.getByTestId('post-tile').filter({ hasText: postText }).waitFor()
   await pageA.goto(`${APP}/app/profile`)
   await pageA.getByRole('heading', { name: 'Settings' }).waitFor()
   check('the reported member sees no Moderation link', (await pageA.getByRole('link', { name: 'Moderation' }).count()) === 0)
@@ -221,7 +221,7 @@ async function signIn(page, email) {
   await pageA.goto(`${APP}/app/u/${A.username}`)
   await pageA.getByRole('heading', { name: 'Posts' }).waitFor()
   await pageA.waitForTimeout(500)
-  check("the hidden post is gone from the author's own page", (await pageA.getByTestId('post').filter({ hasText: postText }).count()) === 0)
+  check("the hidden post is gone from the author's own page", (await pageA.getByTestId('post-tile').filter({ hasText: postText }).count()) === 0 && (await pageA.getByTestId('post').filter({ hasText: postText }).count()) === 0)
 
   // 5. Restore brings it back.
   await pageM.getByRole('button', { name: 'Restore' }).click()

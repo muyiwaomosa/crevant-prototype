@@ -30,7 +30,7 @@ Hands-on steps: `docs/FOUNDER-TESTING-GUIDE.md`.
 |---|---|---|---|
 | A1 | Staging fast-forwarded to main `6023da7` (SP-UX-002, UX-01 to UX-04, landing page) | Claude | **Done** Nov 27 |
 | A2 | No database change between the previous staging commit and `6023da7`, so no migration is needed | Claude | **Done** (no `supabase/` differences) |
-| A3 | Read-only staging check: isolation from Production, migrations through 20261219, security and separation checks, switch states (run 52) | You approve the gate; Claude reads the result | Waiting for your approval |
+| A3 | Read-only staging check: isolation from Production, migrations through 20261219, security and separation checks, switch states (run 52) | You approve the gate; Claude reads the result | **Done** Nov 27 13:27 (run 46003719199): approved project, all 38 migrations applied through 20261219, every security and separation check passed; progression off at that time, 0 qualifications |
 | A4 | Staging serves `6023da7` (View Source: `splitpost-commit`) | You (staging is behind Vercel sign-in) | To do, 1 minute |
 | A5 | Progression switched on for staging, with a reason | You (founder-only control in Control Center) | To do, 1 minute |
 | A6 | Safeguards unchanged with progression on: simulated amounts only, manual qualification approval with a reason, holds and daily caps, no cash movement, no 40:20:40 percentages shown, no unrestricted balance editing, no automatic qualification | Claude (code and tests); you see it during B | **Done** in code and CI; confirmed by you in B9 and B12 |
@@ -127,7 +127,13 @@ goes to the post-launch backlog.
 
 | ID | Severity | Found in | Finding | Status |
 |---|---|---|---|---|
-| | | | None yet | |
+| UAT-001-1 | P2 | Founder acceptance, Nov 27 (SP-UAT-001) | Landing page mobile hero too crowded: value proposition comes after a text-heavy split-post illustration | **Built, awaiting founder visual review**: value proposition, actions and disclosure under the headline; the split post as a picture (verified creator photo above, community below); no sample text, statistics or comment. Targeted exception to the landing freeze; no other section changed |
+| UAT-001-2 | P1 | Founder acceptance, Nov 27 | Video unavailable | Not a defect: uploads stay closed until both phone device tests pass and the storage cap is set. **Waiting for the founder**: device tests, record results, 50 GB cap, switch on. Claude then verifies (check 029, video journey) |
+| UAT-001-3 | P2, blocks the interface milestone | Founder acceptance, Nov 27 | Interface does not match the approved designs | **Built, awaiting founder review and hands-on acceptance**: Home, Discover, Create and Profile restored to the approved references, with designed states for text-only posts, missing photos, empty states and zero balances; validated with new, growing and established members on phone and desktop |
+| UAT-001-4 | P2 | Founder acceptance, Nov 27 | Gamification and progression not obvious | **Built, awaiting founder review and hands-on acceptance**: onboarding, Home strip, Discover hint, publish and contribution feedback, My Split next goal, My Goals path, My Activity achievements; all from server progress, goals in any order, approved rules only. Recorded end to end |
+| UAT-001-5 | P2 | Automated (stakeholder journeys, axe), Nov 27 | With a picture on the Profile tab, its fixed label no longer matched the visible text (WCAG 2.5.3) | **Resolved**: tab links are named by their visible word; Profile is named "Profile" with the picture decorative; Create keeps its explicit name. Unit test added; all four stakeholder journeys pass |
+
+**Interface milestone:** not accepted until UAT-001-1, -3 and -4 are resolved and reviewed by the founder. Design review with previews: `docs/design/uat/SP-UAT-001.md`.
 
 **Post-launch backlog (P3 and deferred items)**
 
