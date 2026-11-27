@@ -469,7 +469,7 @@ function MemberLayout() {
               key={item.to}
               to={item.to}
               end={item.end}
-              aria-label={item.label}
+              aria-label={item.primary ? item.label : undefined}
               className={({ isActive }) =>
                 clsx('flex h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold', isActive ? 'text-ink-900' : 'text-ink-500')
               }
