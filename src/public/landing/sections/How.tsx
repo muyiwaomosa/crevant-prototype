@@ -41,6 +41,11 @@ export function How() {
                   {s.body.map((p) => (
                     <p key={p}>{p}</p>
                   ))}
+                  {'source' in s && s.source && (
+                    <p data-testid={`how-${s.id}-source`} className="text-[0.98rem] text-sp-muted">
+                      {s.source}
+                    </p>
+                  )}
                 </div>
                 {'note' in s && s.note && (
                   <p data-testid={`how-${s.id}-note`} className="mt-4 max-w-md rounded-2xl bg-sp-secondary-tint px-4 py-3 text-[14px] font-semibold leading-snug text-sp-ink">

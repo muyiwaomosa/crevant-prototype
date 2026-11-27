@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { WHO_PHOTOS, PHOTOS, SAMPLE_AVATAR } from './photos'
+import { WHO_PHOTOS, PHOTOS, PHOTOS_TO_VERIFY, SAMPLE_AVATAR } from './photos'
 import { HOMEPAGE_COPY } from './copy'
 
 const PUBLIC = join(__dirname, '../../../public')
@@ -61,6 +61,11 @@ describe('homepage photos', () => {
       ['6697318', 'To be verified on the Pexels listing'],
       ['5738245', 'To be verified on the Pexels listing'],
     ])
+  })
+
+  it('the asset register marks the two new photos unverified, to be verified or replaced before publication', () => {
+    expect(PHOTOS_TO_VERIFY.map((p) => p.id)).toEqual(['supporter-phone', 'community-table'])
+    for (const p of photos.filter((x) => x.verified)) expect(p.photographer).not.toMatch(/verified/i)
   })
 
   it('never names a model as a member, user or sample person, and never guesses who they are', () => {

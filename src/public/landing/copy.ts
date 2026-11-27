@@ -66,8 +66,8 @@ export const HOMEPAGE_COPY = {
     eyebrow: 'Why Splitpost exists',
     headline: 'You do the work. Who gets the reward?',
     body: [
-      'Every day, millions of people create the content that makes social media valuable.',
-      'Millions more watch, comment, share and help that content reach new people.',
+      'Every day, people create the content that makes social media valuable.',
+      'Others watch, comment, share and help that content reach new people.',
       'Together, they build communities, influence decisions and generate value.',
     ],
     question: 'But who benefits the most?',
@@ -148,7 +148,7 @@ export const HOMEPAGE_COPY = {
         ],
         screen: '/media/landing/screens/how-discover.webp',
         alt: 'The Splitpost Discover screen: search, three ways in (For you, People, Topics) and a creator worth following.',
-        callout: 'Three ways in, picked by your interests',
+        callout: 'Find creators who share your interests.',
       },
       {
         id: 'connect',
@@ -161,7 +161,7 @@ export const HOMEPAGE_COPY = {
         ],
         screen: '/media/landing/screens/how-connect.webp',
         alt: 'The Splitpost Home feed: the Clique row at the top, then new posts from the people followed, newest first.',
-        callout: 'Your Clique, first on Home',
+        callout: 'Your Clique, first on Home.',
       },
       {
         id: 'create',
@@ -174,7 +174,7 @@ export const HOMEPAGE_COPY = {
         ],
         screen: '/media/landing/screens/how-create.webp',
         alt: 'A creator’s Splitpost profile: followers, Your insights (Reach, Connection and simulated Earnings) and published posts.',
-        callout: 'Your posts and your insights, together',
+        callout: 'Your posts and your insights, together.',
       },
       {
         id: 'contribute',
@@ -185,10 +185,10 @@ export const HOMEPAGE_COPY = {
           'Support the creators you value through meaningful engagement and by helping their communities grow.',
           'Earn Connection Points for eligible contributions and track your progress.',
         ],
-        note: 'Connection Points recognize contributions. They are not money.',
+        note: 'Connection Points recognize your contributions. They are not money and have no cash value.',
         screen: '/media/landing/screens/how-contribute.webp',
         alt: 'A save on Splitpost recognized: a short message says it counts toward the supporter goals.',
-        callout: 'Recognized when it counts',
+        callout: 'Your contributions, recognized.',
       },
       {
         id: 'earn',
@@ -196,13 +196,14 @@ export const HOMEPAGE_COPY = {
         label: 'Earn',
         title: 'Get your split.',
         body: [
-          'Whether you create content or help creators grow, work towards qualifying for a share of eligible content revenue.',
-          'See your accumulated split, track your goals and know what to do next.',
+          'Whether you create content or help creators grow, work towards qualifying for a future share of eligible content revenue.',
+          'During the pilot, you can track your simulated split, see your progress and know what to do next.',
         ],
+        source: 'Splitpost is designed to share future eligible revenue from advertising shown with content with the creators and qualifying supporters who help that content succeed.',
         note: 'All pilot earnings are simulated. No cash is paid during the pilot. Eligibility, verification and qualification review requirements apply. Future earnings are not guaranteed.',
         screen: '/media/landing/screens/how-earn.webp',
         alt: 'My Split on Splitpost: your split so far, as a creator and as a supporter, unlocked and locked, marked Simulated, then the next goal.',
-        callout: 'Your split, your goals, your next step',
+        callout: 'Your split, your goals, your next step.',
       },
     ],
     /** Under every product screen. */
@@ -227,7 +228,7 @@ export const HOMEPAGE_COPY = {
     eyebrow: 'Be part of the beginning',
     headline: 'Help shape the future of Splitpost.',
     body: [
-      "We're inviting creators, supporters and businesses to help us test a better way for social media to work.",
+      "We're inviting creators and supporters to help us test a better way for social media to work.",
       "As an early member, you'll have the opportunity to experience Splitpost, build meaningful connections and help shape the platform we're creating together.",
       'Your experience and feedback will help us understand what works, what needs to improve and how we can better serve our community.',
     ],
@@ -235,7 +236,7 @@ export const HOMEPAGE_COPY = {
     details: [
       'The initial pilot is invitation-only and available to adults aged 18 and over.',
       'All pilot earnings and financial rewards are simulated.',
-      'Connection Points are not money and cannot be exchanged for cash during the pilot.',
+      'Connection Points recognize your contributions. They are not money and have no cash value.',
       'No cash payments or payouts will take place during the pilot.',
       'Future financial rewards are subject to eligibility, verification and applicable legal and financial requirements.',
       'Features and experiences are being tested and may evolve.',
@@ -245,7 +246,7 @@ export const HOMEPAGE_COPY = {
       DISCLOSURES.cpNotMoney,
       DISCLOSURES.noGuarantee,
       DISCLOSURES.creatorSupportTest,
-      DISCLOSURES.adsAreDemos,
+      DISCLOSURES.adsAndRevenueTested,
       DISCLOSURES.pilotStart,
     ],
   },
@@ -268,18 +269,6 @@ export const HOMEPAGE_COPY = {
   peopleNote: 'Photos show models from stock images, not Splitpost members. App screens use illustrative sample people and data.',
   /** Shown on a photo placeholder until the founder approves the shortlist. */
   photoPending: 'Photo pending approval',
-} as const
-
-/**
- * Approved sentences that meet an existing safeguard, kept word for word and
- * shown to the founder for a decision (SP-BRAND-002, requirement E). The
- * claim tests allow exactly these, and nothing else.
- */
-export const FOUNDER_REVIEW = {
-  /** The claims checker reads this as revenue sharing that exists today (no "future" or "simulated" in the sentence). */
-  revenueToday: 'Whether you create content or help creators grow, work towards qualifying for a share of eligible content revenue.',
-  /** "Millions" reads as an unsourced figure to the statistics check; it is the founder's general wording. */
-  millions: ['Every day, millions of people create the content that makes social media valuable.', 'Millions more watch, comment, share and help that content reach new people.'],
 } as const
 
 /** Every visitor-facing string in the homepage copy, for the claim checks. */

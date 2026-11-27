@@ -49,56 +49,62 @@ In. Discover Splitpost opens the story at WHY; How it works opens HOW.
 
 ## 3. Test results
 
-* Unit: all landing, claims, copy, photo, logo and public-site tests pass
-  (410 in the public site and logo files; whole suite green).
+* Unit: 901 pass (whole suite), including the claims checker over every
+  sentence with no exceptions.
 * Browser (`scripts/e2e/public-site.sh`): 211 checks pass, including WCAG 2.2
   AA on every public page at phone and desktop, no sideways scrolling at 320
   to 1440 px, every screen and callout on screen, images sharp at 2x, every
   link working, no outside requests, no CSP violations.
 * Speed (local production build): phone on Slow 4G with 4x CPU, first and
-  largest paint 1.25 s, layout shift 0.001, 140 KB first load; desktop 0.17 s.
+  largest paint 1.24 s, layout shift 0.001, 140 KB first load; desktop 0.15 s.
   Photos and screens load lazily (WebP, 43 to 112 KB each).
 * Not run locally: the production-address launch rehearsal (the sandbox's
   browser forces HTTPS for vercel.app); it runs in CI.
 
-## 4. Decisions for the founder
+## 4. Founder decisions (Nov 27), as implemented
 
-1. **Revenue sentence (legal safeguard).** "Whether you create content or
-   help creators grow, work towards qualifying for a share of eligible
-   content revenue." The claims checker reads it as revenue sharing that
-   exists today, because the sentence itself has no "simulated" or "future".
-   The disclosure sits directly beneath it. Kept word for word and listed in
-   `FOUNDER_REVIEW`; please confirm, or approve a wording such as adding
-   "simulated during the pilot".
-2. **Connection Points "during the pilot".** "Connection Points are not money
-   and cannot be exchanged for cash during the pilot." could be read as
-   exchangeable after the pilot. The earlier approved disclosure ("can't be
-   bought, sold, transferred or converted to cash") is kept beside it, so the
-   page stays safe, but the two read differently. Please choose one.
-3. **"Millions".** The WHY lines "millions of people" and "Millions more"
-   are general, not a figure, but the statistics check flags them. Kept and
-   listed for review.
-4. **Source of eligible revenue.** The amendment asks to keep advertising and
-   the source of eligible revenue disclosed. The new copy says "eligible
-   content revenue" without naming advertising; the retained "Any ads you
-   see are labelled demonstrations." is the only advertising line, and the
-   app labels ads "Sponsored". Suggest approving one line, for example
-   "Eligible revenue comes from advertising shown with content.", and
-   checking whether "labelled demonstrations" is still accurate.
-5. **Pilot body mentions businesses.** "We're inviting creators, supporters
-   and businesses" is your section 7 copy, kept; the amendment focuses the
-   page on creators and supporters. Keep or remove "and businesses"?
-6. **Two new photos.** Supporters (Pexels 6697318) and the community table
-   (Pexels 5738245) are licensed Pexels photos; please confirm the
-   photographer credits on the listings, as for the first four. The
-   metalworker and filmmaker photos are no longer used and were removed.
-7. **My words, for approval.** The five screen callouts ("Three ways in,
-   picked by your interests", "Your Clique, first on Home", "Your posts and
-   your insights, together", "Recognized when it counts", "Your split, your
-   goals, your next step"), the screen label, and the footer note now saying
-   product screens "show the Splitpost app with illustrative sample people
-   and data" (it said "concepts"). The image you shared included a photo
-   with another site's watermark; nothing from those images is used.
+1. **Revenue language:** the Earn body is the approved two sentences ("a
+   future share of eligible content revenue"; "your simulated split"), with
+   the existing qualification, verification and simulated disclosures.
+2. **Connection Points:** "Connection Points recognize your contributions.
+   They are not money and have no cash value." in Contribute and the pilot
+   list; the earlier safeguard (can't be bought, sold, transferred or
+   converted to cash) stays in the list.
+3. **No numerical claims:** the WHY opening is the approved four lines.
+4. **Source of eligible revenue:** added to Earn, and the outdated "labelled
+   demonstrations" disclosure replaced. **One word added to each of two
+   sentences, for confirmation:** with the claims checker unchanged, both
+   sentences as written read as revenue sharing that exists today. Adding
+   "future" (the word decision 1 uses) satisfies the checker without any
+   exception:
+   * "Splitpost is designed to share **future** eligible revenue from
+     advertising shown with content with the creators and qualifying
+     supporters who help that content succeed."
+   * "Sponsored content is clearly labelled. Advertising and **future**
+     revenue sharing are being tested during the pilot, and all pilot
+     earnings are simulated."
+   Consistency with the economic framework: only advertising shown with
+   content is described as shared (general feed advertising is not), and
+   supporters' share is from the platform-wide pool, which "qualifying
+   supporters who help that content succeed" describes at this level.
+5. **Pilot audience:** "We're inviting creators and supporters to help us
+   test a better way for social media to work."
+6. **Photography:** recorded in the asset register (`landing/photos.ts`:
+   source URL, licence, filenames, `verified`). The two new photos are
+   **unverified**: pexels.com cannot be reached from the build environment
+   and search does not return either listing, so their credits could not be
+   confirmed. They are flagged (`PHOTOS_TO_VERIFY`) for verification or
+   replacement before publication:
+   * supporter-phone (`supporter-phone-600.webp`, `-960.webp`):
+     https://www.pexels.com/photo/smiling-woman-using-mobile-phone-at-home-6697318/
+   * community-table (`community-table-640.webp`, `-1200.webp`):
+     https://www.pexels.com/photo/a-group-of-friends-laughing-while-sitting-near-the-table-5738245/
+   No watermarked reference imagery is used.
+7. **Callouts:** exactly as approved. The labels say the screens are the
+   actual app, with illustrative sample people and data and simulated amounts.
+
+The claims checker is unchanged and nothing on the page needs an exception:
+`FOUNDER_REVIEW` and every allowance in the tests are gone.
 
 ## 5. Publication
 

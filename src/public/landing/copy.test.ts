@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation } from './claims'
-import { allHomepageText, FOUNDER_REVIEW, HOMEPAGE_COPY } from './copy'
+import { allHomepageText, HOMEPAGE_COPY } from './copy'
 
 // SP-BRAND-002 (Nov 27), with the positioning amendment: the founder's script,
 // word for word. These tests are the confirmation that it is preserved.
@@ -23,7 +23,7 @@ describe('Splitpost homepage copy (SP-BRAND-002)', () => {
     expect(c.why.eyebrow).toBe('Why Splitpost exists')
     expect(c.why.headline).toBe('You do the work. Who gets the reward?')
     expect([...c.why.body, c.why.question, ...c.why.body2, ...c.why.belief].join(' ')).toBe(
-      'Every day, millions of people create the content that makes social media valuable. Millions more watch, comment, share and help that content reach new people. Together, they build communities, influence decisions and generate value. But who benefits the most? Creators spend hours making content but struggle to turn their passion into a sustainable income. Followers help their favourite creators grow but rarely receive anything in return. And somewhere along the way, social media became more about capturing attention than building meaningful connections. We believe social media should work differently. The people who help create the value should have an opportunity to share in it. That\'s why we\'re building Splitpost.',
+      'Every day, people create the content that makes social media valuable. Others watch, comment, share and help that content reach new people. Together, they build communities, influence decisions and generate value. But who benefits the most? Creators spend hours making content but struggle to turn their passion into a sustainable income. Followers help their favourite creators grow but rarely receive anything in return. And somewhere along the way, social media became more about capturing attention than building meaningful connections. We believe social media should work differently. The people who help create the value should have an opportunity to share in it. That\'s why we\'re building Splitpost.',
     )
   })
 
@@ -61,8 +61,24 @@ describe('Splitpost homepage copy (SP-BRAND-002)', () => {
     ])
     expect(new Set(c.how.steps.map((s) => s.screen)).size).toBe(5)
     const contribute = c.how.steps.find((s) => s.id === 'contribute')!
-    expect('note' in contribute && contribute.note).toBe('Connection Points recognize contributions. They are not money.')
+    expect('note' in contribute && contribute.note).toBe('Connection Points recognize your contributions. They are not money and have no cash value.')
     const earn = c.how.steps.find((s) => s.id === 'earn')!
+    // Decisions 1 and 4: a future share, the simulated split today, and where eligible revenue comes from.
+    expect(earn.body).toEqual([
+      'Whether you create content or help creators grow, work towards qualifying for a future share of eligible content revenue.',
+      'During the pilot, you can track your simulated split, see your progress and know what to do next.',
+    ])
+    expect('source' in earn && earn.source).toBe(
+      'Splitpost is designed to share future eligible revenue from advertising shown with content with the creators and qualifying supporters who help that content succeed.',
+    )
+    // Decision 7: the five callouts, exactly.
+    expect(c.how.steps.map((s) => s.callout)).toEqual([
+      'Find creators who share your interests.',
+      'Your Clique, first on Home.',
+      'Your posts and your insights, together.',
+      'Your contributions, recognized.',
+      'Your split, your goals, your next step.',
+    ])
     expect('note' in earn && earn.note).toBe(
       'All pilot earnings are simulated. No cash is paid during the pilot. Eligibility, verification and qualification review requirements apply. Future earnings are not guaranteed.',
     )
@@ -96,29 +112,29 @@ describe('Splitpost homepage copy (SP-BRAND-002)', () => {
 
   it('PILOT: the founder’s list, then every earlier approved disclosure still in force', () => {
     expect(c.pilot.headline).toBe('Help shape the future of Splitpost.')
+    // Decision 5: creators and supporters.
+    expect(c.pilot.body[0]).toBe("We're inviting creators and supporters to help us test a better way for social media to work.")
     expect(c.pilot.details.slice(0, 7)).toEqual([
       'The initial pilot is invitation-only and available to adults aged 18 and over.',
       'All pilot earnings and financial rewards are simulated.',
-      'Connection Points are not money and cannot be exchanged for cash during the pilot.',
+      'Connection Points recognize your contributions. They are not money and have no cash value.',
       'No cash payments or payouts will take place during the pilot.',
       'Future financial rewards are subject to eligibility, verification and applicable legal and financial requirements.',
       'Features and experiences are being tested and may evolve.',
       'Earnings are not guaranteed.',
     ])
-    for (const k of ['invitationOnly', 'cpNotMoney', 'noGuarantee', 'creatorSupportTest', 'adsAreDemos', 'pilotStart'] as const) expect(c.pilot.details, k).toContain(DISCLOSURES[k])
+    for (const k of ['invitationOnly', 'cpNotMoney', 'noGuarantee', 'creatorSupportTest', 'adsAndRevenueTested', 'pilotStart'] as const) expect(c.pilot.details, k).toContain(DISCLOSURES[k])
     expect(new Set(c.pilot.details).size).toBe(c.pilot.details.length)
   })
 
-  it('no sentence makes a misleading claim, except the one listed for the founder’s decision', () => {
-    const findings = allHomepageText().flatMap((t) => findMisleadingClaims(t))
-    expect(findings).toEqual([{ rule: 'revenue sharing described as existing today', sentence: FOUNDER_REVIEW.revenueToday }])
+  it('no sentence anywhere makes a misleading claim (the checker unchanged, no exceptions)', () => {
+    expect(allHomepageText().flatMap((t) => findMisleadingClaims(t))).toEqual([])
   })
 
-  it('never publishes the provisional allocation, a currency amount or a statistic (the founder’s "millions" lines aside, listed for review)', () => {
+  it('never publishes the provisional allocation, a currency amount or a statistic', () => {
     const all = allHomepageText()
     expect(all.some((t) => mentionsProvisionalAllocation(t))).toBe(false)
-    let text = all.join(' ')
-    for (const s of FOUNDER_REVIEW.millions) text = text.split(s).join(' ')
+    const text = all.join(' ')
     expect(text).not.toMatch(/[$€£¥]|\d+(\.\d+)?\s?%|per ?cent|million|billion/i)
   })
 

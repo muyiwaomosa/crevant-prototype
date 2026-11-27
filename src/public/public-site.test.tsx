@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PublicRoutes } from './PublicApp'
-import { FOUNDER_REVIEW, HOMEPAGE_COPY } from './landing/copy'
+import { HOMEPAGE_COPY } from './landing/copy'
 import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation } from './landing/claims'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 
@@ -60,9 +60,8 @@ const APPROVED_GUARANTEE_SENTENCES = [
   "Joining the waitlist doesn't guarantee an invitation to the pilot.",
   'Participation does not guarantee earnings or rewards.',
 ]
-// Approved sentences the copy rules would otherwise read as risky: listed for
-// the founder's review (FOUNDER_REVIEW in landing/copy.ts), never reworded.
-const APPROVED_PROBLEM_SENTENCES = [...FOUNDER_REVIEW.millions, FOUNDER_REVIEW.revenueToday]
+// No approved sentence needs an exception from the copy rules (SP-BRAND-002 decisions, Nov 27).
+const APPROVED_PROBLEM_SENTENCES: string[] = []
 /** Every block of visible text in an element, for the claims checker. */
 const blocks = (el: Element) => [...el.querySelectorAll('h1, h2, h3, p, li, span, a, figcaption')].map((e) => norm(e).trim()).filter(Boolean)
 
@@ -81,8 +80,7 @@ describe('one Splitpost story, top to bottom (SP-BRAND-002)', () => {
     expect(c.querySelectorAll('#problem, #building, #paths, #creators, #split, #vision, [data-status]')).toHaveLength(0)
   })
   it('shows no external research, percentages or statistics', () => {
-    let t = norm(landing())
-    for (const s of FOUNDER_REVIEW.millions) t = t.split(s).join(' ')
+    const t = norm(landing())
     expect(t).not.toMatch(/Goldman|Nielsen|Linktree|\bstudy\b|survey|respondents|\d+(\.\d+)?\s?%|billion|million/i)
   })
   it('joins the eight sections with the split-post seam, so they read as one story', () => {
@@ -90,8 +88,13 @@ describe('one Splitpost story, top to bottom (SP-BRAND-002)', () => {
   })
   it('speaks to creators and supporters only: no advertiser proposition (amendment)', () => {
     const c = landing()
-    for (const id of ['hero', 'why', 'who', 'what', 'how', 'account', 'invitation'])
-      expect(norm(c.querySelector(`#${id}`)), id).not.toMatch(/advertis|for businesses|customers, not just clicks/i)
+    // Nowhere is advertising offered to visitors.
+    expect(norm(c)).not.toMatch(/for advertisers|for businesses|advertise with|advertise on|reach the right people|customers, not just clicks|run (an? )?ads?/i)
+    for (const id of ['hero', 'why', 'who', 'what', 'account', 'invitation']) expect(norm(c.querySelector(`#${id}`)), id).not.toMatch(/advertis/i)
+    // HOW names advertising once, as the source of eligible revenue (decision 4: transparency, not a proposition).
+    const how = c.querySelector('#how')!
+    const lines = [...how.querySelectorAll('p')].map((p) => norm(p)).filter((t) => /advertis/i.test(t))
+    expect(lines).toEqual([HOMEPAGE_COPY.how.steps[4].source])
   })
 })
 
@@ -190,7 +193,10 @@ describe('HOW (the product demonstration)', () => {
     expect(new Set([...sec().querySelectorAll('img')].map((i) => i.getAttribute('src'))).size).toBe(5)
   })
   it('says beside Contribute that Connection Points are not money, and beside Earn that every amount is simulated', () => {
-    expect(norm(sec().querySelector('[data-testid="how-contribute-note"]'))).toBe('Connection Points recognize contributions. They are not money.')
+    expect(norm(sec().querySelector('[data-testid="how-contribute-note"]'))).toBe('Connection Points recognize your contributions. They are not money and have no cash value.')
+    expect(norm(sec().querySelector('[data-testid="how-earn-source"]'))).toBe(
+      'Splitpost is designed to share future eligible revenue from advertising shown with content with the creators and qualifying supporters who help that content succeed.',
+    )
     expect(norm(sec().querySelector('[data-testid="how-earn-note"]'))).toBe(
       'All pilot earnings are simulated. No cash is paid during the pilot. Eligibility, verification and qualification review requirements apply. Future earnings are not guaranteed.',
     )
@@ -279,10 +285,7 @@ describe('claims safeguards across the whole page', () => {
   it('makes no misleading financial claim anywhere (an extra safeguard, not a substitute for review)', () => {
     const b = blocks(landing())
     expect(b.length).toBeGreaterThan(80)
-    // Only the one sentence listed for the founder's decision (FOUNDER_REVIEW.revenueToday).
-    const findings = b.flatMap((x) => findMisleadingClaims(x))
-    expect(findings.length).toBeGreaterThan(0)
-    for (const f of findings) expect(f.sentence, f.rule).toContain(FOUNDER_REVIEW.revenueToday)
+    expect(b.flatMap((x) => findMisleadingClaims(x))).toEqual([])
   })
   it('never publishes the provisional allocation', () => {
     expect(mentionsProvisionalAllocation(norm(landing()))).toBe(false)
