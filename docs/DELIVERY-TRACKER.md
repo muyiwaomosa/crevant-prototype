@@ -42,11 +42,12 @@ https://claude.ai/artifact/LT9k8aSFrFMz6MxRqtsvQ9).
 | F2 Locked creator earnings (simulated) | **Approved**: append-only states; Splitpost never absorbs a locked amount | SP-REFINE-002, section 3 | Built in G3; deletion, dormancy, disqualification and legal treatment stay open |
 | F3 Consumer eligible points before qualification | **Option A approved** (include and lock) | SP-REFINE-002, section 4 | Built in G3 |
 | F4 Interactive advertising | **Approved as a controlled experiment** in principle | SP-REFINE-002, section 6 | After launch unless the founder asks otherwise |
-| UX-01 Home without settings | **Awaiting founder confirmation**: Home has no settings section in the current build; the account links near it are the desktop sidebar footer and the phone header, on every page. Proposal in `docs/design/ux-refine/SP-UX-REFINE-001.md` | Screens checked Nov 27 as founder and member | Founder confirms the block, then build (front end only) |
-| UX-02 Video readiness | **Confirmed gated**: the composer offers video only when the server reports video on; the switch refuses until both phone results pass and the cap is set | Staging check 029 | Founder: device test (shortest path in SP-UX-REFINE-001) |
-| UX-03 Recognition and progress visibility | **Proposed** (previews 5, 6) using the existing engine only; progression switch off on staging at run 50 | `docs/design/ux-refine/` | Founder approval, then build |
-| UX-04 My Split: My Split, My Goals, My Activity | **Proposed** (previews 1 to 4, 7: phone and desktop) | `docs/design/ux-refine/` | Founder approval, then build |
-| UX-05 Welcome walkthrough and first-use tips | **Proposed** with exact wording (previews 8 to 14) | `docs/design/ux-refine/SP-UX-REFINE-001.md` | Founder approval, then build |
+| UX-01 Account links out of the sidebar and phone header | **Built** (approved Nov 27): account settings under Profile, Settings; Feedback and the pilot line kept | Unit tests; journeys | PR with SP-UX-002 |
+| UX-02 Video readiness | **Confirmed gated**; founder running the device tests | Staging check 029 | Founder |
+| UX-03 Recognition, goal progress, milestones, next actions | **Built** (approved direction): recognition only for server-recorded contributions; rings, bars, one action per goal; a met goal acknowledged once | Unit tests; progression, social journeys | PR with SP-UX-002; founder visual review |
+| UX-04 My Split: My Split, My Goals, My Activity | **Built** (approved direction): split first with the official symbol, creator and supporter, unlocked and locked, simulated; plain-language terms behind "What do these mean?"; empty states | Unit tests; progression, rewards, consumer journeys | Same |
+| SP-UX-002 Value-first welcome and tailored first steps | **Built, for final copy and visual review**: five faces before setup (Skip, Back, Continue, Get started; swipe, keys, reduced motion), again from Profile; first steps tailored by the goal answer and interests | Unit tests; social journey walks all five faces with an accessibility check; `docs/design/ux-refine/SP-UX-002.md` and `sp-ux-002-*.png` | Founder final review, then merge |
+| Intermittent ad view unit test | **Resolved**: a finished ad observer could start a view timer; it can no longer (regression test fails without the fix) | 12 repeated runs pass | Merged with the package |
 | L1 Landing page visual assets | Not started | Prepared from the approved screens once V1 lands; not published before approval | After V1 |
 
 **Impact on December 23:** H1, V1, D1 and P1 are about 7 working days of UI
@@ -83,7 +84,7 @@ to the previews confirmed first (SP-REFINE-002, section 2).
 | Pilot media disclosure: "Keep your original" in the composer when a photo or video is attached; privacy notice draft line | Tested | PR #117; unit tests; photo, creator and video journeys | Merge, then acceptance (row 64) |
 | Recovery after a restore: deleted accounts and posts stay deleted (deletion register, migration 20261216000000; D7 approved Nov 26, conditional) | **Merged** (PR #120, 74d41d7; migration applied to staging by run 45861107192) | Register written in the same transaction as each deletion; reported to the Edge Function log at once after each deletion (`/deletions`) and retried by the 15-minute drain; a row unlogged after 30 minutes fails the reconciliation. Recovery: export the live register before restoring (complete), else the log; restrict again after the restore; reconciliation is idempotent; reopening rules fail safe; residual risk documented by path (`docs/RECOVERY.md`). Recovery exercise passes locally and in CI | post-media v3 deployed and verified on staging (Nov 26). **Immediate reporting confirmed on staging:** the latest deletion reached the function log in 1 second (run 45878052395); the scheduled drain runs every 15 minutes. **Completeness** is now checked as well: staging check 032 fails on any post or comment deletion without a register row, any founder account deletion without its own register row (matched one by one), or any row not logged. Its first staging result comes with step 3 of the recovery exercise; not accepted until then. Then the exercise on staging after the transfer (action 7). Not complete until then. Incomplete evidence keeps a restored app restricted until resolved |
 | Video journey failed once in CI (PR #120): no video post found right after posting | Fixed (test synchronization) | Cause shown: the wait for the post text also matched the composer, because React keeps a controlled textarea's text in sync with what is typed, so the database was read before the post was saved. The video and photo journeys now wait for the rendered post card. Not an app defect | Both journeys pass locally; CI on the next push |
-| Intermittent failure of the ad view unit test (once in about six full local runs) | **Open investigation** | Root cause not confirmed: React effect timing is suspected, not proven. The test now waits for the slot's observer and prints a timed trace on failure that separates a test synchronization problem from a real miscount | If it recurs, read the trace; validate real ad viewing during acceptance (Journey 6) |
+| Intermittent failure of the ad view unit test | **Resolved Nov 27** (see the UX rows above) | Root cause found and fixed | None |
 | Supabase consolidation: staging into the Pro organization (daily backups, 7-day logs, 110 MB upload limit) | **Done** (founder, Nov 26) | Same project and reference after the transfer; Edge Functions verified again: post-media 454 checks (run 45878056710), avatar 225 checks (run 45878061367), 0 failures, same builds; staging checks run 45878052395 all passed after the transfer (database connectivity with full TLS verification, every security and separation check, 36 migrations matching, scheduled cleanup at 18:45). Global upload limit set to 110 MB (founder). Cost about $55 a month until the rehearsal project is retired, then about $45; no new subscription | Founder: action 7 (confirm the first daily backup). The rehearsal project stays until the recovery exercise has passed on staging, its dependencies are ruled out, and the founder explicitly approves deleting it |
 | "See Splitpost" screenshots on the landing page | Not started | Needs the Dec 7 build | Take from staging after acceptance starts |
 
@@ -134,14 +135,11 @@ which needs no change to the code.
 Everything else in the approved scope is built, merged and on staging. What
 remains, by kind:
 
-**Remaining development:** none beyond the refinements below. Open
-investigation: the intermittent ad view unit test (row above).
+**Remaining development:** none. The intermittent ad view test is resolved.
 
-**Experience refinements** (founder feedback Nov 27; front end only, no
-migration; about three days once approved, inside the December 10 interface
-target): UX-01 Home settings (needs the founder's confirmation of the block
-meant), UX-03 recognition and progress, UX-04 My Split, UX-05 walkthrough and
-first-use tips. Previews and wording in `docs/design/ux-refine/`.
+**Experience refinements:** UX-01, UX-03, UX-04 and SP-UX-002 are built and
+tested (front end only, no migration), awaiting the founder's final copy and
+visual review before merge, inside the December 10 interface target.
 
 **Acceptance testing** (founder, on staging): the full member journey
 (`docs/FOUNDER-TESTING-GUIDE.md`) with progression on; the refinements once

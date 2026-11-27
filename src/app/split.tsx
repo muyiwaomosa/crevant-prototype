@@ -449,7 +449,10 @@ function ActivityFace() {
             </span>
           </div>
           <p className="mt-1 text-[13px] leading-relaxed text-ink-600">
-            Recognition for how you help creators grow. {points.recognized.toLocaleString('en-US')} count your contribution and have no value.
+            Recognition for how you help creators grow.{' '}
+            {points.recognized > 0
+              ? `${points.recognized.toLocaleString('en-US')} count your contribution and have no value.`
+              : 'Recognition points count your contribution and have no value.'}
             {points.redeemableApproved > 0
               ? ` ${points.redeemableApproved.toLocaleString('en-US')} came from qualified referrals and share in the simulated rewards pool.`
               : ' Only points from qualified referrals share in the simulated rewards pool.'}
