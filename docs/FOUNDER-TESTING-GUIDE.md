@@ -38,6 +38,24 @@ is in `docs/ACCEPTANCE-CHECKLIST.md`.
    safeguard stays in place: amounts are simulated, qualification approval
    is a manual click with a reason, holds and daily caps apply, and no cash
    can move.
+4. **Optional, to test the media-led experience with testers: let staging
+   testers post photos.** Photo posting is founder-only by default
+   (`photos_audience = founder`), so testers can only post text. Widening it
+   is a server-only, recorded action with an explicit phrase, on **staging
+   only**. In the staging project's SQL editor (Supabase, project
+   `kpudeppgokpjhvaqrprn`):
+
+   ```sql
+   select ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS');
+   select photos_enabled, photos_audience from ops.media_settings;
+   ```
+
+   The check should read `t`, `members`. Only invited staging members exist,
+   so nobody outside the pilot gains anything; member Production is a
+   separate project and stays founder-only (`invitationsApproved` is false).
+   The 600 KB photo limit, the storage cap, moderation and deletion are
+   unchanged. To return to founder-only (no phrase needed):
+   `select ops.set_photo_audience('founder', 'founder');`
 
 ## The journey
 
@@ -45,13 +63,13 @@ is in `docs/ACCEPTANCE-CHECKLIST.md`.
 |---|---|---|---|
 | 1 | Join | Open your invitation link in a private window and sign up as the tester | Registration, then the **welcome walkthrough**: five faces ("Don't just post. Get your split.", "Your people. Your feed.", "Your support counts.", "Grow. Qualify. Earn.", "Make it yours."). Try Back, Continue and swipe; Skip works on every face; the last face says Get started |
 | 2 | Setup | Pick a username, display name and one or two interests, or skip | Then Home. Setup and the walkthrough never show again on their own |
-| 3 | Home | Look at Home as the tester | No title and no composer; your Clique row at the top; **first steps** for a new member (Find people, Follow them, Choose your Clique, Publish your first post, Support a post you value), worded for the interest you picked, with "0 of 5 done". Hide puts the card away; it also goes once every step is done |
+| 3 | Home | Look at Home as the tester | No title and no composer; your Clique row at the top; a compact **goal strip** (your supporter goals, the next step and Go, with X to hide it for the day); **first steps** for a new member, worded for the interest you picked, saying they also start your supporter goals. Text posts are set large on a soft brand colour; members without a photo show initials on a brand tint |
 | 4 | Discover | Tap the first step's Discover button, then try For you, People and Topics, and search for your founder username | Creators for your interest first; each way in opens a focused view; your founder profile is found |
 | 5 | Profile (theirs) | Open your founder profile; Follow, then Add to Clique | Counts, Following and In your Clique; "···" holds Report and Block. Back on Home, the matching first steps are ticked (Follow them needs three follows) |
-| 6 | Create | As the founder, tap the + button and publish a post with a topic | The post opens on its own page and appears first on the tester's Home |
+| 6 | Create | As the founder, tap the + button and publish a post with a topic | A full-screen **New post**: close at the top left, Post at the top right, your name and "Available to all your followers", then the text and Add photo. After posting, the post opens and a short message shows your creator goal for original posts with its new count (from the server). It appears first on the tester's Home |
 | 7 | Engage | As the tester: like, comment, save, share and repost it. Open "···" on the post and look at Report (cancel it) | After a comment, save, share or repost, a short message: "… recognized", with what it counts toward (your supporter goals and where you stand, such as "2 of 10"). Report sits only in the "···" menu and only on other people's posts |
 | 8 | Clique | Tester: Profile, Settings, Your Clique | The founder listed under My Clique and Following, with Remove, Mute and Unfollow. A one-time tip explains the Clique |
-| 9 | My Split | Tester: My Split | **My Split** face: your split so far, as a creator and as a supporter, unlocked and locked, every amount marked Simulated, and "What this means" opens the definitions. **My Goals**: Connection Goals with a ring and bars, the next action for each, and "Reach every goal to unlock $X (simulated)". **My Activity**: Connection Points history and opportunities. Each face opens full screen. No 40:20:40 percentages appear |
+| 9 | My Split | Tester: My Split, then My Goals and My Activity | **My Split**: your split (creator and supporter, unlocked and locked, Simulated), then **Your next goal** straight under it: where you are, what's left, why it matters and one action. **My Goals**: each journey with what's left (in any order, the closest marked Suggested next, each with a bar, what remains and an action) and what's done. **My Activity**: Connection Points, **Your achievements** (goals met) and your contributions. No 40:20:40 percentages appear |
 | 10 | Insights | Founder: Profile, Your insights, then Reach, Connection and Earnings | Your creator view, with Earnings labelled Simulated |
 | 11 | Welcome again | Tester: Profile, Settings, How Splitpost works | The same five faces, ending with Done instead of Get started |
 | 12 | Control Center | Founder, on a laptop: Control Center | The review queue marks each case Routine or Flagged with the reason and how long it has waited, plus turnaround and revocations. Approving stays a manual click with a reason. Insights shows Activation for creators, consumers and advertisers, plus the previous consumer metric until Dec 26 |

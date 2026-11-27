@@ -773,7 +773,17 @@ export function MemberPage() {
               : `${m.displayName} hasn't posted yet. Follow them to see their posts on Home when they do.`}
         </Message>
       )}
-      {posts.data && posts.data.length > 0 && (
+      {/* Approved design (SP-DESIGN-002): someone else's posts as a grid that opens each post; your own keep their edit and delete. */}
+      {posts.data && posts.data.length > 0 && !m.isMe && (
+        <ul className="grid grid-cols-3 gap-1 overflow-hidden rounded-[18px]" data-testid="profile-grid">
+          {posts.data.map((p) => (
+            <li key={p.id}>
+              <PostTile post={p} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {posts.data && posts.data.length > 0 && m.isMe && (
         <PostList
           posts={posts.data}
           loadOlder={(before) => api.memberPosts(m.id, before)}
