@@ -1177,7 +1177,7 @@ const MESSAGES: Record<string, string> = {
   correction_too_large: 'That correction would take the amount below zero.',
   pool_too_small: 'The open fan pool is too small for that restoration.',
   on_hold: 'That amount is on hold.',
-  video_not_ready: 'Video posts stay off until the iPhone and Android device tests have passed and the video storage cap is set.',
+  video_not_ready: 'Set the video storage cap first (Video posts, below). New video uploads can be switched on once it is set.',
   videos_unavailable: "Video posts aren't available right now. You can still post text.",
   not_tester: 'Only the founder and testers can run the video device test.',
   video_too_large: 'That video is too large. Videos can be up to 110 MB once prepared.',

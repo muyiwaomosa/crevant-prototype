@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Tests the staging rollback of 20261219000000 (pilot closure, activation and triage),
 # scripts/db/staging-rollback-pilot-closure.sql, against a LOCAL Supabase database.
-# Local only. Called first by scripts/db/rollback-test.sh, because
-# 20261219000000 is the newest migration.
+# Local only. Called by scripts/db/rollback-test.sh after the video release
+# decision (20261220000000) is rolled back.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 DB_URL="${DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"

@@ -39,3 +39,4 @@
 033_progression.sql 20261217000000
 034_progression_rules.sql 20261218000000
 035_pilot_closure_activation_triage.sql 20261219000000
+036_video_release_decision.sql 20261220000000

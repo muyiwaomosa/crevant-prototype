@@ -582,7 +582,7 @@ export function VideoReadinessPanel() {
       <Card className="space-y-3 p-5">
         <h2 className="font-display text-lg font-extrabold text-ink-900">Video posts</h2>
         <p className="text-[14px] text-ink-700">
-          Video posts can be switched on once the latest iPhone Safari and Android Chrome device tests passed and the storage cap is set. The test page is{' '}
+          Video posts can be switched on once the storage cap is set. Device tests are optional and kept for diagnosing problems members report. The test page is{' '}
           <Link to="/app/video-test" className="font-semibold text-brand-700 underline">
             Video device test
           </Link>

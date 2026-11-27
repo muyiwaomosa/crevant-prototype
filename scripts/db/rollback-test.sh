@@ -16,8 +16,9 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: pilot closure (20261219000000,
-# scripts/db/rollback-pilot-closure-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: the video release decision (20261220000000,
+# scripts/db/rollback-video-release-test.sh, the newest, so it goes first),
+# pilot closure (20261219000000, scripts/db/rollback-pilot-closure-test.sh),
 # progression rules (20261218000000, scripts/db/rollback-progression-rules-test.sh),
 # progression (20261217000000, scripts/db/rollback-progression-test.sh),
 # the deletion register (20261216000000, scripts/db/rollback-deletion-register-test.sh),
@@ -128,9 +129,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+RELEASE=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261220000000')")
+if [ "$RELEASE" = t ]; then
+  # The newest migration (the video release decision) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-pilot-closure.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the pilot closure rollback refuses while the video release decision is recorded" \
+    || bad "the pilot closure rollback did not refuse while the video release decision is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-video-release-test.sh; then
+    ok "video release decision: the rollback refuses while a later migration exists, and otherwise restores the device-test gate exactly"
+  else
+    bad "the video release rollback tests failed"
+  fi
+fi
 CLOSURE=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261219000000')")
 if [ "$CLOSURE" = t ]; then
-  # The newest migration (pilot closure) goes first.
+  # Then the pilot closure.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-progression-rules.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the progression rules rollback refuses while the pilot closure is recorded" \
@@ -772,9 +786,19 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
                                               && ok "after reapplying, the progression rules rollback refuses while the pilot closure is recorded" \
                                               || bad "the progression rules rollback did not refuse after reapply while the pilot closure is recorded (exit $code)"
                                             out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-pilot-closure.sql 2>&1); code=$?
+                                            if [ "$RELEASE" = t ]; then
+                                              [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                                                && ok "after reapplying, the pilot closure rollback refuses while the video release decision is recorded" \
+                                                || bad "the pilot closure rollback did not refuse after reapply while the video release decision is recorded (exit $code)"
+                                              out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-video-release.sql 2>&1); code=$?
+                                              [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                                && ok "after reapplying, the video release rollback check passes again" \
+                                                || bad "video release rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                            else
                                             [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                                               && ok "after reapplying, the pilot closure rollback check passes again" \
                                               || bad "pilot closure rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                            fi
                                           else
                                             [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                                               && ok "after reapplying, the progression rules rollback check passes again" \

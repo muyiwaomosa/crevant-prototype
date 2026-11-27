@@ -219,7 +219,7 @@ export function InvitationLinksPanel() {
 const SWITCH_TEXT: Record<SwitchFeature, { title: string; body: string }> = {
   ads: { title: 'Advertising', body: 'Sponsored posts in Home and under posts.' },
   sharing: { title: 'Sharing', body: 'Copy link and the share sheet on posts.' },
-  video_posts: { title: 'New video uploads', body: 'New video posts. Turns on only once the iPhone and Android device tests have passed and the video storage cap is set (see Video posts below).' },
+  video_posts: { title: 'New video uploads', body: 'New video posts. Turns on only once the video storage cap is set (see Video posts below).' },
   video_playback: { title: 'Video playback', body: 'Playing videos already published. Separate from uploads, so pausing uploads never hides existing videos.' },
   progression: { title: 'Progression', body: 'Goals and simulated locked earnings in My Split. Nobody qualifies while it is off or until you set every goal value.' },
 }
@@ -229,7 +229,7 @@ export function SwitchesPanel() {
   const [s, setS] = useState<FounderSwitches | null | undefined>(undefined)
   const [reason, setReason] = useState('')
   const [error, setError] = useState<unknown>(null)
-  // Video posts (20261213000000): offered only once both phone device tests passed and the cap is set (the server checks again).
+  // Video posts: offered once the storage cap is set (20261220000000, the founder's release decision; the server checks again).
   const [videoReady, setVideoReady] = useState(false)
   const load = () => {
     api.founderVideoStatus().then(

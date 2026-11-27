@@ -3,8 +3,19 @@
 Migration: `supabase/migrations/20261213000000_video_posts.sql` (checksum
 recorded; merging approves it, D7). Design and parameters: SP-VID-001
 (`docs/video/VIDEO-FEASIBILITY.md`, sections 5 and 8). The founder's device
-test: `docs/video/DEVICE-TEST.md`. Video posts stay **off** until that test
-has passed; nothing in this change turns them on.
+test: `docs/video/DEVICE-TEST.md`.
+
+**Release decision (founder, Nov 27, 2026; migration 20261220000000):** video
+posting is released as part of the MVP, for members once the external pilot
+opens. Real-device compatibility testing is **no longer an activation gate**:
+New video uploads can be switched on once the 50 GB storage cap is set.
+Compatibility, upload and playback problems are found from pilot members'
+feedback and fixed then. The device test page and records stay, for
+diagnosis; no device test result was recorded or changed by this decision.
+Unchanged: the cap and its enforcement, every limit below, the server's file
+checks, moderation and reporting, the deletion queue and scheduled cleanup,
+the separate upload and playback switches and the emergency stop, and the
+error messages.
 
 A post can carry one video of up to five minutes. The browser checks it and,
 where needed, converts it to 720p H.264 before upload; the server checks the
@@ -26,7 +37,7 @@ Function), not beside it.
 | Video ads | Simple video ads (20261209000000) stay on the small public `ad-creatives` bucket, which the founder manages (MP4 up to 8 MB, played inline from a local copy, muted, never autoplaying). They don't need member uploads, conversion or private links, so they don't duplicate this pipeline. When it is useful, the same MP4 header check (`supabase/functions/post-media/video.ts`) can verify an ad file before a campaign activates, with no new system | Founder question |
 | Deletion | Deleting a post, deleting an account, a refused file and any upload never published within 24 hours are queued through the existing media deletion queue (`ops.media_deletions`, now also for the private `post-videos` bucket) and removed by the scheduled drain. Reported videos are kept as evidence like photos | 5.7 |
 | Device test page | `/app/video-test`, founder and testers only: Choose a video, the Check, Convert and Upload times, Play, a results summary and Copy results. Test uploads are private, can never be published and are deleted after 24 hours | DEVICE-TEST.md |
-| The switch gate | Control Center, Video posts: record each device test (iPhone Safari, Android Chrome, computer) with its notes, and the project video storage cap (50 GB proposed). **Turn video posts on** is offered, and accepted by the server, only when the latest iPhone Safari and Android Chrome results passed and the cap is set; otherwise it still refuses (`video_not_ready`). Storage over 50% and 80% of the cap is flagged | Founder decision, section 8 |
+| The switch gate | Control Center, Video posts: record each device test (iPhone Safari, Android Chrome, computer) with its notes, and the project video storage cap (50 GB proposed). **Turn video posts on** is offered, and accepted by the server, once the cap is set; otherwise it still refuses (`video_not_ready`). Until 20261220000000 it also needed the latest iPhone Safari and Android Chrome results to have passed; device tests are now diagnostic only (release decision above). Storage over 50% and 80% of the cap is flagged | Founder decision, section 8 |
 | Moderation | A reported video's link (and poster) for moderators, while the report keeps it | Existing photo rules |
 
 Approved parameters (section 8): 5 minutes; 720p30 H.264 about 2.5 Mbps, AAC,

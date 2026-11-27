@@ -1,8 +1,10 @@
 # Video device test (founder or testers, about half a day)
 
-Video posts stay **off** until this test passes. The switch in the Control
-Center refuses to turn them on before then. Everything else in Splitpost works
-without video.
+**Since Nov 27, 2026 this test is optional** (founder release decision,
+migration 20261220000000). Video posts no longer wait for it: the switch needs
+only the storage cap. Use it to diagnose a phone or browser that members
+report problems with, and record the result in Control Center for reference.
+Never record a result that wasn't actually observed.
 
 **When:** once the video pull request is merged and deployed to staging (Claude
 will say when). The test page is `/app/video-test` on the staging app.

@@ -30,12 +30,14 @@ begin
                  and g.tgrelid = 'ops.video_device_tests'::regclass) then
     bad := bad || 'the device tests can be edited'::text;
   end if;
-  -- The switch still refuses, now unless both phone tests passed and the cap is set.
+  -- The switch still refuses unless the cap is set; until the release decision (20261220000000, checked in 036)
+  -- it also needed both phone tests.
   if position('video_not_ready' in sw) = 0 or position('ops.video_ready()' in sw) = 0
-     or position('iphone_safari' in (select prosrc from pg_proc where oid = 'ops.video_ready()'::regprocedure)) = 0
-     or position('android_chrome' in (select prosrc from pg_proc where oid = 'ops.video_ready()'::regprocedure)) = 0
-     or position('video_storage_cap_bytes' in (select prosrc from pg_proc where oid = 'ops.video_ready()'::regprocedure)) = 0 then
-    bad := bad || 'video posts can be switched on without both device tests and the cap'::text;
+     or position('video_storage_cap_bytes' in (select prosrc from pg_proc where oid = 'ops.video_ready()'::regprocedure)) = 0
+     or (not coalesce(obj_description('ops.video_ready()'::regprocedure, 'pg_proc'), '') ~ '20261220000000'
+         and (position('iphone_safari' in (select prosrc from pg_proc where oid = 'ops.video_ready()'::regprocedure)) = 0
+              or position('android_chrome' in (select prosrc from pg_proc where oid = 'ops.video_ready()'::regprocedure)) = 0)) then
+    bad := bad || 'video posts can be switched on without the cap (or, before the release decision, without both device tests)'::text;
   end if;
   -- Uploads and publishing are refused while the upload switch is off, playback while the playback switch is off; tests are for the founder and testers only.
   if position('ops.videos_open()' in begin_src) = 0 or position('ops.video_tester(v_uid)' in begin_src) = 0
@@ -81,7 +83,7 @@ begin
   if cardinality(bad) > 0 then
     raise exception 'FAIL: video posts: %', bad;
   end if;
-  raise notice 'PASS: video posts: device tests are private and append-only; video turns on only after both phone tests and a cap; the server closes uploads, publishing and links while off; the approved limits hold; every file goes through the deletion queue';
+  raise notice 'PASS: video posts: device tests are private and append-only; video turns on only with a cap (and, before the release decision, both phone tests); the server closes uploads, publishing and links while off; the approved limits hold; every file goes through the deletion queue';
 end $$;
 
 \else
