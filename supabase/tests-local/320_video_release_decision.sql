@@ -92,6 +92,6 @@ begin
   if (select count(*) from ops.video_device_tests) <> (select n from vrd_before) then
     raise exception 'FAIL: device test records changed';
   end if;
-  raise notice 'PASS: video release decision: New video uploads need the storage cap, and turn on even when both phones' latest device test failed; limits, the switch, member access and the device test records are unchanged';
+  raise notice 'PASS: video release decision: New video uploads need the storage cap, and turn on even when the latest device test failed on both phones; limits, the switch, member access and the device test records are unchanged';
 end $$;
 rollback;
