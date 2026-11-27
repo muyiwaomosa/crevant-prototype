@@ -3399,6 +3399,22 @@ describe('the members area', () => {
     expect(screen.getByRole('link', { name: 'Your account' }).getAttribute('href')).toBe('/app/account')
   })
 
+  it('names every phone tab by its purpose; Profile shows your picture and is still named "Profile" (WCAG 2.5.3, SP-UAT-001)', async () => {
+    const { api } = fakeApi()
+    renderApp('/app', api)
+    await screen.findByRole('heading', { name: 'Home' })
+    const navs = screen.getAllByRole('navigation', { name: 'Main' })
+    const phone = navs[navs.length - 1]
+    // The picture (or initials) is decorative: the visible word is the name, so speech and sight match.
+    const profile = within(phone).getByRole('link', { name: 'Profile' })
+    expect(profile.getAttribute('href')).toBe('/app/profile')
+    expect(profile.getAttribute('aria-label')).toBeNull()
+    expect(profile.querySelector('[aria-hidden="true"]')).toBeTruthy()
+    // Create has no visible words, so it keeps an explicit name.
+    expect(within(phone).getByRole('link', { name: 'Create' }).getAttribute('href')).toBe('/app/new')
+    for (const name of ['Home', 'Discover', 'My Split']) expect(within(phone).getByRole('link', { name })).toBeTruthy()
+  })
+
   it('never mentions Connection Points, rewards or money in Release 1', async () => {
     const { api, seedPost, follows, key } = fakeApi()
     seedPost('c1', 'Hello')
