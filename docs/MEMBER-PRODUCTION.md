@@ -336,3 +336,4 @@ connection strings.
 | 2026-11-27 | post-media v3 deployed (founder) and verified | run 46051971520 | `1fa2e7a` | 455 passed, 0 failed; avatar v1 re-verified (run 46051975445, 226 passed) |
 | 2026-11-27 | Video release decision dry run | run 46063637097 | `7c0411a` | Exactly 20261220000000 |
 | 2026-11-27 | Video release decision apply (founder approved; daily backup 10:00:34 UTC, within the approved 24 hour objective; the migration changes no data) | run 46064254403 | `7c0411a` | Applied and recorded; member checks passed, 0 skipped; check 036 passed (cap not yet set, uploads off, playback on, 0 device test records) |
+| 2026-11-27 | Video switched on (founder: 50 GB cap, New video uploads on with a reason); PROD-VID-1 fixed (`media-src` for the member project) and accepted | PR #138 | `787c465` | First video shows a preview, plays with sound, plays after a refresh |
