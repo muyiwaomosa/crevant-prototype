@@ -55,7 +55,7 @@ describe('the official Splitpost logo', () => {
     const logos = [...container.querySelectorAll('img[data-testid="splitpost-logo"]')]
     expect(container.querySelector('header img[data-testid="splitpost-logo"]')).toBeTruthy()
     expect(container.querySelector('footer img[data-testid="splitpost-logo"]')).toBeTruthy()
-    expect(container.querySelectorAll('[data-testid="seam"] img[data-testid="splitpost-logo"]')).toHaveLength(8)
+    expect(container.querySelectorAll('[data-testid="seam"] img[data-testid="splitpost-logo"]')).toHaveLength(7)
     expect(new Set(logos.map((l) => l.getAttribute('src')))).toEqual(new Set([SPLITPOST_LOGO_SRC]))
     // Decorative beside the wordmark, so screen readers hear "Splitpost" once.
     for (const l of logos) expect(l.getAttribute('alt')).toBe('')

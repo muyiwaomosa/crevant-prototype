@@ -22,7 +22,7 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  [${MODE}] ${name}${detail ? `  (${detail})` : ''}`)
 }
 const robots = (page) => page.locator('meta[name="robots"]').getAttribute('content')
-const landing = (page) => page.getByRole('heading', { level: 1, name: /You Create The Post\. You Deserve a Split\./ })
+const landing = (page) => page.getByRole('heading', { level: 1, name: /Don't just post\. Get your split\./ })
 
 ;(async () => {
   const browser = await chromium.launch({ args: [`--host-resolver-rules=MAP ${HOST} 127.0.0.1`] })

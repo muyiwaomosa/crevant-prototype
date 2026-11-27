@@ -87,7 +87,7 @@ export function JoinPage({
         )}
 
         {/* The same pilot disclosures as the homepage's pilot details band, word for word. */}
-        <h2 className="mt-10 font-display text-xl font-bold text-ink-900">{HOMEPAGE_COPY.pilot.eyebrow}</h2>
+        <h2 className="mt-10 font-display text-xl font-bold text-ink-900">{HOMEPAGE_COPY.pilot.listTitle}</h2>
         <ul data-testid="join-pilot-details" className="mt-3 space-y-1.5 leading-relaxed text-ink-600">
           {HOMEPAGE_COPY.pilot.details.map((d) => (
             <li key={d}>{d}</li>

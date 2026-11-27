@@ -23,11 +23,17 @@ export function PilotDetails() {
           >
             {copy.headline}
           </h2>
-          <p className="mt-6 max-w-md text-[1.08rem] leading-relaxed text-sp-muted sm:text-lg">{copy.intro}</p>
+          <div className="mt-6 max-w-md space-y-3 text-[1.05rem] leading-relaxed text-sp-muted">
+            {copy.body.map((p) => (
+              <p key={p}>{p}</p>
+            ))}
+          </div>
         </div>
+        <div className="min-w-0 rounded-[28px] bg-white p-6 ring-1 ring-sp-ink/8 sm:p-8">
+        <h3 className="font-sp-display text-lg font-extrabold">{copy.listTitle}</h3>
         <ul
           data-testid="pilot-details"
-          className="grid min-w-0 content-start gap-x-8 gap-y-4 rounded-[28px] bg-white p-6 ring-1 ring-sp-ink/8 sm:grid-cols-2 sm:p-8"
+          className="mt-4 grid min-w-0 content-start gap-x-8 gap-y-3 sm:grid-cols-2"
         >
           {copy.details.map((d) => (
             <li key={d} className="flex gap-3 text-[0.98rem] leading-relaxed">
@@ -36,6 +42,7 @@ export function PilotDetails() {
             </li>
           ))}
         </ul>
+        </div>
       </div>
     </section>
   )

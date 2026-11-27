@@ -87,10 +87,10 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
           </Link>
           <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2">
             {/* Phones: logo, Sign in and Join the Waitlist; Discover Splitpost stays in the hero. */}
-            {/* Wide screens also get Find your path, the homepage's creators, members and advertisers cards. */}
+            {/* Wide screens also get How it works, the homepage's product walkthrough. */}
             <span className="hidden lg:contents">
-              <Link to="/#paths" className={`${HEADER_LINK} px-3.5`}>
-                Find your path
+              <Link to="/#how" className={`${HEADER_LINK} px-3.5`}>
+                How it works
               </Link>
             </span>
             <span className="hidden sm:contents">
@@ -143,14 +143,14 @@ export function PublicLayout({ account }: { account?: ReactNode }) {
             </p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-white/85">
-            <Link to="/#problem" className="hover:text-sp-secondary-on-dark">
+            <Link to="/#why" className="hover:text-sp-secondary-on-dark">
               Why Splitpost
             </Link>
-            <Link to="/#building" className="hover:text-sp-secondary-on-dark">
+            <Link to="/#how" className="hover:text-sp-secondary-on-dark">
               How It Works
             </Link>
-            <Link to="/#paths" className="hover:text-sp-secondary-on-dark">
-              Find Your Path
+            <Link to="/#pilot" className="hover:text-sp-secondary-on-dark">
+              The Pilot
             </Link>
             <Link to={JOIN_PATH} className="hover:text-sp-secondary-on-dark">
               {waitlistCta()}

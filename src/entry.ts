@@ -56,7 +56,7 @@ export const RETIRED_TOUR_REDIRECT = '/'
  * Where "Discover Splitpost" goes on the public site: the homepage's "What
  * we're building" introduction, which leads on to Join the Waitlist.
  */
-export const DISCOVER_PATH = '/#building'
+export const DISCOVER_PATH = '/#why'
 
 /** Prototype paths that existed before the tour moved under /tour, and then redirected into it. */
 const LEGACY_PROTOTYPE_PATHS = [

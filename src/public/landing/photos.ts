@@ -51,30 +51,31 @@ export const PHOTOS = {
     sourceUrl: 'https://www.pexels.com/photo/teacher-recording-herself-teaching-9040544/',
     photographer: 'Alena Darmel',
   }),
-  metalworker: pexels({
-    id: 'metalworker',
-    base: '/media/landing/photos/metalworker',
-    widths: [640, 1200],
-    ratio: '4/3',
-    alt: 'A metalworker grinding a piece of steel in a crowded workshop, sparks flying.',
-    sourceUrl: 'https://www.pexels.com/photo/man-sitting-and-working-at-workshop-23638660/',
-    photographer: 'Yunus Tuğ',
-  }),
-  filmmaker: pexels({
-    id: 'filmmaker',
-    base: '/media/landing/photos/filmmaker',
+  supporterPhone: pexels({
+    id: 'supporter-phone',
+    base: '/media/landing/photos/supporter-phone',
     widths: [600, 960],
     ratio: '4/5',
-    alt: 'A filmmaker framing a shot with a cinema camera on a tripod, outdoors.',
-    sourceUrl: 'https://www.pexels.com/photo/young-filmmaker-operating-a-professional-camera-36181988/',
-    photographer: 'Director Chenchi',
+    alt: 'A person smiling at their phone, sitting at home in a soft sweater.',
+    sourceUrl: 'https://www.pexels.com/photo/smiling-woman-using-mobile-phone-at-home-6697318/',
+    /** Added Nov 27 (SP-BRAND-002): the founder confirms the credit on the Pexels listing, as for the first four. */
+    photographer: 'To be verified on the Pexels listing',
+  }),
+  communityTable: pexels({
+    id: 'community-table',
+    base: '/media/landing/photos/community-table',
+    widths: [640, 1200],
+    ratio: '4/3',
+    alt: 'Friends laughing together around a table set with food and flowers, outdoors under string lights.',
+    sourceUrl: 'https://www.pexels.com/photo/a-group-of-friends-laughing-while-sitting-near-the-table-5738245/',
+    photographer: 'To be verified on the Pexels listing',
   }),
 } as const
 
 export type PhotoKey = keyof typeof PHOTOS
 
-/** Which photo goes with each creator group in WHO WE'RE BUILDING FOR, in order. */
-export const CREATOR_GROUP_PHOTOS: readonly PhotoKey[] = ['creatorEditing', 'teacherRecording', 'metalworker']
+/** The photo for each group in WHO WE'RE BUILDING FOR, in order: creators, supporters. */
+export const WHO_PHOTOS: readonly PhotoKey[] = ['teacherRecording', 'supporterPhone']
 
 /**
  * The profile photo on the hero's sample post. Priya Raman is a fictional
