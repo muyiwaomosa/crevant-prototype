@@ -1,13 +1,21 @@
-// Photographs on the homepage: licensed stock photos from Pexels, chosen as a
-// set so that, together, they show different kinds of creative work, working
-// environments, visible ages and genders. They show models, never Splitpost
-// members, and are never presented as users, testimonials or endorsements:
-// the page says so (HOMEPAGE_COPY.peopleNote and the footer). Alt text
-// describes what the person is doing, not who they are.
+// Photographs on the homepage: licensed stock photos from Pexels and
+// Unsplash, chosen as a set so that, together, they show different kinds of
+// creative work, settings, visible ages and genders. They show models, never
+// Splitpost members, and are never presented as users, testimonials or
+// endorsements: the page says so (HOMEPAGE_COPY.peopleNote and the footer).
+// Alt text describes what the person is doing, not who they are.
 //
-// Each file is cropped for its slot from the Pexels original, resized,
-// converted to WebP and stripped of metadata. The Pexels License allows free
-// commercial use without attribution; we keep the source and credit anyway.
+// Each file is cropped for its slot from the original, resized, converted to
+// WebP and stripped of metadata. Both licences allow free commercial use
+// without attribution; we keep the source and credit anyway. This file is the
+// asset register (SP-BRAND-002, decision 6): nothing unverified is published.
+
+export type PhotoSource = 'Pexels' | 'Unsplash'
+
+const LICENCES = {
+  Pexels: { licence: 'Pexels License', licenceUrl: 'https://www.pexels.com/license/' },
+  Unsplash: { licence: 'Unsplash License', licenceUrl: 'https://unsplash.com/license' },
+} as const
 
 export interface StockPhoto {
   id: string
@@ -17,29 +25,35 @@ export interface StockPhoto {
   /** Aspect ratio of every size, width / height. */
   ratio: '4/3' | '4/5'
   alt: string
-  source: 'Pexels'
+  source: PhotoSource
   sourceUrl: string
-  /** The photographer as credited on the Pexels page (verified by the founder on each listing). */
+  /** The photographer as credited on the listing. */
   photographer: string
+  /** The photographer's profile on the source site, where the listing links one. */
+  photographerUrl?: string
   /**
-   * Whether the founder has confirmed the listing, credit and licence. An
-   * unverified photo must be verified or replaced before the public site is
-   * published (SP-BRAND-002, decision 6).
+   * Whether the listing, credit and licence have been confirmed on the source
+   * page. An unverified photo is never published (SP-BRAND-002, decision 6).
    */
   verified: boolean
-  licence: 'Pexels License'
-  licenceUrl: 'https://www.pexels.com/license/'
+  /** How and when it was verified. */
+  verification: string
+  licence: (typeof LICENCES)[PhotoSource]['licence']
+  licenceUrl: (typeof LICENCES)[PhotoSource]['licenceUrl']
 }
 
-const pexels = (p: Omit<StockPhoto, 'source' | 'licence' | 'licenceUrl'>): StockPhoto => ({
+const stock = (source: PhotoSource, p: Omit<StockPhoto, 'source' | 'licence' | 'licenceUrl'>): StockPhoto => ({
   ...p,
-  source: 'Pexels',
-  licence: 'Pexels License',
-  licenceUrl: 'https://www.pexels.com/license/',
+  source,
+  ...LICENCES[source],
 })
 
+const FOUNDER_CHECK = 'Confirmed by the founder on the Pexels listing (Nov 24).'
+const UNSPLASH_CHECK =
+  'Listing read Nov 27: photographer as credited, "Free to use under the Unsplash License" (not Unsplash+), no sponsor or brand. Downloaded from the listing\'s images.unsplash.com file.'
+
 export const PHOTOS = {
-  creatorEditing: pexels({
+  creatorEditing: stock('Pexels', {
     id: 'creator-editing',
     base: '/media/landing/photos/creator-editing',
     widths: [640, 1200],
@@ -48,8 +62,9 @@ export const PHOTOS = {
     sourceUrl: 'https://www.pexels.com/photo/focused-female-freelancer-editing-photos-on-laptop-7014401/',
     photographer: 'George Milton',
     verified: true,
+    verification: FOUNDER_CHECK,
   }),
-  teacherRecording: pexels({
+  teacherRecording: stock('Pexels', {
     id: 'teacher-recording',
     base: '/media/landing/photos/teacher-recording',
     widths: [640, 1200],
@@ -58,32 +73,37 @@ export const PHOTOS = {
     sourceUrl: 'https://www.pexels.com/photo/teacher-recording-herself-teaching-9040544/',
     photographer: 'Alena Darmel',
     verified: true,
+    verification: FOUNDER_CHECK,
   }),
-  supporterPhone: pexels({
+  /** Replaced Nov 27: the earlier Pexels photo could not be verified. Files: supporter-phone-600.webp, supporter-phone-960.webp. */
+  supporterPhone: stock('Unsplash', {
     id: 'supporter-phone',
     base: '/media/landing/photos/supporter-phone',
     widths: [600, 960],
     ratio: '4/5',
-    alt: 'A person smiling at their phone, sitting at home in a soft sweater.',
-    sourceUrl: 'https://www.pexels.com/photo/smiling-woman-using-mobile-phone-at-home-6697318/',
-    /** Added Nov 27 (SP-BRAND-002). Files: supporter-phone-600.webp, supporter-phone-960.webp. */
-    photographer: 'To be verified on the Pexels listing',
-    verified: false,
+    alt: 'A person smiling at their phone, relaxing on a sofa at home.',
+    sourceUrl: 'https://unsplash.com/photos/a-woman-sitting-on-a-couch-looking-at-her-cell-phone-TRkyQgyb4c0',
+    photographer: 'Ninthgrid',
+    photographerUrl: 'https://unsplash.com/@ninthgrid_',
+    verified: true,
+    verification: UNSPLASH_CHECK,
   }),
-  communityTable: pexels({
+  /** Replaced Nov 27: the earlier Pexels photo could not be verified. Files: community-table-640.webp, community-table-1200.webp. */
+  communityTable: stock('Unsplash', {
     id: 'community-table',
     base: '/media/landing/photos/community-table',
     widths: [640, 1200],
     ratio: '4/3',
-    alt: 'Friends laughing together around a table set with food and flowers, outdoors under string lights.',
-    sourceUrl: 'https://www.pexels.com/photo/a-group-of-friends-laughing-while-sitting-near-the-table-5738245/',
-    /** Added Nov 27 (SP-BRAND-002). Files: community-table-640.webp, community-table-1200.webp. */
-    photographer: 'To be verified on the Pexels listing',
-    verified: false,
+    alt: 'Friends gathered around a long table outdoors in the evening under string lights, talking and laughing, an oud resting on the blankets.',
+    sourceUrl: 'https://unsplash.com/photos/outdoor-dinner-party-with-oud-UrzN-8K1PCE',
+    photographer: 'Considerate Agency',
+    photographerUrl: 'https://unsplash.com/@considerateagency',
+    verified: true,
+    verification: UNSPLASH_CHECK,
   }),
 } as const
 
-/** Photos that must be verified on their Pexels listing, or replaced, before the public site is published. */
+/** Photos not yet verified on their listing: must be empty before the public site is published. */
 export const PHOTOS_TO_VERIFY = Object.values(PHOTOS).filter((p) => !p.verified)
 
 export type PhotoKey = keyof typeof PHOTOS
@@ -101,10 +121,12 @@ export const SAMPLE_AVATAR = {
   id: 'priya-avatar',
   src: '/media/landing/photos/priya-avatar-160.webp',
   size: 160,
-  source: 'Pexels',
-  sourceUrl: 'https://www.pexels.com/photo/1239291/',
-  /** To be confirmed by the founder on the Pexels listing, as with the four photos above. */
-  photographer: 'Credit to be verified on the Pexels listing',
-  licence: 'Pexels License',
-  licenceUrl: 'https://www.pexels.com/license/',
+  /** Replaced Nov 27: the earlier Pexels avatar's credit could not be verified. */
+  source: 'Unsplash',
+  sourceUrl: 'https://unsplash.com/photos/a-young-woman-with-dark-wavy-hair-smiles-brightly-smiling-HVbaH3p9B8k',
+  photographer: 'IMANA',
+  photographerUrl: 'https://unsplash.com/@imanaindia',
+  verified: true,
+  verification: UNSPLASH_CHECK,
+  ...LICENCES.Unsplash,
 } as const

@@ -72,34 +72,45 @@ In. Discover Splitpost opens the story at WHY; How it works opens HOW.
    converted to cash) stays in the list.
 3. **No numerical claims:** the WHY opening is the approved four lines.
 4. **Source of eligible revenue:** added to Earn, and the outdated "labelled
-   demonstrations" disclosure replaced. **One word added to each of two
-   sentences, for confirmation:** with the claims checker unchanged, both
-   sentences as written read as revenue sharing that exists today. Adding
-   "future" (the word decision 1 uses) satisfies the checker without any
+   demonstrations" disclosure replaced. **Approved Nov 27** with the word
+   "future" in both sentences; the claims checker is unchanged and needs no
    exception:
-   * "Splitpost is designed to share **future** eligible revenue from
+   * "Splitpost is designed to share future eligible revenue from
      advertising shown with content with the creators and qualifying
      supporters who help that content succeed."
-   * "Sponsored content is clearly labelled. Advertising and **future**
-     revenue sharing are being tested during the pilot, and all pilot
-     earnings are simulated."
+   * "Sponsored content is clearly labelled. Advertising and future revenue
+     sharing are being tested during the pilot, and all pilot earnings are
+     simulated."
    Consistency with the economic framework: only advertising shown with
    content is described as shared (general feed advertising is not), and
    supporters' share is from the platform-wide pool, which "qualifying
    supporters who help that content succeed" describes at this level.
 5. **Pilot audience:** "We're inviting creators and supporters to help us
    test a better way for social media to work."
-6. **Photography:** recorded in the asset register (`landing/photos.ts`:
-   source URL, licence, filenames, `verified`). The two new photos are
-   **unverified**: pexels.com cannot be reached from the build environment
-   and search does not return either listing, so their credits could not be
-   confirmed. They are flagged (`PHOTOS_TO_VERIFY`) for verification or
-   replacement before publication:
-   * supporter-phone (`supporter-phone-600.webp`, `-960.webp`):
-     https://www.pexels.com/photo/smiling-woman-using-mobile-phone-at-home-6697318/
-   * community-table (`community-table-640.webp`, `-1200.webp`):
-     https://www.pexels.com/photo/a-group-of-friends-laughing-while-sitting-near-the-table-5738245/
-   No watermarked reference imagery is used.
+6. **Photography:** the asset register (`landing/photos.ts`) records each
+   photo's source, listing, photographer, licence, files and how it was
+   verified. The two Pexels photos whose listings could not be verified were
+   **replaced** (founder authorization, Nov 27), and so was the hero's small
+   sample avatar, whose credit had also never been confirmed. Each
+   replacement's listing was read on Nov 27 and shows the photographer and
+   "Free to use under the Unsplash License" (not Unsplash+), with no sponsor
+   or brand. Nothing unverified is published (tested: `PHOTOS_TO_VERIFY` is
+   empty and every asset is `verified`).
+
+   | Slot | Files | Listing | Photographer | Licence |
+   | --- | --- | --- | --- | --- |
+   | WHY, creator | creator-editing-640/1200 | [Pexels 7014401](https://www.pexels.com/photo/focused-female-freelancer-editing-photos-on-laptop-7014401/) | George Milton | Pexels License (founder verified Nov 24) |
+   | WHO, creators | teacher-recording-640/1200 | [Pexels 9040544](https://www.pexels.com/photo/teacher-recording-herself-teaching-9040544/) | Alena Darmel | Pexels License (founder verified Nov 24) |
+   | WHO, supporters | supporter-phone-600/960 | [Unsplash TRkyQgyb4c0](https://unsplash.com/photos/a-woman-sitting-on-a-couch-looking-at-her-cell-phone-TRkyQgyb4c0) | [Ninthgrid](https://unsplash.com/@ninthgrid_) | [Unsplash License](https://unsplash.com/license) |
+   | WHAT, community | community-table-640/1200 | [Unsplash UrzN-8K1PCE](https://unsplash.com/photos/outdoor-dinner-party-with-oud-UrzN-8K1PCE) | [Considerate Agency](https://unsplash.com/@considerateagency) | [Unsplash License](https://unsplash.com/license) |
+   | HOOK, sample avatar | priya-avatar-160 | [Unsplash HVbaH3p9B8k](https://unsplash.com/photos/a-young-woman-with-dark-wavy-hair-smiles-brightly-smiling-HVbaH3p9B8k) | [IMANA](https://unsplash.com/@imanaindia) | [Unsplash License](https://unsplash.com/license) |
+
+   The Unsplash License allows free commercial use without attribution; it
+   does not allow selling unaltered copies or compiling a competing image
+   service, neither of which applies. Like Pexels, it gives no model release,
+   so the page keeps its note that photos show models, not members, and never
+   presents anyone as a user or endorsement. No watermarked reference imagery
+   is used.
 7. **Callouts:** exactly as approved. The labels say the screens are the
    actual app, with illustrative sample people and data and simulated amounts.
 
@@ -109,4 +120,6 @@ The claims checker is unchanged and nothing on the page needs an exception:
 ## 5. Publication
 
 Merging to `main` builds the public site, so this goes out only with your
-approval (with the SP-UX-002 package in the same pull request).
+approval (with the SP-UX-002 package in the same pull request). Once
+published, the landing page's messaging and design are frozen until we have
+meaningful feedback from prospective members.
