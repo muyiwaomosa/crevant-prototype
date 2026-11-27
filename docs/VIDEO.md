@@ -72,9 +72,21 @@ day; 1 GB per member; project cap 50 GB, configurable.
   upload library), `src/app/video.tsx` (player, composer progress, the device
   test page, the Control Center panel, reported videos).
 * **Security headers** (`vercel.json`): Previews (staging) may stream media
-  from the staging project (`media-src`). `www.splitpost.ca` and
-  `app.splitpost.ca` are unchanged: member Production needs the same
-  `media-src` addition when video is approved there.
+  from the staging project (`media-src`), and `app.splitpost.ca` from the
+  member Production project (added Nov 27 after the release decision; until
+  then the browser blocked every member video and the player stayed blank at
+  0:00, defect PROD-VID-1). `www.splitpost.ca` has no video and is unchanged.
+* **Preview and failure** (`src/app/video.tsx`): a video with a poster loads
+  nothing before play. One without a poster reads only its start (metadata)
+  so the browser shows the first frame instead of a blank player. A failure
+  that survives one fresh link shows "This video couldn't play" with Try
+  again. The poster capture (`posterFrom`) starts a muted, inline, offscreen
+  play when the browser loads no frame on its own (iPhone Safari), instead of
+  skipping the poster.
+* **Delivery estimate** (Control Center): counted per video link issued,
+  which happens when a video post is shown, not when it plays. It is an upper
+  estimate of bandwidth and never a play count; exact bandwidth is on the
+  Supabase Usage page.
 
 ## Evidence (local)
 

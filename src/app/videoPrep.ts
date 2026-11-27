@@ -171,9 +171,17 @@ export async function posterFrom(file: Blob): Promise<Blob | null> {
   try {
     await new Promise<void>((resolve, reject) => {
       const t = setTimeout(() => reject(new Error('timeout')), 15_000)
-      video.onloadeddata = () => (clearTimeout(t), resolve())
-      video.onerror = () => (clearTimeout(t), reject(new Error('error')))
+      video.onloadeddata = () => (clearTimeout(t), clearTimeout(kick), resolve())
+      video.onerror = () => (clearTimeout(t), clearTimeout(kick), reject(new Error('error')))
+      // Some browsers (iPhone Safari) load no frame for a video that never plays, so the poster used
+      // to be skipped there. A muted, inline, offscreen play (always allowed) makes it load one.
+      const kick = setTimeout(() => {
+        const p = video.play()
+        if (p) p.then(() => video.pause(), () => undefined)
+      }, 1_500)
+      video.load()
     })
+    video.pause()
     await new Promise<void>((resolve) => {
       const t = setTimeout(resolve, 5_000)
       video.onseeked = () => (clearTimeout(t), resolve())
