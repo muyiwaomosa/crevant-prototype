@@ -39,26 +39,13 @@ export const HOMEPAGE_COPY = {
   },
 
   /**
-   * The hero's sample post (the split-post illustration): a fictional
-   * creator, labelled SAMPLE; the numbers are illustrative, not Splitpost data.
+   * The hero's sample post (the split-post illustration, simplified for
+   * SP-UAT-001): a fictional creator, labelled SAMPLE, shown as a photo post.
+   * No sample text, statistics or comments.
    */
-  post: {
-    author: 'Priya Raman',
-    role: 'Content creator',
-    time: '2h',
-    paragraphs: [
-      'I have 10,000 followers. So why do only a few hundred people see my posts?',
-      'I spend hours creating content, but I never know if the people who followed me will even see it. One post reaches thousands. The next barely reaches anyone.',
-    ],
-    reach: { followers: '10,000', followersLabel: 'followers', seen: 'A few hundred', seenLabel: 'saw this post' },
-    likes: '1.2K',
-    comments: '86',
-    reposts: '214',
-  },
   split: {
     creatorTag: 'Created by Priya',
     communityTag: 'Grown by her community',
-    communityComment: { name: 'Ana', text: "Oh wow, I was wondering why I hadn't been seeing your content. I thought you stopped posting!" },
   },
 
   why: {

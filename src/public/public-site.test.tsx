@@ -129,11 +129,19 @@ describe('HOOK', () => {
     expect(norm(scene)).toContain('Sample')
     expect(norm(scene)).not.toMatch(/[$£€%]|earn|cash|payout/i)
   })
-  it('puts the picture straight after the headline, before the copy and actions', () => {
+  it('tells the split in pictures: a photo post above, the community below, no sample text, statistics or comment (SP-UAT-001)', () => {
+    const scene = hero().querySelector('[data-testid="hero-scene"]')!
+    expect(scene.querySelector('[data-testid="split-creator-piece"] img[data-photo="creator-editing"]')).not.toBeNull()
+    // Only the two labels and the sample tag carry words; no numbers anywhere in the picture.
+    const visible = norm(scene.querySelector('[aria-hidden="true"]'))
+    expect(visible).not.toMatch(/\d/)
+    expect(visible.replace(/Created by Priya|Grown by her community|Sample/g, '').replace(/[A-Z]{2}/g, '').trim()).toBe('')
+  })
+  it('puts the value proposition straight after the headline, then the actions, then the picture (SP-UAT-001)', () => {
     const order = [
       ...hero().querySelectorAll('h1, [data-testid="hero-scene"], [data-testid="hero-body"], [data-testid="hero-actions"], [data-testid="hero-small-print"]'),
     ].map((el) => el.getAttribute('data-testid') ?? el.tagName)
-    expect(order).toEqual(['H1', 'hero-scene', 'hero-body', 'hero-actions', 'hero-small-print'])
+    expect(order).toEqual(['H1', 'hero-body', 'hero-actions', 'hero-small-print', 'hero-scene'])
   })
 })
 
@@ -260,7 +268,8 @@ describe('THE INVITATION', () => {
 
 describe('photos', () => {
   it('shows the four licensed photos, lazy-loaded at responsive sizes, with no placeholders left', () => {
-    const imgs = [...landing().querySelectorAll('img[data-photo]')]
+    // The hero's picture reuses the creator photo as Priya's sample post (decorative, loaded eagerly): checked in HOOK.
+    const imgs = [...landing().querySelectorAll('img[data-photo]')].filter((i) => !i.closest('[data-testid="hero-scene"]'))
     expect(imgs.map((i) => i.getAttribute('data-photo')).filter((id) => id !== 'priya-avatar')).toEqual([
       'creator-editing',
       'teacher-recording',

@@ -3,29 +3,28 @@ import type { ReactNode } from 'react'
 import { Heart, MessageCircle, Repeat2, Send } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
 import { SAMPLE_AVATAR } from '../photos'
-import { Avatar, ReachArt } from './SamplePost'
+import { Photo } from './Photo'
+import { Avatar } from './SamplePost'
 
 /**
- * The hero picture, "Split the post".
+ * The hero picture, "Split the post" (simplified, SP-UAT-001 finding 1).
  *
- * One sample post in two separate pieces with a visible gap between them.
- * The upper piece is what the creator made: a fictional creator, Priya,
- * frustrated that her followers don't reliably see her posts (illustrative
- * numbers, labelled SAMPLE). The lower piece is what her community added.
- * The separation reads without colour: a real gap and a label on each piece.
+ * One sample post in two separate pieces with a visible gap between them,
+ * told in pictures rather than words. The upper piece is what the creator
+ * made: a photo post (labelled SAMPLE) by Priya, a fictional creator. The
+ * lower piece is what her community added: people and the ways they
+ * contributed, with no counts, statistics or comments. An apricot line sits
+ * in the gap. No money, no amounts, no percentages: only the post and the
+ * people.
  *
- * On phones both pieces stay upright and inside the screen, with the accent
- * line kept between the pieces' edges. From the sm breakpoint up, the lower
- * piece is offset and the picture tilts slightly, with a small mark past
- * each end of the line. The accent always sits BEHIND both pieces, so it only
- * shows in the gap and never crosses the content. No money, no amounts, no
- * percentages: only the post and the people.
+ * On phones both pieces stay upright and inside the screen; from the sm
+ * breakpoint up the lower piece is offset and the picture tilts slightly.
+ * The accent always sits BEHIND both pieces, so it only shows in the gap.
  */
 
-const post = HOMEPAGE_COPY.post
 const split = HOMEPAGE_COPY.split
 /** How far the cut climbs across the card, in px. Both pieces use it, so the edges stay parallel. */
-const CUT = 40
+const CUT = 32
 /** The vertical gap between the pieces, in px. */
 const GAP = 18
 
@@ -33,30 +32,14 @@ export function SplitThePost({ className }: { className?: string }) {
   return (
     <figure data-testid="hero-scene" className={clsx('relative m-0 mx-auto w-full max-w-[25rem] px-2 sm:px-0 lg:max-w-[28rem]', className)}>
       <div aria-hidden="true" className="relative sm:-rotate-[1.5deg]">
-        {/* Upper piece: the creator's content. */}
+        {/* Upper piece: the creator's content, a photo post. */}
         <div data-testid="split-creator-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(0_0_0/0.4))]">
-          <div
-            className="rounded-[22px] bg-sp-bg px-4 pt-7 text-sp-ink sm:px-5 sm:pt-8"
-            style={{ clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${CUT}px), 0 100%)`, paddingBottom: CUT + 8 }}
-          >
-            <div className="flex items-center gap-2.5">
-              <AvatarPhoto className="h-9 w-9" />
-              <div className="min-w-0 leading-tight">
-                <p className="text-sm font-bold">{post.author}</p>
-                <p className="text-xs text-sp-muted">
-                  {post.role} · {post.time}
-                </p>
-              </div>
-              <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-sp-muted">Sample</span>
-            </div>
-            <div data-testid="hero-post-text" className="mt-2.5 space-y-1.5 text-[0.875rem] leading-snug sm:mt-3 sm:space-y-2 sm:text-[0.95rem]">
-              <p className="font-semibold">{post.paragraphs[0]}</p>
-              <p>{post.paragraphs[1]}</p>
-            </div>
-            <ReachArt {...post.reach} className="mt-2.5 sm:mt-3" />
+          <div className="relative overflow-hidden rounded-[22px] bg-sp-bg" style={{ clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${CUT}px), 0 100%)` }}>
+            <Photo id="creatorEditing" sizes="(min-width: 1024px) 448px, 400px" eager decorative className="aspect-[4/3.2]" />
+            <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.1em] text-sp-ink">Sample</span>
           </div>
           <Tag className="absolute -left-1 -top-4 bg-sp-primary text-sp-bg ring-1 ring-sp-bg/30 sm:-left-4">
-            <AvatarPhoto className="h-5 w-5" /> {split.creatorTag}
+            <AvatarPhoto className="h-6 w-6" /> {split.creatorTag}
           </Tag>
         </div>
 
@@ -80,31 +63,20 @@ export function SplitThePost({ className }: { className?: string }) {
 
           <div data-testid="split-community-piece" className="relative z-10 [filter:drop-shadow(0_24px_30px_rgb(0_0_0/0.4))]">
             <div
-              className="rounded-[22px] bg-sp-secondary px-4 pb-4 text-sp-ink sm:px-5 sm:pb-5"
-              style={{ clipPath: `polygon(0 ${CUT}px, 100% 0, 100% 100%, 0 100%)`, paddingTop: CUT + 10 }}
+              className="flex items-center justify-between gap-3 rounded-[22px] bg-sp-secondary px-4 pb-7 text-sp-ink sm:px-5"
+              style={{ clipPath: `polygon(0 ${CUT}px, 100% 0, 100% 100%, 0 100%)`, paddingTop: CUT + 14 }}
             >
-              <div className="flex items-center gap-4 text-sm font-extrabold">
-                <span className="inline-flex items-center gap-1.5">
-                  <Heart className="h-4 w-4 fill-sp-ink" /> {post.likes}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <MessageCircle className="h-4 w-4" /> {post.comments}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Repeat2 className="h-4 w-4" /> {post.reposts}
-                </span>
-                <Send className="ml-auto h-4 w-4" />
-              </div>
-              <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-white/25 p-2">
-                <span className="flex">
-                  <Avatar initials="AN" tone="ana" className="h-8 w-8 text-[10px] ring-2 ring-sp-secondary" />
-                  <Avatar initials="LE" tone="leo" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-secondary" />
-                  <Avatar initials="JK" tone="friend" className="-ml-2 h-8 w-8 text-[10px] ring-2 ring-sp-secondary" />
-                </span>
-                <p data-testid="hero-community-comment" className="min-w-0 text-[13px] font-medium leading-snug">
-                  <span className="font-extrabold">{split.communityComment.name}</span> {split.communityComment.text}
-                </p>
-              </div>
+              <span className="flex">
+                <Avatar initials="AN" tone="ana" className="h-9 w-9 text-[11px] ring-2 ring-sp-secondary" />
+                <Avatar initials="LE" tone="leo" className="-ml-1.5 h-9 w-9 text-[11px] ring-2 ring-sp-secondary" />
+                <Avatar initials="JK" tone="friend" className="-ml-1.5 h-9 w-9 text-[11px] ring-2 ring-sp-secondary" />
+              </span>
+              <span className="flex items-center gap-4">
+                <Heart className="h-5 w-5 fill-sp-ink" />
+                <MessageCircle className="h-5 w-5" />
+                <Repeat2 className="h-5 w-5" />
+                <Send className="h-5 w-5" />
+              </span>
             </div>
             <Tag className="absolute -bottom-3.5 right-2 bg-sp-bg text-sp-primary sm:-right-3">
               <Repeat2 className="h-3.5 w-3.5 text-sp-link" /> {split.communityTag}
@@ -113,9 +85,9 @@ export function SplitThePost({ className }: { className?: string }) {
         </div>
       </div>
       <figcaption className="sr-only">
-        A sample post split into two separate pieces with a gap between them. The upper piece is what Priya created: a post asking why only a few hundred
-        of her 10,000 followers see her posts. The lower piece is what her community grew: their likes, comments and reposts. An apricot line marks the
-        space between them. Priya is a fictional sample creator; her profile photo is a stock image of a model, and the numbers are illustrative.
+        A sample post split into two separate pieces with a gap between them. The upper piece is what Priya created: a photo post. The lower piece is what
+        her community grew: the people who liked, commented on, reposted and shared it. An apricot line marks the space between them. Priya is a fictional
+        sample creator; the photos are stock images of models.
       </figcaption>
     </figure>
   )

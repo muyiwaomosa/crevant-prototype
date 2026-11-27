@@ -5,7 +5,7 @@ import { PHOTOS, type PhotoKey } from '../photos'
  * A licensed stock photograph from photos.ts, served at the size the layout
  * needs (srcset) and cropped to its slot, so the layout never jumps.
  */
-export function Photo({ id, sizes, className }: { id: PhotoKey; sizes: string; className?: string }) {
+export function Photo({ id, sizes, className, eager, decorative }: { id: PhotoKey; sizes: string; className?: string; eager?: boolean; decorative?: boolean }) {
   const p = PHOTOS[id]
   const [w, h] = p.ratio.split('/').map(Number)
   const largest = p.widths[p.widths.length - 1]
@@ -17,8 +17,8 @@ export function Photo({ id, sizes, className }: { id: PhotoKey; sizes: string; c
       sizes={sizes}
       width={largest}
       height={Math.round((largest * h) / w)}
-      alt={p.alt}
-      loading="lazy"
+      alt={decorative ? '' : p.alt}
+      loading={eager ? 'eager' : 'lazy'}
       decoding="async"
       className={clsx('block h-auto w-full object-cover', className)}
     />
