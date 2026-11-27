@@ -378,7 +378,7 @@ async function shows(locator, timeout = 5000) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await page.goto(`${APP}/`)
-      check('landing page loads', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ').includes('You Create The Post. You Deserve a Split.'))
+      check('landing page loads', (await page.getByRole('heading', { level: 1 }).innerText()).replace(/\s+/g, ' ').includes("Don't just post. Get your split."))
       await page.goto(`${APP}/tour/discover`)
       await page.waitForURL(`${APP}/`, { timeout: 5000 }).catch(() => {})
       check('the retired sample tour redirects to the landing page', page.url() === `${APP}/` && (await page.getByRole('complementary', { name: 'Sample tour' }).count()) === 0, page.url())
