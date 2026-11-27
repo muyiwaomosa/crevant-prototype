@@ -5,7 +5,8 @@
  * members only while the progression switch is on. Nothing here is paid.
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Check } from 'lucide-react'
+import { Check, ChevronRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Card, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import {
@@ -39,7 +40,58 @@ export const GOAL_TEXT: Record<string, { label: string; unit: string }> = {
   external_shares: { label: 'Share posts outside Splitpost', unit: 'shares' },
   qualified_referrals: { label: 'Bring people who join and follow a creator', unit: 'referrals' },
 }
-const goalText = (metric: string) => GOAL_TEXT[metric] ?? { label: metric, unit: '' }
+export const goalText = (metric: string) => GOAL_TEXT[metric] ?? { label: metric, unit: '' }
+
+/** One clear next action per open goal (UX-03): where the member does it. No new rule: it only points to the place. */
+export const NEXT_ACTION: Record<string, { label: string; to: string }> = {
+  original_posts: { label: 'Create a post', to: '/app/new' },
+  posting_weeks: { label: 'Post this week', to: '/app/new' },
+  genuine_followers: { label: 'Invite people who follow you elsewhere', to: '/app/split?face=activity' },
+  clique_connections: { label: 'Post something your supporters will value', to: '/app/new' },
+  returning_supporters: { label: 'Post for your supporters', to: '/app/new' },
+  clique_creators: { label: 'Choose your Clique', to: '/app/clique' },
+  meaningful_engagements: { label: 'Find a post to support', to: '/app' },
+  engaged_creators: { label: 'Discover creators', to: '/app/discover' },
+  supporting_weeks: { label: 'Support your Clique this week', to: '/app' },
+  external_shares: { label: 'Share a post you value', to: '/app' },
+  qualified_referrals: { label: 'Invite someone', to: '/app/split?face=activity' },
+}
+
+/** A small ring: goals done out of the total (decorative; the text says the same). */
+export function GoalRing({ done, total, tone = 'brand', size = 48 }: { done: number; total: number; tone?: 'brand' | 'green'; size?: number }) {
+  const r = 20
+  const c = 2 * Math.PI * r
+  const share = total > 0 ? done / total : 0
+  return (
+    <span className="relative inline-grid shrink-0 place-items-center" style={{ width: size, height: size }} aria-hidden="true">
+      <svg width={size} height={size} viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r={r} fill="none" stroke="#efe9de" strokeWidth="5" />
+        <circle
+          cx="24"
+          cy="24"
+          r={r}
+          fill="none"
+          stroke={tone === 'green' ? '#0f7a64' : '#2447a6'}
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray={`${(c * share).toFixed(1)} ${c.toFixed(1)}`}
+          transform="rotate(-90 24 24)"
+        />
+      </svg>
+      <span className="absolute font-display text-[12px] font-extrabold tabular-nums text-ink-900">
+        {done}/{total}
+      </span>
+    </span>
+  )
+}
+
+/** Goals met and the first open goal of a journey, when its goals are set. */
+export function journeyProgress(j: ProgressJourney) {
+  const set = j.steps.length > 0 && j.steps.every((s) => s.target !== null)
+  const done = j.steps.filter((s) => s.target !== null && s.value >= s.target).length
+  const next = j.steps.find((s) => s.target !== null && s.value < s.target)
+  return { set, done, total: j.steps.length, next }
+}
 
 const STATUS_TEXT: Record<QualificationStatus, string> = {
   in_progress: 'In progress',
@@ -97,8 +149,10 @@ export function PointsBar({ recognized, redeemable }: { recognized: number; rede
 function StepRow({ step }: { step: GoalStep }) {
   const t = goalText(step.metric)
   const met = step.target !== null && step.value >= step.target
+  const action = NEXT_ACTION[step.metric]
   return (
-    <li className="flex items-center gap-2.5 text-[14px]" data-testid="goal-step" data-met={met ? 'true' : 'false'}>
+    <li data-testid="goal-step" data-met={met ? 'true' : 'false'}>
+    <div className="flex items-center gap-2.5 text-[14px]">
       <span
         className={`inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${met ? 'bg-[#0f7a64] text-white' : 'bg-ink-200'}`}
         aria-hidden="true"
@@ -112,11 +166,24 @@ function StepRow({ step }: { step: GoalStep }) {
       <span className="text-[12px] tabular-nums text-ink-600">
         {step.target === null ? `${step.value} ${t.unit}` : `${Math.min(step.value, step.target)} / ${step.target}`}
       </span>
+    </div>
+    {!met && step.target !== null && (
+      <div className="ml-[32px] mt-1.5">
+        <div className="h-1.5 overflow-hidden rounded-full bg-[#efe9de]" aria-hidden="true">
+          <div className="h-full rounded-full bg-brand-600" style={{ width: `${Math.round((Math.min(step.value, step.target) / step.target) * 100)}%` }} />
+        </div>
+        {action && (
+          <Link to={action.to} className="mt-1 inline-flex items-center gap-0.5 text-[13px] font-semibold text-brand-700" data-testid="goal-action">
+            {action.label} <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </Link>
+        )}
+      </div>
+    )}
     </li>
   )
 }
 
-function EarningsRow({ e, testId, estimatedCents }: { e: EarningsByState; testId: string; estimatedCents?: number }) {
+export function EarningsRow({ e, testId, estimatedCents }: { e: EarningsByState; testId: string; estimatedCents?: number }) {
   const cells: Array<[string, number]> = [
     ['Accumulated', e.accumulatedCents],
     ['Locked', e.lockedCents],
@@ -179,27 +246,32 @@ function GoalCard({
   earnings,
   audience,
   notices,
-  estimatedCents,
 }: {
   title: string
   journey: ProgressJourney
   earnings: EarningsByState
   audience: GoalAudience
   notices: ProgressNotice[]
-  estimatedCents?: number
 }) {
-  const set = journey.steps.length > 0 && journey.steps.every((s) => s.target !== null)
-  const done = journey.steps.filter((s) => s.target !== null && s.value >= s.target).length
-  const next = journey.steps.find((s) => s.target !== null && s.value < s.target)
+  const { set, done, next } = journeyProgress(journey)
   const showSteps = journey.status === 'in_progress'
+  const unlocks = earnings.lockedCents + earnings.pausedCents
   return (
     <div data-testid={`goals-${audience}`}>
       <Card className="p-5">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="font-bold text-ink-900">{title}</h2>
-          <span className="text-[13px] font-semibold text-ink-700" data-testid={`goals-${audience}-badge`}>
-            {journey.status === 'in_progress' && set ? `${done} of ${journey.steps.length}` : STATUS_TEXT[journey.status]}
-          </span>
+        <div className="flex items-center gap-3">
+          {set && journey.status === 'in_progress' && <GoalRing done={done} total={journey.steps.length} tone={audience === 'creator' ? 'brand' : 'green'} />}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="font-bold text-ink-900">{title}</h2>
+              <span className="text-[13px] font-semibold text-ink-700" data-testid={`goals-${audience}-badge`}>
+                {journey.status === 'in_progress' && set ? `${done} of ${journey.steps.length}` : STATUS_TEXT[journey.status]}
+              </span>
+            </div>
+            {journey.status === 'in_progress' && set && unlocks > 0 && (
+              <p className="text-[12.5px] text-ink-600">Reach every goal to unlock {dollars(unlocks)} (simulated).</p>
+            )}
+          </div>
         </div>
         <p className="mt-1 text-[13px] leading-relaxed text-ink-600" data-testid={`goals-${audience}-status`}>
           {statusLine(journey, set, next)}
@@ -224,13 +296,6 @@ function GoalCard({
             Goals in force since {new Date(journey.goalsSince).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
           </p>
         )}
-        <EarningsRow e={earnings} testId={`earnings-${audience}`} estimatedCents={estimatedCents} />
-        {journey.status !== 'qualified' && earnings.lockedCents > 0 && (
-          <p className="mt-2 text-[12px] text-ink-600">
-            Your legitimate allocated rewards remain attributed to you until you qualify, subject to applicable integrity and adjustment rules. All pilot
-            amounts are simulated.
-          </p>
-        )}
         {(journey.status === 'qualified' || journey.status === 'eligibility_paused') && (
           <div className="mt-3" data-testid={`growth-${audience}`}>
             <h3 className="text-[13px] font-bold text-ink-900">Keep growing (optional)</h3>
@@ -248,29 +313,32 @@ function GoalCard({
 }
 
 /** The goal cards of My Split (shown only while progression is on). */
-export function ProgressCards({ progress, estimatedCents }: { progress: Extract<MyProgress, { enabled: true }>; estimatedCents?: number }) {
-  const creatorShown =
-    progress.creator.status !== 'in_progress' ||
-    progress.earnings.creator.accumulatedCents !== 0 ||
-    progress.creator.steps.some((s) => s.metric === 'original_posts' && s.value > 0)
-  const notices = (a: GoalAudience) =>
-    progress.notices.filter((n) =>
-      n.kind === 'revoked' ? n.audience === a : a === 'creator' ? n.scope !== 'consumer_allocation' : n.scope !== 'creator_entry',
-    )
+export function ProgressCards({ progress }: { progress: Extract<MyProgress, { enabled: true }> }) {
+  const creatorShown = creatorJourneyShown(progress)
+  const notices = (a: GoalAudience) => journeyNotices(progress, a)
   return (
     <>
       {creatorShown && (
         <GoalCard title="Creator goals" audience="creator" journey={progress.creator} earnings={progress.earnings.creator} notices={notices('creator')} />
       )}
-      <GoalCard
-        title="Supporter goals"
-        audience="consumer"
-        journey={progress.consumer}
-        earnings={progress.earnings.consumer}
-        notices={notices('consumer')}
-        estimatedCents={estimatedCents}
-      />
+      <GoalCard title="Supporter goals" audience="consumer" journey={progress.consumer} earnings={progress.earnings.consumer} notices={notices('consumer')} />
     </>
+  )
+}
+
+/** The creator journey shows once the member has started it (a post, an amount or a status). */
+export function creatorJourneyShown(progress: Extract<MyProgress, { enabled: true }>) {
+  return (
+    progress.creator.status !== 'in_progress' ||
+    progress.earnings.creator.accumulatedCents !== 0 ||
+    progress.creator.steps.some((s) => s.metric === 'original_posts' && s.value > 0)
+  )
+}
+
+/** The notices for one journey: a revocation names its journey; a hold names what it holds. */
+export function journeyNotices(progress: Extract<MyProgress, { enabled: true }>, a: GoalAudience) {
+  return progress.notices.filter((n) =>
+    n.kind === 'revoked' ? n.audience === a : a === 'creator' ? n.scope !== 'consumer_allocation' : n.scope !== 'creator_entry',
   )
 }
 

@@ -159,6 +159,13 @@ async function signIn(page, email) {
   await home.waitFor()
 }
 
+/** The My Split face with its breakdown opened ("What do these mean?"). */
+async function splitBreakdown(page, APP) {
+  await page.goto(`${APP}/app/split`)
+  await page.getByTestId('split-explain').locator('summary').click()
+  return (await page.getByTestId('earnings-creator').innerText()).replace(/\s+/g, ' ')
+}
+
 ;(async () => {
   const browser = await chromium.launch({
     args: ['--disable-features=LocalNetworkAccessChecks,BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights'],
@@ -229,12 +236,15 @@ async function signIn(page, email) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await signIn(page, email('c'))
-      await page.goto(`${APP}/app/split`)
+      const e = await splitBreakdown(page, APP)
+      const hero = (await page.getByTestId('split-hero').innerText()).replace(/\s+/g, ' ')
+      check('My Split opens on her split: $40.00 as a creator, locked, Simulated', /Simulated/.test(hero) && /\$40\.00/.test(hero) && /Locked \$40\.00/.test(hero), hero)
+      check('Next for you names her nearest goal and one action', /Be in members’ Cliques: 4 of 5/.test(await page.getByTestId('next-for-you').innerText()))
+      await page.goto(`${APP}/app/split?face=goals`)
       const card = page.getByTestId('goals-creator')
       await card.waitFor()
       const t = (await card.innerText()).replace(/\s+/g, ' ')
       check('Cleo sees 4 of 5 creator goals and the next step', /4 of 5/.test(t) && /Next: be in members’ cliques\./.test(t), t)
-      const e = (await page.getByTestId('earnings-creator').innerText()).replace(/\s+/g, ' ')
       check('her simulated share is accumulated and locked, marked Simulated', /Simulated/i.test(e) && /Accumulated \$40\.00 Locked \$40\.00 Unlocked \$0\.00/.test(e), e)
       check('no allocation percentage is shown', !/\d+\s*%/.test(await page.getByTestId('split-progression').innerText()))
       // Optional, for a person to look at (SHOTS=<directory>); never in CI.
@@ -247,7 +257,7 @@ async function signIn(page, email) {
       sql(`insert into social.clique_members (fan_id, creator_id) values ('${gus}', '${c}')`)
       await page.reload()
       await page.getByTestId('goals-creator-badge').getByText('Under review').waitFor()
-      const e2 = (await page.getByTestId('earnings-creator').innerText()).replace(/\s+/g, ' ')
+      const e2 = await splitBreakdown(page, APP)
       check('meeting every goal puts her Under review, her share still locked', /Locked \$40\.00 Unlocked \$0\.00/.test(e2), e2)
       check('the goals-met record has its date and goal version', sql(`select count(*) from sim.qualifications where member_id = '${c}' and version_id = (select max(id) from sim.goal_versions where audience = 'creator')`) === '1')
       await ctx.close()
@@ -294,11 +304,11 @@ async function signIn(page, email) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await signIn(page, email('c'))
-      await page.goto(`${APP}/app/split`)
+      await page.goto(`${APP}/app/split?face=goals`)
       await page.getByTestId('goals-creator-badge').getByText('Qualified').waitFor()
-      const e3 = (await page.getByTestId('earnings-creator').innerText()).replace(/\s+/g, ' ')
-      check('Cleo sees Qualified and her share Settled (simulated)', /Locked \$0\.00 Unlocked \$0\.00 Settled \$40\.00/.test(e3), e3)
       check('optional growth guidance is shown once qualified', /Keep growing \(optional\)/.test(await page.getByTestId('growth-creator').innerText()))
+      const e3 = await splitBreakdown(page, APP)
+      check('Cleo sees Qualified and her share Settled (simulated)', /Locked \$0\.00 Unlocked \$0\.00 Settled \$40\.00/.test(e3), e3)
       await screenChecks(page, 'My Split when qualified')
       await ctx.close()
     }

@@ -6,6 +6,7 @@ import { Message } from '../public/auth/AuthUi'
 import { SUPPORT_CHOICES, type Audience, type FollowedCreator, type Relationship, type SupportChoice } from './api'
 import { useAppApi } from './AppApiContext'
 import { ErrorNote, MemberAvatar, MemberLink, When } from './components'
+import { FirstUseTip } from './split'
 
 /**
  * Relationships and Home (IP-2, SP-DESIGN-002). Three stages: Following,
@@ -58,8 +59,14 @@ export function CliquePage() {
     <>
       <PageHeader
         title="Your Clique"
-        subtitle="The creators you choose to keep closest, from the people you follow. Choose as many as you like. It never changes the order of your feed."
+        subtitle="The creators you choose to keep closest, from the people you follow. Choose as many as you like. Their unseen posts come first on Home."
       />
+      <div className="mb-4">
+        <FirstUseTip id="clique">
+          Your Clique is the creators you want closest. Their new posts come first on Home, and supporting them is recognized in My Split. Add or remove people
+          at any time.
+        </FirstUseTip>
+      </div>
       <p aria-live="polite" data-testid="clique-status" className="sr-only">
         {status}
       </p>

@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Copy, Share2 } from 'lucide-react'
+import { Check, ChevronDown, Copy, Lock, Share2 } from 'lucide-react'
 import { Card, PageHeader, buttonClass } from '../components/ui'
 import { FaceView } from '../components/FaceView'
 import { MySplitIcon } from '../components/MySplitIcon'
 import { Message } from '../public/auth/AuthUi'
-import { AppApiError, messageFor, type MyPoints, type PointsEntry, type ReferralReview, type RewardsOverview } from './api'
+import { AppApiError, messageFor, type EarningsByState, type MyProgress, type MyPoints, type PointsEntry, type ReferralReview, type RewardsOverview } from './api'
 import { Link } from 'react-router-dom'
 import { useFeedbackAccess } from './feedback'
-import { useAppApi } from './AppApiContext'
+import { useAppApi, useMyProfile } from './AppApiContext'
 import { ContributionInsight } from './insights'
 import { MySplitIntro } from './onboarding'
-import { PointsBar, ProgressCards, useMyProgress } from './progression'
+import { EarningsRow, GoalRing, NEXT_ACTION, ProgressCards, creatorJourneyShown, goalText, journeyProgress, useMyProgress } from './progression'
 
 /**
  * My Split (SP-DESIGN-002). IP-1 delivers the destination, its three faces and
@@ -21,13 +21,13 @@ import { PointsBar, ProgressCards, useMyProgress } from './progression'
 export function MySplitPage() {
   return (
     <>
-      <PageHeader title="My Split" subtitle="How you help the creators you value grow. Rewards are simulated during the pilot." />
+      <PageHeader title="My Split" subtitle="What you've built, what's next, and how you got here. Every amount is simulated during the pilot." />
       <FaceView
         label="My Split views"
         faces={[
-          { key: 'overview', label: 'Overview', content: <Overview /> },
-          { key: 'history', label: 'History', content: <History /> },
-          { key: 'opportunities', label: 'Opportunities', content: <Opportunities /> },
+          { key: 'split', label: 'My Split', content: <SplitFace /> },
+          { key: 'goals', label: 'My Goals', content: <GoalsFace /> },
+          { key: 'activity', label: 'My Activity', content: <ActivityFace /> },
         ]}
       />
     </>
@@ -43,10 +43,9 @@ function SimulatedTag() {
   return <span className="ml-1.5 rounded-full bg-[#e7f4f1] px-2 py-0.5 text-[11px] font-bold text-[#1f5e52]">Simulated</span>
 }
 
-function Overview() {
+function useMyPoints() {
   const api = useAppApi()
   const [points, setPoints] = useState<MyPoints | null | undefined>(undefined)
-  const { founder } = useFeedbackAccess()
   useEffect(() => {
     let live = true
     api.myPoints().then(
@@ -57,29 +56,233 @@ function Overview() {
       live = false
     }
   }, [api])
-  const progress = useMyProgress()
-  // Progression on (20261217000000): the simplified one-column My Split (G5):
-  // points as one bar, the goals, the simulated earnings; history and
-  // opportunities stay one tap away.
-  if (progress?.enabled) {
-    return (
-      <div className="space-y-4" data-testid="split-progression">
-        {points && <PointsBar recognized={points.recognized} redeemable={points.redeemableApproved} />}
-        <ProgressCards progress={progress} estimatedCents={points?.simulatedValueCents} />
-        <p className="rounded-xl bg-[#e7f4f1] px-3 py-2 text-[13px] text-[#1f5e52]" data-testid="split-disclosure">
-          During the pilot all rewards and values are simulated. Connection Points have no cash value and nothing is paid out.
-        </p>
-        {founder && (
-          <Link to="/app/split/review" className={buttonClass('secondary', 'sm')}>
-            Founder: review referrals and rewards
-          </Link>
-        )}
-        <Card className="p-5">
-          <MySplitIntro />
-        </Card>
+  return points
+}
+
+function FounderReviewLink() {
+  const { founder } = useFeedbackAccess()
+  if (!founder) return null
+  return (
+    <Link to="/app/split/review" className={buttonClass('secondary', 'sm')}>
+      Founder: review referrals and rewards
+    </Link>
+  )
+}
+
+function Disclosure() {
+  return (
+    <p className="rounded-xl bg-[#e7f4f1] px-3 py-2 text-[13px] text-[#1f5e52]" data-testid="split-disclosure">
+      During the pilot all rewards and values are simulated. Connection Points have no cash value and nothing is paid out.
+    </p>
+  )
+}
+
+/** One dismissible first-use tip (UX-05). "Got it" hides it on this device. */
+export function FirstUseTip({ id, children }: { id: string; children: React.ReactNode }) {
+  const key = `splitpost.tip.${id}`
+  const [open, setOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem(key) !== 'seen'
+    } catch {
+      return true
+    }
+  })
+  if (!open) return null
+  return (
+    <div className="rounded-2xl border-2 border-brand-100 bg-white p-4" data-testid={`tip-${id}`}>
+      <p className="text-[11px] font-extrabold uppercase tracking-wider text-brand-700">New here</p>
+      <p className="mt-1 text-[14px] leading-relaxed text-ink-800">{children}</p>
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            try {
+              window.localStorage.setItem(key, 'seen')
+            } catch {
+              // A tip that comes back next time is fine.
+            }
+            setOpen(false)
+          }}
+          className={buttonClass('secondary', 'sm')}
+        >
+          Got it
+        </button>
       </div>
-    )
-  }
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Face 1: My Split, what I have (UX-04).
+
+function SplitFace() {
+  const points = useMyPoints()
+  const progress = useMyProgress()
+  if (progress === undefined) return <p className="text-sm text-ink-600">Loading your split…</p>
+  if (!progress?.enabled) return <PointsOverview points={points} />
+  const e = progress.earnings
+  return (
+    <div className="space-y-4" data-testid="split-progression">
+      <FirstUseTip id="split">
+        This is your split: what you've accumulated so far, simulated during the pilot. Locked amounts unlock when you reach your goals under My Goals.
+      </FirstUseTip>
+      <SplitHero creator={e.creator} supporter={e.consumer} />
+      <details className="group rounded-3xl bg-white p-5 shadow-[0_1px_2px_rgb(19_25_27/0.06),0_0_0_1px_rgb(19_25_27/0.05)]" data-testid="split-explain">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-[14px] font-bold text-brand-700">
+          What do these mean? <ChevronDown className="h-4 w-4 transition group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+        </summary>
+        <dl className="mt-3 space-y-2.5 text-[13.5px] leading-relaxed text-ink-700">
+          <div>
+            <dt className="inline font-semibold text-ink-900">Your split </dt>
+            <dd className="inline">
+              is everything you've accumulated on Splitpost: as a creator, from ads shown with your posts, and as a supporter, for helping creators grow.
+            </dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold text-ink-900">Locked </dt>
+            <dd className="inline">is accumulated but held until you reach your goals for that journey.</dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold text-ink-900">Unlocked </dt>
+            <dd className="inline">is available to you once your goals are met and checked.</dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold text-ink-900">Settled </dt>
+            <dd className="inline">is what a monthly statement has closed.</dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold text-ink-900">Simulated </dt>
+            <dd className="inline">means these are practice amounts for the pilot. Points are not money and nothing is paid.</dd>
+          </div>
+        </dl>
+        <h3 className="mt-4 text-[13px] font-bold text-ink-900">The breakdown</h3>
+        {creatorJourneyShown(progress) && (
+          <div>
+            <p className="mt-2 text-[12.5px] font-semibold text-ink-700">As a creator</p>
+            <EarningsRow e={e.creator} testId="earnings-creator" />
+          </div>
+        )}
+        <div>
+          <p className="mt-2 text-[12.5px] font-semibold text-ink-700">As a supporter</p>
+          <EarningsRow e={e.consumer} testId="earnings-consumer" estimatedCents={points?.simulatedValueCents} />
+        </div>
+        {(e.creator.lockedCents > 0 || e.consumer.lockedCents > 0) && (
+          <p className="mt-2 text-[12px] text-ink-600">
+            Your legitimate allocated rewards remain attributed to you until you qualify, subject to applicable integrity and adjustment rules. All pilot
+            amounts are simulated.
+          </p>
+        )}
+      </details>
+      <NextForYou progress={progress} />
+      <Disclosure />
+      <FounderReviewLink />
+    </div>
+  )
+}
+
+function SplitHero({ creator, supporter }: { creator: EarningsByState; supporter: EarningsByState }) {
+  const total = creator.accumulatedCents + supporter.accumulatedCents
+  const unlocked = creator.eligibleCents + creator.settledCents + supporter.eligibleCents + supporter.settledCents
+  const locked = Math.max(0, total - unlocked)
+  const share = total > 0 ? Math.round((unlocked / total) * 100) : 0
+  return (
+    <section className="rounded-[26px] bg-brand-600 p-5 text-white shadow-[0_18px_30px_-20px_rgba(23,47,112,0.8)]" aria-labelledby="split-total-label" data-testid="split-hero">
+      <div className="flex items-center justify-between gap-3">
+        <span id="split-total-label" className="flex items-center gap-2 text-[13px] font-semibold text-[#d3def3]">
+          <MySplitIcon className="h-5 w-5" strokeWidth={2.2} /> Your split so far
+        </span>
+        <span className="rounded-full bg-[#e7f4f1] px-2.5 py-0.5 text-[11px] font-bold text-[#1f5e52]">Simulated</span>
+      </div>
+      <p className="mt-1 font-display text-[44px] font-extrabold leading-none tracking-tight tabular-nums" data-testid="split-total">
+        {simulatedDollars(total)}
+      </p>
+      <dl className="mt-4 grid grid-cols-2 gap-2">
+        <div className="rounded-2xl bg-white/10 px-3 py-2.5">
+          <dt className="text-[12px] text-[#d3def3]">As a creator</dt>
+          <dd className="font-display text-[21px] font-extrabold tabular-nums">{simulatedDollars(creator.accumulatedCents)}</dd>
+        </div>
+        <div className="rounded-2xl bg-white/10 px-3 py-2.5">
+          <dt className="text-[12px] text-[#d3def3]">As a supporter</dt>
+          <dd className="font-display text-[21px] font-extrabold tabular-nums">{simulatedDollars(supporter.accumulatedCents)}</dd>
+        </div>
+      </dl>
+      <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-white/20" aria-hidden="true">
+        <div className="bg-[#a8d9cf]" style={{ width: `${share}%` }} />
+        <div className="bg-[#f6b888]" style={{ width: `${total > 0 ? 100 - share : 0}%` }} />
+      </div>
+      <p className="mt-1.5 flex justify-between text-[12px] font-semibold">
+        <span>Unlocked {simulatedDollars(unlocked)}</span>
+        <span className="inline-flex items-center gap-1">
+          <Lock className="h-3 w-3" aria-hidden="true" /> Locked {simulatedDollars(locked)}
+        </span>
+      </p>
+      <p className="mt-3 text-[13px] leading-relaxed text-[#e7edf9]">
+        {total === 0
+          ? 'Nothing yet. Your split grows as you post and as you support the creators you value. Start with the next step below.'
+          : 'Locked amounts are held until you reach your goals. Reach them and they unlock. During the pilot every amount is simulated and nothing is paid.'}
+      </p>
+    </section>
+  )
+}
+
+/** The nearest open goal and one action (UX-03): the journey closest to done first. */
+function NextForYou({ progress }: { progress: Extract<MyProgress, { enabled: true }> }) {
+  const journeys = ([
+    ['creator', 'Creator goals', progress.creator, progress.earnings.creator],
+    ['consumer', 'Supporter goals', progress.consumer, progress.earnings.consumer],
+  ] as const)
+    .filter(([a]) => a === 'consumer' || creatorJourneyShown(progress))
+    .map(([audience, title, j, e]) => ({ audience, title, j, e, ...journeyProgress(j) }))
+  const open = journeys
+    .filter((x) => x.j.status === 'in_progress' && x.set && x.next)
+    .sort((a, b) => b.done / b.total - a.done / a.total)[0]
+  const review = journeys.find((x) => x.j.status === 'under_review')
+  return (
+    <section aria-labelledby="next-for-you" data-testid="next-for-you">
+      <div className="mb-2 flex items-baseline justify-between">
+        <h2 id="next-for-you" className="font-display text-[17px] font-extrabold text-ink-900">
+          Next for you
+        </h2>
+        <Link to="/app/split?face=goals" className="text-[13px] font-semibold text-brand-700">
+          All goals
+        </Link>
+      </div>
+      <Card className="p-4">
+        {open && open.next ? (
+          <>
+            <div className="flex items-center gap-3">
+              <GoalRing done={open.done} total={open.total} tone={open.audience === 'creator' ? 'brand' : 'green'} />
+              <div className="min-w-0">
+                <p className="font-bold text-ink-900">{open.title}</p>
+                <p className="text-[12.5px] text-ink-600">
+                  {open.done} of {open.total} done.
+                  {open.e.lockedCents + open.e.pausedCents > 0 ? ` Unlocks ${simulatedDollars(open.e.lockedCents + open.e.pausedCents)} (simulated).` : ''}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#fef4ec] px-3 py-2.5">
+              <span className="text-[13.5px] font-semibold text-[#5a2a0b]">
+                {goalText(open.next.metric).label}: {Math.min(open.next.value, open.next.target ?? 0)} of {open.next.target}
+              </span>
+              {NEXT_ACTION[open.next.metric] && (
+                <Link to={NEXT_ACTION[open.next.metric].to} className={buttonClass('primary', 'sm')}>
+                  {NEXT_ACTION[open.next.metric].label}
+                </Link>
+              )}
+            </div>
+          </>
+        ) : review ? (
+          <p className="text-[14px] text-ink-800">You've met every {review.audience === 'creator' ? 'creator' : 'supporter'} goal. We're checking it, then it unlocks.</p>
+        ) : (
+          <p className="text-[14px] text-ink-800">You're up to date. Keep supporting the creators you value; My Goals shows where you stand.</p>
+        )}
+      </Card>
+    </section>
+  )
+}
+
+/** While progression is off: Connection Points and the simulated estimate, as before. */
+function PointsOverview({ points }: { points: MyPoints | null | undefined }) {
   return (
     <div className="space-y-4">
       <ContributionInsight />
@@ -126,20 +329,141 @@ function Overview() {
               </div>
             </dl>
           )}
-          <p className="rounded-xl bg-[#e7f4f1] px-3 py-2 text-[13px] text-[#1f5e52]" data-testid="split-disclosure">
-            During the pilot all rewards and values are simulated. Connection Points have no cash value and nothing is paid out.
-          </p>
-          {founder && (
-            <Link to="/app/split/review" className={buttonClass('secondary', 'sm')}>
-              Founder: review referrals and rewards
-            </Link>
-          )}
+          <Disclosure />
+          <FounderReviewLink />
         </div>
       </Card>
       {/* The setup's last step, always here to come back to: how points are recognized, reviewed and simulated. */}
       <Card className="p-5">
         <MySplitIntro />
       </Card>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Face 2: My Goals, what to do (UX-03, UX-04).
+
+function GoalsFace() {
+  const progress = useMyProgress()
+  if (progress === undefined) return <p className="text-sm text-ink-600">Loading your goals…</p>
+  if (!progress?.enabled)
+    return (
+      <Card className="p-6 text-center">
+        <h2 className="font-display text-lg font-extrabold">Goals are coming</h2>
+        <p className="mt-2 text-[14px] text-ink-700">
+          Goals will show what to do next, and how close you are, once they open in the pilot. Until then, your contributions are still recognized under My Activity.
+        </p>
+      </Card>
+    )
+  return (
+    <div className="space-y-4">
+      <GoalCompleted progress={progress} />
+      <ProgressCards progress={progress} />
+      <MySplitIntroCard />
+    </div>
+  )
+}
+
+function MySplitIntroCard() {
+  return (
+    <Card className="p-5">
+      <MySplitIntro />
+    </Card>
+  )
+}
+
+/**
+ * Milestone feedback (UX-03): a goal met since the member last looked is
+ * acknowledged once, then remembered on this device. Only goals the server
+ * reports as met; nothing is predicted.
+ */
+function GoalCompleted({ progress }: { progress: Extract<MyProgress, { enabled: true }> }) {
+  const { profile } = useMyProfile()
+  const key = `splitpost.goals-met.${profile.id}`
+  const met = (
+    [
+      ['creator', progress.creator],
+      ['consumer', progress.consumer],
+    ] as const
+  ).flatMap(([a, j]) => (j.status === 'in_progress' || j.status === 'under_review' ? j.steps.filter((s) => s.target !== null && s.value >= s.target).map((s) => ({ a, s, j })) : []))
+  const [fresh] = useState(() => {
+    let seen: string[] = []
+    try {
+      seen = JSON.parse(window.localStorage.getItem(key) ?? '[]') as string[]
+    } catch {
+      seen = []
+    }
+    const ids = met.map((m) => `${m.a}:${m.s.metric}:${m.j.goalsSince ?? ''}`)
+    try {
+      window.localStorage.setItem(key, JSON.stringify(ids))
+    } catch {
+      // Shown again next time at worst.
+    }
+    // The first visit records what is already met without celebrating it all at once.
+    if (window.localStorage.getItem(key + '.started') === null) {
+      try {
+        window.localStorage.setItem(key + '.started', '1')
+      } catch {
+        // ignore
+      }
+      return []
+    }
+    return met.filter((_m, i) => !seen.includes(ids[i]))
+  })
+  if (fresh.length === 0) return null
+  const first = fresh[0]
+  const { done, total } = journeyProgress(first.j)
+  return (
+    <div className="flex items-center gap-3 rounded-3xl bg-[#e7f4f1] p-4" data-testid="goal-completed" role="status">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#0f7a64] text-white shadow-[0_0_0_5px_#cdebe4]" aria-hidden="true">
+        <Check className="h-5 w-5" strokeWidth={3} />
+      </span>
+      <div className="min-w-0">
+        <p className="font-display text-[15px] font-extrabold text-[#173f37]">Goal complete: {goalText(first.s.metric).label}</p>
+        <p className="text-[13px] text-[#1f5e52]">
+          {done === total
+            ? "That's every goal. We'll check it, then it unlocks."
+            : `That's ${done} of your ${total} ${first.a === 'creator' ? 'creator' : 'supporter'} goals done.`}
+          {fresh.length > 1 ? ` And ${fresh.length - 1} more since you last looked.` : ''}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Face 3: My Activity, what I did (UX-04).
+
+function ActivityFace() {
+  const points = useMyPoints()
+  return (
+    <div className="space-y-4">
+      {points && (
+        <div data-testid="activity-points">
+        <Card className="p-5">
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-bold text-ink-900">Connection Points</h2>
+            <span className="font-display text-[26px] font-extrabold tabular-nums text-ink-900">
+              {(points.recognized + points.redeemableApproved).toLocaleString('en-US')}
+            </span>
+          </div>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink-600">
+            Recognition for how you help creators grow. {points.recognized.toLocaleString('en-US')} count your contribution and have no value.
+            {points.redeemableApproved > 0
+              ? ` ${points.redeemableApproved.toLocaleString('en-US')} came from qualified referrals and share in the simulated rewards pool.`
+              : ' Only points from qualified referrals share in the simulated rewards pool.'}
+          </p>
+        </Card>
+        </div>
+      )}
+      <section aria-labelledby="activity-history">
+        <h2 id="activity-history" className="mb-2 font-display text-[17px] font-extrabold text-ink-900">
+          Your contributions
+        </h2>
+        <History />
+      </section>
+      <Opportunities />
     </div>
   )
 }

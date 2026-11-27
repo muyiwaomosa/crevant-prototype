@@ -7,6 +7,7 @@ import { AppApiError, LIMITS, type Post, type PostMeta, type Topic } from './api
 import { useAppApi } from './AppApiContext'
 import { useFeatures } from './onboarding'
 import { ErrorNote } from './components'
+import { useRecognize } from './recognition'
 
 /**
  * Content (IP-4a, 20261202000000): post topics, saves, reposts and editing.
@@ -90,17 +91,19 @@ export function PostMetaLine({ postId }: { postId: string }) {
 /** Save and Repost, in the card's action row. */
 export function SaveRepostButtons({ post }: { post: Post }) {
   const api = useAppApi()
+  const recognize = useRecognize()
   const { meta, available, set } = usePostMeta(post.id)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   if (!available || !meta) return null
-  async function run(action: () => Promise<void>, optimistic: Partial<PostMeta>, undo: Partial<PostMeta>) {
+  async function run(action: () => Promise<void>, optimistic: Partial<PostMeta>, undo: Partial<PostMeta>, contributed = false) {
     if (busy) return
     setBusy(true)
     setError(null)
     set(optimistic)
     try {
       await action()
+      if (contributed) recognize()
     } catch (e) {
       set(undo)
       setError(e)
@@ -122,6 +125,7 @@ export function SaveRepostButtons({ post }: { post: Post }) {
               () => (reposted ? api.unrepost(post.id) : api.repost(post.id)),
               { repostedByMe: !reposted, repostCount: meta.repostCount + (reposted ? -1 : 1) },
               { repostedByMe: reposted, repostCount: meta.repostCount },
+              !reposted,
             )
           }
           className={clsx(
@@ -147,7 +151,7 @@ export function SaveRepostButtons({ post }: { post: Post }) {
         disabled={busy}
         aria-pressed={saved}
         aria-label={saved ? 'Saved (tap to remove)' : 'Save'}
-        onClick={() => run(() => (saved ? api.unsave(post.id) : api.save(post.id)), { savedByMe: !saved }, { savedByMe: saved })}
+        onClick={() => run(() => (saved ? api.unsave(post.id) : api.save(post.id)), { savedByMe: !saved }, { savedByMe: saved }, !saved)}
         className={clsx('inline-flex h-9 w-9 items-center justify-center rounded-full transition', saved ? 'text-brand-700' : 'text-ink-600 hover:bg-ink-100')}
       >
         <Bookmark className={clsx('h-[18px] w-[18px]', saved && 'fill-current')} aria-hidden="true" />
@@ -303,6 +307,7 @@ export function EditPost({ post, onEdited }: { post: Post; onEdited: (body: stri
 export function ShareButton({ post }: { post: Post }) {
   const features = useFeatures()
   const api = useAppApi()
+  const recognize = useRecognize()
   const { available } = usePostMeta(post.id)
   const [copied, setCopied] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -345,7 +350,7 @@ export function ShareButton({ post }: { post: Post }) {
         return
       }
     }
-    void api.recordShare(post.id, channel).catch(() => undefined)
+    void api.recordShare(post.id, channel).then(recognize, () => undefined)
   }
   if (!features.sharing) return null
   return (

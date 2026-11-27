@@ -225,6 +225,11 @@ async function shows(locator, timeout = 5000) {
       const idA = userBy(emailA).split('|')[0]
       sql(`select ops.grant_member_access('${idA}', 'tester', 'auth-journey')`)
       await pageA.reload()
+      // SP-UX-002: before any setup, the value-first welcome.
+      const welcome = pageA.getByTestId('welcome')
+      await welcome.waitFor()
+      check('a new member first sees the welcome: "Don\'t just post. Get your split."', (await welcome.getByRole('heading', { level: 1 }).innerText()) === "Don't just post. Get your split.")
+      await welcome.getByRole('button', { name: 'Skip' }).click()
       await pageA.getByText('Your profile is ready').waitFor()
       check('once granted, home shows "Your profile is ready"', true)
       check('home shows the signed-in email', (await pageA.locator('main').innerText()).includes(emailA))
@@ -308,6 +313,9 @@ async function shows(locator, timeout = 5000) {
       await page.getByLabel('Type it again', { exact: true }).fill(NEW_PASSWORD)
       await page.getByRole('button', { name: 'Save password' }).click()
       await page.waitForURL(`${APP}/app`)
+      // An account that has not finished setup sees the welcome first on a new browser (SP-UX-002).
+      await page.getByTestId('welcome').or(page.getByText('Your password is saved.')).first().waitFor()
+      if (await page.getByTestId('welcome').isVisible()) await page.getByTestId('welcome').getByRole('button', { name: 'Skip' }).click()
       check('new password saved', await shows(page.getByText('Your password is saved.')))
       await page.goto(resetLink)
       await page.getByRole('button', { name: 'Continue' }).click()

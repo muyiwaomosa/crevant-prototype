@@ -71,16 +71,20 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
     }
     let timer: ReturnType<typeof setTimeout> | null = null
     let inView = false
+    // Once this effect is cleaned up, its observer is finished: a late callback
+    // from it must never start a timer that nothing would clear.
+    let disposed = false
     const stop = () => {
       if (timer) clearTimeout(timer)
       timer = null
     }
     const start = () => {
       stop()
-      if (inView && document.visibilityState === 'visible') timer = setTimeout(() => void markViewed(), 1000)
+      if (!disposed && inView && document.visibilityState === 'visible') timer = setTimeout(() => void markViewed(), 1000)
     }
     const io = new IntersectionObserver(
       ([e]) => {
+        if (disposed) return
         inView = e.isIntersecting && e.intersectionRatio >= 0.5
         start()
       },
@@ -89,6 +93,7 @@ export function AdSlot({ surface, postId }: { surface: AdSurface; postId?: strin
     io.observe(ref.current)
     document.addEventListener('visibilitychange', start)
     return () => {
+      disposed = true
       io.disconnect()
       document.removeEventListener('visibilitychange', start)
       stop()
