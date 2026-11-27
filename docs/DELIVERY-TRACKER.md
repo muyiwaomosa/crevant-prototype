@@ -9,7 +9,9 @@ merging approves its migration checksums under D7), **Deployed** (database on
 staging and the `staging` app at that commit), **Accepted** (the founder used it
 on staging and signed off).
 
-Infrastructure (Nov 27): Vercel Pro; the staging app follows the `staging` branch, now at 12303fe (every merged pull request through #129). Supabase: one Splitpost Production organization on Pro holds staging (`crevant-staging`, daily backups), member Production, the waitlist and the rehearsal project. Every migration through 20261219000000 is applied on staging (run 50, Nov 27). Founder acceptance is under way: initial feedback Nov 27 (UX-01 to UX-05 below).
+**Final release readiness phase (from Nov 27):** what remains, with owner, dependency, effort and acceptance criteria, is in `docs/ACCEPTANCE-CHECKLIST.md` (the single actionable list). The MVP scope and the landing page are frozen; SP-BRAND-003 is accepted and closed (www.splitpost.ca serves `ac40597`).
+
+Infrastructure (Nov 27): Vercel Pro; the staging app follows the `staging` branch, now at `00ee129` (every merged pull request through #133; #134 changed only the public landing page). Supabase: one Splitpost Production organization on Pro holds staging (`crevant-staging`, daily backups), member Production, the waitlist and the rehearsal project. Every migration through 20261219000000 is applied on staging (run 50, Nov 27). Founder acceptance is under way: initial feedback Nov 27 (UX-01 to UX-05 below).
 
 Staging app: https://splitpost-app-git-staging-crevant.vercel.app (the `staging`
 branch, fast-forwarded only to merged `main`). Founder actions and acceptance
@@ -49,7 +51,8 @@ https://claude.ai/artifact/LT9k8aSFrFMz6MxRqtsvQ9).
 | SP-UX-002 Value-first welcome and tailored first steps | **Merged and on staging** (PR #130, `6023da7`): five faces before setup (Skip, Back, Continue, Get started; swipe, keys, reduced motion), again from Profile; first steps tailored by the goal answer and interests | Unit tests; social journey walks all five faces with an accessibility check; `docs/design/ux-refine/SP-UX-002.md` and `sp-ux-002-*.png` | Founder final review, then merge |
 | Intermittent ad view unit test | **Resolved**: a finished ad observer could start a view timer; it can no longer (regression test fails without the fix) | 12 repeated runs pass | Merged with the package |
 | SP-BRAND-002 Landing page (creators and supporters) | **Published and complete** (PRs #130 and #131; www.splitpost.ca serves `6023da7`), frozen until market feedback: eight-section story with the exact copy, real app screens in HOW, every photo verified and licensed; 213 public-site browser checks pass | `docs/design/brand/SP-BRAND-002.md`; decisions 1 to 7 implemented and approved Nov 27 ("future" approved; unverifiable photos and the sample avatar replaced with verified Unsplash photos) | Founder publication approval, then merge with SP-UX-002 (publishes the public site). After publication: messaging and design frozen until meaningful feedback from prospective members |
-| L1 Landing page visual assets | Not started | Prepared from the approved screens once V1 lands; not published before approval | After V1 |
+| SP-BRAND-003 Landing refinement: logo-split hero, curated demo screenshots, HOW problem statements | **Accepted and closed** Nov 27 (PR #134, `ac40597`, live) | All CI green including the production-address launch check; founder visual approval | Landing page frozen again |
+| L1 Landing page visual assets | **Superseded** by SP-BRAND-003 (real app screens from a curated demo community) | | None |
 
 **Impact on December 23:** H1, V1, D1 and P1 are about 7 working days of UI
 work with no database change. The lean progression plan (G1, G2, G3, G5) is

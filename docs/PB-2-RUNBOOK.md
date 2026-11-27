@@ -17,6 +17,27 @@ workflows and their gates; none is bypassed. Checklist item: F1 in
 | avatar function | v1 deployed at `d278415`; no change to its code since | `config/function-deployments.json` |
 | post-media function | Approved for member Production, not yet deployed; no change since staging v3 (`74d41d7`) | same |
 
+## Dry-run readiness (Nov 27, at `ac40597`)
+
+Checked by Claude on the current main, without touching member Production:
+
+* `supabase/migrations` holds exactly 20 migrations after the launch gate,
+  20261130000000 to 20261219000000, the list below. No migration has been
+  added since 20261219 (MVP scope freeze).
+* Each has its member check registered (016 to 035 in
+  `supabase/members-checks.txt`).
+* CI run 390 on `ac40597` is green, including the Database job, which
+  rehearses foundation, activation, these 20 migrations and every check on a
+  throwaway database.
+* The functions ledger records post-media v3 (`74d41d7`) on staging and only
+  avatar on member Production, as expected before step 6. PR #105 (a v2
+  ledger entry for staging) is superseded and can be closed.
+* Prerequisite outside this runbook: PB-1 B2 (the member Production drain
+  key) before step 6, so the post-media drain can authenticate.
+
+If any fix merges before PB-2, Claude repeats this check at the new commit
+and uses that commit for steps 3 to 6.
+
 ## What PB-2 applies
 
 The 20 migrations after the launch gate, **20261130000000 to

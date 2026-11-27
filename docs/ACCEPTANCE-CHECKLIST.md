@@ -1,148 +1,164 @@
-# MVP acceptance and release readiness checklist (Nov 27)
+# MVP release readiness checklist (Nov 27, final phase)
 
-The single list for completing, validating and releasing the approved MVP.
-It replaces separate status reports: findings, readiness and gates are all
-recorded here. The aim is to release as soon as the MVP is demonstrably
-ready; the planned dates are latest dates, not waiting points. No new
-features, redesigns or scope changes are planned; a change is made only if
-acceptance finds a material issue. Every production, security, financial,
-legal and external pilot approval gate stays in place.
+The single actionable list for completing the approved MVP and opening the
+controlled pilot. `docs/DELIVERY-TRACKER.md` keeps the history; this file
+says what is left, who does it, what it waits on, how long it takes and what
+"done" means. No separate assessment is kept anywhere else.
 
-**Three kinds of verification**, kept apart throughout:
+**Release target: December 23** (PB-4, the controlled pilot opens).
+Planned dates are latest dates: a step moves earlier when its criteria are met.
 
-* **Automated:** technical checks Claude runs or CI runs on every change
-  (tests, journeys, security and separation checks, deployment checks).
-* **Founder acceptance:** you using the product on real devices and deciding
-  it is acceptable.
-* **External validation:** people outside the team (counsel, prospective
-  members, the pilot cohort). Claude cannot stand in for these.
+**Freezes in force**
 
-**Who:** **You** means the founder has to do it (a click, a decision, a
-signature or hands-on testing). **Claude** means Claude does it and reports
-back. **Done** items have their evidence beside them.
+* **MVP scope:** frozen. No new features, redesigns or architectural changes
+  unless one is needed to fix an approved-scope defect or a release blocker.
+* **Landing page:** frozen again after SP-BRAND-003 (accepted and closed
+  Nov 27; www.splitpost.ca serves `ac40597`). It changes only after
+  meaningful feedback from prospective members.
 
-Staging: https://splitpost-app-git-staging-crevant.vercel.app at `6023da7`.
-Hands-on steps: `docs/FOUNDER-TESTING-GUIDE.md`.
+**Gates that stay in place:** production activation, external pilot access,
+destructive recovery operations and real financial transactions each need
+the founder's explicit authorization at the time. Nothing here lifts one.
 
-## A. Staging ready for acceptance (automated, with three founder clicks)
+**Four kinds of readiness**, kept apart:
 
-| # | Item | Who | Status |
-|---|---|---|---|
-| A1 | Staging fast-forwarded to main `6023da7` (SP-UX-002, UX-01 to UX-04, landing page) | Claude | **Done** Nov 27 |
-| A2 | No database change between the previous staging commit and `6023da7`, so no migration is needed | Claude | **Done** (no `supabase/` differences) |
-| A3 | Read-only staging check: isolation from Production, migrations through 20261219, security and separation checks, switch states (run 52) | You approve the gate; Claude reads the result | **Done** Nov 27 13:27 (run 46003719199): approved project, all 38 migrations applied through 20261219, every security and separation check passed; progression off at that time, 0 qualifications |
-| A4 | Staging serves `6023da7` (View Source: `splitpost-commit`) | You (staging is behind Vercel sign-in) | To do, 1 minute |
-| A5 | Progression switched on for staging, with a reason | You (founder-only control in Control Center) | To do, 1 minute |
-| A6 | Safeguards unchanged with progression on: simulated amounts only, manual qualification approval with a reason, holds and daily caps, no cash movement, no 40:20:40 percentages shown, no unrestricted balance editing, no automatic qualification | Claude (code and tests); you see it during B | **Done** in code and CI; confirmed by you in B9 and B12 |
-
-## B. The member journey (founder acceptance, about 90 minutes)
-
-Each row is a step in the testing guide. Claude's automated journeys already
-cover each one in CI on every change (green on `d6d4e53`, which has
-exactly the same files as `6023da7`); your pass is the acceptance on real devices.
-
-| # | Journey step | Who | Automated cover |
-|---|---|---|---|
-| B1 | Invitation, registration, welcome walkthrough (five faces, Skip, Back, Continue, swipe, Get started) | You | auth, registration, social journeys |
-| B2 | Setup with interests, or skipped | You | registration journey |
-| B3 | Home: Clique row, personalized first steps, Hide | You | social journey; unit tests |
-| B4 | Discover: interest first, For you, People, Topics, search | You | social, consumer journeys |
-| B5 | Their profile: Follow, Add to Clique, Report and Block in "···" | You | social, moderation journeys |
-| B6 | Create a post with a topic | You | content, creator journeys |
-| B7 | Engage: like, comment, save, share, repost; recognition message; Report in "···" only | You | social, rewards journeys |
-| B8 | Your Clique: Remove, Mute, Unfollow; one-time tip | You | social journey |
-| B9 | My Split: three faces, Connection Goals, Connection Points history, simulated labels, no percentages | You | progression, rewards, stakeholder journeys |
-| B10 | Your insights: Reach, Connection, Earnings (simulated) | You | creator journey |
-| B11 | Welcome again from Profile, Settings, How Splitpost works | You | unit tests |
-| B12 | Control Center: review queue, Routine or Flagged, manual approval with a reason, Activation | You (laptop) | founder journey |
-| B13 | Deletion preview: balances closed, the pilot rule explained | You (don't send unless you mean to) | privacy journey; behaviour test 310 |
-| B14 | Defects sent through Feedback | You report; Claude classifies them in section H and fixes P0 and P1 at once | |
-
-## C. Quality checks (automated, except C6 and C7)
-
-| # | Item | Who | Status |
-|---|---|---|---|
-| C1 | Unit tests (901), types, build and secret scan | Claude | **Done**, green on `d6d4e53` (same files as `6023da7`) |
-| C2 | Database migrations, separation and reconciliation checks in CI | Claude | **Done**, green on `d6d4e53` (same files as `6023da7`) |
-| C3 | Browser journeys on local Supabase, including WCAG 2.2 AA checks | Claude | **Done**, green on `d6d4e53` (same files as `6023da7`) |
-| C4 | Public site checks and the production-address launch rehearsal | Claude | **Done**, green on `d6d4e53` (same files as `6023da7`) |
-| C5 | Emulated phone speed (Slow 4G) | Claude | **Done** (sign-in 2.1 s; landing 1.24 s) |
-| C6 | Real-device speed check on your phone | You | To do during B |
-| C7 | Reduced motion on a real phone | You | To do during B1 |
-
-## D. Operational readiness (automated, with founder authorizations)
-
-| # | Item | Who | Status |
-|---|---|---|---|
-| D1 | Video device tests on two phones, then video posts on staging | You (tests); Claude (switch evidence) | In progress (you) |
-| D2 | Staging recovery exercise | You give written authorization for the in-place restore; Claude runs it | Waiting for authorization |
-| D3 | PB-1 member Production operations (SMTP, drain key, health checks, ledger) | You approve; Claude prepares and runs | Prepared, waiting for approval |
-| D4 | Backups and restore drill in CI | Claude | **Done** (every CI run) |
-| D5 | Security and authorization review fixes | Claude | **Done** (migration 20261214, on staging) |
-| D6 | Public site in production reflects the merged landing page and verified photos | Claude | **Done** (www.splitpost.ca serves `6023da7`; all five replacement photos match byte for byte) |
-
-## E. Legal (external validation, before the gates they protect)
-
-| # | Item | Who | Before |
-|---|---|---|---|
-| E1 | Rewards Rules review | You (counsel) | Any allocation percentages shown to members |
-| E2 | Pilot privacy notice and policies (`docs/policies/`) | You (counsel) | External invitations |
-| E3 | Regulated financial products review | You (counsel) | Real financial functionality (deferred) |
-
-## F. Production release (each needs its own authorization)
-
-| # | Item | Who | Planned |
-|---|---|---|---|
-| F1 | PB-2 migrations and functions to member Production (`docs/PB-2-RUNBOOK.md`) | You authorize; Claude prepares and reads results | Dec 16 at the latest; ready to run on authorization |
-| F2 | PB-3 release candidate fixes | Claude; you accept | Dec 20 |
-| F3 | PB-4 external pilot access and the cohort plan | You authorize | Dec 23 at the latest |
-
-**Ready to release** means: sections A to D complete, no open P0 or P1, every
-open P2 either fixed or accepted by you for the pilot, the legal items for
-the chosen gate done, and your authorization for that gate. If that happens
-before a planned date, the step moves earlier.
-
-## G. External business validation
-
-| # | Item | Who | When |
-|---|---|---|---|
-| G1 | Prospective members' response to the landing page (the trigger for revisiting its frozen messaging and design) | You (conversations, waitlist) | From publication |
-| G2 | Pilot cohort feedback on the member journey | Pilot members, through Feedback | After PB-4 |
-
-## H. Findings during acceptance
-
-Every finding gets a severity and a next step. Claude resolves P0 and P1
-immediately within the authorized scope (no new features, no scope change,
-no gate bypassed); P2 is ordered by its effect on the pilot experience; P3
-goes to the post-launch backlog.
-
-| Severity | Meaning | Handling |
+| Kind | Means | Who can complete it |
 |---|---|---|
-| **P0** | Critical security, privacy, financial integrity or data loss issue | Fixed immediately; you are told at once |
-| **P1** | A core stakeholder journey is broken or cannot be completed | Fixed immediately |
-| **P2** | Significant usability, clarity or performance issue | Prioritized by pilot impact; fixed or accepted by you before release |
-| **P3** | Minor cosmetic issue or future enhancement | Post-launch backlog |
+| **T. Technical acceptance** | The product works as approved: automated checks, then the founder's hands-on acceptance on staging | Claude (automated), founder (acceptance) |
+| **O. Operational readiness** | We can run, monitor, recover and release it safely | Founder authorizes; Claude prepares and verifies |
+| **L. Legal readiness** | The documents members agree to, and the rules behind them, are reviewed | Founder and qualified Canadian counsel |
+| **B. Business validation** | People outside the team respond to it | Prospective members and the pilot cohort |
 
-**Open findings**
+**Who:** **Founder** means only you can do it (a click, a decision, a
+signature, hands-on testing). **Claude** means Claude does it and reports
+back. **Counsel** means external legal counsel.
 
-| ID | Severity | Found in | Finding | Status |
-|---|---|---|---|---|
-| UAT-001-1 | P2 | Founder acceptance, Nov 27 (SP-UAT-001) | Landing page mobile hero too crowded: value proposition comes after a text-heavy split-post illustration | **Built, awaiting founder visual review**: value proposition, actions and disclosure under the headline; the split post as a picture (verified creator photo above, community below); no sample text, statistics or comment. Targeted exception to the landing freeze; no other section changed |
-| UAT-001-2 | P1 | Founder acceptance, Nov 27 | Video unavailable | Not a defect: uploads stay closed until both phone device tests pass and the storage cap is set. **Waiting for the founder**: device tests, record results, 50 GB cap, switch on. Claude then verifies (check 029, video journey) |
-| UAT-001-3 | P2, blocks the interface milestone | Founder acceptance, Nov 27 | Interface does not match the approved designs | **Built, awaiting founder review and hands-on acceptance**: Home, Discover, Create and Profile restored to the approved references, with designed states for text-only posts, missing photos, empty states and zero balances; validated with new, growing and established members on phone and desktop |
-| UAT-001-4 | P2 | Founder acceptance, Nov 27 | Gamification and progression not obvious | **Built, awaiting founder review and hands-on acceptance**: onboarding, Home strip, Discover hint, publish and contribution feedback, My Split next goal, My Goals path, My Activity achievements; all from server progress, goals in any order, approved rules only. Recorded end to end |
-| UAT-001-5 | P2 | Automated (stakeholder journeys, axe), Nov 27 | With a picture on the Profile tab, its fixed label no longer matched the visible text (WCAG 2.5.3) | **Resolved**: tab links are named by their visible word; Profile is named "Profile" with the picture decorative; Create keeps its explicit name. Unit test added; all four stakeholder journeys pass |
-| BRAND-003 | P2 | Founder review, Nov 27 (SP-BRAND-003, targeted exception to the landing freeze) | Mobile hero hierarchy, logo-inspired illustration, realistic product screenshots, HOW problem statements | **Built, awaiting founder visual approval before merge**: hero order headline, value, picture, support, actions, disclosure; the split post on the logo diagonal captioned "Created by one. Grown by many." with an illustrative note; verified Unsplash photos registered; HOW screens from an isolated local demo community (no pilot data, no app changes); founder problem lines word for word. The landing freeze resumes after acceptance |
+Staging app: https://splitpost-app-git-staging-crevant.vercel.app at
+`00ee129` (the member app is identical at `ac40597`; that commit changed only
+the public landing page). Acceptance procedure: `docs/FOUNDER-TESTING-GUIDE.md`.
 
-**Interface milestone:** not accepted until UAT-001-1, -3 and -4 are resolved and reviewed by the founder. Design review with previews: `docs/design/uat/SP-UAT-001.md`.
+## 1. What needs you, in order
 
-**Post-launch backlog (P3 and deferred items)**
+| # | Action | Effort | Latest |
+|---|---|---|---|
+| 1 | Confirm staging serves `00ee129` and switch progression on (T1, T2) | 5 min | Nov 30 |
+| 2 | Hands-on acceptance of the member journey (T3) | 2 h | Dec 5 |
+| 3 | Video device tests, record results, 50 GB cap, video on for staging (T4) | half a day | Dec 10 |
+| 4 | Engage counsel with the policy pack (L1) | 1 h to send | **Dec 1** |
+| 5 | Approve PB-1 member Production operations (O1) | 1 h | Dec 5 |
+| 6 | Authorize and run the staging recovery exercise with Claude (O2) | 1 h | Dec 12 |
+| 7 | Decide pilot switch states and the cohort plan (O5, O6) | 1 h | Dec 15 |
+| 8 | Authorize PB-2 (O3) | 30 min with Claude | Dec 16 |
+| 9 | Accept the release candidate (O4) | 30 min | Dec 20 |
+| 10 | Authorize PB-4, external pilot access (O7) | 15 min | Dec 23 |
+
+Housekeeping, any time: close PR #105 (superseded: the ledger already records
+post-media v3 on staging, which replaced the v2 entry it proposed).
+
+## 2. What Claude does without waiting
+
+| Item | Status |
+|---|---|
+| Fix every P0 and P1 the same day it is reported; P2 by pilot impact | Ongoing; nothing open |
+| Verify each founder step from the read-only side (staging checks, Verify Edge Functions, CI) | Ready |
+| Keep main green: full CI on every change, the 20 browser journeys, WCAG 2.2 AA, the PB-2 rehearsal | Green at `ac40597` (CI run 390) |
+| Recovery exercise queries, ready to send | **Done**: `scripts/db/recovery/staging-exercise.sql` |
+| PB-2 dry-run readiness at the target commit | **Done** for `ac40597`: 20 migrations, 20 member checks, rehearsal green (see O3) |
+| Release candidate regression before PB-2 and PB-3 (T6) | Scheduled for each |
+| Update this list after every change | Ongoing |
+
+## 3. Outstanding items
+
+Effort is working time, not elapsed time. "Depends on" lists what must be
+true first.
+
+### T. Technical acceptance
+
+| ID | Item | Status | Owner | Depends on | Effort | Acceptance criteria |
+|---|---|---|---|---|---|---|
+| T1 | Staging serves the accepted build | Pushed (`00ee129`); not yet confirmed by you | Founder | None | 1 min | View Source shows `splitpost-commit` = `00ee129` |
+| T2 | Progression on for staging | Not confirmed | Founder | T1 | 1 min | Control Center shows Progression on, with your reason; Claude's staging check shows the switch on |
+| T3 | **Interface milestone**: hands-on acceptance of interface, onboarding, gamification, My Split and publishing (closes UAT-001-3 and UAT-001-4) | Built, automated checks green; **awaiting your acceptance** | Founder; Claude fixes findings | T1, T2 | 2 h, plus fixes | Every step of parts B and C of the testing guide behaves as written on your phone and laptop; no open P0 or P1; each P2 fixed or accepted by you; you record "accepted" here |
+| T4 | **Video device validation** (closes UAT-001-2) | Ready since Nov 26; no results recorded yet | Founder (tests); Claude (verification) | T1 | half a day; Claude 30 min | iPhone Safari and Android Chrome each pass the 1 and 5 minute clips (`docs/video/DEVICE-TEST.md`), results recorded in Control Center, cap set to 50 GB, video uploads switched on for staging only; Claude's check 029 and video checks pass. **Fallback:** if a phone fails, the pilot opens with text and photos and video follows, with no code change |
+| T5 | Real-device speed and reduced motion | Emulated checks done (sign-in 2.1 s, landing 1.24 s on Slow 4G) | Founder | T3 (same session) | 10 min | Sign-in about 2 s and Home about 3 s on your phone with Wi-Fi off; with Reduce Motion on, the walkthrough changes faces without sliding |
+| T6 | Release candidate regression | Green at `ac40597` | Claude | Any fix merged | 2 h each time | Full CI green (unit, types, build, secret scan, database, separation, reconciliation, 20 browser journeys with WCAG 2.2 AA, public site and launch rehearsal) at the exact commit PB-2 and PB-3 use |
+
+### O. Operational readiness
+
+| ID | Item | Status | Owner | Depends on | Effort | Acceptance criteria |
+|---|---|---|---|---|---|---|
+| O1 | **PB-1** member Production operations: SMTP, drain key, cleanup schedule, health checks, uptime checks (`docs/STAGING-ACCEPTANCE.md`, section 4, B1 to B5; B6 is superseded by PB-2 step 6) | Prepared; **awaiting your approval** | Founder; Claude verifies | None | 1 h | A password reset to your account arrives from Splitpost; the cleanup schedule checks pass; the next health runs pass; both uptime checks are Up |
+| O2 | **Staging recovery exercise** (`docs/RECOVERY.md`; queries in `scripts/db/recovery/staging-exercise.sql`) | Prepared; **awaiting your written authorization** for the in-place restore | Founder authorizes and runs dashboard steps; Claude runs checks | A daily backup taken after T4's results (or those results exported), a quiet hour | 1 h together | Both test deletions come back with the restore and are deleted again by the re-apply; its second run changes nothing; staging checks (including 032 and the reconciliation) and Verify Edge Functions pass; device results present; sign-in, Home and a photo work; total time within the 4 hour objective. Only then does recovery count as demonstrated |
+| O3 | **PB-2** migrations and post-media to member Production (`docs/PB-2-RUNBOOK.md`) | Prepared; dry-run ready at `ac40597` | Founder authorizes each run; Claude prepares and reads results | No open P0 or P1; O1 (the drain key is needed before post-media); a restore point | 1.5 h | `plan` lists exactly the 20 migrations 20261130 to 20261219; `apply` passes every member check (016 to 035); post-media verified and recorded in the ledger by reviewed PR. Invitations stay closed |
+| O4 | **PB-3** release candidate fixes | Nothing open | Claude; founder accepts | T3, T4, O3 | depends on findings | Every fix through full CI; staging and Production at the same commit; your acceptance recorded |
+| O5 | Pilot switch states for Production: progression, advertising, sharing, video | Defaults known (PB-2 runbook) | Founder decides | O3 | 15 min | Each switch set in Control Center with a reason; video stays off unless T4 passed |
+| O6 | Cohort plan: who is invited first, how many, invitation links, the pilot welcome | Not started | Founder; Claude prepares the welcome text from approved copy | L1 for the documents members accept | 1 h | A named first cohort and size; invitation links issued only after O7 |
+| O7 | **PB-4** external pilot access | Not started; needs separate authorization | Founder | T3, O1 to O6, L1 | 15 min | Your written authorization; invitations approved in `config/member-production.json` by reviewed PR; the first invited member can register on app.splitpost.ca |
+| O8 | Delete the rehearsal project (saves about $10 a month) | Kept on purpose | Founder approves; Claude checks dependencies | O2 passed | 15 min | No workflow or check refers to it; your explicit approval |
+
+Already done (evidence in the tracker): staging on Pro with daily backups,
+110 MB upload limit, backups and restore drill in every CI run, security and
+authorization fixes (20261214), reconciliation suite, deletion register and
+its immediate reporting, recovery objectives approved (RPO 24 h, RTO 4 h).
+
+### L. Legal readiness
+
+| ID | Item | Status | Owner | Depends on | Effort | Acceptance criteria |
+|---|---|---|---|---|---|---|
+| L1 | **Pilot documents**: Terms of Use and Pilot Participation Terms, Member Privacy Notice (including the media backup line and the deletion register), Community Standards, Rewards Rules as they apply to simulated amounts, and the blocking questions in `docs/policies/LEGAL-REVIEW-QUESTIONS.md` | Drafts v0.1 ready; **not yet with counsel** | Founder and counsel; Claude updates the drafts | Counsel engaged | 1 h to brief; counsel's time; Claude 1 day for changes | Counsel's written sign-off on each document for an invitation-only, adult, simulated-earnings pilot; every blocking question answered; final text linked from registration before O7 |
+| L2 | Rewards Rules for allocation percentages | Not needed for the pilot | Counsel | Showing percentages to members | Later | Required before any allocation percentage is shown; percentages stay hidden in the pilot |
+| L3 | Regulated financial products review | Deferred | Counsel | Real financial functionality | Later | Required before any real money moves; nothing in the MVP moves money |
+
+### B. Business validation
+
+| ID | Item | Status | Owner | When | Acceptance criteria |
+|---|---|---|---|---|---|
+| B1 | Prospective members' response to the landing page and waitlist | Live since publication | Founder | Ongoing | The trigger for revisiting the frozen landing page; not a release gate |
+| B2 | Pilot cohort feedback on the member journey | After O7 | Pilot members, through Feedback | From Dec 23 | Findings classified P0 to P3 here; not a release gate |
+
+## 4. Risks to December 23
+
+| Risk | Level | Why | What keeps the date |
+|---|---|---|---|
+| **Legal review (L1) not started** | **High, flagged now** | The pilot documents must be reviewed before invitations, and counsel's lead time is outside our control. Without them, O7 cannot happen on Dec 23 | Counsel engaged by Dec 1 with the pack and the blocking questions; sign-off by Dec 18 |
+| Founder acceptance (T3) still to do | Medium | Findings need fix time before PB-2 on Dec 16 | T3 by Dec 5 leaves a week for fixes |
+| Video device tests (T4) | Medium, contained | A failure on either phone holds video back | The pilot opens with text and photos; video later with no code change |
+| PB-1 approval (O1) | Low | PB-2's post-media step needs the Production drain key | Approve by Dec 5 |
+| Recovery exercise (O2) | Low | Needs a daily backup after T4 and a quiet hour | Run between T4 and Dec 12 |
+
+No risk today comes from remaining development: none is outstanding.
+
+## 5. Findings
+
+Severity: **P0** critical security, privacy, financial integrity or data
+loss (fixed immediately, you are told at once); **P1** a core journey broken
+(fixed immediately); **P2** significant usability, clarity or performance
+(fixed or accepted by you before release); **P3** minor or a future
+enhancement (post-launch backlog).
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| UAT-001-1 | P2 | Landing page mobile hero too crowded | **Accepted and closed** Nov 27 (SP-BRAND-003, live at `ac40597`) |
+| BRAND-003 | P2 | Mobile hero hierarchy, logo-inspired illustration, realistic screenshots, HOW problem statements | **Accepted and closed** Nov 27 (PR #134, live at `ac40597`). Landing freeze reinstated |
+| UAT-001-2 | P1 | Video unavailable | Not a defect: gated until T4 |
+| UAT-001-3 | P2, blocks the interface milestone | Interface did not match the approved designs | Built and merged (`00ee129`); **awaiting T3** |
+| UAT-001-4 | P2 | Gamification and progression not obvious | Built and merged (`00ee129`); **awaiting T3** |
+| UAT-001-5 | P2 | Profile tab label mismatch (WCAG 2.5.3) | **Resolved** |
+
+**Open P0 or P1:** none.
+
+**Post-launch backlog (P3 and deferred)**
 
 | ID | Item | Source |
 |---|---|---|
-| BL-1 | Weighted Connection Score, leaderboards, rankings, advanced achievements | Deferred by the founder, Nov 26 (F1) |
-| BL-2 | Interactive advertising as a controlled experiment | Approved in principle, after launch (F4) |
+| BL-1 | Weighted Connection Score, leaderboards, rankings, advanced achievements | Deferred by the founder, Nov 26 |
+| BL-2 | Interactive advertising as a controlled experiment | Approved in principle, after launch |
+| BL-3 | Media backup and recovery approach for photos and videos | Required before any cohort beyond the controlled pilot |
+| BL-4 | App topic names aligned with launch market segments | Not needed (founder, Nov 27): segments need not match the app's topics |
 
-Production activation, external pilot access and real financial transactions
-remain unauthorized until their gates are approved. The landing page
-(SP-BRAND-002) is complete and frozen until meaningful market feedback.
+## 6. Ready to release
+
+PB-4 can be authorized when: T3 and T5 are accepted; T4 passed or video is
+deliberately left off; O1 to O6 are done; L1 is signed off; there is no open
+P0 or P1 and every P2 is fixed or accepted; and you authorize it. If all of
+that is true before December 23, the pilot opens earlier.
