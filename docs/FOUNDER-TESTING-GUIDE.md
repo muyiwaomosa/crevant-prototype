@@ -2,7 +2,9 @@
 
 **One URL:** https://splitpost-app-git-staging-crevant.vercel.app
 
-Updated Nov 27 for staging at commit `00ee129`: the approved MVP with the
+Updated Nov 27 for staging at commit `787c465` (the member app; a later
+docs-only commit can show instead, and the checklist header names the
+current one): the approved MVP with the
 SP-UAT-001 remediation (approved interface restored, gamification visible
 throughout the app). One procedure covers every area you accept: **interface,
 onboarding, gamification, My Split, publishing and video**. Part A prepares
@@ -29,14 +31,16 @@ is in `docs/ACCEPTANCE-CHECKLIST.md`.
 1. **Check staging is the latest build (live deployment verification).**
    Always in a **private window** (signed in to Vercel there): open
    `view-source:` followed by the staging address, and find
-   `<meta name="splitpost-commit" content="00ee129" />`. A normal window can
+   `<meta name="splitpost-commit" content="..." />` with the commit named at
+   the top of `docs/ACCEPTANCE-CHECKLIST.md`. A normal window can
    show a cached older page (on Nov 27 it showed `9d17683` while the address
    was serving `00ee129`). Any other value in a private window means Vercel
    has not finished deploying; wait a minute and reload. This check is
    required at the start of every acceptance session and after every
    deployment, on staging and on app.splitpost.ca.
-2. The read-only database check already passed (run 52, Nov 27): staging
-   isolation, every migration through 20261219, the switches. Nothing to do.
+2. The staging database checks already passed (run 46062877363, Nov 27):
+   staging isolation, every migration through 20261220, the switches
+   (progression on). Nothing to do.
 3. **Turn on progression for staging.** Control Center, Operational switches,
    **Progression**, with a reason such as "founder acceptance, Nov 27". It is
    a founder-only control by design, so only your signed-in session can
@@ -97,7 +101,7 @@ publishing loop with progression on.
 | C4 | As the founder, delete the photo post from its "···" menu | It disappears for both of you; Claude can confirm the files are cleaned up within 15 minutes |
 | C5 | Change your profile picture, then refresh | The new picture on Profile, on your posts and in the tester's Clique row |
 
-## D. Video device validation (optional since Nov 27; for diagnosis)
+## D. Video device validation (optional since Nov 27; for diagnosis. Video is already accepted in Production, so skip this part)
 
 Since the founder's release decision (Nov 27, migration 20261220000000) these
 tests no longer gate video: the switch needs only the 50 GB cap. Use them to

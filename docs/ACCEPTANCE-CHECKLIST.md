@@ -34,29 +34,55 @@ signature, hands-on testing). **Claude** means Claude does it and reports
 back. **Counsel** means external legal counsel.
 
 Staging app: https://splitpost-app-git-staging-crevant.vercel.app and
-member Production app: https://app.splitpost.ca, both at `787c465` (Nov 27).
+member Production app: https://app.splitpost.ca, both on the latest commit on
+main (the last change to the app itself was `787c465`, Nov 27; later commits
+change only docs). Claude tells you the exact value to check at the start of
+each session.
 Member Production is live for the founder only: text, photo and video
 posting, progression and moderation work there; registration, invitations
 and the waitlist are closed. Acceptance procedure:
 `docs/FOUNDER-TESTING-GUIDE.md`.
 
-## 1. What needs you, in order
+## 1. Three workstreams, run in parallel
 
-Done and not to be repeated: T1, T2, T4 (video released and accepted in
-Production), O3 (PB-2), the PB-1 items marked verified in O1, and in O5 the
-moderator role, the six photo processing checks, founder photos, progression
-and video.
+Done and not to be repeated unless a later change touches what they tested:
+T1, T2, T4 (video released and accepted in Production), O3 (PB-2), the PB-1
+items marked verified in O1, and in O5 the moderator role, the six photo
+processing checks, founder photos, progression and video.
 
-| # | Action | Item | Effort | Latest |
-|---|---|---|---|---|
-| 1 | Send counsel the policy pack and the blocking questions | L1 | 1 h to send | **Dec 1** |
-| 2 | Hands-on acceptance of the member journey on your phone and laptop, with the speed and reduced motion checks in the same session (testing guide parts B and C; part D, video, is already accepted) | T3, T5 | 2 h | Dec 5 |
-| 3 | Request a password reset to your own account on app.splitpost.ca and confirm it arrives from Splitpost | O1 | 5 min | Dec 5 |
-| 4 | Authorize the staging recovery exercise in writing, then run its dashboard steps with Claude in a quiet hour | O2 | 1 h | Dec 12 |
-| 5 | Confirm advertising and sharing stay at their defaults for the pilot (or set them), and decide the first cohort | O5, O6 | 1 h | Dec 15 |
-| 6 | Accept the release candidate | O4 | 30 min | Dec 20 |
-| 7 | Set up the two uptime checks (deferred until now) | O1 | 15 min | Before O7 |
-| 8 | Authorize PB-4, external pilot access | O7 | 15 min | Dec 23 |
+Nothing here opens registration, invitations or the waitlist, and rewards
+stay simulated. Recruiting conversations in workstream 3 happen outside the
+product. No link, invitation or campaign is issued until O7.
+
+### Workstream 1: Product readiness
+
+| # | Action | Item | Who | Effort | Latest |
+|---|---|---|---|---|---|
+| 1.1 | Hands-on acceptance of the member journey on your phone and laptop (testing guide parts A to C and E, your founder-account steps; the tester steps are 1.2 and can be the same sitting), with the speed and Reduce Motion checks in the same session. Video (part D) is already accepted | T3, T5 | Founder | 2 h | Dec 5 |
+| 1.2 | **Staging tester session**: the two-account part of the guide, played by a second test account (yours, or a founding team member's). Covers joining by invitation, the tester's Home, engaging with your post, the Clique, My Split and goals, the welcome walkthrough again and the deletion preview | T7 | Founder | 45 min | Dec 5 |
+| 1.3 | Fix each finding: P0 and P1 the same day, P2 fixed or accepted by you | O4 | Claude; founder accepts | Depends on findings | Dec 16 |
+| 1.4 | Release candidate regression after any fix, then your acceptance | T6, O4 | Claude; founder | 30 min for you | Dec 20 |
+
+### Workstream 2: Operational and legal readiness
+
+| # | Action | Item | Who | Effort | Latest |
+|---|---|---|---|---|---|
+| 2.1 | Send counsel the review package (`docs/policies/COUNSEL-PACKAGE.md`: four member documents, the Advertising Policy and 20 blocking questions) | L1 | Founder | 1 h to send | **Dec 1** |
+| 2.2 | Request a password reset to your own account on app.splitpost.ca and confirm it arrives from Splitpost | O1 | Founder | 5 min | Dec 5 |
+| 2.3 | Authorize the staging recovery exercise in writing, then run its dashboard steps with Claude in a quiet hour | O2 | Founder; Claude runs checks | 1 h | Dec 12 |
+| 2.4 | Set up the two uptime checks | O1 | Founder; Claude verifies | 15 min | Dec 18 |
+| 2.5 | Record counsel's answers and update the drafts; publish the final versions and link them from registration | L1 | Claude drafts; founder approves | 1 day | Dec 20 |
+
+### Workstream 3: Business readiness
+
+| # | Action | Item | Who | Effort | Latest |
+|---|---|---|---|---|---|
+| 3.1 | Founding creators: a shortlist of creators, conversations to confirm interest, and their consent to the public name they want shown | B3 | Founder | Ongoing | Dec 15 |
+| 3.2 | Cohort selection: the named first 10 to 20 members (creators and supporters), and the order they are invited in | O6 | Founder | 1 h | Dec 15 |
+| 3.3 | Advertiser recruitment: a shortlist and early conversations only. No campaign is activated until the Advertising Policy is reviewed and questions 20 and 21 are answered | B4 | Founder | Ongoing | Before any campaign |
+| 3.4 | Confirm advertising and sharing stay at their defaults for the pilot (or set them) | O5 | Founder | 15 min | Dec 15 |
+| 3.5 | Pilot communications: the invitation message, the welcome note and a short pilot FAQ, drafted from approved copy. They are sent only after O7, with the CASL elements counsel confirms (question 23) | B5 | Claude drafts; founder approves | 2 h for Claude, 30 min for you | Dec 18 |
+| 3.6 | Authorize PB-4, external pilot access | O7 | Founder | 15 min | Dec 23 |
 
 ## 2. What Claude does without waiting
 
@@ -85,6 +111,7 @@ true first.
 | T4 | **Video release** (closes UAT-001-2) | **Changed by founder decision, Nov 27:** device testing is no longer an activation gate (approved change to the video release criteria; migration 20261220000000). Device tests stay available and recorded for diagnosis; none was recorded or changed by the decision | Founder (switch on); Claude (migration, checks, verification) | **Done and accepted Nov 27.** Migration merged (D7, `7c0411a`) and applied to staging (run 46062877363) and member Production (run 46064254403), check 036 passed on both. Founder set the 50 GB cap, switched New video uploads on and published an 11 second video; after the PROD-VID-1 fix (`787c465`) it showed a preview, played with sound and played again after a refresh | 30 min | The 50 GB cap is set and New video uploads is on in member Production with a reason; check 036 passes; limits, server file checks, moderation, cleanup and the separate playback switch unchanged; members get video when the pilot opens (no separate step) |
 | T5 | Real-device speed and reduced motion | Emulated checks done (sign-in 2.1 s, landing 1.24 s on Slow 4G) | Founder | T3 (same session) | 10 min | Sign-in about 2 s and Home about 3 s on your phone with Wi-Fi off; with Reduce Motion on, the walkthrough changes faces without sliding |
 | T6 | Release candidate regression | Green at `787c465` | Claude | Any fix merged | 2 h each time | Full CI green (unit, types, build, secret scan, database, separation, reconciliation, 20 browser journeys with WCAG 2.2 AA, public site and launch rehearsal) at the exact commit PB-2 and PB-3 use |
+| T7 | **Staging tester session** (tracked since Nov 27; workstream 1.2) | Not started | Founder, with a second test account | T1, T2 (done) | 45 min | Every tester step of part B of the testing guide behaves as written for the second account, alongside your founder account; findings recorded in Feedback and classified here. No one outside the founding team is invited |
 
 ### O. Operational readiness
 
@@ -96,7 +123,7 @@ true first.
 | O4 | **PB-3** release candidate fixes | Nothing open | Claude; founder accepts | T3, T4, O3 | depends on findings | Every fix through full CI; staging and Production at the same commit; your acceptance recorded |
 | O5 | Pilot switch states for Production: progression, photos, advertising, sharing, video | **In progress.** Done Nov 27 (founder, verified; not to be repeated): **moderator role** granted to the launch founder only (recorded with `ops.grant_moderator`) and verified; **all six hosted photo processing checks** passed; **photo posting** on for the founder only (`photos_enabled` true, audience `founder`) and verified; **progression** on in member Production; **video** on (50 GB cap, New video uploads and playback on; T4). Remaining: confirm advertising and sharing stay at their defaults | Founder decides | O3 | 15 min | Each switch set in Control Center with a reason; photos stay founder only until PB-4 |
 | O6 | Cohort plan: who is invited first, how many, invitation links, the pilot welcome | Not started | Founder; Claude prepares the welcome text from approved copy | L1 for the documents members accept | 1 h | A named first cohort and size; invitation links issued only after O7 |
-| O7 | **PB-4** external pilot access | Not started; needs separate authorization | Founder | T3, O1 to O6, L1 | 15 min | Your written authorization; invitations approved in `config/member-production.json` by reviewed PR; the first invited member can register on app.splitpost.ca |
+| O7 | **PB-4** external pilot access | Not started; needs separate authorization | Founder | T3, T7, O1 to O6, L1 | 15 min | Your written authorization; invitations approved in `config/member-production.json` by reviewed PR; the first invited member can register on app.splitpost.ca |
 | O8 | Delete the rehearsal project (saves about $10 a month) | Kept on purpose | Founder approves; Claude checks dependencies | O2 passed | 15 min | No workflow or check refers to it; your explicit approval |
 
 Already done (evidence in the tracker): staging on Pro with daily backups,
@@ -108,7 +135,7 @@ its immediate reporting, recovery objectives approved (RPO 24 h, RTO 4 h).
 
 | ID | Item | Status | Owner | Depends on | Effort | Acceptance criteria |
 |---|---|---|---|---|---|---|
-| L1 | **Pilot documents**: Terms of Use and Pilot Participation Terms, Member Privacy Notice (including the media backup line and the deletion register), Community Standards, Rewards Rules as they apply to simulated amounts, and the blocking questions in `docs/policies/LEGAL-REVIEW-QUESTIONS.md` | Drafts v0.1 ready; **not yet with counsel** | Founder and counsel; Claude updates the drafts | Counsel engaged | 1 h to brief; counsel's time; Claude 1 day for changes | Counsel's written sign-off on each document for an invitation-only, adult, simulated-earnings pilot; every blocking question answered; final text linked from registration before O7 |
+| L1 | **Pilot documents**: Terms of Use and Pilot Participation Terms, Member Privacy Notice (including the media backup line and the deletion register), Community Standards, Rewards Rules as they apply to simulated amounts (Part G, goals and locked value, added Nov 27), and the 20 blocking questions in `docs/policies/LEGAL-REVIEW-QUESTIONS.md` | Drafts v0.1 ready; **review package ready** (`docs/policies/COUNSEL-PACKAGE.md`); **not yet with counsel** | Founder and counsel; Claude updates the drafts | Counsel engaged | 1 h to brief; counsel's time; Claude 1 day for changes | Counsel's written sign-off on each document for an invitation-only, adult, simulated-earnings pilot; every blocking question answered; final text linked from registration before O7 |
 | L2 | Rewards Rules for allocation percentages | Not needed for the pilot | Counsel | Showing percentages to members | Later | Required before any allocation percentage is shown; percentages stay hidden in the pilot |
 | L3 | Regulated financial products review | Deferred | Counsel | Real financial functionality | Later | Required before any real money moves; nothing in the MVP moves money |
 
@@ -118,6 +145,9 @@ its immediate reporting, recovery objectives approved (RPO 24 h, RTO 4 h).
 |---|---|---|---|---|---|
 | B1 | Prospective members' response to the landing page and waitlist | Live since publication | Founder | Ongoing | The trigger for revisiting the frozen landing page; not a release gate |
 | B2 | Pilot cohort feedback on the member journey | After O7 | Pilot members, through Feedback | From Dec 23 | Findings classified P0 to P3 here; not a release gate |
+| B3 | Founding creators: shortlist, interest confirmed, consent to the public name shown | Not started | Founder | By Dec 15 | Enough confirmed creators for the first cohort (O6); creator links issued only after O7 and the CASL answer |
+| B4 | Advertiser recruitment | Not started | Founder | Conversations any time; campaigns only after the Advertising Policy review (questions 20, 21) | A shortlist and recorded interest; no campaign activated during the members-only pilot without that review |
+| B5 | Pilot communications: invitation, welcome note, pilot FAQ | Not started | Claude drafts from approved copy; founder approves | By Dec 18 | Approved text; the CASL elements counsel requires; nothing sent before O7 |
 
 ## 4. Risks to December 23
 
@@ -162,6 +192,6 @@ enhancement (post-launch backlog).
 
 ## 6. Ready to release
 
-PB-4 can be authorized when: T3 and T5 are accepted (T4 is done); O1 to O6 are done; L1 is signed off; there is no open
+PB-4 can be authorized when: T3, T5 and T7 are accepted (T4 is done); O1 to O6 are done; L1 is signed off; there is no open
 P0 or P1 and every P2 is fixed or accepted; and you authorize it. If all of
 that is true before December 23, the pilot opens earlier.

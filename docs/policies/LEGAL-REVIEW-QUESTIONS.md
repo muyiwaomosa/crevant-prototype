@@ -42,6 +42,10 @@ Splitpost is a connection-driven social media platform operated from Ontario. It
 18. Is changing the points table or economic split "prospectively with advance notice" an acceptable unilateral amendment mechanism?
 19. What notice should be given if the pilot closes and simulated balances end?
 
+**Added Nov 27 (progression is live in the pilot app; Rewards Rules Part G):**
+
+49. **BLOCKING.** Members see simulated value as "Locked" until they meet one-time goals and as "Unlocked" afterwards, and the approved framework speaks of "no automatic forfeiture of legitimate earnings". Does this, as worded in the app and in Rewards Rules Part G, create an expectation of value, an obligation or a debt, or make qualification look like a condition for receiving something of value? Does requiring 5 qualified referrals as one of the supporter goals change the answers to questions 14 and 35?
+
 ## C. Advertising
 
 20. **BLOCKING for external advertisers.** How should the pilot settlement terms work when an advertiser agrees a real price but the creator and fan pool allocations are simulated? Must advertisers be told, and how, that their spend is not distributed to creators during the pilot?
@@ -99,7 +103,7 @@ Splitpost is a connection-driven social media platform operated from Ontario. It
 | Question | Blocks |
 |---|---|
 | 1, 2, 3, 4, 5 | External pilot participation (privacy) |
-| 12, 13, 14, 15 | External pilot participation (consumer protection, contests, lottery) |
+| 12, 13, 14, 15, 49 | External pilot participation (consumer protection, contests, lottery, locked value) |
 | 20, 21 | External advertisers |
 | 23 | External invitations and referral links (CASL) |
 | 26, 27 | External pilot participation (content licence, public previews) |
