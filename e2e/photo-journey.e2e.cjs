@@ -148,11 +148,13 @@ const makePhoto = (page, w, h) =>
       box(form.getByRole('button', { name: 'Post', exact: true })),
     ])
     const vw = pageP.viewportSize().width
+    // Post sits at the top right of the full-screen composer (SP-DESIGN-002, SP-UAT-001), above the photo,
+    // and stays last in Tab order (checked below).
     return img.y + img.height <= change.y && change.y + change.height <= caption.y && remove.y + remove.height <= caption.y
-      && caption.y + caption.height <= post.y && change.height >= 44 && remove.height >= 44
+      && post.y + post.height <= img.y && change.height >= 44 && remove.height >= 44
       && [img, change, remove, caption, post].every((b) => b.x >= 0 && b.x + b.width <= vw)
   }
-  check('at 390px: photo, then Change photo and Remove photo (44px targets), then the caption, then Post', await layout())
+  check('at 390px: Post at the top, then the photo, Change photo and Remove photo (44px targets), then the caption', await layout())
   // Keyboard: from Change photo, Tab moves to Remove photo, then the caption,
   // then the optional topic (20261202000000), then Post.
   {

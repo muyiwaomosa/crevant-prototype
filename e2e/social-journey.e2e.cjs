@@ -370,7 +370,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
   // Only the sign-in session and interface preferences (welcome seen, tips and first steps dismissed,
   // milestones already acknowledged; SP-UX-002); never posts, likes, comments or follows.
   const appStorage = await pageB.evaluate(() =>
-    Object.keys(localStorage).filter((k) => !/^sb-/.test(k) && !/^splitpost\.(welcome|tip|first-steps|goals-met)\./.test(k)),
+    Object.keys(localStorage).filter((k) => !/^sb-/.test(k) && !/^splitpost\.(welcome|tip|first-steps|goals-met|goalstrip)\./.test(k)),
   )
   check('no social data is kept in browser storage', appStorage.length === 0, appStorage.join(','))
 
