@@ -13,7 +13,7 @@ Version: 0.1 (draft) | Prepared for: [Legal entity name] | Date: [Effective date
 
 ## Background in brief
 
-Splitpost is a connection-driven social media platform operated from Ontario. It is running a controlled, invitation and referral only, adult-only (18+ attestation) pilot. Members earn Connection Points (CP), which are not money, cannot be bought, sold or transferred, and are not redeemable for money. Qualified referrals earn 100 redemption-eligible CP (simulated). A published model allocates eligible net content-associated ad revenue 40% creator, 20% fan pool, 40% Splitpost, all simulated in the pilot, with an estimated dynamic point valuation shown to members. Real advertisers may agree real prices. Data is held with Supabase and hosted on Vercel, possibly outside Canada.
+Splitpost is a connection-driven social media platform operated from Ontario. It is running a controlled, invitation and referral only, adult-only (18+ attestation) pilot. Members earn Connection Points (CP), which are not money, cannot be bought, sold or transferred, and are not redeemable for money. Qualified referrals earn 100 redemption-eligible CP (simulated). An approved internal model allocates eligible net content-associated ad revenue 40% creator, 20% fan pool, 40% Splitpost, all simulated in the pilot. Pilot members are shown simulated amounts (creator earnings and an estimated dynamic point valuation from the fan pool), not the percentages. Real advertisers may agree real prices. Data is held with Supabase and hosted on Vercel, possibly outside Canada.
 
 ---
 
@@ -44,7 +44,7 @@ Splitpost is a connection-driven social media platform operated from Ontario. It
 
 **Added Nov 27 (progression is live in the pilot app; Rewards Rules Part G):**
 
-49. **BLOCKING.** Members see simulated value as "Locked" until they meet one-time goals and as "Unlocked" afterwards, and the approved framework speaks of "no automatic forfeiture of legitimate earnings". Does this, as worded in the app and in Rewards Rules Part G, create an expectation of value, an obligation or a debt, or make qualification look like a condition for receiving something of value? Does requiring 5 qualified referrals as one of the supporter goals change the answers to questions 14 and 35?
+49. **BLOCKING.** Members see simulated value as "Locked" until their qualification is approved (meeting one-time goals makes them eligible for a qualification review, which Splitpost decides after an integrity review) and as "Unlocked" afterwards, and the approved framework speaks of "no automatic forfeiture of legitimate earnings". Does this, as worded in the app and in Rewards Rules Part G, create an expectation of value, an obligation or a debt, or make qualification look like a condition for receiving something of value? Does requiring 5 qualified referrals as one of the supporter goals change the answers to questions 14 and 35?
 
 ## C. Advertising
 
@@ -100,13 +100,22 @@ Splitpost is a connection-driven social media platform operated from Ontario. It
 
 ## Summary of blocking questions
 
-| Question | Blocks |
+Two separate sets, subject to counsel's advice on whether any question belongs in the other set.
+
+**A. Blocks external member participation** (inviting anyone outside the founding team, issuing referral links or invitations, publishing documents)
+
+| Question | Area |
 |---|---|
-| 1, 2, 3, 4, 5 | External pilot participation (privacy) |
-| 12, 13, 14, 15, 49 | External pilot participation (consumer protection, contests, lottery, locked value) |
-| 20, 21 | External advertisers |
-| 23 | External invitations and referral links (CASL) |
-| 26, 27 | External pilot participation (content licence, public previews) |
-| 31, 32 | External pilot participation (securities and payments characterization) |
-| 35, 36 | External pilot participation (pyramid scheme provisions) |
+| 1, 2, 3, 4, 5 | Privacy |
+| 12, 13, 14, 15, 49 | Consumer protection, contests, lottery, locked value |
+| 23 | CASL: invitations and referral links |
+| 26, 27 | Content licence, public previews |
+| 31, 32 | Securities and payments characterization |
+| 35, 36 | Pyramid selling and multi-level marketing |
 | 46 | Publishing any document |
+
+**B. Blocks external advertiser activation only** (any campaign with a real external advertiser; not the members-only pilot)
+
+| Question | Area |
+|---|---|
+| 20, 21 | Pilot settlement terms; deceptive marketing and sector rules |

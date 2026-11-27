@@ -40,17 +40,10 @@ is in `docs/ACCEPTANCE-CHECKLIST.md`.
    deployment, on staging and on app.splitpost.ca.
 2. The staging database checks already passed (run 46062877363, Nov 27):
    staging isolation, every migration through 20261220, the switches
-   (progression on). Nothing to do.
-3. **Turn on progression for staging.** Control Center, Operational switches,
-   **Progression**, with a reason such as "founder acceptance, Nov 27". It is
-   a founder-only control by design, so only your signed-in session can
-   change it. The approved SP-PRG-001 v1.0 goals are already recorded, so
-   goals start counting as soon as it is on. This affects staging only.
-   Production and ordinary pilot members are not touched, and every
-   safeguard stays in place: amounts are simulated, qualification approval
-   is a manual click with a reason, holds and daily caps apply, and no cash
-   can move.
-4. **Optional, to test the media-led experience with testers: let staging
+   (progression on). Nothing to do: progression is already on in staging and
+   in member Production, verified independently, so there is no switch to
+   change before you start.
+3. **Optional, to test the media-led experience with testers: let staging
    testers post photos.** Photo posting is founder-only by default
    (`photos_audience = founder`), so testers can only post text. Widening it
    is a server-only, recorded action with an explicit phrase, on **staging
@@ -97,7 +90,7 @@ publishing loop with progression on.
 |---|---|---|
 | C1 | As the founder, + then Add photo: pick a photo from your phone, add a caption and a topic, Post | The photo preview with "Keep your original" beside it; after Post, the post opens with the photo, and the creator goal message with its new count |
 | C2 | Refresh, then open Home as the tester | The photo still shows; the post is first on the tester's Home with your picture and name |
-| C3 | As the tester, try to post a photo | Founder-only by default: the tester can post text, not photos, unless you widened it in step A4 |
+| C3 | As the tester, try to post a photo | Founder-only by default: the tester can post text, not photos, unless you widened it in step A3 |
 | C4 | As the founder, delete the photo post from its "···" menu | It disappears for both of you; Claude can confirm the files are cleaned up within 15 minutes |
 | C5 | Change your profile picture, then refresh | The new picture on Profile, on your posts and in the tester's Clique row |
 
@@ -149,8 +142,6 @@ accepted by you before release.
 ## When you are done
 
 * Send any defects through Feedback; Claude picks them up from the inbox.
-* Leave progression on for further staging testing, or turn it off with a
-  reason. Either way, nothing reaches ordinary members or Production.
 * Reduced motion: with your phone's Reduce Motion setting on, the walkthrough
   changes faces without sliding.
 * Reference screenshots: `docs/design/ux-refine/` (walkthrough, first steps,

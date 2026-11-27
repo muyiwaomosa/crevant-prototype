@@ -8,15 +8,18 @@ Package version: 1 (Nov 27, 2026). Checklist item L1 in `docs/ACCEPTANCE-CHECKLI
 
 Splitpost is a connection-driven social media platform operated from
 Ontario. We plan to open a small, invitation-only, adult-only (18+
-attestation) pilot of 10 to 20 members, targeted for **December 23, 2026**.
+attestation) pilot, targeted for **December 23, 2026**. The size and
+composition of the first cohort are pending the founder's approval through
+go-to-market planning (currently proposed: 10 to 20 members).
 Every earning, pool and payout figure in the pilot is simulated: no money is
 collected from members, held, paid or redeemed.
 
 We ask counsel to:
 
-1. Answer the **20 blocking questions** (section 4) in writing. Nobody
-   outside the founding team will be invited until they are answered and any
-   required changes are made.
+1. Answer the **20 blocking questions** (section 4) in writing. They come
+   in two sets: 18 gate external member participation, and 2 gate only
+   external advertiser activation. Nobody outside the founding team will be
+   invited until set A is answered and any required changes are made.
 2. Review the **four member documents** (section 3, items 1 to 4) for an
    invitation-only, adult, simulated-earnings pilot, and confirm or mark up
    each one. The Constitution (item 5) is welcome but does not gate the
@@ -26,7 +29,7 @@ We ask counsel to:
 4. Answer the non-blocking questions where convenient. They gate a wider
    launch or a later feature, not this pilot.
 
-To keep the date, we need written answers to the blocking questions and
+To keep the date, we need written answers to set A and
 sign-off (or markups) on documents 1 to 4 by **December 18, 2026**.
 
 ## 2. Facts counsel can rely on (as built, Nov 27)
@@ -40,12 +43,19 @@ sign-off (or markups) on documents 1 to 4 by **December 18, 2026**.
   feedback; delete their account.
 * **Simulated economics:** Connection Points (recognition points have no
   value; only qualified referrals earn redemption-eligible points, 100 each).
-  The published model splits eligible content-associated advertising revenue
-  40% creator, 20% fan pool, 40% Splitpost. All of it is simulated and
-  labelled "Simulated" in the app.
-* **Progression:** one-time goals for creators and supporters. Until a member
-  qualifies, their simulated value shows as Locked; after qualifying it shows
-  as Unlocked. Nothing is ever paid (Rewards Rules, Part G).
+  The **approved internal model** splits eligible content-associated
+  advertising revenue 40% creator, 20% fan pool, 40% Splitpost. **What pilot
+  members see** is different: simulated amounts only (a creator's simulated
+  earnings, an estimated value for eligible points from the simulated fan
+  pool), labelled "Simulated", and never the percentages. Whether and how
+  the percentages are disclosed is for counsel's advice (Rewards Rules,
+  section 10).
+* **Progression:** one-time goals for creators and supporters. Completing
+  them makes a member eligible for qualification review, not Qualified.
+  Qualification is granted only after a successful integrity review and the
+  founder's approval, with a recorded reason. Until then the member's
+  simulated value shows as Locked; after approval it shows as Unlocked.
+  Nothing is ever paid (Rewards Rules, Part G).
 * **Advertising:** built, but no external advertiser is active. Regulated
   financial products cannot be advertised or targeted. Targeting never uses
   sensitive information.
@@ -79,20 +89,33 @@ needed): `docs/PRIVACY-NOTICE-PILOT-FEEDBACK-DRAFT.md` and
 on the waitlist. It is included for questions 1, 9 and 23 and is reviewed
 before creator links are issued to anyone outside the team.
 
-## 4. The 20 blocking questions
+## 4. The 20 blocking questions, in two separate sets
 
-Full wording, with the non-blocking questions, is in document 7.
+Full wording, with the non-blocking questions, is in document 7. We ask
+counsel to say if any question belongs in the other set.
 
-| Area | Questions | What it blocks |
-|---|---|---|
-| Privacy: consent, Ontario law, cross-border processing, 18+ attestation, retention after deletion | 1, 2, 3, 4, 5 | Inviting anyone outside the team |
-| Consumer protection: simulated values, value of points, contests, lottery, locked value | 12, 13, 14, 15, 49 | Inviting anyone outside the team |
-| Advertising: pilot settlement when allocations are simulated, deceptive marketing risk | 20, 21 | Any external advertiser |
-| CASL: invitation emails and referral messages | 23 | Sending any invitation or referral link |
-| Intellectual property: the member content licence, public previews | 26, 27 | Inviting anyone outside the team |
-| Securities and payments characterization of points and the pool | 31, 32 | Inviting anyone outside the team |
-| Pyramid selling and multi-level marketing (referrals) | 35, 36 | Inviting anyone outside the team |
-| No statements of compliance or commitments we cannot meet | 46 | Publishing any document |
+**Set A: blocks external member participation (18 questions).** No one
+outside the founding team is invited, and no invitation or referral link is
+sent, until these are answered.
+
+| Area | Questions |
+|---|---|
+| Privacy: consent, Ontario law, cross-border processing, 18+ attestation, retention after deletion | 1, 2, 3, 4, 5 |
+| Consumer protection: simulated values, value of points, contests, lottery, locked value | 12, 13, 14, 15, 49 |
+| CASL: invitation emails and referral messages | 23 |
+| Intellectual property: the member content licence, public previews | 26, 27 |
+| Securities and payments characterization of points and the pool | 31, 32 |
+| Pyramid selling and multi-level marketing (referrals) | 35, 36 |
+| No statements of compliance or commitments we cannot meet (blocks publishing any document) | 46 |
+
+**Set B: blocks external advertiser activation only (2 questions).** These
+gate any campaign with a real external advertiser. Subject to counsel's
+advice, they do not hold up the members-only pilot, which has no external
+advertiser.
+
+| Area | Questions |
+|---|---|
+| Advertising: pilot settlement when allocations are simulated; deceptive marketing and sector rules | 20, 21 |
 
 ## 5. Placeholders the founder supplies privately (not in this repository)
 
