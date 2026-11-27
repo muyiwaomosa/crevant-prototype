@@ -806,7 +806,7 @@ function MemberHeader({ member, onChange, about }: { member: Member; onChange: (
       </div>
       {!member.isMe && <MoreMenu member={member} onChange={onChange} />}
       <div className="px-5 pb-5">
-        <div className="-mt-12 inline-block rounded-full ring-4 ring-white sm:-mt-14">
+        <div className="relative z-10 -mt-12 inline-block rounded-full ring-4 ring-white sm:-mt-14">
           <MemberAvatar member={member} size={88} />
         </div>
         <div className="mt-2 min-w-0 max-w-full">
