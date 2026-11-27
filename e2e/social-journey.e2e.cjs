@@ -462,7 +462,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
   await pageA.getByTestId('post-tile').filter({ hasText: postText }).click()
   const postCard = pageA.getByTestId('post').filter({ hasText: postText })
   await postCard.waitFor()
-  check('A sees one comment on their post', /\b1\s*comment\b/.test(await postCard.textContent()))
+  check('A sees one comment on their post', /(^|\D)1 comment(?!s)/.test(await postCard.textContent()))
   check('A sees B’s comment under it', (await pageA.getByTestId('comment').count()) === 1)
   await postCard.getByRole('button', { name: 'Delete post' }).click()
   await postCard.getByRole('button', { name: 'Delete', exact: true }).click()
