@@ -202,6 +202,10 @@ async function axe(page) {
 
     // 9. The rate limit: the browser sends no client address here, so every
     // attempt shares one bucket (10 an hour), and the 11th is limited.
+    // Buckets are fixed clock hours, so never start this close to the hour:
+    // the attempts would split across two windows and none would be limited.
+    const toHour = Number(sql("select ceil(extract(epoch from date_trunc('hour', now()) + interval '1 hour' - now()))"))
+    if (toHour < 90) await page.waitForTimeout((toHour + 2) * 1000)
     resetLimits()
     let limitedAt = 0
     for (let i = 1; i <= 12 && !limitedAt; i++) {
