@@ -78,7 +78,7 @@ test('the committed references match config, and functions read references only 
   assert.equal(read('supabase/functions/_shared/build-info.ts').match(/export const BUILD = '([^']*)'/)[1], 'unstamped', 'the repository copy is never stamped')
 })
 
-test('member Production is recorded (one valid project, not staging or the waitlist), founder-only photos approved, only avatar on member Production in the ledger', () => {
+test('member Production is recorded (one valid project, not staging or the waitlist), founder-only photos approved, avatar and post-media on member Production in the ledger', () => {
   const p = JSON.parse(read('config/supabase-projects.json'))
   assert.match(p.memberProduction.ref, /^[a-z]{20}$/)
   assert.ok(![p.staging.ref, p.production.ref].includes(p.memberProduction.ref))
@@ -89,10 +89,13 @@ test('member Production is recorded (one valid project, not staging or the waitl
   assert.equal(a.invitationsApproved, false)
   const ledger = JSON.parse(read('config/function-deployments.json'))
   assert.deepEqual(ledgerProblems(ledger), [])
-  // Exactly one member Production entry: avatar v1 at d2784151, on this project.
+  // Member Production: avatar v1 at d2784151, and post-media v3 at 1fa2e7a (PB-2, approved with postMediaFunctionApproved), on this project.
   const member = ledger.deployments.filter((e) => e.target === 'member-production')
-  assert.deepEqual(member.map((e) => [e.ref, e.function, e.commit, e.version]), [[p.memberProduction.ref, 'avatar', 'd2784151ef162e5967851f9d7a8849b7c8a617ef', 1]])
-  assert.ok(ledger.deployments.every((e) => e.function === 'avatar' || (e.function === 'post-media' && e.target === 'staging')), 'post-media is in the ledger for staging only')
+  assert.deepEqual(member.map((e) => [e.ref, e.function, e.commit, e.version]), [
+    [p.memberProduction.ref, 'avatar', 'd2784151ef162e5967851f9d7a8849b7c8a617ef', 1],
+    [p.memberProduction.ref, 'post-media', '1fa2e7aa4b243019d69ec8ded901a1a40b3117c8', 3],
+  ])
+  assert.ok(ledger.deployments.every((e) => ['avatar', 'post-media'].includes(e.function)), 'only avatar and post-media are in the ledger (never join-waitlist)')
   assert.match(read('docs/function-evidence-log.md'), /\| Time \(UTC\) \| Action \| Target \| Project \| Function \| Commit \| Version \| Operator \| Reason \| Result \|/)
 })
 
