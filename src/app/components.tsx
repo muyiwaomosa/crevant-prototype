@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Heart, MessageCircle, Repeat2, Sparkles, Trash2, Users } from 'lucide-react'
+import { Check, Heart, MessageCircle, MoreHorizontal, Repeat2, Sparkles, Trash2, Users } from 'lucide-react'
 import { Card, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
@@ -198,7 +198,11 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
           )}
           <SaveRepostButtons post={post} />
           <ShareButton post={post} />
-          {!post.isMine && <ReportButton target="post" targetId={post.id} name={post.author.displayName} className="ml-auto" />}
+          {!post.isMine && (
+            <OverflowMenu label={`More options for this post by ${post.author.displayName}`} className="ml-auto">
+              <ReportButton target="post" targetId={post.id} name={post.author.displayName} />
+            </OverflowMenu>
+          )}
           {post.isMine && onDeleted && (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2 has-[.post-editor]:w-full">
               {!confirming && <EditPost post={{ ...post, body }} onEdited={setBody} />}
@@ -233,6 +237,42 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
         </div>
       </article>
     </Card>
+  )
+}
+
+/** "···": less frequent actions (report, block), out of the way until needed. */
+export function OverflowMenu({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', close)
+    }
+  }, [open])
+  return (
+    <div ref={ref} className={clsx('relative', className)}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full text-ink-700 hover:bg-ink-100"
+      >
+        <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="absolute bottom-full right-0 z-20 mb-1 flex min-w-44 flex-col items-stretch gap-1 rounded-2xl bg-white p-2 text-left shadow-lg ring-1 ring-ink-100">
+          {children}
+        </div>
+      )}
+    </div>
   )
 }
 

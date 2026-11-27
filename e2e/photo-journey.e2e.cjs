@@ -257,6 +257,8 @@ const makePhoto = (page, w, h) =>
   await pageQ.keyboard.press('Escape')
   await dialog.waitFor({ state: 'detached' })
   check('Escape closes it', true)
+  // Report is in the post's "···" menu.
+  await qPost.getByRole('button', { name: /^More options for this post/ }).click()
   await qPost.getByRole('button', { name: /Report this post/ }).click()
   const reportDialog = pageQ.getByRole('dialog')
   await reportDialog.getByRole('radio', { name: /Harassment/ }).check()

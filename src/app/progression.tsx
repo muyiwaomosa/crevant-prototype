@@ -19,6 +19,8 @@ import {
   type ProgressNotice,
   type ProgressionQueue,
   type ProgressionReport,
+  type Activation,
+  type ActivationMetric,
   type QualificationStatus,
 } from './api'
 import { useAppApi } from './AppApiContext'
@@ -392,6 +394,20 @@ function ReviewSection({ queue, onChanged }: { queue: ProgressionQueue; onChange
             >
               <span className="text-[14px] text-ink-800">
                 @{m.username ?? 'member'} · {m.audience === 'creator' ? 'creator' : 'supporter'} · {STATUS_TEXT[m.status]}
+                {m.status === 'under_review' && m.routine !== undefined && (
+                  <span
+                    className={`ml-2 rounded-full px-2 py-0.5 text-[12px] font-semibold ${m.routine ? 'bg-[#e7f4f1] text-[#1f5e52]' : 'bg-[#fde8ea] text-[#b4233a]'}`}
+                    data-testid="review-triage"
+                  >
+                    {m.routine ? 'Routine' : 'Flagged'}
+                  </span>
+                )}
+                {m.pendingReason && (
+                  <span className="block text-[12px] text-ink-600">
+                    {m.pendingReason}
+                    {m.waitingHours != null && ` · waiting ${m.waitingHours < 48 ? `${m.waitingHours} h` : `${Math.floor(m.waitingHours / 24)} days`}`}
+                  </span>
+                )}
               </span>
               <span className="flex flex-wrap gap-2">
                 {m.status === 'under_review' && (
@@ -462,6 +478,14 @@ function ReviewSection({ queue, onChanged }: { queue: ProgressionQueue; onChange
             </li>
           ))}
         </ul>
+      )}
+      {queue.metrics && (
+        <p className="text-[12px] text-ink-600" data-testid="review-metrics">
+          Waiting: {queue.metrics.routine_waiting ?? 0} routine, {queue.metrics.flagged_waiting ?? 0} flagged
+          {queue.metrics.oldest_waiting_hours != null && ` (oldest ${queue.metrics.oldest_waiting_hours} h)`}. Decisions in 7 days: {queue.metrics.decisions_7d ?? 0}.
+          Median time to approval: {queue.metrics.median_turnaround_hours != null ? `${queue.metrics.median_turnaround_hours} h` : 'not yet measured'}. Revocations:{' '}
+          {queue.metrics.revoked ?? 0}.
+        </p>
       )}
       <h3 className="pt-2 font-bold text-ink-900">Open holds</h3>
       {queue.holds.length === 0 ? (
@@ -750,6 +774,53 @@ function Scorecard({ report }: { report: ProgressionReport }) {
         revocation(s), {report.integrity.restorations ?? 0} restoration(s), {report.integrity.revenue_corrections ?? 0} revenue and{' '}
         {report.integrity.allocation_corrections ?? 0} allocation correction(s). Held creator amounts (simulated): {dollars(report.money.heldCreatorCents)}.
       </p>
+    </div>
+  )
+}
+
+/** Activation by the SP-PRG-001 definitions, with the previous consumer metric during the transition (20261219000000). */
+export function ActivationPanel() {
+  const api = useAppApi()
+  const [a, setA] = useState<Activation | null | undefined>(undefined)
+  useEffect(() => {
+    let live = true
+    api.founderActivation().then(
+      (x) => live && setA(x),
+      () => live && setA(null),
+    )
+    return () => {
+      live = false
+    }
+  }, [api])
+  if (!a) return null
+  const pct = (m: ActivationMetric) => (m.denominator > 0 ? `${Math.round((m.activated / m.denominator) * 100)}%` : 'not yet measured')
+  const rows: Array<[string, ActivationMetric]> = [
+    ['Creators', a.creator],
+    ['Consumers', a.consumer],
+    ['Consumers (previous metric)', a.consumerPrevious],
+    ['Advertisers', a.advertiser],
+  ]
+  return (
+    <div data-testid="activation-panel">
+      <Card className="p-5">
+        <h2 className="font-display text-lg font-extrabold text-ink-900">Activation</h2>
+        <p className="mt-1 text-[13px] text-ink-600">
+          SP-PRG-001 definitions, effective {a.effectiveFrom}. The previous consumer metric is shown until {a.transitionUntil}. Actual data.
+        </p>
+        <ul className="mt-3 space-y-3">
+          {rows.map(([label, m]) => (
+            <li key={label}>
+              <p className="text-[14px] font-semibold text-ink-900">
+                {label}: {m.activated} of {m.denominator} ({pct(m)})
+              </p>
+              <p className="text-[12px] text-ink-600">
+                {m.definition}. Out of: {m.denominatorDefinition}.
+              </p>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-[12px] text-ink-600">{a.comparability}</p>
+      </Card>
     </div>
   )
 }

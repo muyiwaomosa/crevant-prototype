@@ -230,6 +230,11 @@ declare
     'public.app_founder_settle_eligible(text)',
     'public.app_my_progress()'
   ];
+  -- Pilot closure, activation and triage (20261219000000), once applied.
+  closure text[] := array[
+    'public.app_founder_activation()',
+    'public.app_my_deletion_consequences()'
+  ];
   -- Progression rules (20261218000000), once applied.
   progression_rules text[] := array[
     'public.app_founder_correct_allocation(bigint,uuid,bigint,text,text,text)',
@@ -276,6 +281,9 @@ begin
   end if;
   if to_regclass('sim.qualification_decisions') is not null then
     expected := expected || progression_rules;
+  end if;
+  if to_regclass('sim.balance_closures') is not null then
+    expected := expected || closure;
   end if;
   if to_regclass('social.shares') is not null then
     expected := expected || discovery;
