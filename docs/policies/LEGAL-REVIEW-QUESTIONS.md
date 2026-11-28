@@ -58,7 +58,7 @@ Splitpost is a connection-driven social media platform operated from Ontario. It
 ## D. Intellectual property
 
 26. **BLOCKING.** Is the licence members grant (non-exclusive, royalty-free, worldwide, host, store, adapt, display and distribute within Splitpost and in public previews) appropriate in scope and duration? Should sublicensing to service providers be stated?
-27. **BLOCKING.** Do public previews of shared content outside the app require a separate opt-in by the creator, or is the licence sufficient?
+27. **BLOCKING.** Do public previews of shared content outside the app require a separate opt-in by the creator, or is the licence sufficient? **Updated Nov 28, 2026:** the founder has decided to make previews on by default for eligible posts, with clear disclosure in Settings and at sharing, and a switch-off that takes effect at once (Terms section 25; Member Privacy Notice). Is a default with a switch-off acceptable, and is the disclosure sufficient? Visitors see nothing until the project-wide switch is turned on after this answer.
 28. Are reposts (a pointer that always shows the original creator and disappears when the original is deleted) adequately covered by the licence and by the moral rights of the creator?
 29. How does the Copyright Act notice-and-notice regime apply to Splitpost, and is the takedown and counter-notice process appropriate? Is a repeat-infringer policy needed?
 30. Is the Splitpost name and logo adequately protected for the pilot (trademark search and filing)?

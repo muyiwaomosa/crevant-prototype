@@ -192,9 +192,9 @@ You confirm that you own your content or have permission to post it, and that po
 
 ### 25. Public previews
 
-Some content you share externally may be shown as a public preview to people without an account. Previews show only content that is eligible for preview, and stop when the content is deleted or hidden.
+When you or another member shares one of your posts outside Splitpost, people without an account may see a public preview of it. Previews are on by default for eligible posts, and you can switch them off at any time in Settings (Privacy, sharing and ads); they stop straight away. A preview shows only the post's text, when it was posted, its topic and your name and username, never photos or videos, comments, likes or anything about other members. A post is eligible only while it is live: never once deleted, hidden by moderation or under review, and never while your account is suspended or removed. Splitpost turns previews on for visitors only when the pilot opens to the public.
 
-> **Review note:** "Eligible for preview" to be defined with the founder (for example, by creator setting and content type).
+> **Review note:** Changed Nov 28, 2026 (founder decision, BL-006): previews moved from opt-in to on by default with a switch-off. Implemented in migration 20261222000000; the project-wide switch stays off in member Production until counsel answers question 27 and the founder approves. Counsel to confirm the default, the disclosure and the switch-off are sufficient.
 
 ### 26. Splitpost's own rights
 
