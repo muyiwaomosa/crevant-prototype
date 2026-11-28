@@ -213,8 +213,12 @@ J.run(async (browser) => {
   check('Redeemable 0, with 100 waiting for review', /Redeemable 0 From qualified referrals\. 100 waiting for review\./.test(t8), t8)
   check('the estimated value is labelled Simulated and is $0.00 until review', /Estimated value of your redeemable points Simulated \$0\.00/.test(t8), t8)
   check('the disclosure: simulated, no cash value, nothing paid out', /simulated.*no cash value.*nothing is paid out/i.test(await kai.page.getByTestId('split-disclosure').innerText()))
+  // Nov 28: his week is in Your Insights (performance); My Split keeps rewards.
+  await kai.page.goto(`${APP}/app/insights`)
+  await kai.page.getByTestId('contribution-insight').getByText('What happened').waitFor()
   const week = flat(await kai.page.getByTestId('contribution-insight').innerText())
-  check('Your week: what happened, what it means, what to do next, and the referral waiting', /What happened.*What it means.*What to do next/i.test(week) && week.includes('Referrals: 1 joined · 1 waiting for review · 0 qualified'), week)
+  check('Your support: what happened, what it means, what to do next, and the referral waiting', /What happened.*What it means.*What to do next/i.test(week) && week.includes('Referrals: 1 joined · 1 waiting for review · 0 qualified'), week)
+  await kai.page.goto(`${APP}/app/split`)
   const intro = kai.page.getByTestId('my-split-intro')
   await intro.waitFor()
   const ti = flat(await intro.innerText())

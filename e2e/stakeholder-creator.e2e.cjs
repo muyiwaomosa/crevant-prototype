@@ -156,11 +156,12 @@ J.run(async (browser) => {
 
   // ---------------------------------------------------------------------------
   step('7. Cleo strengthens the relationship: who joined, follow back, her own Clique')
-  await cleo.page.goto(`${APP}/app/profile?edit=1`)
-  await cleo.page.getByTestId('audience-insight').waitFor()
+  // Nov 28: the audience is part of Your Insights.
+  await cleo.page.goto(`${APP}/app/insights`)
+  await cleo.page.getByTestId('audience-insight').getByText('Followers', { exact: true }).waitFor()
   check('one person joined through her link', sql(`select count(*) from ops.registrations where referrer_id = '${c}'`) === '1')
   const audience = flat(await cleo.page.getByTestId('audience-insight').innerText())
-  check('Your audience: 1 follower, 1 in her Clique, 1 Active Supporter', /1 Followers 1 Clique 1 Active Supporters/.test(audience), audience)
+  check('Your audience: 1 follower, 1 in her Clique, 1 Active Supporter', /^Audience Actual 1 Followers .* 1 In your Clique 1 Active Supporters/.test(audience), audience)
   await cleo.page.goto(`${APP}/app/u/${userN}`)
   await cleo.page.getByRole('button', { name: 'Follow Nia New' }).click()
   await cleo.page.getByTestId('follow-confirmation').getByRole('button', { name: 'Join Clique (Nia New)' }).click()
@@ -238,17 +239,18 @@ J.run(async (browser) => {
   }
   const share = sql(`select (sim.split('content_ad', 5000)).creator_cents`)
   check('the database gives Cleo the creator share of $50.00 (2000 cents)', share === '2000' && sql(`select sum(net_cents) from sim.revenue_entries where creator_id = '${c}'`) === '5000')
-  await cleo.page.reload()
-  await cleo.page.getByTestId('money-face').waitFor()
+  // Nov 28: the simulated share is a reward, so it is in My Split; Insights keeps actual income.
+  await cleo.page.goto(`${APP}/app/split`)
   const earn = cleo.page.getByTestId('simulated-earnings')
   await earn.waitFor()
   const te = flat(await earn.innerText())
-  const tm = flat(await money.innerText())
-  check('Money: her simulated share is $20.00, labelled Simulated', /Simulated/.test(te) && te.includes('$20.00') && te.includes('Your simulated share by month')
+  await cleo.page.goto(`${APP}/app/insights`)
+  const tm = flat(await cleo.page.getByTestId('money-face').innerText())
+  check('Money: her simulated share is $20.00, labelled Simulated', /Simulated/.test(te) && te.includes('$20.00') && te.includes('Your simulated creator share')
     // The total revenue is never shown beside her share, so the allocation can't be worked out (legal safeguard).
     && !te.includes('$50.00'), te)
   check('Money: a You, Fans and Splitpost bar, and "Nothing is paid during the pilot"', /You Fans Splitpost/.test(te) && te.includes('Nothing is paid during the pilot.'), te)
-  check('Money: actual income stays $0.00, apart from the simulated figure', /Actual income Actual \$0\.00/.test(tm), tm.slice(-200))
+  check('Money: actual income stays $0.00, apart from the simulated figure', /Actual income \$0\.00/.test(tm) && !tm.includes('$20.00'), tm.slice(-200))
   check('Money: no allocation percentages (no 40/20/40)', !/\d+\s*%/.test(tm) && !/40\s*\/\s*20/.test(tm))
   await screenChecks(cleo.page, 'the Money face with simulated earnings')
   check('nothing is paid: the only money is in the simulated schema', sql("select count(*) from pg_namespace where nspname = 'finance'") === '0')

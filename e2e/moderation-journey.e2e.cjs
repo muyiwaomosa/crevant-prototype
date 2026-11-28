@@ -271,8 +271,9 @@ async function signIn(page, email) {
     await pageC.goto(`${APP}/app/discover?face=creators`)
     await pageC.getByLabel('Search people, posts and topics').fill(A.username)
     await pageC.getByRole('button', { name: 'Search', exact: true }).click()
-    await pageC.getByRole('button', { name: `In your Clique (${A.displayName}, tap to remove)` }).waitFor()
-    check('after a reload and navigating to Discover, the person is still "In your Clique"', true)
+    // Discover's compact row (Nov 28) shows the same state in one small button.
+    await pageC.getByRole('button', { name: `In Clique (${A.displayName}, tap to remove)` }).waitFor()
+    check('after a reload and navigating to Discover, the person is still in the Clique', true)
     await ctxC.close()
   }
 
