@@ -1,6 +1,9 @@
 -- Waitlist email verification and the BL-009 handoff (20261223000000).
 -- Read-only. Runs on the waitlist project, staging and member Production.
 \set ON_ERROR_STOP on
+-- Skipped until the migration is applied.
+select to_regclass('ops.waitlist_withdrawals') is not null as waitlist_handoff_applied \gset
+\if :waitlist_handoff_applied
 
 do $$
 declare
@@ -53,3 +56,7 @@ begin
   end if;
   raise notice 'PASS: waitlist verification and handoff: tokens hashed, withdrawals hold ids only, tables private, the handoff runs only as its own login';
 end $$;
+
+\else
+\echo 'Skipped 039_waitlist_handoff.sql: 20261223000000 is not applied here.'
+\endif

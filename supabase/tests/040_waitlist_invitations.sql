@@ -1,6 +1,9 @@
 -- Waitlist review and invitations, member side (20261224000000). Read-only.
 -- Runs on staging and member Production.
 \set ON_ERROR_STOP on
+-- Skipped until the migration is applied.
+select to_regclass('ops.waitlist_review') is not null as waitlist_invitations_applied \gset
+\if :waitlist_invitations_applied
 
 do $$
 declare
@@ -78,3 +81,7 @@ begin
   end if;
   raise notice 'PASS: waitlist invitations: private, expiring copies; one single-use invitation per applicant, only behind the launch gate; bridge steps for the server only; founder-only review';
 end $$;
+
+\else
+\echo 'Skipped 040_waitlist_invitations.sql: 20261224000000 is not applied here.'
+\endif
