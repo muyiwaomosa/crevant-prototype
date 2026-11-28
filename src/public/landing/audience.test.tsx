@@ -6,7 +6,7 @@ import { PainPoints, ProblemToSolution, UseCases } from './sections/Audience'
 
 afterEach(cleanup)
 
-// SP-BRAND-003 follow-up (Nov 28), BR-003 to BR-005: layout only, founder copy to come.
+// SP-BRAND-004 (Nov 28), BR-003 to BR-005: layout only, founder copy to come.
 describe('creator and supporter detail (layout ready, words pending founder approval)', () => {
   it('ships with no copy at all: every list is empty until the founder approves the wording', () => {
     expect(PAIN_POINTS).toEqual([])

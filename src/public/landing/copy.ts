@@ -52,7 +52,7 @@ export const HOMEPAGE_COPY = {
   why: {
     status: 'final' as CopyStatus,
     /**
-     * Founder-approved and locked (Nov 28, SP-BRAND-003 follow-up, BR-001).
+     * Founder-approved and locked (Nov 28, SP-BRAND-004, BR-001).
      * Verbatim: do not rewrite, paraphrase, shorten or add to it. The
      * paragraph breaks are part of the approval; the emphasis line is shown
      * with greater visual prominence.
@@ -66,6 +66,8 @@ export const HOMEPAGE_COPY = {
     ],
     emphasis: 'Everyone contributes. Not everyone gets a split.',
     closing: "We believe it's time to change that.",
+    /** The value-flow illustration's only words (SP-BRAND-004, founder decision Nov 28, round 2), exactly as approved. */
+    flow: ['Everyone creates value.', 'Platforms control the split.', 'Not everyone benefits.'],
   },
 
 
@@ -271,19 +273,22 @@ export const HOMEPAGE_COPY = {
  * other sentence still goes through every check. Each needs the founder's
  * and counsel's sign-off before publication.
  *
- *   BR-001 (Nov 28): describes how platforms earn from attention today, not
- *   anything Splitpost offers. It trips three checks: "revenue sharing
- *   described as existing today" (the claims checker), "no statistics"
- *   (the word "billions", an unsourced general figure), and "no mention of
- *   advertising in WHY" (it names advertising revenue, but offers nothing to
- *   advertisers). Open question for counsel: is "billions in advertising
- *   revenue" acceptable without a cited source?
+ *   SP-BRAND-004, BR-001 (Nov 28): describes how platforms earn from
+ *   attention today, not anything Splitpost offers. It trips three checks:
+ *   "revenue sharing described as existing today" (the claims checker),
+ *   "no statistics" (the word "billions") and "no mention of advertising in
+ *   WHY" (it names advertising revenue, but offers nothing to advertisers).
+ *   "Billions" is substantiated by published financial statements (Meta
+ *   Platforms FY2024 Form 10-K: advertising $160,633 million; Alphabet FY2024
+ *   Form 10-K: YouTube ads $36,147 million). The sources, with links and
+ *   access dates, are in docs/design/brand/SP-BRAND-004.md. The exception
+ *   covers this exact sentence only; no other safeguard is loosened.
  */
 export const FOUNDER_LOCKED_EXCEPTIONS: ReadonlyArray<{ sentence: string; checks: readonly string[]; approved: string }> = [
   {
     sentence: 'Together, you generate the attention that platforms turn into billions in advertising revenue.',
     checks: ['revenue sharing described as existing today', 'no statistics', 'no advertising in WHY'],
-    approved: 'Founder, Nov 28 (BR-001, locked wording); counsel review pending',
+    approved: 'Founder, Nov 28 (SP-BRAND-004, BR-001, locked wording); sources in docs/design/brand/SP-BRAND-004.md; counsel review pending',
   },
 ]
 

@@ -11,7 +11,7 @@ import {
 } from '../audience'
 
 /**
- * Layout for the creator and supporter detail (SP-BRAND-003 follow-up,
+ * Layout for the creator and supporter detail (SP-BRAND-004,
  * BR-003 to BR-005). Each block is fed only from `landing/audience.ts` and
  * renders nothing while its list is empty, so the live site never shows
  * placeholder text. The founder supplies every word.

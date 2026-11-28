@@ -1,4 +1,4 @@
-// Who Splitpost is for, in more detail (SP-BRAND-003 follow-up, Nov 28:
+// Who Splitpost is for, in more detail (SP-BRAND-004, Nov 28, following SP-BRAND-003:
 // BR-003, BR-004 and BR-005). The layout is built; the words are NOT.
 //
 // The founder writes and approves every line that goes here. Until then the

@@ -200,12 +200,22 @@ describe('WHY', () => {
     expect(emphasis.className).toMatch(/font-black/)
     expect(emphasis.className).toMatch(/text-\[clamp\(/)
   })
-  it('shows a creator at work and a sample dashboard with no figures, and names no company', () => {
+  it('shows a creator at work with the value-flow illustration, no figures, and names no company (SP-BRAND-004)', () => {
     const v = sec().querySelector('[data-testid="why-visual"]')!
     expect(v.querySelector('img[data-photo="creator-editing"]')).toBeTruthy()
-    expect(norm(v)).toMatch(/Sample/)
-    expect(norm(v)).not.toMatch(/\d/)
+    // The old dashboard is gone.
+    expect(norm(v)).not.toMatch(/month at a glance|hard to predict|views per post|Sample/i)
+    expect(norm(v)).not.toMatch(/\d|[$€£¥%]|earn|cash|payout|income/i)
     expect(norm(sec())).not.toMatch(/facebook|instagram|tiktok|youtube|meta\b|twitter|\bx\.com/i)
+  })
+  it("the value-flow illustration's only words are the three approved statements, in order (SP-BRAND-004)", () => {
+    const flow = sec().querySelector('[data-testid="value-flow"]')!
+    expect([...flow.querySelectorAll('p')].map((p) => norm(p))).toEqual(['Everyone creates value.', 'Platforms control the split.', 'Not everyone benefits.'])
+    expect(norm(flow)).toBe('Everyone creates value.Platforms control the split.Not everyone benefits.')
+    expect(HOMEPAGE_COPY.why.flow).toEqual(['Everyone creates value.', 'Platforms control the split.', 'Not everyone benefits.'])
+    // The drawing is decorative; the statements are the accessible text.
+    for (const g of flow.querySelectorAll('svg, [aria-hidden="true"]')) expect(g.closest('[aria-hidden="true"]')).toBeTruthy()
+    for (const p of flow.querySelectorAll('p')) expect(p.closest('[aria-hidden="true"]')).toBeNull()
   })
 })
 
