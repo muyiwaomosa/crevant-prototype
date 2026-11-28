@@ -35,7 +35,8 @@ begin
   -- The bridge steps are for the server key only.
   foreach f in array array['public.svc_waitlist_import(jsonb)', 'public.svc_waitlist_withdraw(jsonb)', 'public.svc_waitlist_bridge_pending()',
                            'public.svc_waitlist_forget_done(uuid[])', 'public.svc_waitlist_declined_done(uuid[])', 'public.svc_waitlist_not_confirmed(uuid[])',
-                           'public.svc_invitation_create(uuid)', 'public.svc_invitation_delivery(uuid,text,text,text)', 'public.svc_invitation_retry_list()'] loop
+                           'public.svc_invitation_create(uuid)', 'public.svc_invitation_delivery(uuid,text,text,text)', 'public.svc_invitation_retry_list()',
+                           'public.svc_waitlist_forget_address(text)'] loop
     if has_function_privilege('anon', f, 'EXECUTE') or has_function_privilege('authenticated', f, 'EXECUTE') then
       bad := bad || (f || ': callable by visitors or members');
     end if;

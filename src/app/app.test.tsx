@@ -17,6 +17,7 @@ import {
   toPost,
   usernameProblem,
   type AppApi,
+  type WaitlistOverview,
   type PointsEntry,
   type CreatorSetup,
   type Inviter,
@@ -137,6 +138,8 @@ function fakeApi(
     /** Feedback (20261126000000): 'absent' for a database without it. */
     feedback?: 'present' | 'absent'
     founder?: boolean
+    /** BL-009: whether the database would allow invitations (the launch gate). Off unless a test says so. */
+    waitlistMaySend?: boolean
     /** Photo posts (20261127000000): on only when a test says so. */
     photos?: boolean
     /** Video posts (20261213000000): on only when a test says so; tester: may run the device test. */
@@ -297,6 +300,20 @@ function fakeApi(
     contribution: null as ContributionInsights | null,
     overview: null as FounderOverview | null,
     opens: [] as string[],
+  }
+  // Waitlist review and invitations (BL-009).
+  const wl: WaitlistOverview = {
+    applicants: [
+      { waitlistId: 'w1', email: 'ava@example.test', joinedAt: '2026-11-20T00:00:00Z', verifiedAt: '2026-11-20T01:00:00Z', groups: ['supporter'], intent: 'discover',
+        platform: null, audienceBand: null, introducedByCreator: false, source: 'site', fromCreatorLink: false, decision: 'pending', cohort: null, expiresAt: '2026-12-20T00:00:00Z' },
+      { waitlistId: 'w2', email: 'ben@example.test', joinedAt: '2026-11-21T00:00:00Z', verifiedAt: '2026-11-21T01:00:00Z', groups: ['active_creator'], intent: 'create',
+        platform: 'youtube', audienceBand: '1k_10k', introducedByCreator: true, source: null, fromCreatorLink: true, decision: 'pending', cohort: null, expiresAt: '2026-12-21T00:00:00Z' },
+    ],
+    invitations: { sent: 0, sending: 0, failed: 0, accepted: 0, onboarded: 0, expired: 0, open: 0, fromCreatorLinks: 0 },
+    recent: [],
+    maySend: opts.waitlistMaySend ?? false,
+    lastImportAt: null,
+    pendingDeletions: 0,
   }
   // Unified onboarding, privacy requests and switches (20261211000000, 20261212000000).
   const onb = {
@@ -1285,6 +1302,40 @@ function fakeApi(
     async founderRevokeInvitationLink(code) {
       requireFounder()
       onb.links = onb.links.map((l) => (l.code === code ? { ...l, revokedAt: new Date().toISOString() } : l))
+    },
+    async founderWaitlist() {
+      requireFounder()
+      return { ...wl, applicants: wl.applicants.map((a) => ({ ...a })) }
+    },
+    async founderWaitlistDecide(ids, decision, cohort) {
+      requireFounder()
+      if (decision === 'approved' && !cohort) throw new AppApiError('invalid_cohort')
+      let n = 0
+      wl.applicants = wl.applicants.map((a) => (ids.includes(a.waitlistId) ? (n++, { ...a, decision, cohort: decision === 'approved' ? cohort ?? null : null }) : a))
+      return n
+    },
+    async founderWaitlistForget(id) {
+      requireFounder()
+      wl.applicants = wl.applicants.filter((a) => a.waitlistId !== id)
+      wl.pendingDeletions += 1
+    },
+    async founderWaitlistForgetEmail(email) {
+      requireFounder()
+      const before = wl.applicants.length
+      wl.applicants = wl.applicants.filter((a) => a.email !== email.trim().toLowerCase())
+      return { status: 'deleted', removed_here: before - wl.applicants.length, waitlist_deleted: 1 }
+    },
+    async founderWaitlistImport() {
+      requireFounder()
+      return { status: 'imported', imported: 0, skipped: 0 }
+    },
+    async founderWaitlistSend() {
+      requireFounder()
+      if (!wl.maySend) return { status: 'closed', sent: 0 }
+      const sent = wl.applicants.filter((a) => a.decision === 'approved').length
+      wl.applicants = wl.applicants.filter((a) => a.decision !== 'approved')
+      wl.invitations = { ...wl.invitations, sent: wl.invitations.sent + sent, open: wl.invitations.open + sent }
+      return { status: 'sent', sent }
     },
     async requestAdvertising(r) {
       complete()
@@ -5405,6 +5456,44 @@ describe('unified account and progressive onboarding (20261211000000, 2026121200
     expect(f.onb.requests[0]).toMatchObject({ kind: 'deletion', status: 'open' })
     fireEvent.click(await screen.findByRole('button', { name: 'Withdraw' }))
     await waitFor(() => expect(f.onb.requests[0].status).toBe('withdrawn'))
+  })
+
+  it('BL-009: the founder reviews waitlist applicants, approves a cohort and sends invitations from Control Center', async () => {
+    const f = fakeApi('me', { founder: true, waitlistMaySend: true })
+    renderApp('/app/control', f.api)
+    const panel = await screen.findByTestId('waitlist-panel')
+    expect(within(panel).getByTestId('waitlist-may-send').textContent).toBe('Invitations can be sent.')
+    expect(within(panel).getByText('ava@example.test')).toBeTruthy()
+    expect(within(panel).getByText(/Creator · wants to create · youtube \(1k 10k\) · from a creator link/)).toBeTruthy()
+    const send = () => within(panel).getByRole('button', { name: /Send approved invitations/ }) as HTMLButtonElement
+    expect(send().disabled).toBe(true)
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Select ava@example.test' }))
+    fireEvent.change(within(panel).getByLabelText('Cohort'), { target: { value: 'creator' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Approve selected (1)' }))
+    expect(await within(panel).findByText(/Approved: creator/)).toBeTruthy()
+    fireEvent.click(send())
+    fireEvent.click(within(panel).getByRole('button', { name: 'Yes, send' }))
+    expect((await within(panel).findByTestId('waitlist-result')).textContent).toBe('1 invitations sent')
+    expect(within(panel).queryByText('ava@example.test')).toBeNull()
+    // A deletion request removes the applicant here and is queued for the waitlist.
+    fireEvent.click(within(panel).getByRole('button', { name: 'Delete on request' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Yes, delete' }))
+    expect(await within(panel).findByText(/1 deletion request\(s\) waiting to reach the waitlist/)).toBeTruthy()
+    // A deletion request received by email, for anyone on the waitlist.
+    fireEvent.change(within(panel).getByLabelText('Delete a waitlist applicant by email'), { target: { value: 'someone@example.test' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Delete everywhere' }))
+    expect((await within(panel).findByTestId('waitlist-result')).textContent).toBe('Deleted from the waitlist and from review.')
+  })
+
+  it('BL-009: while external access is closed, Control Center says so and offers no send', async () => {
+    const f = fakeApi('me', { founder: true })
+    renderApp('/app/control', f.api)
+    const panel = await screen.findByTestId('waitlist-panel')
+    expect(within(panel).getByTestId('waitlist-may-send').textContent).toMatch(/Invitations are closed/)
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Select ava@example.test' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Approve selected (1)' }))
+    await within(panel).findByText(/Approved: member/)
+    expect((within(panel).getByRole('button', { name: /Send approved invitations/ }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('the Control Center manages registration, invitation links, switches and deletion requests', async () => {

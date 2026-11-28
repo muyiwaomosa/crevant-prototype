@@ -740,6 +740,44 @@ export interface FeedbackEntry extends Omit<FeedbackItem, 'noteCount'> {
 }
 export type FeedbackFilters = { category?: FeedbackCategory; status?: FeedbackStatus; cohort?: Cohort }
 
+/** BL-009: a waitlist applicant under the founder's review (a temporary copy). */
+export interface WaitlistApplicant {
+  waitlistId: string
+  email: string
+  joinedAt: string
+  verifiedAt: string
+  groups: string[]
+  intent: string | null
+  platform: string | null
+  audienceBand: string | null
+  introducedByCreator: boolean | null
+  source: string | null
+  fromCreatorLink: boolean
+  decision: 'pending' | 'approved' | 'declined'
+  cohort: 'creator' | 'fan' | 'tester' | null
+  expiresAt: string
+}
+export interface WaitlistInvitationCounts {
+  sent: number
+  sending: number
+  failed: number
+  accepted: number
+  onboarded: number
+  expired: number
+  open: number
+  fromCreatorLinks: number
+}
+export interface WaitlistOverview {
+  applicants: WaitlistApplicant[]
+  invitations: WaitlistInvitationCounts
+  recent: Array<{ email: string; cohort: string | null; createdAt: string; status: string; error: string | null }>
+  maySend: boolean
+  lastImportAt: string | null
+  pendingDeletions: number
+}
+/** What an import or a send did (counts and a fixed status only). */
+export type WaitlistBridgeResult = Record<string, number | string>
+
 export interface AppApi {
   /** The signed-in account's own pilot membership state (needs no membership itself). */
   accessState(): Promise<AccessState>
@@ -944,6 +982,14 @@ export interface AppApi {
   founderCreateInvitationLink(maxUses: number | null, days: number, creatorUsername?: string): Promise<string>
   founderInvitationLinks(): Promise<InvitationLink[]>
   founderRevokeInvitationLink(code: string): Promise<void>
+  /** Waitlist review and invitations (BL-009, 20261224000000 and the waitlist-bridge function). */
+  founderWaitlist(): Promise<WaitlistOverview | null>
+  founderWaitlistDecide(ids: string[], decision: 'approved' | 'declined' | 'pending', cohort?: 'creator' | 'fan' | 'tester'): Promise<number>
+  founderWaitlistForget(waitlistId: string): Promise<void>
+  founderWaitlistImport(): Promise<WaitlistBridgeResult>
+  founderWaitlistSend(): Promise<WaitlistBridgeResult>
+  /** A deletion request received by email: removed here and on the waitlist. */
+  founderWaitlistForgetEmail(email: string): Promise<WaitlistBridgeResult>
   requestAdvertising(r: AdvertisingRequest): Promise<string>
   myAdvertising(): Promise<MyAdvertising | null>
   myCampaignReport(campaignId: string): Promise<CampaignReport>
@@ -1189,6 +1235,9 @@ const MESSAGES: Record<string, string> = {
   on_hold: 'That amount is on hold.',
   video_not_ready: 'Set the video storage cap first (Video posts, below). New video uploads can be switched on once it is set.',
   videos_unavailable: "Video posts aren't available right now. You can still post text.",
+  waitlist_bridge_failed: "The waitlist couldn't be reached just now. Nothing was sent. Please try again in a minute.",
+  invalid_cohort: 'Choose a cohort for the applicants you approve.',
+  invalid_selection: 'Select at least one applicant first.',
   media_unsupported: "That file isn't a photo or a video Splitpost can use. Choose a photo (JPEG, PNG, HEIC) or a video (MP4 or MOV).",
   not_tester: 'Only the founder and testers can run the video device test.',
   video_too_large: 'That video is too large. Videos can be up to 110 MB once prepared.',
@@ -2744,6 +2793,59 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       }))
     },
     founderRevokeInvitationLink: (code) => rpc<void>('app_founder_revoke_invitation_link', { p_code: code }),
+    async founderWaitlist() {
+      const { data, error } = await client.rpc('app_founder_waitlist_overview')
+      if (error) {
+        if (isMissingFunction(error, 'app_founder_waitlist_overview')) return null
+        throw toAppError(error)
+      }
+      const d = (data ?? {}) as Record<string, unknown>
+      const n = (v: unknown) => Number(v ?? 0)
+      const inv = (d.invitations ?? {}) as Record<string, unknown>
+      return {
+        applicants: ((d.applicants as Array<Record<string, unknown>> | null) ?? []).map((a) => ({
+          waitlistId: String(a.waitlist_id),
+          email: String(a.email),
+          joinedAt: String(a.joined_at),
+          verifiedAt: String(a.verified_at),
+          groups: Array.isArray(a.groups) ? a.groups.map(String) : [],
+          intent: a.intent ? String(a.intent) : null,
+          platform: a.platform ? String(a.platform) : null,
+          audienceBand: a.audience_band ? String(a.audience_band) : null,
+          introducedByCreator: typeof a.introduced_by_creator === 'boolean' ? a.introduced_by_creator : null,
+          source: a.source ? String(a.source) : null,
+          fromCreatorLink: a.from_creator_link === true,
+          decision: (['approved', 'declined'].includes(String(a.decision)) ? a.decision : 'pending') as WaitlistApplicant['decision'],
+          cohort: (['creator', 'fan', 'tester'].includes(String(a.cohort)) ? a.cohort : null) as WaitlistApplicant['cohort'],
+          expiresAt: String(a.expires_at),
+        })),
+        invitations: { sent: n(inv.sent), sending: n(inv.sending), failed: n(inv.failed), accepted: n(inv.accepted), onboarded: n(inv.onboarded),
+          expired: n(inv.expired), open: n(inv.open), fromCreatorLinks: n(inv.from_creator_links) },
+        recent: ((d.recent as Array<Record<string, unknown>> | null) ?? []).map((r) => ({
+          email: String(r.email), cohort: r.cohort ? String(r.cohort) : null, createdAt: String(r.created_at), status: String(r.status), error: r.error ? String(r.error) : null,
+        })),
+        maySend: d.may_send === true,
+        lastImportAt: d.last_import_at ? String(d.last_import_at) : null,
+        pendingDeletions: n(d.pending_deletions),
+      }
+    },
+    founderWaitlistDecide: (ids, decision, cohort) => rpc<number>('app_founder_waitlist_decide', { p_ids: ids, p_decision: decision, p_cohort: cohort ?? null }),
+    founderWaitlistForget: (waitlistId) => rpc<void>('app_founder_waitlist_forget', { p_waitlist_id: waitlistId }),
+    async founderWaitlistImport() {
+      const { data, error } = await client.functions.invoke('waitlist-bridge/import', { body: {} })
+      if (error) throw new AppApiError('waitlist_bridge_failed')
+      return (data ?? {}) as WaitlistBridgeResult
+    },
+    async founderWaitlistSend() {
+      const { data, error } = await client.functions.invoke('waitlist-bridge/send', { body: {} })
+      if (error) throw new AppApiError('waitlist_bridge_failed')
+      return (data ?? {}) as WaitlistBridgeResult
+    },
+    async founderWaitlistForgetEmail(email) {
+      const { data, error } = await client.functions.invoke('waitlist-bridge/forget-email', { body: { email: email.trim() } })
+      if (error) throw new AppApiError('waitlist_bridge_failed')
+      return (data ?? {}) as WaitlistBridgeResult
+    },
     requestAdvertising: (r) =>
       rpc<string>('app_request_advertising', {
         p: {

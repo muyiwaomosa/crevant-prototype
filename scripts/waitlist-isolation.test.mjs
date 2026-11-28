@@ -26,8 +26,32 @@ const walk = (dir) =>
 // Code only: comments may name what the code must not do.
 const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '')
 
-test('supabase/functions holds only the approved functions (join-waitlist, avatar, post-media) and their shared code', () => {
-  assert.deepEqual(readdirSync(join(root, 'supabase/functions')).sort(), ['_shared', 'avatar', 'join-waitlist', 'post-media'])
+test('supabase/functions holds only the approved functions (join-waitlist, avatar, post-media, and the BL-009 waitlist-handoff and waitlist-bridge) and their shared code', () => {
+  assert.deepEqual(readdirSync(join(root, 'supabase/functions')).sort(), ['_shared', 'avatar', 'join-waitlist', 'post-media', 'waitlist-bridge', 'waitlist-handoff'])
+})
+
+test('waitlist-handoff (BL-009) runs only on the waitlist project or staging, with its own restricted login on its own project, and a key', () => {
+  const index = code(read('supabase/functions/waitlist-handoff/index.ts'))
+  assert.match(index, /waitlistProjectAllowed\(Deno\.env\.get\('SUPABASE_URL'\) \?\? ''\)/, 'the project guard')
+  assert.match(index, /checkDatabaseTarget\(env\('WAITLIST_HANDOFF_DB_URL'\), env\('SUPABASE_URL'\), HANDOFF_ROLE\)/, 'its own project, its own login')
+  assert.match(index, /role: HANDOFF_ROLE/)
+  assert.ok(!/SERVICE_ROLE|SUPABASE_DB_URL/.test(index), 'no privileged credential')
+  assert.equal([...index.matchAll(/env\('([A-Z_]+)'\)/g)].map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i).sort().join(','),
+    'SUPABASE_URL,WAITLIST_DB_CA_CERT,WAITLIST_HANDOFF_DB_URL,WAITLIST_HANDOFF_KEY', 'reads only its own settings')
+  const handler = code(read('supabase/functions/waitlist-handoff/handler.ts'))
+  assert.match(handler, /if \(req\.origin\) return json\(403/, 'browsers are refused')
+  assert.match(handler, /sameKey\(given, deps\.key\)/, 'the key is checked')
+})
+
+test('waitlist-bridge (BL-009) runs only on member projects, holds no database URL, and lets the database decide the founder and the launch gate', () => {
+  const index = code(read('supabase/functions/waitlist-bridge/index.ts'))
+  assert.match(index, /memberFunctionRole\(url\)/)
+  assert.match(index, /bridgeTargets\(role, url\)/, 'the waitlist address comes from config, never a secret')
+  assert.ok(!/DB_URL|postgres/.test(index), 'no database credential of any project')
+  const handler = code(read('supabase/functions/waitlist-bridge/handler.ts'))
+  assert.match(handler, /deps\.userRpc\(token, 'app_founder_waitlist_overview', \{\}\)/, 'the founder check is the database\'s')
+  assert.match(handler, /if \(pending\.may_send !== true\) return r\(200, \{ status: 'closed'/, 'nothing is sent while invitations may not be')
+  assert.match(code(read('supabase/functions/_shared/email.ts')), /export const EMAIL_FROM = 'Splitpost <noreply@mail\.splitpost\.ca>'/, 'the fixed sender')
 })
 
 test('no test substitution or verification bypass in deployable code', () => {

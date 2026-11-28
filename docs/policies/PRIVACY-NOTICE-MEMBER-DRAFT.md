@@ -21,6 +21,13 @@ Splitpost is operated by [Legal entity name] ("we", "us"), in Ontario, Canada. T
 * Your email address, and that you verified it.
 * That you confirmed you are 18 or older. We do not ask for your date of birth.
 * The invitation or referral link you used.
+* If you were invited from the waitlist: your personal invitation (the address
+  it was sent to, the group you were invited into, when it was sent, whether
+  it was delivered and when you accepted it, and, if you joined through a
+  creator's waitlist link, that link). Before your invitation, the details you
+  gave the waitlist were held here for our review for up to 30 days (see the
+  waitlist notice). If you delete your account, we delete your invitation and
+  your waitlist entry too.
 * Your agreement to the Terms of Use and this notice: the versions you saw and when you agreed.
 
 **Your profile**

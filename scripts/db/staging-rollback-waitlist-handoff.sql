@@ -6,7 +6,7 @@
 --   psql "<url>" -X -q -v ON_ERROR_STOP=1 -v mode=apply -v confirm='REMOVE STAGING WAITLIST HANDOFF' -f ...
 --
 -- Drops the verification links, the withdrawals, the handoff columns, the
--- seven functions and the waitlist_handoff login, and removes the migration
+-- eight functions and the waitlist_handoff login, and removes the migration
 -- record. Verifications already recorded on entries stay (email_verified_at
 -- existed before). Refuses, changing nothing, if the record is missing, a
 -- later migration exists, or the handoff login has an open session.
@@ -52,6 +52,7 @@ drop function waitlist_api.handoff_recheck(uuid[]);
 drop function waitlist_api.handoff_record(uuid, text);
 drop function waitlist_api.handoff_withdrawals(timestamptz);
 drop function waitlist_api.handoff_forget(uuid[]);
+drop function waitlist_api.handoff_forget_email(text);
 drop function ops.waitlist_handoff_eligible(ops.waitlist);
 drop trigger waitlist_record_withdrawal on ops.waitlist;
 drop function ops.waitlist_record_withdrawal();

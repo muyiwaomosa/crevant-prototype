@@ -92,3 +92,18 @@ export function waitlistProjectAllowed(supabaseUrl: string, refs: Refs = DEFAULT
   if (valid(refs.member) && ref === refs.member) return false
   return (valid(refs.waitlist) && ref === refs.waitlist) || (valid(refs.staging) && ref === refs.staging)
 }
+
+// BL-009: where the member waitlist-bridge function reaches the waitlist's
+// handoff function, and where invitation links point, for each member role.
+// Member Production uses the waitlist project (only when its reference is
+// valid); staging and local use their own project, which holds both.
+export const STAGING_APP_ORIGIN = 'https://splitpost-app-git-staging-crevant.vercel.app'
+export function bridgeTargets(role: Role | null, supabaseUrl: string, refs: Refs = DEFAULT_REFS): { handoffUrl: string; appOrigin: string } | null {
+  const url = supabaseUrl.trim().replace(/\/+$/, '')
+  if (role === 'member-production') {
+    return valid(refs.waitlist) ? { handoffUrl: `https://${refs.waitlist}.supabase.co/functions/v1/waitlist-handoff`, appOrigin: MEMBER_APP_ORIGIN } : null
+  }
+  if (role === 'staging') return { handoffUrl: `${url}/functions/v1/waitlist-handoff`, appOrigin: STAGING_APP_ORIGIN }
+  if (role === 'local') return { handoffUrl: `${url}/functions/v1/waitlist-handoff`, appOrigin: 'http://localhost:5173' }
+  return null
+}

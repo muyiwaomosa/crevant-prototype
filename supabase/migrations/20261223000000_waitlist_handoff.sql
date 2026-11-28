@@ -15,7 +15,7 @@
 --
 -- 2. Handoff, for one new login, waitlist_handoff, used only by the member
 --    project's waitlist-bridge function (never a browser, never a member).
---    It can run exactly these functions and touch no table:
+--    It can run exactly these six functions and touch no table:
 --      handoff_export(limit)      verified, consenting entries not yet handed
 --                                 off: the minimum fields for cohort review and
 --                                 an invitation. Marks them exported.
@@ -29,6 +29,9 @@
 --      handoff_forget(ids)        delete entries on request, from Control
 --                                 Center (an applicant's deletion request, or a
 --                                 member deleting their account)
+--      handoff_forget_email(email) delete the entry with this address (a
+--                                 deletion request received by email for
+--                                 someone never handed off)
 --
 -- Registration, invitations and the waitlist stay closed: this migration
 -- switches nothing on. Submissions stay off (ops.settings), and the new login
@@ -295,9 +298,29 @@ begin
 end;
 $$;
 
+-- A deletion request received by email, carried out from Control Center: the
+-- entry with this address, whether or not it was ever handed off. Returns 0
+-- or 1 (no address is ever returned).
+create function waitlist_api.handoff_forget_email(p_email text)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+begin
+  select w.id into v_id from ops.waitlist w where w.email = pg_catalog.lower(pg_catalog.btrim(coalesce(p_email, '')));
+  if v_id is null then
+    return 0;
+  end if;
+  return ((ops.waitlist_delete(v_id)) ->> 'waitlist')::integer;
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- 3. The handoff login: no special powers, no password (the founder sets one
---    when the handoff is approved), and only the five handoff functions.
+--    when the handoff is approved), and only the six handoff functions.
 
 do $$
 begin
@@ -316,6 +339,7 @@ revoke all on function waitlist_api.handoff_recheck(uuid[]) from public, anon, a
 revoke all on function waitlist_api.handoff_record(uuid, text) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.handoff_withdrawals(timestamptz) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.handoff_forget(uuid[]) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.handoff_forget_email(text) from public, anon, authenticated, service_role;
 
 grant execute on function waitlist_api.verification_issue(text) to waitlist_writer;
 grant execute on function waitlist_api.verify_email(text) to waitlist_writer;
@@ -324,3 +348,4 @@ grant execute on function waitlist_api.handoff_recheck(uuid[]) to waitlist_hando
 grant execute on function waitlist_api.handoff_record(uuid, text) to waitlist_handoff;
 grant execute on function waitlist_api.handoff_withdrawals(timestamptz) to waitlist_handoff;
 grant execute on function waitlist_api.handoff_forget(uuid[]) to waitlist_handoff;
+grant execute on function waitlist_api.handoff_forget_email(text) to waitlist_handoff;

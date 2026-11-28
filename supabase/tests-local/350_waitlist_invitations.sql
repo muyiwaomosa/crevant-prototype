@@ -177,6 +177,12 @@ begin
   end if;
   reset role;
 
+  -- A deletion request by address removes the copy (the waitlist side is the bridge's).
+  set local role service_role;
+  perform public.svc_waitlist_import(jsonb_build_array(pg_temp.row('9', 'wa9@example.test')));
+  if public.svc_waitlist_forget_address(' WA9@example.test ') <> 1 then raise exception 'FAIL: deletion by address did not remove the copy'; end if;
+  reset role;
+
   -- 9. Copies expire after 30 days.
   update ops.waitlist_review set imported_at = now() - interval '31 days', expires_at = now() - interval '1 day' where waitlist_id = pg_temp.w('3');
   insert into ops.waitlist_review (waitlist_id, email, joined_at, verified_at, consent_version, consented_at, imported_at, expires_at)

@@ -403,6 +403,32 @@ as $$
     and l.revoked_at is null and ops.invites_may_send();
 $$;
 
+-- A deletion request by address (BL-009): the review copy, and any open
+-- waitlist invitation and its link, for this address. Accepted invitations
+-- belong to an account and follow account deletion. Returns how many rows went.
+create function ops.waitlist_forget_address(p_email text)
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_email text := pg_catalog.lower(pg_catalog.btrim(coalesce(p_email, '')));
+  n integer := 0;
+  m integer;
+begin
+  delete from ops.waitlist_review where email = v_email;
+  get diagnostics n = row_count;
+  update ops.registration_links l set revoked_at = pg_catalog.now()
+  from ops.invitations i where i.email = v_email and i.waitlist_id is not null and i.accepted_at is null and l.id = i.link_id and l.revoked_at is null;
+  delete from ops.invitations where email = v_email and waitlist_id is not null and accepted_at is null;
+  get diagnostics m = row_count;
+  return n + m;
+end;
+$$;
+revoke all on function ops.waitlist_forget_address(text) from public, anon, authenticated;
+
 -- The service_role entry points (public, so the function can call them with
 -- the service key): thin wrappers, so that only ops code touches ops.invitations.
 create function public.svc_waitlist_import(p_rows jsonb) returns jsonb language sql volatile security definer set search_path = ''
@@ -416,6 +442,8 @@ language sql volatile security definer set search_path = ''
 as $$ select ops.bridge_invitation_delivery(p_invitation, p_status, p_provider_id, p_error) $$;
 create function public.svc_invitation_retry_list() returns jsonb language sql stable security definer set search_path = ''
 as $$ select ops.bridge_invitation_retry_list() $$;
+create function public.svc_waitlist_forget_address(p_email text) returns integer language sql volatile security definer set search_path = ''
+as $$ select ops.waitlist_forget_address(p_email) $$;
 revoke all on function ops.bridge_import(jsonb) from public, anon, authenticated;
 revoke all on function ops.bridge_withdraw(jsonb) from public, anon, authenticated;
 revoke all on function ops.bridge_invitation_create(uuid) from public, anon, authenticated;
@@ -431,6 +459,7 @@ revoke all on function public.svc_waitlist_not_confirmed(uuid[]) from public, an
 revoke all on function public.svc_invitation_create(uuid) from public, anon, authenticated;
 revoke all on function public.svc_invitation_delivery(uuid, text, text, text) from public, anon, authenticated;
 revoke all on function public.svc_invitation_retry_list() from public, anon, authenticated;
+revoke all on function public.svc_waitlist_forget_address(text) from public, anon, authenticated;
 grant execute on function public.svc_waitlist_import(jsonb) to service_role;
 grant execute on function public.svc_waitlist_withdraw(jsonb) to service_role;
 grant execute on function public.svc_waitlist_bridge_pending() to service_role;
@@ -440,6 +469,7 @@ grant execute on function public.svc_waitlist_not_confirmed(uuid[]) to service_r
 grant execute on function public.svc_invitation_create(uuid) to service_role;
 grant execute on function public.svc_invitation_delivery(uuid, text, text, text) to service_role;
 grant execute on function public.svc_invitation_retry_list() to service_role;
+grant execute on function public.svc_waitlist_forget_address(text) to service_role;
 
 -- Invitation counts and the latest 50 invitations, for the founder's overview.
 create function ops.waitlist_invitation_summary()
@@ -493,6 +523,7 @@ begin
 end;
 $$;
 revoke all on function ops.waitlist_forget_applicant(uuid) from public, anon, authenticated;
+
 
 -- Records the founder's decision on review copies (checked by the caller).
 create function ops.waitlist_decide(p_ids uuid[], p_decision text, p_cohort text)

@@ -121,9 +121,9 @@ begin
       when 'waitlist_writer' then array['waitlist_api.submit', 'waitlist_api.submit_v2', 'waitlist_api.invite_preview']
         || case when to_regprocedure('waitlist_api.verify_email(text)') is not null
                 then array['waitlist_api.verification_issue', 'waitlist_api.verify_email'] else '{}'::text[] end
-      -- BL-009: the handoff login runs exactly the five handoff functions.
+      -- BL-009: the handoff login runs exactly the six handoff functions.
       when 'waitlist_handoff' then array['waitlist_api.handoff_export', 'waitlist_api.handoff_recheck', 'waitlist_api.handoff_record',
-                                         'waitlist_api.handoff_withdrawals', 'waitlist_api.handoff_forget']
+                                         'waitlist_api.handoff_withdrawals', 'waitlist_api.handoff_forget', 'waitlist_api.handoff_forget_email']
       else array['waitlist_api.admin_summary', 'waitlist_api.admin_status', 'waitlist_api.admin_delete', 'waitlist_api.admin_purge',
                  'waitlist_api.admin_set_notice_version', 'waitlist_api.admin_open', 'waitlist_api.admin_close',
                  'waitlist_api.admin_wave_preview', 'waitlist_api.admin_wave_select', 'waitlist_api.admin_wave_summary',

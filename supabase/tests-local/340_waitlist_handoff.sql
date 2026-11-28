@@ -114,6 +114,10 @@ begin
   end if;
   if j::text like '%@%' then raise exception 'FAIL: a withdrawal carried an address'; end if;
 
+  -- A deletion request by address, for an entry never handed off: deleted, and nothing to report.
+  if waitlist_api.handoff_forget_email(' H3@Example.test ') <> 1 then raise exception 'FAIL: the deletion by address did not delete the entry'; end if;
+  if waitlist_api.handoff_forget_email('nobody@example.test') <> 0 then raise exception 'FAIL: a deletion by an unknown address reported a deletion'; end if;
+
   -- The handoff login reads no table.
   begin
     perform count(*) from ops.waitlist;

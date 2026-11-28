@@ -105,6 +105,15 @@ export interface JoinDeps {
   previewInvite(code: string, clientKey: string): Promise<unknown>
   /** True if the database login works (a bare `select 1`). */
   databaseReachable(): Promise<boolean>
+  /**
+   * BL-009: after an accepted submission, issue and email a verification link
+   * for the address if it is on the list and unverified. 'skipped' when email
+   * isn't configured or no link is due. The visitor's answer never depends on
+   * it, so nobody can learn whether an address is on the list.
+   */
+  afterJoin?(email: string): Promise<'sent' | 'skipped'>
+  /** BL-009: checks a verification link's token. */
+  verifyEmail?(token: string): Promise<'verified' | 'invalid' | 'expired'>
 }
 
 export interface IncomingRequest {
@@ -227,6 +236,7 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
   const body = input as Record<string, unknown>
 
   if (body.action === 'invite_preview') return handlePreview(body, req, deps, origin)
+  if (body.action === 'verify_email') return handleVerify(body, deps, origin)
 
   // Honeypot: looks like success, stores nothing, costs no Turnstile call.
   if (typeof body.website === 'string' && body.website.trim() !== '') return reply(200, 'ok', origin)
@@ -270,8 +280,16 @@ export async function handleJoin(req: IncomingRequest, deps: JoinDeps): Promise<
     return reply(500, 'error', origin)
   }
   switch (result) {
-    case 'ok':
-      return reply(200, 'ok', origin)
+    case 'ok': {
+      // The same answer whatever happens to the email (BL-009).
+      let note: string | undefined
+      try {
+        if (deps.afterJoin) await deps.afterJoin(payload.email)
+      } catch {
+        note = 'verification_email_failed'
+      }
+      return note ? { ...reply(200, 'ok', origin), logNote: note } : reply(200, 'ok', origin)
+    }
     case 'closed':
       return reply(503, 'closed', origin)
     case 'rate_limited':
@@ -328,6 +346,20 @@ async function handlePreview(body: Record<string, unknown>, req: IncomingRequest
       return reply(429, 'rate_limited', origin)
     default:
       return reply(400, 'invalid', origin)
+  }
+}
+
+export const VERIFY_TOKEN = /^[0-9a-f]{64}$/
+
+// BL-009: {"action":"verify_email","token":"<64 hex>"} from the public site's
+// verification page. Answers verified, invalid or expired; nothing else.
+async function handleVerify(body: Record<string, unknown>, deps: JoinDeps, origin: string): Promise<Outgoing> {
+  const token = typeof body.token === 'string' ? body.token.trim().toLowerCase() : ''
+  if (!VERIFY_TOKEN.test(token) || !deps.verifyEmail) return replyJson(200, { status: 'invalid' }, origin)
+  try {
+    return replyJson(200, { status: await deps.verifyEmail(token) }, origin)
+  } catch {
+    return reply(500, 'error', origin)
   }
 }
 

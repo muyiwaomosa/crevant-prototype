@@ -29,6 +29,13 @@
 //                               platform first (docs/WAITLIST.md, hosted
 //                               staging check 3).
 //   One of the two must be chosen, consistently. Neither, or both = closed.
+//   RESEND_API_KEY              BL-009: a sending-only Resend key for
+//                               mail.splitpost.ca. Optional: without it (or
+//                               without WAITLIST_VERIFY_ORIGIN) no verification
+//                               email is sent and entries stay unverified.
+//   WAITLIST_VERIFY_ORIGIN      BL-009: the site the verification link opens,
+//                               e.g. https://www.splitpost.ca. Must be one of
+//                               WAITLIST_ALLOWED_ORIGINS.
 //
 // Supabase also provides SUPABASE_URL (https://<project ref>.supabase.co),
 // which secrets can't override. The database URL must belong to that same
@@ -44,8 +51,10 @@
 
 import postgres from 'npm:postgres@3.4.9'
 import { cachedHealthCheck, clientIpFor, handleJoin, parseClientAddressMode, rateKeysForMode, verifyWithCloudflare } from './handler.ts'
-import { checkDatabaseTarget, databaseOptions, databaseReachable, previewWithDatabase, submitWithDatabase, type Sql } from './db.ts'
+import { checkDatabaseTarget, databaseOptions, databaseReachable, issueVerificationWithDatabase, previewWithDatabase, submitWithDatabase, verifyEmailWithDatabase, type Sql } from './db.ts'
 import { waitlistProjectAllowed } from '../_shared/policy.ts'
+import { sendEmail } from '../_shared/email.ts'
+import { verificationMail, verifyOriginFor } from './verification.ts'
 
 // Runtime project guard (Phase 1B-2): this function may run only on the
 // waitlist project, staging or local Supabase (../_shared/policy.ts, from
@@ -92,6 +101,19 @@ const enabled =
   env('WAITLIST_RATE_SALT').length >= 32 &&
   env('TURNSTILE_SECRET_KEY') !== ''
 
+// BL-009: verification emails, only with a key and an allowed https origin.
+const verifyOrigin = verifyOriginFor(env('WAITLIST_VERIFY_ORIGIN'), list('WAITLIST_ALLOWED_ORIGINS'))
+const resendKey = env('RESEND_API_KEY')
+if (env('WAITLIST_VERIFY_ORIGIN') && !verifyOrigin) configProblem('WAITLIST_VERIFY_ORIGIN is not an https origin in WAITLIST_ALLOWED_ORIGINS; no verification email is sent')
+async function afterJoin(email: string): Promise<'sent' | 'skipped'> {
+  if (!verifyOrigin || !resendKey || !sql) return 'skipped'
+  const token = await issueVerificationWithDatabase(sql, email)
+  if (!token) return 'skipped'
+  const sent = await sendEmail(verificationMail(email, verifyOrigin, token), resendKey, fetch)
+  if (!sent.ok) throw new Error(sent.error)
+  return 'sent'
+}
+
 // At most one database health check per 30 seconds per instance.
 const health = cachedHealthCheck(() => databaseReachable(sql))
 
@@ -116,6 +138,8 @@ Deno.serve(async (req: Request) => {
       submit: (payload) => submitWithDatabase(sql!, payload),
       previewInvite: (code, clientKey) => previewWithDatabase(sql!, code, clientKey),
       databaseReachable: health,
+      afterJoin,
+      verifyEmail: (token) => verifyEmailWithDatabase(sql!, token),
     },
   )
   // Status, and for a failed Turnstile check a fixed reason: never the email, address, token or request body.

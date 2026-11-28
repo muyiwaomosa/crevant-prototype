@@ -167,7 +167,9 @@ test('founder-only photos are approved, invitations stay off, and the member Pro
   assert.equal(approvals.photosApproved, true)
   assert.equal(approvals.invitationsApproved, false, 'external members stay out')
   assert.equal(approvals.postMediaFunctionApproved, true, 'post-media may be deployed to member Production (founder-only photos)')
-  assert.deepEqual(Object.keys(approvals).filter((k) => !k.startsWith('_')).sort(), ['invitationsApproved', 'photosApproved', 'postMediaFunctionApproved'])
+  // BL-009: the waitlist bridge stays off member Production until separately approved.
+  assert.equal(approvals.waitlistBridgeFunctionApproved, false, 'waitlist-bridge is not deployed to member Production yet')
+  assert.deepEqual(Object.keys(approvals).filter((k) => !k.startsWith('_')).sort(), ['invitationsApproved', 'photosApproved', 'postMediaFunctionApproved', 'waitlistBridgeFunctionApproved'])
   assert.match(JSON.parse(read('config/supabase-projects.json')).memberProduction.ref, /^[a-z]{20}$/)
 })
 

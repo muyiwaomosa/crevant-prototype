@@ -5,7 +5,7 @@ import { Card, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import { messageFor, type Audience, type ContributionInsights, type CreatorInsights, type FounderOverview } from './api'
 import { useAppApi } from './AppApiContext'
-import { InvitationLinksPanel, PrivacyRequestsPanel, RegistrationPanel, SwitchesPanel } from './control'
+import { InvitationLinksPanel, PrivacyRequestsPanel, RegistrationPanel, SwitchesPanel, WaitlistPanel } from './control'
 import { ActivationPanel, GoalsPanel } from './progression'
 import { VideoReadinessPanel } from './video'
 import { useFeedbackAccess } from './feedback'
@@ -784,6 +784,7 @@ export function ControlCenterPage() {
         </h2>
         <RegistrationPanel />
         <InvitationLinksPanel />
+        <WaitlistPanel />
         <SwitchesPanel />
         <GoalsPanel />
         <ActivationPanel />

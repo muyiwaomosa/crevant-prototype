@@ -8,7 +8,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Card, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
-import { messageFor, type FounderMemberRequest, type FounderSwitches, type InvitationLink, type RegistrationSettings, type SwitchFeature } from './api'
+import { messageFor, type FounderMemberRequest, type FounderSwitches, type InvitationLink, type RegistrationSettings, type SwitchFeature, type WaitlistBridgeResult, type WaitlistOverview } from './api'
 import { useAppApi } from './AppApiContext'
 
 /** Sent by the video readiness panel (video.tsx) when a device test or the cap is saved. */
@@ -459,6 +459,223 @@ export function PrivacyRequestsPanel() {
         <ul className="space-y-2">
           {rows.map((r) => (
             <RequestItem key={r.id} r={r} onChanged={() => void load()} />
+          ))}
+        </ul>
+      )}
+    </Panel>
+  )
+}
+
+const GROUP_LABEL: Record<string, string> = { active_creator: 'Creator', aspiring_creator: 'Aspiring creator', supporter: 'Supporter' }
+const RESULT_LABEL: Record<string, string> = {
+  imported: 'copied for review', skipped: 'already here or a member', withdrawn: 'withdrawals carried', invitations_removed: 'open invitations removed',
+  deleted: 'deletion requests carried', declined: 'declines recorded', sent: 'invitations sent', failed: 'emails failed (retried next time)',
+  retried: 'earlier failures resent', not_confirmed: 'no longer eligible (dropped)', already_invited: 'already invited',
+}
+
+/**
+ * BL-009: the waitlist to member journey, all from Control Center. The
+ * waitlist stays the authoritative record; Import copies only verified,
+ * consenting applicants (the minimum for review) for 30 days at most. You
+ * approve applicants into a cohort or decline them; Send rechecks each one
+ * with the waitlist and emails a personal, single-use invitation. While
+ * external access is closed, the database refuses to create any invitation.
+ */
+export function WaitlistPanel() {
+  const api = useAppApi()
+  const [o, setO] = useState<WaitlistOverview | null | undefined>(undefined)
+  const [picked, setPicked] = useState<string[]>([])
+  const [cohort, setCohort] = useState<'fan' | 'creator' | 'tester'>('fan')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [result, setResult] = useState<WaitlistBridgeResult | null>(null)
+  const [confirmSend, setConfirmSend] = useState(false)
+  const [forgetting, setForgetting] = useState<string | null>(null)
+  const [forgetEmail, setForgetEmail] = useState('')
+  const load = () =>
+    api.founderWaitlist().then(
+      (x) => setO(x),
+      (e) => (setError(e), setO(null)),
+    )
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api])
+  async function act(name: string, fn: () => Promise<unknown>) {
+    setBusy(name)
+    setError(null)
+    try {
+      const out = await fn()
+      if (out && typeof out === 'object') setResult(out as WaitlistBridgeResult)
+      setPicked([])
+      await load()
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(null)
+      setConfirmSend(false)
+      setForgetting(null)
+    }
+  }
+  if (o === undefined) return <Spinner label="Loading the waitlist…" />
+  if (o === null) return error ? <Message tone="error">{messageFor(error)}</Message> : null
+  const inv = o.invitations
+  const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : 'none yet')
+  const approved = o.applicants.filter((a) => a.decision === 'approved').length
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+  return (
+    <Panel title="Waitlist and invitations" testId="waitlist-panel">
+      <p className="text-[14px] text-ink-700">
+        The waitlist stays the record of who applied. Import copies verified applicants who agreed to be contacted, for up to 30 days. Approve them into a cohort,
+        then send: each one is checked with the waitlist again and gets a personal link that works once and lasts 14 days.
+      </p>
+      <p className="text-[14px] font-semibold" data-testid="waitlist-may-send">
+        {o.maySend ? 'Invitations can be sent.' : 'Invitations are closed: external access is not approved, or registration is paused. Nothing can be sent.'}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy !== null} onClick={() => void act('import', () => api.founderWaitlistImport())} className={buttonClass('secondary', 'sm')}>
+          {busy === 'import' ? 'Importing…' : 'Import verified applicants'}
+        </button>
+        {!confirmSend ? (
+          <button type="button" disabled={busy !== null || !o.maySend || approved === 0} onClick={() => setConfirmSend(true)} className={buttonClass('primary', 'sm')}>
+            Send approved invitations ({approved})
+          </button>
+        ) : (
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-[14px]">Send {approved} personal invitation{approved === 1 ? '' : 's'} now?</span>
+            <button type="button" disabled={busy !== null} onClick={() => void act('send', () => api.founderWaitlistSend())} className={buttonClass('primary', 'sm')}>
+              {busy === 'send' ? 'Sending…' : 'Yes, send'}
+            </button>
+            <button type="button" onClick={() => setConfirmSend(false)} className={buttonClass('ghost', 'sm')}>
+              Cancel
+            </button>
+          </span>
+        )}
+      </div>
+      <p className="text-[13px] text-ink-600">
+        Last import: {o.lastImportAt ? new Date(o.lastImportAt).toLocaleString() : 'never'}
+        {o.pendingDeletions > 0 ? ` · ${o.pendingDeletions} deletion request(s) waiting to reach the waitlist (carried on the next import or send)` : ''}
+      </p>
+      {result && (
+        <p className="rounded-xl bg-paper px-3 py-2 text-[14px]" data-testid="waitlist-result">
+          {String(result.status) === 'deleted'
+            ? Number(result.waitlist_deleted ?? 0) + Number(result.removed_here ?? 0) > 0 ? 'Deleted from the waitlist and from review.' : 'No one with that address was found.'
+            : String(result.status) === 'closed'
+            ? 'Nothing was sent: invitations are closed.'
+            : String(result.status) === 'email_not_configured'
+              ? 'Nothing was sent: the email key is not set up for this project.'
+              : Object.entries(RESULT_LABEL)
+                  .filter(([k]) => Number(result[k] ?? 0) > 0)
+                  .map(([k, label]) => `${result[k]} ${label}`)
+                  .join(' · ') || 'Nothing new.'}
+        </p>
+      )}
+      {error !== null && <Message tone="error">{messageFor(error)}</Message>}
+
+      <h3 className="pt-2 font-semibold text-ink-900">Applicants under review ({o.applicants.length})</h3>
+      {o.applicants.length === 0 ? (
+        <p className="text-[14px] text-ink-600">No applicants to review. Import to copy newly verified ones.</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-sm font-semibold text-ink-800">
+              Cohort
+              <select value={cohort} onChange={(e) => setCohort(e.target.value as typeof cohort)} className={input}>
+                <option value="fan">Member</option>
+                <option value="creator">Creator</option>
+                <option value="tester">Tester</option>
+              </select>
+            </label>
+            <button type="button" disabled={busy !== null || picked.length === 0} onClick={() => void act('approve', () => api.founderWaitlistDecide(picked, 'approved', cohort))} className={buttonClass('secondary', 'sm')}>
+              Approve selected ({picked.length})
+            </button>
+            <button type="button" disabled={busy !== null || picked.length === 0} onClick={() => void act('decline', () => api.founderWaitlistDecide(picked, 'declined'))} className={buttonClass('ghost', 'sm')}>
+              Decline selected
+            </button>
+            <button type="button" disabled={busy !== null || picked.length === 0} onClick={() => void act('reset', () => api.founderWaitlistDecide(picked, 'pending'))} className={buttonClass('ghost', 'sm')}>
+              Back to undecided
+            </button>
+          </div>
+          <ul className="space-y-2" data-testid="waitlist-applicants">
+            {o.applicants.map((a) => (
+              <li key={a.waitlistId} className="flex items-start gap-3 rounded-2xl bg-paper px-4 py-3">
+                <input type="checkbox" className="mt-1 h-5 w-5" aria-label={`Select ${a.email}`} checked={picked.includes(a.waitlistId)} onChange={() => toggle(a.waitlistId)} />
+                <div className="min-w-0 flex-1">
+                  <p className="break-all font-semibold text-ink-900">{a.email}</p>
+                  <p className="text-[13px] text-ink-600">
+                    {[a.groups.map((g) => GROUP_LABEL[g] ?? g).join(', ') || 'No group answers', a.intent && `wants to ${a.intent === 'both' ? 'create and discover' : a.intent}`,
+                      a.platform && `${a.platform}${a.audienceBand ? ` (${a.audienceBand.replace('_', ' ')})` : ''}`, a.fromCreatorLink && 'from a creator link',
+                      a.introducedByCreator && 'says a creator introduced them', `joined ${new Date(a.joinedAt).toLocaleDateString()}`]
+                      .filter(Boolean).join(' · ')}
+                  </p>
+                  <p className="text-[13px] font-semibold text-ink-700">
+                    {a.decision === 'approved' ? `Approved: ${a.cohort === 'fan' ? 'member' : a.cohort}` : a.decision === 'declined' ? 'Declined (recorded on the next import or send)' : 'Undecided'}
+                    {` · copy removed ${new Date(a.expiresAt).toLocaleDateString()}`}
+                  </p>
+                  {forgetting === a.waitlistId ? (
+                    <span className="mt-1 flex flex-wrap items-center gap-2 text-[13px]">
+                      Delete this applicant here and on the waitlist?
+                      <button type="button" onClick={() => void act('forget', () => api.founderWaitlistForget(a.waitlistId))} className={buttonClass('secondary', 'sm')}>
+                        Yes, delete
+                      </button>
+                      <button type="button" onClick={() => setForgetting(null)} className={buttonClass('ghost', 'sm')}>
+                        Cancel
+                      </button>
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => setForgetting(a.waitlistId)} className="mt-1 text-[13px] underline">
+                      Delete on request
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (forgetEmail.trim()) void act('forget-email', () => api.founderWaitlistForgetEmail(forgetEmail)).then(() => setForgetEmail(''))
+        }}
+      >
+        <label className="text-sm font-semibold text-ink-800">
+          Delete a waitlist applicant by email
+          <input type="email" value={forgetEmail} onChange={(e) => setForgetEmail(e.target.value)} placeholder="name@example.com" className={input} />
+        </label>
+        <button type="submit" disabled={busy !== null || !forgetEmail.trim()} className={buttonClass('secondary', 'sm')}>
+          {busy === 'forget-email' ? 'Deleting…' : 'Delete everywhere'}
+        </button>
+      </form>
+
+      <h3 className="pt-2 font-semibold text-ink-900">Invitations from the waitlist</h3>
+      <dl className="grid grid-cols-2 gap-2 text-[14px] sm:grid-cols-4" data-testid="waitlist-counts">
+        {[
+          ['Sent', inv.sent],
+          ['Failed', inv.failed],
+          ['Accepted', inv.accepted],
+          ['Onboarded', inv.onboarded],
+          ['Open', inv.open],
+          ['Expired', inv.expired],
+          ['Accepted of sent', pct(inv.accepted, inv.sent + inv.failed)],
+          ['Onboarded of accepted', pct(inv.onboarded, inv.accepted)],
+        ].map(([k, v]) => (
+          <div key={String(k)} className="rounded-xl bg-paper px-3 py-2">
+            <dt className="text-[12px] text-ink-600">{k}</dt>
+            <dd className="font-semibold text-ink-900">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {inv.fromCreatorLinks > 0 && <p className="text-[13px] text-ink-600">{inv.fromCreatorLinks} came through a creator's link.</p>}
+      {o.recent.length > 0 && (
+        <ul className="space-y-1 text-[13px]" data-testid="waitlist-recent">
+          {o.recent.map((r, i) => (
+            <li key={i} className="break-all">
+              {r.email} · {r.status}
+              {r.error ? ` (${r.error.replace(/_/g, ' ')})` : ''} · {new Date(r.createdAt).toLocaleDateString()}
+            </li>
           ))}
         </ul>
       )}

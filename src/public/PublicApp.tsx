@@ -9,6 +9,7 @@ import { AccountNavLink } from './auth/AccountNavLink'
 import { LandingPage } from './LandingPage'
 import { RequestInvitePage } from './RequestInvitePage'
 import { JoinPage } from './JoinPage'
+import { VerifyEmailPage } from './waitlist/VerifyEmailPage'
 import { PublicNotFound } from './PublicNotFound'
 import { PrivacyPage } from './PrivacyPage'
 import { PilotAccessPage } from './PilotAccessPage'
@@ -96,6 +97,7 @@ function AllRoutes() {
         <Route index element={<LandingPage />} />
         <Route path="request-invite" element={<RequestInvitePage />} />
         <Route path="join" element={<JoinPage />} />
+        <Route path="waitlist/verify" element={<VerifyEmailPage />} />
         <Route path="privacy" element={<PrivacyPage />} />
         <Route path="pilot-access" element={<PilotAccessPage />} />
         {/* The earlier creator and supporter pages now point to the one waitlist. */}

@@ -37,7 +37,8 @@ begin
   -- Nobody but the handoff login can run the handoff, and no API role can run any of it.
   foreach r in array array['anon', 'authenticated', 'service_role', 'waitlist_writer', 'waitlist_admin'] loop
     if has_function_privilege(r, 'waitlist_api.handoff_export(integer)', 'EXECUTE')
-       or has_function_privilege(r, 'waitlist_api.handoff_forget(uuid[])', 'EXECUTE') then
+       or has_function_privilege(r, 'waitlist_api.handoff_forget(uuid[])', 'EXECUTE')
+       or has_function_privilege(r, 'waitlist_api.handoff_forget_email(text)', 'EXECUTE') then
       raise exception 'FAIL: % can run the waitlist handoff', r;
     end if;
   end loop;
