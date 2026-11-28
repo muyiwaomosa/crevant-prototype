@@ -26,6 +26,8 @@ const MIGRATION = 'supabase/migrations/20261119000000_publishing_request_ids.sql
 const ROLLBACK = 'scripts/db/staging-rollback-publishing-requests.sql'
 // Newest first.
 const LATER = [
+  { version: '20261224000000', name: 'waitlist_invitations', file: 'supabase/migrations/20261224000000_waitlist_invitations.sql', rollback: 'scripts/db/staging-rollback-waitlist-invitations.sql', phrase: 'REMOVE STAGING WAITLIST INVITATIONS' },
+  { version: '20261223000000', name: 'waitlist_handoff', file: 'supabase/migrations/20261223000000_waitlist_handoff.sql', rollback: 'scripts/db/staging-rollback-waitlist-handoff.sql', phrase: 'REMOVE STAGING WAITLIST HANDOFF' },
   { version: '20261222000000', name: 'preview_default', file: 'supabase/migrations/20261222000000_preview_default.sql', rollback: 'scripts/db/staging-rollback-preview-default.sql', phrase: 'REMOVE STAGING PREVIEW DEFAULT' },
   { version: '20261221000000', name: 'profile_link', file: 'supabase/migrations/20261221000000_profile_link.sql', rollback: 'scripts/db/staging-rollback-profile-link.sql', phrase: 'REMOVE STAGING PROFILE LINK' },
   { version: '20261220000000', name: 'video_release_decision', file: 'supabase/migrations/20261220000000_video_release_decision.sql', rollback: 'scripts/db/staging-rollback-video-release.sql', phrase: 'REMOVE STAGING VIDEO RELEASE DECISION' },

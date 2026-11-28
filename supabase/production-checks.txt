@@ -6,3 +6,4 @@
 003_waitlist.sql
 004_acquisition.sql
 006_platform_functions.sql
+039_waitlist_handoff.sql

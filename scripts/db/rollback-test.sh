@@ -16,9 +16,11 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: public previews on by default
-# (20261222000000, scripts/db/rollback-preview-default-test.sh, the newest, so it
-# goes first), link in bio (20261221000000, scripts/db/rollback-profile-link-test.sh),
+# Later migrations follow the waitlist: waitlist review and invitations
+# (20261224000000, scripts/db/rollback-waitlist-invitations-test.sh, the newest,
+# so it goes first), waitlist verification and the handoff (20261223000000,
+# scripts/db/rollback-waitlist-handoff-test.sh), public previews on by default
+# (20261222000000, scripts/db/rollback-preview-default-test.sh), link in bio (20261221000000, scripts/db/rollback-profile-link-test.sh),
 # the video release decision (20261220000000, scripts/db/rollback-video-release-test.sh),
 # pilot closure (20261219000000, scripts/db/rollback-pilot-closure-test.sh),
 # progression rules (20261218000000, scripts/db/rollback-progression-rules-test.sh),
@@ -131,9 +133,35 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+INVITES=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261224000000')")
+if [ "$INVITES" = t ]; then
+  # The newest migration (waitlist review and invitations) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-waitlist-handoff.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the waitlist handoff rollback refuses while the waitlist invitations are recorded" \
+    || bad "the waitlist handoff rollback did not refuse while the waitlist invitations are recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-waitlist-invitations-test.sh; then
+    ok "waitlist invitations: the rollback refuses while a later migration exists, and otherwise removes the review copies and tracking exactly"
+  else
+    bad "the waitlist invitations rollback tests failed"
+  fi
+fi
+HANDOFF=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261223000000')")
+if [ "$HANDOFF" = t ]; then
+  # Then waitlist verification and the handoff.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-preview-default.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the preview default rollback refuses while the waitlist handoff is recorded" \
+    || bad "the preview default rollback did not refuse while the waitlist handoff is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-waitlist-handoff-test.sh; then
+    ok "waitlist handoff: the rollback refuses while a later migration exists, and otherwise removes verification links, the handoff and its login exactly"
+  else
+    bad "the waitlist handoff rollback tests failed"
+  fi
+fi
 PREVIEWDEF=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261222000000')")
 if [ "$PREVIEWDEF" = t ]; then
-  # The newest migration (public previews on by default) goes first.
+  # Then public previews on by default.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-profile-link.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the profile link rollback refuses while the preview default is recorded" \
@@ -829,9 +857,29 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
                                                     && ok "after reapplying, the profile link rollback refuses while the preview default is recorded" \
                                                     || bad "the profile link rollback did not refuse after reapply while the preview default is recorded (exit $code)"
                                                   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-preview-default.sql 2>&1); code=$?
+                                                  if [ "$HANDOFF" = t ]; then
+                                                    [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                                                      && ok "after reapplying, the preview default rollback refuses while the waitlist handoff is recorded" \
+                                                      || bad "the preview default rollback did not refuse after reapply while the waitlist handoff is recorded (exit $code)"
+                                                    out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-waitlist-handoff.sql 2>&1); code=$?
+                                                    if [ "$INVITES" = t ]; then
+                                                      [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                                                        && ok "after reapplying, the waitlist handoff rollback refuses while the waitlist invitations are recorded" \
+                                                        || bad "the waitlist handoff rollback did not refuse after reapply while the waitlist invitations are recorded (exit $code)"
+                                                      out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-waitlist-invitations.sql 2>&1); code=$?
+                                                      [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                                        && ok "after reapplying, the waitlist invitations rollback check passes again" \
+                                                        || bad "waitlist invitations rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                                    else
+                                                    [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                                      && ok "after reapplying, the waitlist handoff rollback check passes again" \
+                                                      || bad "waitlist handoff rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                                    fi
+                                                  else
                                                   [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                                                     && ok "after reapplying, the preview default rollback check passes again" \
                                                     || bad "preview default rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                                  fi
                                                 else
                                                 [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                                                   && ok "after reapplying, the profile link rollback check passes again" \

@@ -14,6 +14,10 @@
 #                   the join-waitlist function calls
 #   20261118000000  platform function access (members and waitlist logins
 #                   can't run Supabase's rls_auto_enable)
+#   20261223000000  waitlist email verification and the BL-009 handoff
+#                   (founder decision D1, option A): verification links for
+#                   the join function, and the restricted waitlist_handoff
+#                   login the member project's waitlist-bridge function uses
 #
 # Not listed, so never pushed to Production by the workflow:
 #   20261117000000  the Release 1 social core. Nothing above depends on it.
@@ -29,3 +33,4 @@
 20261111000000_waitlist_admin_tools.sql
 20261116000000_creator_acquisition.sql
 20261118000000_platform_function_access.sql
+20261223000000_waitlist_handoff.sql

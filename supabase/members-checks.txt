@@ -42,3 +42,5 @@
 036_video_release_decision.sql 20261220000000
 037_profile_link.sql 20261221000000
 038_preview_default.sql 20261222000000
+039_waitlist_handoff.sql 20261223000000
+040_waitlist_invitations.sql 20261224000000
