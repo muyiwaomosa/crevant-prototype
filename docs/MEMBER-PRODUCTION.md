@@ -279,6 +279,38 @@ migration itself fail; then a new activation succeeds. A state with
 membership but no gate (only possible by hand) fails the member check, the
 read-only verification and the deploy workflow.
 
+## Held migrations: `supabase/members-held-migrations.txt`
+
+Some migrations are applied to staging but must wait for member Production.
+The first are 20261223000000 and 20261224000000 (BL-009, the waitlist to
+member journey), held by the founder on Nov 28, 2026. A held migration is
+never pushed to member Production.
+
+* **Plan and apply use the same list.** Both build the migration folder with
+  `members-subset.sh prepare ... all`, which leaves the held migrations out
+  and names them in the log.
+* **The other steps ignore them too.** The pending list
+  (`members-pending-migrations.sh`) and the "every migration is recorded" step
+  skip held migrations. The post-apply checks report each held migration's
+  check as held, so `--require-all` still requires every other check.
+* **The hold fails closed.** The file is checked on every run, and the
+  workflow fails if:
+  * a line is malformed or has no reason;
+  * a version is listed twice;
+  * a version is unknown or unapproved;
+  * a version is not after the launch gate;
+  * a held migration is older than one that would be pushed, which could
+    depend on it;
+  * a held migration is already recorded on member Production, meaning the
+    hold was bypassed.
+* **The existing checks are unchanged.** That includes checksum approval,
+  unknown migrations, the identity marker, the founder's environment approval,
+  the backup confirmation and the confirmation phrase.
+* **Staging never reads the list.** It keeps receiving every approved
+  migration.
+* **Releasing a migration is a reviewed change.** A pull request removes its
+  line. The next member Production plan then lists it as pending.
+
 ## Sequence (each step separately approved; none is done by this PR)
 
 1. Provision `splitpost-members-production` (Pro org, `ca-central-1`, Micro).
