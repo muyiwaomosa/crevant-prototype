@@ -70,7 +70,8 @@ export function openSteps(j: ProgressJourney): Array<GoalStep & { target: number
 
 /** The open goal closest to done, across the member's journeys: a suggestion, not an order. */
 export function suggestNext(progress: Enabled): Suggestion | null {
-  const journeys = (['creator', 'consumer'] as const).filter((a) => a === 'consumer' || creatorJourneyShown(progress))
+  // Supporter goals first, so a tie (a brand-new member) suggests supporting before posting.
+  const journeys = (['consumer', 'creator'] as const).filter((a) => a === 'consumer' || creatorJourneyShown(progress))
   let best: Suggestion | null = null
   let bestShare = -1
   for (const a of journeys) {

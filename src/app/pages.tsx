@@ -15,9 +15,9 @@ import { WelcomeIntro } from './welcome'
 import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
 import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
-import { DetailsEditor, MemberAbout, SuggestedPeople, useTopics } from './profileDetails'
+import { DetailsEditor, MemberAbout, SuggestedPeople, WebsiteLink, useTopics } from './profileDetails'
 import { ReportButton, useModeration } from './moderation'
-import { CreatorSetupCard, FirstPostGuide } from './onboarding'
+import { FirstPostGuide } from './onboarding'
 import { PostComposer, usePhotosEnabled } from './media'
 import { ProfilePictureField } from './avatars'
 import { AudienceInsight, SupportButton } from './relationships'
@@ -584,7 +584,10 @@ export function firstSteps(input: {
     body: 'Leave a thoughtful comment, save it or share it. It helps the creator grow, and it is recognized in My Split.',
     done: contributed === true,
   }
-  const steps = identity === 'creator' ? [post, find, clique] : identity === 'both' ? [find, follow, clique, post] : [find, follow, clique]
+  // One account, one experience (BL-005): the same first steps for everyone. The
+  // identity input is kept for older callers and ignored.
+  void identity
+  const steps = [find, follow, clique, post]
   // The contribution step only where the server can say whether it happened.
   return contributed === null ? steps : [...steps, support]
 }
@@ -761,6 +764,7 @@ export function MemberPage() {
   const m = member.data
   const posts = useLoad(async () => (m ? api.memberPosts(m.id) : []), [api, m?.id])
   const details = useLoad(async () => (m ? api.memberDetails(m.id) : null), [api, m?.id])
+  const website = useLoad(async () => (m ? api.memberWebsite(m.id).catch(() => null) : null), [api, m?.id])
   const { topics } = useTopics()
   // Arriving from "See posts" (…#posts): bring the posts into view once they load.
   const postsReady = posts.data !== undefined && m !== undefined && m !== null
@@ -773,7 +777,7 @@ export function MemberPage() {
   if (!m) return <BlockedProfilePanel username={username} fallback={<NotFoundPanel what="This member" />} onUnblocked={() => void member.reload()} />
   return (
     <>
-      <MemberHeader member={m} onChange={member.reload} about={<MemberAbout details={details.data} topics={topics} />} />
+      <MemberHeader member={m} onChange={member.reload} about={<MemberAbout details={details.data} topics={topics} website={website.data} />} />
       <h2 id="posts" className="mb-3 mt-6 scroll-mt-20 font-display text-lg font-bold text-ink-900">
         Posts
       </h2>
@@ -1099,6 +1103,7 @@ function ProfileHome() {
   const member = useLoad(() => api.member(profile.username), [api, profile.username])
   const posts = useLoad(async () => (member.data ? api.memberPosts(member.data.id) : []), [api, member.data?.id])
   const insight = useLoad(() => api.creatorInsights(28).catch(() => null), [api])
+  const website = useLoad(() => api.myWebsite().catch(() => null), [api])
   const earnings = (insight.data?.money.simulated_by_month ?? []).reduce((n, m) => n + m.creator_cents, 0)
   const { moderator } = useModeration()
   const { founder } = useFeedbackAccess()
@@ -1107,6 +1112,7 @@ function ProfileHome() {
     ['/app/saved', 'Saved posts'],
     ['/app/notices', 'Notices'],
     ['/app/account', 'Your account'],
+    ['/app/settings/privacy', 'Privacy, sharing and ads'],
     ['/app/privacy', 'Your data and privacy'],
     ['/app/advertise', 'Advertise with Splitpost'],
     ['/app/welcome', 'How Splitpost works'],
@@ -1127,6 +1133,11 @@ function ProfileHome() {
           </p>
         </div>
       </div>
+      {website.data && (
+        <div className="mt-3">
+          <WebsiteLink url={website.data} />
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap gap-2">
         <Link to="/app/profile?edit=1" className={clsx(buttonClass('secondary', 'sm'), 'h-11 px-4')}>
           Edit profile
@@ -1210,9 +1221,6 @@ function ProfileFace() {
   return (
     <>
       {me.error !== null && <ErrorNote error={me.error} />}
-      <div className="mb-4">
-        <CreatorSetupCard />
-      </div>
       <AudienceInsight />
       <Card className="mb-4 p-5">
         <ProfilePictureField />
@@ -1224,6 +1232,27 @@ function ProfileFace() {
       <Card className="mt-4 p-5">
         <DetailsEditor />
       </Card>
+      <p className="mt-4 text-[14px] text-ink-600">
+        Sharing outside Splitpost, ad preferences and blocked members are in{' '}
+        <Link to="/app/settings/privacy" className="font-semibold text-brand-700 underline underline-offset-2">
+          Privacy, sharing and ads
+        </Link>
+        .
+      </p>
+    </>
+  )
+}
+
+/**
+ * Privacy, sharing and ads (BL-007): the controls that used to sit at the foot
+ * of Edit profile, in Settings. Nothing about them changes: ad preferences
+ * (never required, and without choices ads are not personalized), sharing
+ * outside Splitpost, and blocked members.
+ */
+export function PrivacySettingsPage() {
+  return (
+    <>
+      <PageHeader title="Privacy, sharing and ads" subtitle="Who can see your posts outside Splitpost, what you'd like to see offers for, and who you've blocked." />
       <PublicPreviewsSetting />
       <AdPreferences />
       <BlockedMembers />

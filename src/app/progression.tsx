@@ -369,13 +369,14 @@ export function ProgressCards({ progress }: { progress: Extract<MyProgress, { en
   )
 }
 
-/** The creator journey shows once the member has started it (a post, an amount or a status). */
-export function creatorJourneyShown(progress: Extract<MyProgress, { enabled: true }>) {
-  return (
-    progress.creator.status !== 'in_progress' ||
-    progress.earnings.creator.accumulatedCents !== 0 ||
-    progress.creator.steps.some((s) => s.metric === 'original_posts' && s.value > 0)
-  )
+/**
+ * Both journeys show for every member (BL-005, one account and one experience):
+ * anyone can create and support, so creator goals are never hidden behind a
+ * first post. Kept as a function so every caller stays the same.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function creatorJourneyShown(_progress: Extract<MyProgress, { enabled: true }>) {
+  return true
 }
 
 /** The notices for one journey: a revocation names its journey; a hold names what it holds. */

@@ -766,6 +766,14 @@ export interface AppApi {
   /** Saves all of the member's details at once and marks first-time setup done. */
   saveDetails(details: ProfileDetails): Promise<void>
   memberDetails(memberId: string): Promise<ProfileDetails | null>
+  /**
+   * Link in bio (BL-002, 20261221000000): one optional http(s) address. Null
+   * reads (and not_available on save) on a database without it.
+   */
+  myWebsite(): Promise<string | null>
+  /** Sets or removes (empty) the member's own link; returns the stored address. */
+  setMyWebsite(url: string): Promise<string | null>
+  memberWebsite(memberId: string): Promise<string | null>
   /** People the member doesn't follow yet, shared interests first. */
   suggested(): Promise<DiscoverMember[]>
   /** Moderation (20261124000000): unavailable (and never a moderator) on a database without it. */
@@ -1106,6 +1114,7 @@ const MESSAGES: Record<string, string> = {
   display_name_invalid: 'Display names are 1 to 50 characters, with no special control characters.',
   invalid_identity: 'Choose creator, fan or both.',
   bio_too_long: 'Keep your bio to 160 characters.',
+  website_invalid: 'Use a web address such as https://example.com (http or https, up to 200 characters).',
   follow_reason_too_long: 'Keep this to 140 characters.',
   invalid_text: 'Use a single paragraph, without line breaks or special characters.',
   too_many_topics: 'Choose up to 5 interests.',
@@ -1360,6 +1369,26 @@ const asSupportChoice = (v: unknown): SupportChoice | null => (SUPPORT_CHOICES.s
 const asIdentity = (v: unknown): Identity | null => ((IDENTITIES as unknown[]).includes(v) ? (v as Identity) : null)
 const asText = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 const asTopics = (v: unknown): string[] => (Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : [])
+
+/**
+ * The app's copy of the server's link rules (BL-002): http or https, a host
+ * with a dot, no user name or password, no spaces or angle brackets, at most
+ * 200 characters. A bare address gets https://. The server checks again.
+ */
+export function normalizeWebsite(input: string): { url: string | null } | { error: 'website_invalid' } {
+  let url = input.trim()
+  if (!url) return { url: null }
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`
+  const ok =
+    url.length <= 200 &&
+    /^https?:\/\/[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?)*\.[A-Za-z]{2,63}(?::[0-9]{1,5})?(?:[/?#][^\s<>"'\\^`{|}]*)?$/.test(url)
+  return ok ? { url } : { error: 'website_invalid' }
+}
+
+/** How a link in bio is shown: the address without its scheme, a trailing slash or "www.". */
+export function websiteLabel(url: string): string {
+  return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '')
+}
 
 export function toDetails(r: Record<string, unknown> | undefined): ProfileDetails {
   return { identity: asIdentity(r?.identity), bio: asText(r?.bio), followReason: asText(r?.follow_reason), topics: asTopics(r?.topics) }
@@ -1868,6 +1897,30 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
       if (!error) return
       if (isMissingFunction(error, 'app_set_profile_details')) throw new AppApiError('not_available')
       throw toAppError(error)
+    },
+    async myWebsite() {
+      const { data, error } = await client.rpc('app_my_website')
+      if (error) {
+        if (isMissingFunction(error, 'app_my_website')) return null
+        throw toAppError(error)
+      }
+      return typeof data === 'string' && data ? data : null
+    },
+    async setMyWebsite(url) {
+      const { data, error } = await client.rpc('app_set_my_website', { p_url: url })
+      if (error) {
+        if (isMissingFunction(error, 'app_set_my_website')) throw new AppApiError('not_available')
+        throw toAppError(error)
+      }
+      return typeof data === 'string' && data ? data : null
+    },
+    async memberWebsite(memberId) {
+      const { data, error } = await client.rpc('app_member_website', { p_member: memberId })
+      if (error) {
+        if (isMissingFunction(error, 'app_member_website')) return null
+        throw toAppError(error)
+      }
+      return typeof data === 'string' && data ? data : null
     },
     async memberDetails(memberId) {
       const { data, error } = await client.rpc('app_member_details', { p_member: memberId })

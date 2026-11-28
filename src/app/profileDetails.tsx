@@ -1,14 +1,17 @@
 import clsx from 'clsx'
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Check } from 'lucide-react'
+import { Check, ExternalLink } from 'lucide-react'
 import { Card, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import {
+  AppApiError,
   IDENTITIES,
   LIMITS,
   messageFor,
+  normalizeWebsite,
   shortTextProblem,
+  websiteLabel,
   type DiscoverMember,
   type Identity,
   type MyDetails,
@@ -244,16 +247,18 @@ export function useTopics() {
 }
 
 // ---------------------------------------------------------------------------
-// First-time setup, after the name step: identity, interests, bio and follow
-// statement, then people to follow. Every step can be skipped; nothing here is
-// required to use Splitpost.
+// First-time setup, after the name step: interests, bio and follow statement,
+// then people to follow. Every step can be skipped; nothing here is required to
+// use Splitpost. One account, one experience (BL-005): nobody is asked whether
+// they create or consume; everyone can do both.
 
-export const SETUP_STEPS = ['Your name', 'What brings you here', 'Your interests', 'About you', 'People to follow', 'How My Split works'] as const
+export const SETUP_STEPS = ['Your name', 'Your interests', 'About you', 'People to follow', 'How My Split works'] as const
 
 export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: () => void }) {
   const api = useAppApi()
   const { topics } = useTopics()
-  const [step, setStep] = useState(2)
+  // Steps 3 to 6 (step 2, "what brings you here", was retired by BL-005).
+  const [step, setStep] = useState(3)
   const [draft, setDraft] = useState<ProfileDetails>(fields(initial))
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
@@ -286,7 +291,8 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
 
   // While "Skip the rest" saves, the step buttons wait too, so a second tap
   // can't move to another step underneath the save.
-  const label = SETUP_STEPS[step - 1]
+  const shown = step - 1
+  const label = SETUP_STEPS[shown - 1]
   const skip = (next: () => void, what: string) => (
     <button type="button" onClick={next} disabled={busy} className="text-sm font-semibold text-ink-600 underline underline-offset-2" aria-label={`Skip for now: ${what}`}>
       Skip for now
@@ -294,19 +300,7 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
   )
 
   let body: ReactNode
-  if (step === 2) {
-    body = (
-      <>
-        <IdentityPicker value={draft.identity} onChange={(identity) => set({ identity })} hideLegend />
-        <div className="flex items-center justify-between gap-3">
-          {skip(() => (set({ identity: null }), setStep(3)), 'what brings you here')}
-          <button type="button" disabled={busy} onClick={() => setStep(3)} className={buttonClass('primary')}>
-            Continue
-          </button>
-        </div>
-      </>
-    )
-  } else if (step === 3) {
+  if (step === 3) {
     body = (
       <>
         {topics === undefined && <Spinner label="Loading interests…" />}
@@ -314,9 +308,7 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
         <p className="text-[15px] leading-relaxed text-ink-700">Choose what you love so we can help you find your people.</p>
         {topics && <TopicPicker topics={topics} value={draft.topics} onChange={(t) => set({ topics: t })} hideLegend />}
         <div className="flex items-center justify-between gap-3">
-          <button type="button" disabled={busy} onClick={() => setStep(2)} className={buttonClass('secondary')}>
-            Back
-          </button>
+          <span />
           <div className="flex items-center gap-4">
             {skip(() => (set({ topics: [] }), setStep(4)), 'your interests')}
             <button type="button" disabled={busy} onClick={() => setStep(4)} className={buttonClass('primary')}>
@@ -369,21 +361,16 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
       </>
     )
   } else {
-    const creating = draft.identity === 'creator' || draft.identity === 'both'
     body = (
       <>
         <MySplitIntro heading={null} />
-        {creating && (
-          <p className="rounded-2xl bg-brand-50 px-4 py-3 text-[14px] leading-relaxed text-ink-800 ring-1 ring-brand-100">
-            Ready to share your own work? Your Profile has a short creator setup: what you post about, your first post and your invitation link.
-          </p>
-        )}
+        <p className="rounded-2xl bg-brand-50 px-4 py-3 text-[14px] leading-relaxed text-ink-800 ring-1 ring-brand-100">
+          Every Splitpost account can post, discover, build a Clique, support creators and work towards earning, under the same rules.
+        </p>
         <div className="flex flex-col gap-2 sm:flex-row">
-          {creating && (
-            <Link to="/app/profile?edit=1" onClick={onDone} className={`${buttonClass('secondary')} w-full sm:w-auto`}>
-              Set up my creator profile
-            </Link>
-          )}
+          <Link to="/app/new" onClick={onDone} className={`${buttonClass('secondary')} w-full sm:w-auto`}>
+            Write my first post
+          </Link>
           <button type="button" onClick={onDone} className={`${buttonClass('primary')} w-full sm:flex-1`}>
             Go to my feed
           </button>
@@ -395,10 +382,9 @@ export function DetailsSetup({ initial, onDone }: { initial: MyDetails; onDone: 
   return (
     <main id="main" className="px-4 py-8 sm:py-14">
       <div className="mx-auto max-w-md space-y-5">
-        <SetupProgress step={step} total={SETUP_STEPS.length} label={label} />
+        <SetupProgress step={shown} total={SETUP_STEPS.length} label={label} />
         <Card className="space-y-5 p-5 sm:p-6">
           <h1 id={headingId} tabIndex={-1} className="font-display text-2xl font-extrabold text-ink-900 outline-none">
-            {step === 2 && 'What brings you to Splitpost?'}
             {step === 3 && 'What are you into?'}
             {step === 4 && 'Tell people about you'}
             {step === 5 && 'People you might like'}
@@ -430,11 +416,18 @@ export function DetailsEditor() {
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  // Link in bio (BL-002): saved with the other details.
+  const [website, setWebsite] = useState('')
+  const [storedWebsite, setStoredWebsite] = useState<string | null>(null)
   useEffect(() => {
     let live = true
     api.myDetails().then(
       (d) => live && setDraft(d),
       (e) => live && setLoadError(e),
+    )
+    api.myWebsite().then(
+      (w) => live && (setWebsite(w ?? ''), setStoredWebsite(w)),
+      () => undefined,
     )
     return () => {
       live = false
@@ -458,10 +451,20 @@ export function DetailsEditor() {
       setProblem(p)
       return
     }
+    const link = normalizeWebsite(website)
+    if ('error' in link) {
+      setProblem(messageFor(new AppApiError(link.error)))
+      return
+    }
     setBusy(true)
     setProblem(null)
     try {
       await api.saveDetails(fields(draft))
+      if (link.url !== storedWebsite) {
+        const stored = await api.setMyWebsite(link.url ?? '')
+        setStoredWebsite(stored)
+        setWebsite(stored ?? '')
+      }
       setSaved(true)
     } catch (err) {
       setProblem(messageFor(err))
@@ -475,9 +478,15 @@ export function DetailsEditor() {
       <h2 id="about-you-title" className="font-display text-lg font-bold text-ink-900">
         About you
       </h2>
-      <IdentityPicker value={draft.identity} onChange={(identity) => set({ identity })} />
       {topics && <TopicPicker topics={topics} value={draft.topics} onChange={(t) => set({ topics: t })} />}
       <ShortText label="Short bio" hint="Optional. One line about you." value={draft.bio ?? ''} onChange={(bio) => set({ bio })} max={LIMITS.bio} />
+      <WebsiteField
+        value={website}
+        onChange={(v) => {
+          setSaved(false)
+          setWebsite(v)
+        }}
+      />
       <ShortText
         label="Why should people follow you?"
         hint="Optional. Shown on your profile and in Discover."
@@ -491,6 +500,33 @@ export function DetailsEditor() {
         {busy ? 'Saving…' : 'Save details'}
       </button>
     </form>
+  )
+}
+
+/** The one optional link in bio. Empty removes it. */
+function WebsiteField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const id = useId()
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-semibold text-ink-800">
+        Website
+      </label>
+      <p id={`${id}-hint`} className="mt-0.5 text-[13px] text-ink-600">
+        Optional. One link people can open from your profile, such as your shop or portfolio. Leave it empty to remove it.
+      </p>
+      <input
+        id={id}
+        type="url"
+        inputMode="url"
+        autoComplete="url"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        maxLength={200}
+        placeholder="https://example.com"
+        aria-describedby={`${id}-hint`}
+        className="mt-2 block w-full rounded-2xl border border-ink-200 bg-white px-4 py-3 text-[15px] text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+      />
+    </div>
   )
 }
 
@@ -518,22 +554,45 @@ export function TopicTags({ slugs, topics, highlight }: { slugs: string[]; topic
 }
 
 /** Bio, identity, follow statement and interests, for a profile page. Shows nothing when empty. */
-export function MemberAbout({ details, topics }: { details: ProfileDetails | null | undefined; topics: Topic[] | null | undefined }) {
-  if (!details) return null
+export function MemberAbout({ details, topics, website }: { details: ProfileDetails | null | undefined; topics: Topic[] | null | undefined; website?: string | null }) {
+  if (!details && !website) return null
   // The goal question is private personalization (unified account): never shown as a public label.
-  const { bio, followReason } = details
-  if (!bio && !followReason && details.topics.length === 0) return null
+  const bio = details?.bio ?? null
+  const followReason = details?.followReason ?? null
+  const slugs = details?.topics ?? []
+  if (!bio && !followReason && slugs.length === 0 && !website) return null
   return (
     <div className="mt-4 space-y-3" data-testid="member-about">
       {bio && <p className="text-[15px] leading-relaxed text-ink-800">{bio}</p>}
+      {website && <WebsiteLink url={website} />}
       {followReason && (
         <div className="rounded-2xl bg-brand-50 px-4 py-3 ring-1 ring-brand-100">
           <p className="text-[13px] font-semibold text-brand-800">Why follow</p>
           <p className="text-[15px] leading-relaxed text-ink-900">{followReason}</p>
         </div>
       )}
-      <TopicTags slugs={details.topics} topics={topics} />
+      <TopicTags slugs={slugs} topics={topics} />
     </div>
+  )
+}
+
+/**
+ * A member's link in bio (BL-002): opens in a new tab, never passes the
+ * Splitpost page on (noopener, noreferrer), and is marked as member content
+ * (nofollow, ugc). Only addresses the server accepted ever reach here.
+ */
+export function WebsiteLink({ url }: { url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="nofollow ugc noopener noreferrer"
+      className="inline-flex max-w-full items-center gap-1.5 text-[15px] font-semibold text-brand-700 underline underline-offset-2"
+      data-testid="member-website"
+    >
+      <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="truncate">{websiteLabel(url)}</span>
+    </a>
   )
 }
 
