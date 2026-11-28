@@ -87,6 +87,8 @@ Each of the 16 fixture accounts is let in by the gate's own owner-only, recorded
 
 Nothing is committed until the gate is closed and exactly as it began. Other sessions only ever see committed settings, so they see the gate closed the whole time. The automated test proves this with a second session during the window: it is refused membership, and registration says "closed".
 
+This is the one approved exception (founder, Nov 28, 2026) to the rule that no workflow opens external access. The guard tests in `scripts/db/test-guards.sh` still refuse every other file. They also pin the fixture to exactly this pattern: one open and one close, both inside its grant step, and the check before saving.
+
 The grant only works for the fixture's own accounts: the supporter's address, or one of the 15 supporting accounts this run made. Each open and close is recorded in the launch gate's history under `staging-review-fixture`, which gives 16 pairs per seed. A dry run rolls these back with everything else.
 
 ## Running it again

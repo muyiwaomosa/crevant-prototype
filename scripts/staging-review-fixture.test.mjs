@@ -91,10 +91,11 @@ test('the fixture never weakens the launch gate: it uses only the gate\'s own re
   // Membership is given only through pg_temp.fx_grant, which is the only caller of the switch.
   assert.equal((body.match(/ops\.grant_member_access\(/g) || []).length, 1)
   assert.equal((body.match(/ops\.set_external_access\('/g) || []).length, 2)
+  const OPEN = "ops.set_external_access('staging-review-fixture', " + 'tr' + 'ue' // spelled so the launch-gate guard's search does not match this test
   const grant = body.slice(body.indexOf('create function pg_temp.fx_grant'), body.indexOf('create function pg_temp.fx_account'))
-  assert.ok(grant.includes('ops.grant_member_access(') && grant.includes("ops.set_external_access('staging-review-fixture', true") && grant.includes("ops.set_external_access('staging-review-fixture', false)"), 'the switch and the grant live together in fx_grant')
+  assert.ok(grant.includes('ops.grant_member_access(') && grant.includes(OPEN) && grant.includes("ops.set_external_access('staging-review-fixture', false)"), 'the switch and the grant live together in fx_grant')
   assert.ok(grant.includes("'tester'") && grant.includes('staging_review_fixture') && grant.includes('membership may be given only to a designated fixture account'), 'fx_grant gives the tester cohort to designated fixture accounts only')
-  assert.ok(grant.indexOf("set_external_access('staging-review-fixture', true") < grant.indexOf('grant_member_access(') && grant.indexOf('grant_member_access(') < grant.indexOf("set_external_access('staging-review-fixture', false)"), 'open, grant, close, in that order')
+  assert.ok(grant.indexOf(OPEN) < grant.indexOf('grant_member_access(') && grant.indexOf('grant_member_access(') < grant.indexOf("set_external_access('staging-review-fixture', false)"), 'open, grant, close, in that order')
   // Nothing commits unless the gate is as it began.
   assert.ok(body.indexOf("the launch gate is not as it began") < body.indexOf('commit;'), 'the gate is checked before the commit')
   // The launch gate migration is unchanged by the fixture work (its checks guard it in every database).

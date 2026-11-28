@@ -412,8 +412,17 @@ rm -rf "$adir"
 
 # Opening external member access is never automated: no workflow, and no
 # script outside the local test harness, calls ops.set_external_access to open it.
+# One founder-approved exception (Nov 28, 2026): the staging review fixture,
+# which opens it only inside its own uncommitted transaction, for one grant to a
+# designated fixture account, closes it at once, and refuses to commit unless the
+# gate is as it began. Never committed open, never visible to another session
+# (scripts/db/staging-review-fixture-test.sh proves it). The next guard pins it
+# to exactly that pattern.
 guard "no workflow or non-test script opens external member access" \
-  "[ -z \"\$(grep -rlE \"set_external_access\\([^)]*true\" .github scripts supabase/migrations supabase/tests supabase/tests-members | grep -vxE 'scripts/db/(local-open-launch-gate\\.sh|rollback-member-launch-gate-test\\.sh|members-workflow-test\\.sh)' )\" ]"
+  "[ -z \"\$(grep -rlE \"set_external_access\\([^)]*true\" .github scripts supabase/migrations supabase/tests supabase/tests-members | grep -vxE 'scripts/db/(local-open-launch-gate\\.sh|rollback-member-launch-gate-test\\.sh|members-workflow-test\\.sh|staging-review-fixture-test\\.sh|staging-review-fixture\\.sql)' )\" ]"
+guard "the staging review fixture opens the gate only in fx_grant, closes it there, and checks it before commit" \
+  "f=scripts/db/staging-review-fixture.sql; [ \"\$(grep -c \"set_external_access('staging-review-fixture', tru[e]\" \$f)\" = 1 ] && [ \"\$(grep -c \"set_external_access('staging-review-fixture', false)\" \$f)\" = 1 ] && [ \"\$(grep -cF \"set_external_access('\" \$f)\" = 2 ] && awk '/create function pg_temp.fx_grant/{g=1} /create function pg_temp.fx_account/{g=0} g && /set_external_access/{n++} END{exit n!=2}' \$f && grep -q 'the launch gate is not as it began' \$f && ! grep -qE 'staging-review-fixture|staging_review_fixture' scripts/db/members-*.sh scripts/db/members-*.sql scripts/db/production-* .github/workflows/*production*"
+
 guard "the member deploy refuses membership recorded without the launch gate" \
   "grep -q 'Membership (20261122000000) is recorded without the launch gate (20261129000000)' $mw"
 
