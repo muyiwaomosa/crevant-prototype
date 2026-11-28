@@ -1,0 +1,19 @@
+# Migrations held back from MEMBER PRODUCTION (reviewed changes only).
+#
+# A held migration is applied to staging as usual but is never pushed to
+# member Production: the plan and the apply both leave it out of the
+# migration folder and name it in their logs, the pending list and the
+# "every migration is recorded" check ignore it, and its shared check is
+# reported as held. Releasing one is a reviewed change that removes its line.
+#
+# Rules (scripts/db/members-subset.sh fails the workflow otherwise):
+#   * one line per migration: <version> <reason>
+#   * the version is an existing, approved migration after the launch gate
+#     (20261129000000)
+#   * held migrations are the newest ones: nothing that would be pushed may be
+#     newer than a held migration (it could depend on it)
+#   * a held migration must not already be recorded on member Production
+#
+# Format: <14-digit version> <reason>
+20261223000000 BL-009 waitlist handoff: held until the waitlist to member journey is approved for member Production (founder, Nov 28, 2026)
+20261224000000 BL-009 waitlist review and invitations: held until the waitlist to member journey is approved for member Production (founder, Nov 28, 2026)

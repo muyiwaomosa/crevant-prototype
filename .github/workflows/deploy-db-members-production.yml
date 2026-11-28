@@ -222,7 +222,9 @@ jobs:
           set -euo pipefail
           pending="$(scripts/db/members-pending-migrations.sh)"
           echo "Not yet applied on member Production: ${pending:-none}"
-          all="$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | tr '\n' ' ' | sed 's/ $//')"
+          # Held migrations (supabase/members-held-migrations.txt) are never pending or pushed here.
+          echo "Held for member Production: $(scripts/db/members-subset.sh held | tr '\n' ' ' | sed 's/ $//')"
+          all="$(scripts/db/members-subset.sh unheld | tr '\n' ' ' | sed 's/ $//')"
           if [ "$pending" = "$all" ]; then state=empty
           elif [[ " $pending " == *" 20261122000000 "* ]]; then state=foundation
           elif [[ " $pending " == *" 20261129000000 "* ]]; then

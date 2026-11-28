@@ -5,6 +5,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 
 const DEPLOY = '.github/workflows/deploy-db-members-production.yml'
 const ACTIVATE = '.github/workflows/members-activate-member-access.yml'
@@ -190,4 +191,22 @@ test('the member checks list covers every shared check, each with a real migrati
   const files = new Set(read('supabase/approved-migrations.sha256').split('\n').filter(Boolean).map((l) => l.split('/').pop().slice(0, 14)))
   for (const l of lines) assert.ok(files.has(l.split(' ')[1]), `${l}: no such migration`)
   assert.deepEqual(checks, readdirSync('supabase/tests').filter((f) => f.endsWith('.sql')).sort(), 'every shared check is listed once, in order')
+})
+
+test('member Production holds back exactly the listed migrations; plan and apply use the same list, and staging never reads it', () => {
+  const run = (...a) => execFileSync('bash', ['scripts/db/members-subset.sh', ...a], { encoding: 'utf8' })
+  // BL-009 (founder, Nov 28): the waitlist migrations stay off member Production until a reviewed change releases them.
+  assert.deepEqual(run('held').trim().split('\n'), ['20261223000000', '20261224000000'])
+  const unheld = run('unheld').trim().split('\n')
+  assert.ok(!unheld.includes('20261223000000') && !unheld.includes('20261224000000') && unheld.includes('20261222000000'))
+  const mw = read('.github/workflows/deploy-db-members-production.yml')
+  // Plan and apply both build the "all" folder (which leaves out the held ones) and the same pending list.
+  assert.match(mw, /activated\) scripts\/db\/members-subset\.sh prepare "\$RUNNER_TEMP\/members" all ;;/)
+  assert.match(mw, /all="\$\(scripts\/db\/members-subset\.sh unheld/)
+  assert.match(mw, /echo "Held for member Production: /, 'the held migrations are named in the log')
+  assert.match(read('.github/workflows/members-activate-member-access.yml'), /expected="\$\(scripts\/db\/members-subset\.sh unheld/)
+  assert.match(read('scripts/db/members-pending-migrations.sh'), /the hold was bypassed/)
+  assert.match(read('scripts/db/members-run-checks.sh'), /is held for member Production/)
+  // Staging receives every approved migration.
+  for (const f of ['deploy-db-staging.yml']) assert.ok(!/members-held-migrations|members-subset\.sh/.test(read(`.github/workflows/${f}`)), `${f} must not read the member Production hold`)
 })

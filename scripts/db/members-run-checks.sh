@@ -31,10 +31,18 @@ recorded="$(PGOPTIONS='-c default_transaction_read_only=on' psql "$MEMBERS_PRODU
   -c "select coalesce((xpath('/row/v/text()', query_to_xml('select string_agg(version::text, '' '' order by version) as v from supabase_migrations.schema_migrations', false, true, '')))[1]::text, '') where to_regclass('supabase_migrations.schema_migrations') is not null")" \
   || fail "Could not read the migration history."
 recorded="$(tr ' ' '\n' <<<"$recorded")"
+# Held migrations (supabase/members-held-migrations.txt) are not applied here
+# on purpose: their checks are reported as held, not skipped, so --require-all
+# still demands every other check.
+held="$(scripts/db/members-subset.sh held)" || fail "The member Production hold list is invalid."
 skipped=0
+held_checks=0
 while read -r check version; do
   [ -f "supabase/tests/$check" ] || fail "Listed check not found: $check"
-  if grep -qx "$version" <<<"$recorded"; then
+  if [ -n "$held" ] && grep -qx "$version" <<<"$held" && ! grep -qx "$version" <<<"$recorded"; then
+    echo "Held supabase/tests/$check: $version is held for member Production (supabase/members-held-migrations.txt)"
+    held_checks=$((held_checks + 1))
+  elif grep -qx "$version" <<<"$recorded"; then
     echo "Running supabase/tests/$check"
     psql "$MEMBERS_PRODUCTION_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -f "supabase/tests/$check"
   else
@@ -43,4 +51,5 @@ while read -r check version; do
   fi
 done < <(grep -vE '^\s*(#|$)' supabase/members-checks.txt)
 if $require_all && [ "$skipped" -gt 0 ]; then fail "$skipped check(s) were skipped although every migration should now be applied."; fi
-echo "Member Production checks passed ($skipped skipped)."
+echo "Member Production checks passed ($skipped skipped, $held_checks held)."
+

@@ -221,11 +221,16 @@ expect_identity fail "a staging-shaped database without a marker" "$S" "$MARKER"
 M=$(new_db project) || { echo "could not build a test database" >&2; exit 1; }
 provision "$M" "$MARKER_SHA" >/dev/null || bad "could not provision the marker"
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>&1); code=$?
-all=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | tr '\n' ' ' | sed 's/ $//')
-if [ $code -eq 0 ] && [ "$out" = "$all" ]; then ok "a new project with no history: every migration pending"; else bad "pending on a new project (exit $code): $out"; fi
+# Held migrations (supabase/members-held-migrations.txt) are never pending, and are named.
+held=$(scripts/db/members-subset.sh held | tr '\n' ' ' | sed 's/ $//')
+all=$(scripts/db/members-subset.sh unheld | tr '\n' ' ' | sed 's/ $//')
+pend=$(grep -v '^Held for member Production' <<<"$out")
+if [ $code -eq 0 ] && [ "$pend" = "$all" ] && { [ -z "$held" ] || grep -q "^Held for member Production, not pending (supabase/members-held-migrations.txt): $held" <<<"$out"; }; then
+  ok "a new project with no history: every migration pending except the held ones, which are named (${held:-none})"
+else bad "pending on a new project (exit $code): $out"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-run-checks.sh 2>&1); code=$?
-if [ $code -eq 0 ] && grep -q 'PASS: one immutable identity marker' <<<"$out" && [ "$(grep -c '^Skipped' <<<"$out")" = "$(grep -cE '^[0-9]{3}_' supabase/members-checks.txt)" ]; then
-  ok "check mode on the new project: the marker passes, every shared check skipped and named"
+if [ $code -eq 0 ] && grep -q 'PASS: one immutable identity marker' <<<"$out" && [ "$(grep -cE '^(Skipped|Held) ' <<<"$out")" = "$(grep -cE '^[0-9]{3}_' supabase/members-checks.txt)" ]; then
+  ok "check mode on the new project: the marker passes, every shared check skipped or held, and named"
 else bad "check mode on the new project (exit $code): $(tail -3 <<<"$out")"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-run-checks.sh --require-all 2>&1); code=$?
 if [ $code -ne 0 ] && grep -q 'were skipped' <<<"$out"; then ok "--require-all fails while checks are skipped"; else bad "--require-all on the new project (exit $code)"; fi
@@ -313,20 +318,30 @@ out=$(MEMBERS_FOUNDER_ACCOUNT_ID="$FOUNDER" PGOPTIONS='-c default_transaction_re
 if [ $code -eq 0 ] && grep -q 'STATE: activated' <<<"$out"; then ok "the read-only verification reports activated, gate included"; else bad "verification after activation (exit $code): $out"; fi
 activate "$M" "$FOUNDER" activate "ACTIVATE MEMBER PRODUCTION ACCESS"
 if [ $code -ne 0 ] && grep -q 'already recorded' <<<"$out"; then ok "a second activation is refused"; else bad "second activation (exit $code)"; fi
-out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>&1)
-later=$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | awk '$1 > "20261129000000"' | tr '\n' ' ' | sed 's/ $//')
+out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>/dev/null)
+later=$(scripts/db/members-subset.sh unheld | awk '$1 > "20261129000000"' | tr '\n' ' ' | sed 's/ $//')
 if [ "$out" = "$later" ]; then ok "after the activation, only the later migrations are pending (${later:-none})"; else bad "pending after activation: $out (expected ${later:-none})"; fi
 # The later migrations go through the normal member deploy (db push of the "all" set).
-if [ -n "$later" ]; then apply_range "$M" 20261129000001 29991231235959 || bad "could not apply the later migrations"; fi
-out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>&1)
-if [ -z "$out" ]; then ok "after the later migrations, nothing is pending"; else bad "pending after the later migrations: $out"; fi
-want=$(ls supabase/migrations/*.sql | xargs -n1 basename | sed 's/\.sql$//' | tr '\n' ' ' | sed 's/ $//')
+# Only up to the newest migration that isn't held, as the "all" folder would.
+last_unheld=$(scripts/db/members-subset.sh unheld | tail -1)
+if [ -n "$later" ]; then apply_range "$M" 20261129000001 "$last_unheld" || bad "could not apply the later migrations"; fi
+out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>/dev/null)
+if [ -z "$out" ]; then ok "after the later migrations, nothing is pending (the held ones are not)"; else bad "pending after the later migrations: $out"; fi
+want=$(ls supabase/migrations/*.sql | xargs -n1 basename | awk -v l="$last_unheld" 'substr($0,1,14) <= l' | sed 's/\.sql$//' | tr '\n' ' ' | sed 's/ $//')
 got=$(psql "$M" -X -At -c "select string_agg(version || '_' || name, ' ' order by version) from supabase_migrations.schema_migrations")
 if [ "$got" = "$want" ]; then ok "the migration history records every migration once, in order, with its name (as db push would)"; else bad "migration history: $got"; fi
 out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-run-checks.sh --require-all 2>&1); code=$?
-if [ $code -eq 0 ] && grep -q '(0 skipped)' <<<"$out" && grep -q 'external member access is closed (founder only)' <<<"$out" && grep -q 'PASS: photo posting is off' <<<"$out"; then
+if [ $code -eq 0 ] && grep -q '(0 skipped, ' <<<"$out" && grep -q 'external member access is closed (founder only)' <<<"$out" && grep -q 'PASS: photo posting is off' <<<"$out"; then
   ok "after the activation, every check runs and passes; the gate is closed, photos are off"
 else bad "checks after activation (exit $code): $(grep -E 'ERROR|FAIL' <<<"$out" | head -3)"; fi
+# A held migration that is somehow recorded (the hold bypassed) stops everything.
+first_held=$(scripts/db/members-subset.sh held | head -1)
+if [ -n "$first_held" ]; then
+  psql "$M" -X -q -c "insert into supabase_migrations.schema_migrations (version, name) values ('$first_held', 'bypassed')" >/dev/null
+  out=$(MEMBERS_PRODUCTION_DATABASE_URL="$M" scripts/db/members-pending-migrations.sh 2>&1); code=$?
+  if [ $code -ne 0 ] && grep -q 'the hold was bypassed' <<<"$out"; then ok "a held migration found recorded on member Production fails closed"; else bad "a recorded held migration (exit $code): $out"; fi
+  psql "$M" -X -q -c "delete from supabase_migrations.schema_migrations where version = '$first_held'" >/dev/null
+fi
 
 # Interrupted activations: none may leave active membership without an enabled gate.
 # ready_db <name>: a new project with the marker, the foundation, the lock and the two accounts.

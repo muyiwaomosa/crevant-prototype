@@ -192,7 +192,7 @@ jobs:
           set -euo pipefail
           pending="$(scripts/db/members-pending-migrations.sh)"
           echo "Not yet applied on member Production: ${pending:-none}"
-          expected="$(ls supabase/migrations/*.sql | xargs -n1 basename | cut -c1-14 | awk '$0 >= "20261122000000"' | tr '\n' ' ' | sed 's/ $//')"
+          expected="$(scripts/db/members-subset.sh unheld | awk '$0 >= "20261122000000"' | tr '\n' ' ' | sed 's/ $//')"
           if [ "$pending" != "$expected" ]; then
             echo "::error::Expected exactly the migrations from 20261122000000 on to be pending (the foundation applied, nothing later). Nothing was done."
             exit 1
