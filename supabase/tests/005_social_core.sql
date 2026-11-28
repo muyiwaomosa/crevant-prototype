@@ -61,7 +61,9 @@ begin
                             -- intelligence (20261210000000), once applied
                             'post_opens',
                             -- unified onboarding (20261211000000), once applied
-                            'creator_topics')
+                            'creator_topics',
+                            -- public previews on by default (20261222000000), once applied
+                            'preview_optouts')
   ) then
     raise exception 'FAIL: the social schema has an unexpected table';
   end if;
