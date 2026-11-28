@@ -164,10 +164,10 @@ set local role anon;
 do $$
 begin
   perform pg_temp.expect_error('select * from public.app_access_state()', 'permission denied', 'anon reading an access state');
-  if pg_temp.every_member_function_refuses('permission denied', array['app_public_post']) <> 172 then
+  if pg_temp.every_member_function_refuses('permission denied', array['app_public_post']) <> 175 then
     raise exception 'FAIL: not every member function was checked for anon';
   end if;
-  raise notice 'PASS: anonymous visitors can call none of the 172 member functions';
+  raise notice 'PASS: anonymous visitors can call none of the 175 member functions';
 end $$;
 commit;
 
