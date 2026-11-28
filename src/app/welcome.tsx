@@ -10,7 +10,7 @@ import { MySplitIcon } from '../components/MySplitIcon'
  * one short sentence or two each, an illustration for the rest. Skip, Back,
  * Continue and Get started; swipe and arrow keys too; no motion when the
  * member prefers reduced motion. Shown once before first-time setup, and any
- * time from Profile, Settings, "How Splitpost works". Nothing here promises
+ * time from Profile, Help & getting started, "How Splitpost works". Nothing here promises
  * earnings: every amount in the pilot is simulated and said to be.
  */
 
@@ -32,12 +32,13 @@ export const WELCOME_FACES: Array<Omit<Face, 'art' | 'tint'>> = [
   },
   {
     title: 'Grow. Qualify. Earn.',
-    body: 'Simple goals show what to do next. Reach them and the split you have built unlocks, as a creator, a supporter, or both.',
+    body: 'Simple goals show what to do next. Meet all five and we review your eligibility; once it’s approved, the split you have built unlocks, as a creator, a supporter, or both.',
     note: 'Pilot earnings are simulated. Points are not money.',
   },
   {
     title: 'Make it yours.',
     body: 'Post what you love, support who you value, or both, all from one account. Start by finding a few people worth following.',
+    note: 'Replay this any time from Profile, Help & getting started.',
   },
 ]
 
@@ -240,7 +241,7 @@ function Art({ index }: { index: number }) {
           </span>
           <span className="mt-3" />
           <span className="flex items-center gap-1.5 rounded-full bg-[#263f86] px-3 py-1.5 text-[13px] font-semibold">
-            <Lock className="h-3.5 w-3.5" /> Unlocks at 5 of 5
+            <Lock className="h-3.5 w-3.5" /> Reviewed at 5 of 5
           </span>
         </div>
       </div>

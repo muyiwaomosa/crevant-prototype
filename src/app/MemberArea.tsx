@@ -21,6 +21,7 @@ import { PostMetaProvider } from './content'
 import { RecognitionProvider } from './recognition'
 import { ProgressProvider } from './journey'
 import { WelcomeIntro, markWelcomeSeen, welcomeSeen } from './welcome'
+import { TourProvider } from './tour'
 
 /**
  * The members area (/app): invited, signed-in members only (RequireAuth wraps
@@ -98,7 +99,9 @@ function Gate() {
                   <ViewTrackerProvider userId={status.profile.id}>
                     <ProgressProvider>
                       <RecognitionProvider>
-                        <MemberLayout />
+                        <TourProvider>
+                          <MemberLayout />
+                        </TourProvider>
                       </RecognitionProvider>
                     </ProgressProvider>
                   </ViewTrackerProvider>
@@ -384,11 +387,11 @@ export function ProfileForm({
 }
 
 const NAV = [
-  { to: '/app', label: 'Home', icon: Home, end: true },
-  { to: '/app/discover', label: 'Discover', icon: Compass },
-  { to: '/app/new', label: 'Create', icon: Plus, primary: true },
-  { to: '/app/split', label: 'My Split', icon: MySplitIcon },
-  { to: '/app/profile', label: 'Profile', icon: User },
+  { to: '/app', label: 'Home', icon: Home, end: true, tour: 'home' },
+  { to: '/app/discover', label: 'Discover', icon: Compass, tour: 'discover' },
+  { to: '/app/new', label: 'Create', icon: Plus, primary: true, tour: 'create' },
+  { to: '/app/split', label: 'My Split', icon: MySplitIcon, tour: 'split' },
+  { to: '/app/profile', label: 'Profile', icon: User, tour: 'profile' },
 ]
 
 /** The tour's layout, for real members: sidebar on larger screens, tab bar on phones. */
@@ -419,6 +422,7 @@ function MemberLayout() {
               to={item.to}
               end={item.end}
               title={item.label}
+              data-tour={item.tour}
               className={({ isActive }) =>
                 clsx(
                   'flex h-12 items-center justify-center gap-3 rounded-2xl px-3 text-[15px] font-semibold transition lg:justify-start',
@@ -469,6 +473,7 @@ function MemberLayout() {
               key={item.to}
               to={item.to}
               end={item.end}
+              data-tour={item.tour}
               aria-label={item.primary ? item.label : undefined}
               className={({ isActive }) =>
                 clsx('flex h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold', isActive ? 'text-ink-900' : 'text-ink-500')

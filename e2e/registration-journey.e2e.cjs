@@ -187,7 +187,7 @@ async function confirmAndSetUp(page, email, username, displayName) {
       await nav.getByTitle('My Split').click()
       await page.getByRole('heading', { name: 'My Split', exact: true }).waitFor()
       check('My Split always shows the simulated disclosure', /simulated/i.test(await page.getByTestId('split-disclosure').innerText()))
-      await page.getByRole('tab', { name: 'My Activity' }).click()
+      // One scrolling page (Nov 28): the invitation link is below recent activity.
       const link = await page.getByTestId('referral-link').innerText()
       refCode = (link.match(/\/register\/([0-9a-f]{16})$/) || [])[1] || ''
       check('Opportunities shows a personal referral link on this site', !!refCode && link.startsWith(`${APP}/register/`), link)

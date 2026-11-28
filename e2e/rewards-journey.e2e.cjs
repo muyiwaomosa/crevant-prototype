@@ -209,7 +209,6 @@ async function signIn(page, email) {
       check('My Split shows the recognized points, and nothing redeemable yet', /Recognized 9 .*Redeemable 0/.test(await points(page)), await points(page))
       check('the simulated disclosure is shown', (await page.getByTestId('split-disclosure').innerText()).includes('simulated'))
       await screenChecks(page, 'My Split')
-      await page.getByRole('tab', { name: 'My Activity' }).click()
       const hist = page.getByTestId('points-history')
       await hist.waitFor()
       const h = await hist.innerText()
@@ -220,7 +219,6 @@ async function signIn(page, email) {
       await page.getByText('No comments yet.').waitFor()
       check('a deleted comment reverses its points', pts(m) === 7, String(pts(m)))
       await page.goto(`${APP}/app/split`)
-      await page.getByRole('tab', { name: 'My Activity' }).click()
       await page.getByTestId('points-history').getByText('Reversed').first().waitFor()
       check('History shows the reversal as its own entry', (await page.getByTestId('points-history').innerText()).includes('-2'))
       await ctx.close()
@@ -234,7 +232,6 @@ async function signIn(page, email) {
       const page = await ctx.newPage()
       await signIn(page, email('r'))
       await page.goto(`${APP}/app/split`)
-      await page.getByRole('tab', { name: 'My Activity' }).click()
       const link = await page.getByTestId('referral-link').innerText()
       refCode = link.split('/register/')[1]
       check('Remi has a personal referral link', /^[0-9a-f]{16}$/.test(String(refCode)), link)
@@ -333,7 +330,8 @@ async function signIn(page, email) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await signIn(page, email('c'))
-      await page.goto(`${APP}/app/profile?face=money`)
+      // Rewards live in My Split (Nov 28): the simulated creator share is there.
+      await page.goto(`${APP}/app/split`)
       const e = page.getByTestId('simulated-earnings')
       await e.waitFor()
       const t = await e.innerText()

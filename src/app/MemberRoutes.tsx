@@ -4,7 +4,8 @@ import { AppNotFound, CatchUpPage, CliquePage, ComposePage, DiscoverPage, FeedPa
 import { MySplitPage, RewardsReviewPage } from './split'
 import { NoticesPage } from './governance'
 import { AdsManagePage } from './ads'
-import { ControlCenterPage } from './insights'
+import { ControlCenterPage, InsightsPage } from './insights'
+import { HelpPage } from './guide'
 import { AdvertisePage, PrivacyPage as MemberPrivacyPage } from './account'
 import { ModerationQueuePage, ModerationAppealsPage, ModerationReportPage } from './moderation'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from './feedback'
@@ -31,6 +32,8 @@ export default function MemberRoutes() {
           <Route path="split/review" element={<RewardsReviewPage />} />
           <Route path="catch-up/:username" element={<CatchUpPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="insights" element={<InsightsPage />} />
+          <Route path="help" element={<HelpPage />} />
           <Route path="moderation" element={<ModerationQueuePage />} />
           <Route path="moderation/appeals" element={<ModerationAppealsPage />} />
           <Route path="moderation/:id" element={<ModerationReportPage />} />

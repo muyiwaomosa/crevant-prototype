@@ -95,9 +95,9 @@ J.run(async (browser) => {
   // ---------------------------------------------------------------------------
   step('3. Discover: posts in his interests with their reason, and creators by interest')
   await nav(kai.page).getByTitle('Discover').click()
-  // The first screen (D1): one question, the search box and three ways in.
-  const ways = kai.page.getByRole('navigation', { name: 'Ways into Discover' })
-  await ways.waitFor()
+  // One layout (Nov 28): the search box and three compact tabs, For you first.
+  const tabs = kai.page.getByRole('tablist', { name: 'Discover views' })
+  await tabs.waitFor()
   await screenChecks(kai.page, 'Discover, first screen')
   if (process.env.SHOTS) {
     await kai.page.screenshot({ path: require('node:path').join(process.env.SHOTS, 'discover-desktop.png') })
@@ -106,8 +106,7 @@ J.run(async (browser) => {
     await kai.page.screenshot({ path: require('node:path').join(process.env.SHOTS, 'discover-phone.png') })
     await kai.page.setViewportSize({ width: 1280, height: 900 })
   }
-  await ways.getByRole('button', { name: /^For you/ }).click()
-  await kai.page.getByRole('tab', { name: 'For you' }).waitFor()
+  await tabs.getByRole('tab', { name: 'For you' }).click()
   const boPost = kai.page.getByRole('listitem').filter({ hasText: bo.text[0] })
   await boPost.first().waitFor()
   const reason = flat(await boPost.first().getByTestId('discover-reason').innerText())
@@ -115,13 +114,13 @@ J.run(async (browser) => {
   check('For you leaves out the creator he already follows', (await kai.page.getByRole('listitem').filter({ hasText: ola.text[0] }).count()) === 0)
   await screenChecks(kai.page, 'Discover, For you')
   await kai.page.getByRole('tab', { name: 'People' }).click()
-  await kai.page.getByLabel('Browse by interest').selectOption('travel')
+  await kai.page.getByRole('group', { name: 'Browse by interest' }).getByRole('button', { name: 'Travel' }).click()
   const boCard = kai.page.getByRole('listitem').filter({ hasText: 'Bo Travels' }).first()
   await boCard.waitFor()
   check('Creators by interest shows Bo with what he posts about', (await boCard.innerText()).includes('Travel'))
   await screenChecks(kai.page, 'Discover, People')
   await boCard.getByRole('button', { name: 'Follow Bo Travels' }).click()
-  await boCard.getByTestId('follow-confirmation').waitFor()
+  await boCard.getByRole('button', { name: 'Join Clique (Bo Travels)' }).waitFor()
   check('he follows Bo intentionally, from Discover', sql(`select source from social.follow_events where follower_id = '${k}' and creator_id = '${bo.id}' and action = 'followed'`) === 'discover')
 
   // ---------------------------------------------------------------------------
@@ -176,13 +175,13 @@ J.run(async (browser) => {
   // ---------------------------------------------------------------------------
   step('7. He refers Lu with his personal link; her own first follow qualifies it')
   await nav(kai.page).getByTitle('My Split').click()
-  await kai.page.getByRole('tab', { name: 'My Activity' }).click()
+  await kai.page.getByTestId('referral-link').scrollIntoViewIfNeeded()
   const refLink = await kai.page.getByTestId('referral-link').innerText()
   check('Opportunities shows his personal link', /\/register\/[0-9a-f]{16}$/.test(refLink) && refLink.startsWith(`${APP}/register/`))
   await kai.page.getByRole('button', { name: 'Copy link' }).click()
   await kai.page.getByRole('button', { name: 'Copied' }).waitFor()
   check('Copy link copies the same link', (await kai.page.evaluate(() => navigator.clipboard.readText())) === refLink)
-  await screenChecks(kai.page, 'My Split, My Activity')
+  await screenChecks(kai.page, 'My Split, invite')
   const lu = await person(browser)
   await registerThrough(lu.page, refLink, email('l'))
   const l = idOf(email('l'))
@@ -214,8 +213,12 @@ J.run(async (browser) => {
   check('Redeemable 0, with 100 waiting for review', /Redeemable 0 From qualified referrals\. 100 waiting for review\./.test(t8), t8)
   check('the estimated value is labelled Simulated and is $0.00 until review', /Estimated value of your redeemable points Simulated \$0\.00/.test(t8), t8)
   check('the disclosure: simulated, no cash value, nothing paid out', /simulated.*no cash value.*nothing is paid out/i.test(await kai.page.getByTestId('split-disclosure').innerText()))
+  // Nov 28: his week is in Your Insights (performance); My Split keeps rewards.
+  await kai.page.goto(`${APP}/app/insights`)
+  await kai.page.getByTestId('contribution-insight').getByText('What happened').waitFor()
   const week = flat(await kai.page.getByTestId('contribution-insight').innerText())
-  check('Your week: what happened, what it means, what to do next, and the referral waiting', /What happened.*What it means.*What to do next/i.test(week) && week.includes('Referrals: 1 joined · 1 waiting for review · 0 qualified'), week)
+  check('Your support: what happened, what it means, what to do next, and the referral waiting', /What happened.*What it means.*What to do next/i.test(week) && week.includes('Referrals: 1 joined · 1 waiting for review · 0 qualified'), week)
+  await kai.page.goto(`${APP}/app/split`)
   const intro = kai.page.getByTestId('my-split-intro')
   await intro.waitFor()
   const ti = flat(await intro.innerText())
@@ -223,13 +226,14 @@ J.run(async (browser) => {
   const all = flat(await kai.page.locator('main').innerText())
   check('My Split shows no allocation percentages', !/\d+\s*%/.test(all))
   await screenChecks(kai.page, 'My Split, Overview')
-  await kai.page.getByRole('tab', { name: 'My Activity' }).click()
+  // One scrolling page (Nov 28): recent activity, with the full history on request.
+  if (await kai.page.getByRole('button', { name: 'Show full history' }).count()) await kai.page.getByRole('button', { name: 'Show full history' }).click()
   const hist = kai.page.getByTestId('points-history')
   await hist.waitFor()
   const h = flat(await hist.innerText())
   check('History lists each contribution with the creator', ['Thoughtful comment', 'Saved a post', 'Reposted', 'Shared outside Splitpost', 'Ola Cooks', 'Bo Travels'].every((x) => h.includes(x)), h)
   check('History shows the referral waiting for review', /Qualified referral/.test(h), h)
-  await screenChecks(kai.page, 'My Split, My Activity (history)')
+  await screenChecks(kai.page, 'My Split, recent activity')
   check('nothing is paid: the only money is in the simulated schema', sql("select count(*) from pg_namespace where nspname = 'finance'") === '0')
 
   await kai.ctx.close()
