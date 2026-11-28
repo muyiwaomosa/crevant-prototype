@@ -13,6 +13,7 @@ Previously accepted items are not repeated. That includes sign-in, posting, medi
    * **New tester:** a fresh account with nothing done yet.
 4. Use a phone (about 390 px wide) and a laptop.
 5. External access stays closed, and every amount stays simulated.
+6. **For check 8**, prepare the review fixture first: a dedicated test supporter who has met all 5 approved supporter goals and is waiting for your review. It is clearly labelled test data, runs on staging only, changes no goal, and is removed afterwards. Follow `docs/STAGING-REVIEW-FIXTURE.md`: add the staging secret `STAGING_FIXTURE_MEMBER_EMAIL`, run the **Staging review fixture** workflow (seed), then set its password with "Forgot password".
 
 ## Checks
 

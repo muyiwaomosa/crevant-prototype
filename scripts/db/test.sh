@@ -140,4 +140,9 @@ for v in scripts/db/audit/violations/*.sql; do
   fi
   echo "PASS: member surface audit caught $(basename "$v" .sql) ($(grep -o 'FAIL: [^"]*' <<<"$out" | head -1 | cut -c1-90))"
 done
+
+# The staging review fixture (check 8 of SP-UX-003), exactly as its staging
+# workflow runs it: refusals, dry run, seed, test-data exclusion, idempotence,
+# the founder's approval, and removal.
+scripts/db/staging-review-fixture-test.sh
 echo "Database checks passed"
