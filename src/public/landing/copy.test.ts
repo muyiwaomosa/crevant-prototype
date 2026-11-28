@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation } from './claims'
-import { allHomepageText, HOMEPAGE_COPY } from './copy'
+import { allHomepageText, FOUNDER_LOCKED_EXCEPTIONS, HOMEPAGE_COPY, withoutLockedExceptions } from './copy'
 
 // SP-BRAND-002 (Nov 27), with the positioning amendment: the founder's script,
 // word for word. These tests are the confirmation that it is preserved.
@@ -19,12 +19,17 @@ describe('Splitpost homepage copy (SP-BRAND-002)', () => {
     expect(c.hero.belief).toBe('Everyone deserves a split.')
   })
 
-  it('WHY: the approved script, in order', () => {
-    expect(c.why.eyebrow).toBe('Why Splitpost exists')
+  it('WHY: the founder-approved, locked wording of Nov 28 (BR-001), verbatim, paragraph by paragraph', () => {
     expect(c.why.headline).toBe('You do the work. Who gets the reward?')
-    expect([...c.why.body, c.why.question, ...c.why.body2, ...c.why.belief].join(' ')).toBe(
-      'Every day, people create the content that makes social media valuable. Others watch, comment, share and help that content reach new people. Together, they build communities, influence decisions and generate value. But who benefits the most? Creators spend hours making content but struggle to turn their passion into a sustainable income. Followers help their favourite creators grow but rarely receive anything in return. And somewhere along the way, social media became more about capturing attention than building meaningful connections. We believe social media should work differently. The people who help create the value should have an opportunity to share in it. That\'s why we\'re building Splitpost.',
-    )
+    expect([...c.why.body, c.why.emphasis, c.why.closing]).toEqual([
+      'You create the content. Your followers watch, like, comment, save and share it. Together, you generate the attention that platforms turn into billions in advertising revenue.',
+      'Yet the platforms decide who sees your content, how much you earn and whether you earn anything at all.',
+      'They have built predictable businesses from your creativity, while you are left trying to build a business on unpredictable algorithms.',
+      'Your followers help you grow, but rarely share in the financial value they help create.',
+      'Everyone contributes. Not everyone gets a split.',
+      "We believe it's time to change that.",
+    ])
+    expect('eyebrow' in c.why).toBe(false)
   })
 
   it('WHO: creators and supporters only (amendment), each in the approved words', () => {
@@ -127,14 +132,22 @@ describe('Splitpost homepage copy (SP-BRAND-002)', () => {
     expect(new Set(c.pilot.details).size).toBe(c.pilot.details.length)
   })
 
-  it('no sentence anywhere makes a misleading claim (the checker unchanged, no exceptions)', () => {
-    expect(allHomepageText().flatMap((t) => findMisleadingClaims(t))).toEqual([])
+  it('no sentence anywhere makes a misleading claim (the checker unchanged; only the listed founder-locked sentence is excepted)', () => {
+    const findings = allHomepageText().flatMap((t) => findMisleadingClaims(t))
+    // The checker still flags the locked sentence: the exception is recorded, never hidden by loosening a rule.
+    expect(findings).toEqual([{ rule: 'revenue sharing described as existing today', sentence: FOUNDER_LOCKED_EXCEPTIONS[0].sentence }])
+    expect(allHomepageText().flatMap((t) => findMisleadingClaims(withoutLockedExceptions(t)))).toEqual([])
   })
 
-  it('never publishes the provisional allocation, a currency amount or a statistic', () => {
+  it('lists exactly one founder-locked exception, word for word on the page, pending counsel review', () => {
+    expect(FOUNDER_LOCKED_EXCEPTIONS.map((e) => e.sentence)).toEqual([c.why.body[0].split('it. ')[1]])
+    expect(FOUNDER_LOCKED_EXCEPTIONS[0].approved).toMatch(/counsel review pending/)
+  })
+
+  it('never publishes the provisional allocation, a currency amount or a statistic (outside the founder-locked sentence)', () => {
     const all = allHomepageText()
     expect(all.some((t) => mentionsProvisionalAllocation(t))).toBe(false)
-    const text = all.join(' ')
+    const text = withoutLockedExceptions(all.join(' '))
     expect(text).not.toMatch(/[$€£¥]|\d+(\.\d+)?\s?%|per ?cent|million|billion/i)
   })
 

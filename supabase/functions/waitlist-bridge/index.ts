@@ -105,7 +105,8 @@ const deps: BridgeDeps = {
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get('origin')
   const cors = corsHeaders(role, origin)
-  const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', [BUILD_HEADER]: BUILD_ID, ...cors }
+  // nosniff on every response, preflights included, as on the other member functions (verify.mjs checks it).
+  const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', [BUILD_HEADER]: BUILD_ID, ...cors }
   if (req.method === 'OPTIONS') return new Response(null, { status: cors['Access-Control-Allow-Origin'] ? 204 : 403, headers })
   const body = req.method === 'POST' ? (await req.text()).slice(0, 16384) : ''
   const out = await handleBridge({

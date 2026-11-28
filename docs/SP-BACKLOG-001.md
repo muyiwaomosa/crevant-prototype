@@ -37,6 +37,7 @@ acceptance), Accepted, Deferred.
 | BL-007 | Ads and Preferences off the profile | Usability refinement | P3, Should | Refinement sprint | Built in PR #141 (WP2) |
 | BL-008 | Referral and external sharing journey | Two defects, the rest intentional launch controls | P1 (dead end), Must | Refinement sprint | Built in PR #141 (WP3) |
 | BL-009 | Waitlist to member journey | Missing functionality | P1 for PB-4, Must | Before PB-4 | Built (D1 option A approved Nov 28 with safeguards; migrations 20261223000000 and 20261224000000; `docs/WAITLIST-HANDOFF.md`) |
+| BR-001 to BR-006 | SP-BRAND-004 (Nov 28, follows SP-BRAND-003): public website messaging, hero and value-flow illustration | Website refinement (separate from PR #144) | P2, Should | Before PB-4 | BR-001 and BR-002 built; BR-003 to BR-005 layout ready, awaiting founder copy; BR-006 safeguards in force. See below |
 
 ## BL-001: Unified media upload
 
@@ -438,6 +439,23 @@ in different databases.
   Production stays closed: the database refuses to create an invitation while
   external access is not approved, and `waitlist-bridge` is not approved for
   member Production (`waitlistBridgeFunctionApproved: false`).
+
+## SP-BRAND-004 (Nov 28): website messaging, hero and value-flow illustration
+
+SP-BRAND-004 is the founder's public website refinements of Nov 28. It
+follows SP-BRAND-003, the Nov 27 landing refinement, which is closed. It is
+kept apart from the member app (PR #144) and from BL-009, on its own branch
+(`claude/sp-brand-website-refine`, draft PR #145). Merging publishes the
+public site, so it needs the founder's visual approval. The full record and
+the financial sources are in `docs/design/brand/SP-BRAND-004.md`.
+
+| Item | Status |
+|---|---|
+| BR-001 Section 2, locked wording, verbatim | **Built.** The "billions" sentence is the only, exact-match exception to three checks, substantiated by Meta's and Alphabet's FY2024 Form 10-K filings; counsel review pending. |
+| BR-002 Hero illustration (post above the cut, followers engaging below) | **Built**, kept as is for visual acceptance |
+| Value-flow illustration beside Section 2 (replaces the dashboard); its only words are "Everyone creates value.", "Platforms control the split." and "Not everyone benefits." | **Built** |
+| BR-003 to BR-005 Pain points, use cases by launch category, problem to solution | **Layout ready**, empty until the founder approves the copy |
+| BR-006 Disclosures and claim safeguards | **In force**, unchanged |
 
 ## Recommendation: what must be resolved before the external pilot
 

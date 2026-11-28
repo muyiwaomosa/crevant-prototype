@@ -119,6 +119,35 @@ This is setup, not the invitation process: once done, everything runs from
 Control Center. Do staging first. Repeat for Production only after the staging
 acceptance below passes **and** the move is separately approved.
 
+**Staging is one Supabase project.** On staging the waitlist and the member
+app share the project `kpudeppgokpjhvaqrprn`, and Edge Function secrets are
+per project, shared by every function in it. So on staging each secret below
+is set **once**:
+
+* one `RESEND_API_KEY`: a single sending-only key restricted to
+  `mail.splitpost.ca` is enough; `join-waitlist` and `waitlist-bridge` both
+  read it;
+* one `WAITLIST_HANDOFF_KEY`: the same value is, by design, used on both sides,
+  so steps 4 and 6 set it once;
+* `WAITLIST_HANDOFF_DB_URL`, `WAITLIST_VERIFY_ORIGIN` and
+  `RESEND_WEBHOOK_SECRET` are set once each as well.
+
+In Production the waitlist (`hmrliwoychnqrbbydorg`) and the member project are
+separate projects, so each keeps its own `RESEND_API_KEY` (two separate
+sending-only keys) and each gets the same `WAITLIST_HANDOFF_KEY` value.
+
+### Staging baseline (rechecked Nov 28 after the founder's setup; no secret values read)
+
+| Item | State | Evidence |
+|---|---|---|
+| Waitlist and BL-009 migrations on staging | Done and verified | Staging plan and apply runs; staging checks |
+| Resend domain `mail.splitpost.ca`; staging Auth email | Done and verified | `docs/STAGING-ACCEPTANCE.md` step B |
+| `join-waitlist` at the BL-009 version (65c2220) | Done and verified | A `verify_email` request with an unknown token answers `invalid`; the health check passes (database login, allowed origin, switch open) |
+| `waitlist_handoff` password, the five secrets, the Resend webhook | Done by the founder | Confirmed in use by acceptance steps 1, 2 and 6 |
+| `waitlist-handoff` deployed | Deployed, but answering `closed` (503) | It closes when `WAITLIST_HANDOFF_DB_URL` fails its checks or `WAITLIST_HANDOFF_KEY` is missing, under 32 characters or not printable; its function log names the reason, never a secret |
+| `waitlist-bridge` deployed (65c2220) | Deployed; 209 of 225 independent checks pass, the build stamp matches 65c2220's source | The 16 failures are one gap: no `X-Content-Type-Options: nosniff` header. Fixed in code here; needs a redeploy, then the verification run and ledger entry |
+| `WAITLIST_VERIFY_ORIGIN` | Not observable from outside | The function refuses any origin that is not https and in `WAITLIST_ALLOWED_ORIGINS` (it logs a config problem); the link opening in acceptance step 1 confirms it |
+
 1. **Apply the migrations.** Merge the pull request (your checksum approval),
    then run the staging plan and apply as usual.
 2. **Set the handoff login's password** on the waitlist database (staging:

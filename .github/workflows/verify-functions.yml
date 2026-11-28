@@ -28,11 +28,12 @@ on:
           - member-production
         required: true
       function:
-        description: "The function verified (join-waitlist: removed mode on member Production only)"
+        description: "The function verified (waitlist-bridge: BL-009; join-waitlist: removed mode on member Production only)"
         type: choice
         options:
           - avatar
           - post-media
+          - waitlist-bridge
           - join-waitlist
         required: true
       mode:

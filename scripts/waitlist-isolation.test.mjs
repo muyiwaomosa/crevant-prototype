@@ -45,6 +45,7 @@ test('waitlist-handoff (BL-009) runs only on the waitlist project or staging, wi
 
 test('waitlist-bridge (BL-009) runs only on member projects, holds no database URL, and lets the database decide the founder and the launch gate', () => {
   const index = code(read('supabase/functions/waitlist-bridge/index.ts'))
+  assert.match(index, /'X-Content-Type-Options': 'nosniff'/, 'every response, preflights included, carries nosniff (verify.mjs checks it)')
   assert.match(index, /memberFunctionRole\(url\)/)
   assert.match(index, /bridgeTargets\(role, url\)/, 'the waitlist address comes from config, never a secret')
   assert.ok(!/DB_URL|postgres/.test(index), 'no database credential of any project')
