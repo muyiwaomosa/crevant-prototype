@@ -43,8 +43,12 @@ if [ -z "$founder" ]; then
   q "update public.profiles set username = 'fixture_test_founder', display_name = 'Fixture test founder' where id = '$founder'" >/dev/null
   q "insert into ops.age_attestations (user_id, wording_version, source) values ('$founder', 'test', 'test') on conflict do nothing" >/dev/null
 fi
-# External access is opened by the local test setup (supabase/tests-local/005), as on staging.
-[ "$(q "select external_access_approved from ops.member_launch_settings where id")" = t ] || fail "external member access is closed: run after supabase/tests-local/005, as scripts/db/test.sh does"
+# The local test setup (supabase/tests-local/005) leaves external access open;
+# it is restored to that at the end. Staging keeps it CLOSED (founder only),
+# so the lifecycle below runs with it closed, as on staging.
+gate_was=$(q "select external_access_approved from ops.member_launch_settings where id")
+gate() { q "select external_access_approved from ops.member_launch_settings where id"; }
+fx_events() { q "select count(*) filter (where action = 'external_access_opened') || ' ' || count(*) filter (where action = 'external_access_closed') from ops.member_launch_events where actor = 'staging-review-fixture'"; }
 q "update ops.feature_switches set enabled = true where feature in ('sharing', 'progression')" >/dev/null
 q "insert into ops.feature_switches (feature, enabled) select 'progression', true where not exists (select 1 from ops.feature_switches where feature = 'progression')" >/dev/null 2>&1 || true
 q "update sim.reward_settings set paused = false where id" >/dev/null
@@ -63,6 +67,48 @@ EMAIL=review-supporter@example.test
 GOALS="$(q "select pg_catalog.md5(pg_catalog.string_agg(id || ':' || targets::text, ',' order by id)) from sim.goal_versions")"
 [ "$(marked)" = 0 ] || fail "the database already holds fixture accounts"
 
+# 0a. Already open (as the local tests leave it): the fixture grants without
+# touching the gate, and leaves it open.
+q "select ops.set_external_access('fixture-test', true, 'APPROVE EXTERNAL MEMBER ACCESS')" >/dev/null
+run dry-run STAGING_FOUNDER_ACCOUNT_ID="$founder" STAGING_FIXTURE_MEMBER_EMAIL=$EMAIL >/tmp/fx.out 2>&1 || fail "dry run with the gate open failed: $(cat /tmp/fx.out)"
+grep -q "status under_review" /tmp/fx.out || fail "dry run with the gate open did not reach review: $(cat /tmp/fx.out)"
+[ "$(gate)" = t ] || fail "the fixture closed a gate that was open"
+echo "PASS: staging review fixture with external access already open: reaches review and leaves the gate as it was"
+
+# From here on: external access CLOSED, the founder-only launch gate, as on staging.
+q "select ops.set_external_access('fixture-test', false)" >/dev/null
+[ "$(gate)" = f ] || fail "could not close the gate for the test"
+events_before=$(fx_events)
+
+# 0b. The gate itself still refuses everyone else while it is closed.
+other=$(q "insert into auth.users (email, email_confirmed_at) values ('fixture-test-outsider@example.test', now()) returning id")
+if q "select ops.grant_member_access('$other', 'tester', 'fixture-test')" >/dev/null 2>/tmp/fx.err; then fail "the closed gate let a non-founder in"; fi
+grep -q "external member access is not approved" /tmp/fx.err || fail "wrong refusal from the closed gate: $(cat /tmp/fx.err)"
+
+# 0c. The fixture's window is invisible to every other session: while one
+# transaction holds the gate open exactly as pg_temp.fx_grant does (opened,
+# not committed), a second session still reads it closed, is refused a
+# membership by the gate, and registration answers "closed". Then the
+# window closes and commits with the gate as it began.
+"${P[@]}" -c "begin;
+  select ops.set_external_access('staging-review-fixture', true, 'APPROVE EXTERNAL MEMBER ACCESS');
+  select pg_catalog.pg_sleep(4);
+  select ops.set_external_access('staging-review-fixture', false);
+  commit;" >/dev/null 2>/tmp/fx.window &
+window=$!
+sleep 1.5
+[ "$(q "select count(*) from pg_stat_activity where query like '%pg_sleep(4)%' and state = 'active' and pid <> pg_backend_pid()")" = 1 ] || fail "the window session is not running"
+[ "$(gate)" = f ] || fail "another session saw the gate open during the fixture's window"
+if q "select ops.grant_member_access('$other', 'tester', 'fixture-test')" >/dev/null 2>/tmp/fx.err; then fail "another session was given membership during the fixture's window"; fi
+grep -q "external member access is not approved" /tmp/fx.err || fail "wrong refusal during the window: $(cat /tmp/fx.err)"
+code=$(q "insert into ops.registration_links (code, kind, cohort, created_by) values (ops.new_link_code(), 'invitation', 'fan', 'fixture-test') returning code")
+[ "$(q "select status from ops.registration_check('$code')")" = closed ] || fail "registration was not closed during the window"
+wait $window || fail "the window session failed: $(cat /tmp/fx.window)"
+[ "$(gate)" = f ] || fail "the gate is not closed after the window"
+q "delete from ops.registration_links where code = '$code'; delete from auth.users where id = '$other'; delete from ops.member_launch_events where false" >/dev/null
+echo "PASS: staging review fixture: with the gate closed, everyone else is refused, including during the fixture's uncommitted window (another session sees it closed, is refused membership, and registration is closed)"
+events_before=$(fx_events)
+
 # 1. Refusals change nothing.
 if run seed STAGING_FOUNDER_ACCOUNT_ID=00000000-0000-4000-8000-000000000000 STAGING_FIXTURE_MEMBER_EMAIL=$EMAIL 2>/tmp/fx.err; then fail "ran with another founder"; fi
 grep -q "launch founder is not the staging founder account" /tmp/fx.err || fail "wrong refusal for another founder: $(cat /tmp/fx.err)"
@@ -77,12 +123,26 @@ if run seed STAGING_FOUNDER_ACCOUNT_ID="$founder" 2>/tmp/fx.err; then fail "ran 
 [ "$(marked)" = 0 ] || fail "a refusal left fixture accounts behind"
 echo "PASS: staging review fixture refuses member Production, another founder, a real account's address and a missing address, changing nothing"
 
+# 1b. Every unmet prerequisite is reported together, in one run.
+q "update ops.feature_switches set enabled = false where feature in ('sharing', 'progression')" >/dev/null
+q "update sim.reward_settings set paused = true where id" >/dev/null
+if run seed STAGING_FOUNDER_ACCOUNT_ID="$founder" 2>/tmp/fx.err; then fail "ran without its prerequisites"; fi
+grep -q "Prerequisites not met (4)" /tmp/fx.err || fail "the prerequisites were not reported together: $(cat /tmp/fx.err)"
+for w in "STAGING_FIXTURE_MEMBER_EMAIL is not set" "sharing is switched off" "progression is switched off" "rewards are paused"; do
+  grep -q "$w" /tmp/fx.err || fail "the prerequisite report misses: $w"
+done
+q "update ops.feature_switches set enabled = true where feature in ('sharing', 'progression')" >/dev/null
+q "update sim.reward_settings set paused = false where id" >/dev/null
+[ "$(marked)" = 0 ] && [ "$(gate)" = f ] || fail "the prerequisite refusal changed something"
+echo "PASS: staging review fixture reports every unmet prerequisite in one run, changing nothing"
+
 # 2. Dry run: everything, then nothing.
 run dry-run STAGING_FOUNDER_ACCOUNT_ID="$founder" STAGING_FIXTURE_MEMBER_EMAIL=$EMAIL >/tmp/fx.out 2>&1 || fail "dry run failed: $(cat /tmp/fx.out)"
 grep -q "Dry run: rolled back; nothing changed" /tmp/fx.out || fail "dry run did not confirm: $(cat /tmp/fx.out)"
 grep -q "status under_review" /tmp/fx.out || fail "dry run did not reach review: $(cat /tmp/fx.out)"
 [ "$(marked)" = 0 ] || fail "the dry run left fixture accounts behind"
-echo "PASS: staging review fixture dry run reaches review, then leaves nothing behind"
+[ "$(gate)" = f ] && [ "$(fx_events)" = "$events_before" ] || fail "the dry run left the gate changed or its events behind"
+echo "PASS: staging review fixture dry run with the gate closed reaches review, then leaves nothing behind (gate closed, no events)"
 
 # 3. The metrics that exclude test accounts, before.
 snapshot() {
@@ -101,6 +161,7 @@ snapshot() {
 before=$(snapshot)
 
 # 4. Seed.
+last_event=$(q "select coalesce(max(id), 0) from ops.member_launch_events")
 run seed STAGING_FOUNDER_ACCOUNT_ID="$founder" STAGING_FIXTURE_MEMBER_EMAIL=$EMAIL >/tmp/fx.out 2>&1 || fail "seed failed: $(cat /tmp/fx.out)"
 grep -q "status under_review" /tmp/fx.out || fail "seed did not reach review: $(cat /tmp/fx.out)"
 grep -q "$EMAIL" /tmp/fx.out && fail "the output shows the supporter's address"
@@ -117,10 +178,15 @@ member=$(q "select id from auth.users where email = '$EMAIL'")
 [ "$(q "select count(*) from public.profiles p join auth.users u on u.id = p.id
         where u.raw_user_meta_data ->> 'staging_review_fixture' = 'true' and p.display_name like 'Review fixture %' and p.username like 'review\_fixture\_%'")" = 16 ] \
   || fail "not every fixture account is named as fixture data"
-[ "$(q "select count(*) from sim.points_ledger where source_key like 'review:%:staging-review-fixture'")" = 5 ] || fail "expected the five referral reviews marked as the fixture's"
+[ "$(q "select count(*) from sim.points_ledger where source_key like 'review:%:staging-review-fixture' and member_id = '$member'")" = 5 ] || fail "expected the five referral reviews marked as the fixture's"
 [ "$(q "select count(*) from sim.points_ledger l join auth.users u on u.id = l.member_id
         where u.raw_user_meta_data ->> 'staging_review_fixture' = 'true' and l.created_at < now() - interval '1 day'")" = 3 ] \
   || fail "expected exactly three backdated awards (the documented supporting weeks)"
+[ "$(gate)" = f ] || fail "seed left external access open"
+read -r opened closed <<<"$(fx_events)"; read -r opened0 closed0 <<<"$events_before"
+[ $((opened - opened0)) = 16 ] && [ $((closed - closed0)) = 16 ] || fail "expected 16 recorded open/close pairs by staging-review-fixture, found $((opened - opened0)) and $((closed - closed0))"
+[ "$(q "select count(*) from ops.member_launch_events where id > $last_event and actor <> 'staging-review-fixture'")" = 0 ] || fail "seed recorded a gate event under another actor"
+echo "PASS: staging review fixture seed with the gate closed: the gate is closed afterwards and every grant is a recorded open/close pair by staging-review-fixture"
 echo "PASS: staging review fixture seed: a dedicated tester supporter meets every approved supporter goal and is under review, through the real check; goals unchanged; 16 accounts, all testers, all named as fixture data"
 
 # 5. Test data stays out of the metrics that exclude testers.
@@ -185,5 +251,17 @@ SQL
 "${P[@]}" -f supabase/tests/032_deletion_register.sql >/dev/null || fail "the deletion register check fails after remove"
 echo "PASS: staging review fixture remove: every fixture account and everything they made is gone, each account is in the deletion register, and the register check still passes"
 
-# Restore the local tests' attestation trigger for anything that runs after.
+[ "$(gate)" = f ] || fail "remove changed the gate"
+echo "PASS: staging review fixture: the whole lifecycle ran with the founder-only launch gate closed, and it is still closed"
+
+# 9. Reusable: after a remove, a fresh seed works again (account deletion keeps
+# closed ledger rows, so a new fixture must not reuse the old one's ids).
+run seed STAGING_FOUNDER_ACCOUNT_ID="$founder" STAGING_FIXTURE_MEMBER_EMAIL=$EMAIL >/tmp/fx.out 2>&1 || fail "a seed after remove failed: $(cat /tmp/fx.out)"
+grep -q "status under_review" /tmp/fx.out || fail "a seed after remove did not reach review: $(cat /tmp/fx.out)"
+run remove STAGING_FOUNDER_ACCOUNT_ID="$founder" >/tmp/fx.out 2>&1 || fail "the second remove failed: $(cat /tmp/fx.out)"
+[ "$(marked)" = 0 ] && [ "$(gate)" = f ] || fail "the second cycle left fixture accounts or changed the gate"
+echo "PASS: staging review fixture is reusable: seed after remove reaches review again, and removes cleanly, with the gate closed throughout"
+
+# Restore the gate as the local tests left it, and their attestation trigger, for anything that runs after.
+if [ "$gate_was" = t ]; then q "select ops.set_external_access('fixture-test', true, 'APPROVE EXTERNAL MEMBER ACCESS')" >/dev/null; fi
 "${P[@]}" -f supabase/tests-local/006_adult_attestation_for_tests.sql >/dev/null

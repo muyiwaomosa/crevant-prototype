@@ -44,6 +44,22 @@
 -- then the save itself with the same time, so the save trigger finds the
 -- award and adds nothing. Everything else happens now, through the app.
 --
+-- The member launch gate (ops.member_launch_gate) stays exactly as it is.
+-- Staging keeps external member access CLOSED, and the gate then refuses
+-- membership for anyone but the launch founder. The fixture never leaves it
+-- open, even for a moment another session could see: each grant to a
+-- designated fixture account (pg_temp.fx_grant) runs inside this script's
+-- one transaction as
+--     open (ops.set_external_access, owner only, recorded) -> grant -> close
+-- and nothing is committed until the gate is closed again. Other sessions
+-- read only committed settings, so they see it closed throughout and the
+-- gate keeps refusing them (proved by scripts/db/staging-review-fixture-test.sh
+-- with a second session during the window). The pairs are recorded in
+-- ops.member_launch_events under the actor 'staging-review-fixture' (a dry
+-- run rolls them back with everything else). If external access is already
+-- open, the fixture grants without touching it. The script refuses to commit
+-- unless the gate ends exactly as it began.
+--
 -- Referrals: five fixture members join through the fixture supporter's own
 -- referral link (a registration row, as a claim writes it, and the link's use
 -- counted) and follow a creator, so the real trigger records each qualified
@@ -96,6 +112,48 @@ begin
   perform pg_catalog.set_config('request.jwt.claims', '', true);
 end $$;
 
+-- Fixture ids, fixed within one fixture (derived from its supporter's id, set
+-- as fx.salt before any are made) and new for each fresh seed. Account
+-- deletion keeps closed ledger rows (no member, source keys intact) on
+-- purpose, so ids reused after a remove would collide with them (a referral
+-- would count as already awarded). A seed is one transaction, and a repeat
+-- seed stops at the recorded qualification, so nothing needs the same ids twice.
+create function pg_temp.fx_id(p_what text) returns uuid language sql stable as $$
+  select pg_catalog.md5('staging-review-fixture:' || pg_catalog.current_setting('fx.salt') || ':' || p_what)::uuid $$;
+
+-- The one way the fixture gives membership: tester cohort, to a designated
+-- fixture account only (the fixture supporter's address, or one of the 15
+-- fixed supporting ids), inside the launch gate's own recorded switch, closed
+-- again before anything else happens. See the header.
+create function pg_temp.fx_grant(p_id uuid) returns void language plpgsql as $$
+declare
+  v_open boolean;
+begin
+  if not exists (
+       select 1 from auth.users u
+       where u.id = p_id
+         and u.raw_user_meta_data ->> 'staging_review_fixture' = 'true'
+         and (lower(u.email) = current_setting('fx.email')
+              or (u.id in (select pg_temp.fx_id('creator:' || k) from pg_catalog.generate_series(1, 10) k
+                           union all select pg_temp.fx_id('referred:' || k) from pg_catalog.generate_series(1, 5) k)
+                  and u.email ~ '^review-fixture-(creator|referral)-[0-9]+@staging-fixture\.invalid$')))
+     or exists (select 1 from ops.member_launch_settings s where s.id and s.founder_user_id = p_id) then
+    raise exception 'refused: membership may be given only to a designated fixture account';
+  end if;
+  -- Locks the settings row: no other change to the gate can interleave.
+  select s.external_access_approved into v_open from ops.member_launch_settings s where s.id for update;
+  if not v_open then
+    perform ops.set_external_access('staging-review-fixture', true, 'APPROVE EXTERNAL MEMBER ACCESS');
+  end if;
+  perform ops.grant_member_access(p_id, 'tester', 'staging-review-fixture', null, 'Staging review fixture: test data');
+  if not v_open then
+    perform ops.set_external_access('staging-review-fixture', false);
+  end if;
+  if (select s.external_access_approved from ops.member_launch_settings s where s.id) is distinct from v_open then
+    raise exception 'the launch gate did not return to its state; nothing was changed';
+  end if;
+end $$;
+
 -- A fixture account: created once, an active tester, adult confirmed, named.
 -- p_can_sign_in: only the fixture supporter; the others are banned in Auth.
 create function pg_temp.fx_account(p_id uuid, p_email text, p_username text, p_display text, p_can_sign_in boolean)
@@ -139,7 +197,7 @@ begin
     end if;
   end if;
   if not exists (select 1 from ops.member_access a where a.user_id = p_id and a.status = 'active' and a.cohort = 'tester') then
-    perform ops.grant_member_access(p_id, 'tester', 'staging-review-fixture', null, 'Staging review fixture: test data');
+    perform pg_temp.fx_grant(p_id);
   end if;
   perform pg_temp.fx_as(p_id, $q$select public.app_attest_adult('adult-v1')$q$);
   if not exists (select 1 from public.profiles p where p.id = p_id and p.username = p_username) then
@@ -148,16 +206,14 @@ begin
   return p_id;
 end $$;
 
--- Fixture ids that never change between runs (so every step is idempotent).
-create function pg_temp.fx_id(p_what text) returns uuid language sql immutable as $$
-  select pg_catalog.md5('staging-review-fixture:' || p_what)::uuid $$;
-
--- 0. Preconditions. Nothing has been changed yet.
+-- 0. Preconditions. Nothing has been changed yet. Every unmet prerequisite
+-- is reported together, so one run names everything that needs doing.
 do $$
 declare
   v_mode text := current_setting('fx.mode');
   v_founder text := current_setting('fx.founder');
   v_email text := current_setting('fx.email');
+  v_problems text[] := '{}';
 begin
   if v_mode not in ('seed', 'dry-run', 'remove') then
     raise exception 'refused: mode must be seed, dry-run or remove';
@@ -186,21 +242,36 @@ begin
   if v_mode = 'remove' then
     return;
   end if;
+  -- Everything seed needs, reported together.
   if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
-    raise exception 'refused: STAGING_FIXTURE_MEMBER_EMAIL is not set to an address';
+    v_problems := v_problems || 'STAGING_FIXTURE_MEMBER_EMAIL is not set to an address (staging environment secret)'::text;
+  elsif exists (select 1 from auth.users u where lower(u.email) = v_email
+                and coalesce(u.raw_user_meta_data ->> 'staging_review_fixture', '') <> 'true') then
+    v_problems := v_problems || 'STAGING_FIXTURE_MEMBER_EMAIL belongs to an existing account that is not the fixture supporter; choose an unused address'::text;
   end if;
-  -- The address must be the fixture supporter's own, never a real account's.
-  if exists (select 1 from auth.users u where lower(u.email) = v_email
-             and coalesce(u.raw_user_meta_data ->> 'staging_review_fixture', '') <> 'true') then
-    raise exception 'refused: STAGING_FIXTURE_MEMBER_EMAIL belongs to an existing account that is not the fixture supporter';
+  if not pg_catalog.has_function_privilege('ops.set_external_access(text, boolean, text)', 'execute') then
+    v_problems := v_problems || 'the connection is not the database owner, so it cannot use the launch gate''s recorded switch'::text;
   end if;
   if not ops.feature_on('sharing') then
-    raise exception 'refused: sharing is switched off on staging, so "Share posts outside Splitpost" cannot be met; switch it on in Control Center first';
+    v_problems := v_problems || 'sharing is switched off, so "Share posts outside Splitpost" cannot be met (Control Center, switches)'::text;
+  end if;
+  if not ops.feature_on('progression') then
+    v_problems := v_problems || 'progression is switched off, so the goals and the review would not show (Control Center, switches)'::text;
   end if;
   if (select r.paused from sim.reward_settings r where r.id) then
-    raise exception 'refused: rewards are paused on staging, so no contribution can be recognized; resume them first';
+    v_problems := v_problems || 'rewards are paused, so no contribution can be recognized (resume them in Control Center)'::text;
+  end if;
+  if (select g.targets from sim.goal_versions g where g.audience = 'consumer' order by g.id desc limit 1)
+     is distinct from '{"clique_creators": 10, "meaningful_engagements": 30, "engaged_creators": 3, "supporting_weeks": 4, "external_shares": 5, "qualified_referrals": 5}'::jsonb then
+    v_problems := v_problems || 'the supporter goals in force are not the approved benchmarks; the fixture never changes them'::text;
+  end if;
+  if pg_catalog.cardinality(v_problems) > 0 then
+    raise exception 'refused, nothing was changed. Prerequisites not met (%): %', pg_catalog.cardinality(v_problems),
+      pg_catalog.array_to_string(v_problems, '; ');
   end if;
 end $$;
+-- The gate's state now; it must be exactly this before anything is committed.
+select set_config('fx.gate_open', (select s.external_access_approved::text from ops.member_launch_settings s where s.id), true) as gate_open_at_start;
 
 -- 1. Seed (seed and dry-run): the supporter journey.
 do $$
@@ -226,7 +297,9 @@ begin
     raise notice 'The fixture supporter already has its supporter qualification recorded: nothing changed.';
     return;
   end if;
-  v_member := pg_temp.fx_account(coalesce(v_member, pg_catalog.gen_random_uuid()), current_setting('fx.email'),
+  v_member := coalesce(v_member, pg_catalog.gen_random_uuid());
+  perform pg_catalog.set_config('fx.salt', v_member::text, true);
+  v_member := pg_temp.fx_account(v_member, current_setting('fx.email'),
                                  'review_fixture_supporter', 'Review fixture supporter', true);
 
   -- Ten fixture creators, three posts each (made now, through the app).
@@ -356,6 +429,26 @@ begin
   raise notice 'Removed % fixture account(s) and everything they made.', v_n;
   if exists (select 1 from auth.users u where u.raw_user_meta_data ->> 'staging_review_fixture' = 'true') then
     raise exception 'a fixture account is still there after removal';
+  end if;
+end $$;
+
+-- Before anything is committed: the launch gate is exactly as it began, the
+-- fixture's recorded switches come in open-then-close pairs, and every
+-- membership it holds belongs to a marked fixture account in the tester cohort.
+do $$
+begin
+  if (select s.external_access_approved::text from ops.member_launch_settings s where s.id) is distinct from current_setting('fx.gate_open') then
+    raise exception 'FAIL: the launch gate is not as it began; nothing was changed';
+  end if;
+  if (select count(*) filter (where e.action = 'external_access_opened') - count(*) filter (where e.action = 'external_access_closed')
+      from ops.member_launch_events e where e.actor = 'staging-review-fixture') <> 0 then
+    raise exception 'FAIL: a fixture opening of the launch gate has no matching closing; nothing was changed';
+  end if;
+  if exists (select 1 from ops.member_access a
+             where a.updated_by = 'staging-review-fixture'
+               and (a.cohort <> 'tester' or not exists (select 1 from auth.users u where u.id = a.user_id
+                                                          and u.raw_user_meta_data ->> 'staging_review_fixture' = 'true'))) then
+    raise exception 'FAIL: the fixture holds a membership outside its designated tester accounts; nothing was changed';
   end if;
 end $$;
 
