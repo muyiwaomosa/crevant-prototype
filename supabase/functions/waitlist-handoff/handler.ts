@@ -6,7 +6,8 @@
 // Origin header (a browser) is refused, as is anything without the key.
 // POST application/json, one action per request:
 //   {"action":"export","limit":1..500}                 -> {"applicants":[...]}
-//   {"action":"recheck","ids":[uuid,...]}              -> {"eligible":[uuid,...]}
+//   {"action":"confirm","ids":[uuid,...]}              -> {"confirmed":n}
+//   {"action":"recheck","ids":[uuid,...],"replacement":bool} -> {"eligible":[uuid,...]}
 //   {"action":"record","id":uuid,"outcome":"invited"|"declined"} -> {"recorded":bool}
 //   {"action":"withdrawals","since":iso|null}          -> {"withdrawals":[...]}
 //   {"action":"forget","ids":[uuid,...]}               -> {"deleted":n}
@@ -18,7 +19,8 @@ export interface HandoffDeps {
   enabled: boolean
   key: string
   exportRows(limit: number): Promise<unknown>
-  recheck(ids: string[]): Promise<unknown>
+  confirm(ids: string[]): Promise<unknown>
+  recheck(ids: string[], replacement: boolean): Promise<unknown>
   record(id: string, outcome: 'invited' | 'declined'): Promise<unknown>
   withdrawals(since: string | null): Promise<unknown>
   forget(ids: string[]): Promise<unknown>
@@ -95,10 +97,17 @@ export async function handleHandoff(req: HandoffRequest, deps: HandoffDeps): Pro
         if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > 500) return json(400, { status: 'invalid' })
         return json(200, { applicants: checkApplicants(await deps.exportRows(limit)) })
       }
-      case 'recheck': {
+      case 'confirm': {
         const list = ids(body.ids)
         if (!list) return json(400, { status: 'invalid' })
-        const out = await deps.recheck(list)
+        const out = await deps.confirm(list)
+        if (typeof out !== 'number') throw new Error('unexpected confirm')
+        return json(200, { confirmed: out })
+      }
+      case 'recheck': {
+        const list = ids(body.ids)
+        if (!list || (body.replacement !== undefined && typeof body.replacement !== 'boolean')) return json(400, { status: 'invalid' })
+        const out = await deps.recheck(list, body.replacement === true)
         if (!Array.isArray(out) || !out.every((x) => typeof x === 'string' && UUID.test(x))) throw new Error('unexpected recheck')
         return json(200, { eligible: out })
       }

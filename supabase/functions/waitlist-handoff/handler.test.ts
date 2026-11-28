@@ -7,6 +7,7 @@ const deps = (over: Partial<HandoffDeps> = {}): HandoffDeps => ({
   enabled: true,
   key: KEY,
   exportRows: async () => [{ waitlist_id: ID, email: 'maya@example.com', groups: [] }],
+  confirm: async () => 1,
   recheck: async () => [ID],
   record: async () => true,
   withdrawals: async () => [{ waitlist_id: ID, withdrawn_at: '2026-11-28T00:00:00Z' }],
@@ -40,6 +41,10 @@ describe('waitlist-handoff (BL-009)', () => {
   it('rechecks, records, reads withdrawals and forgets, validating every id', async () => {
     expect(await call({ action: 'recheck', ids: [ID] })).toEqual({ status: 200, data: { eligible: [ID] } })
     expect((await call({ action: 'recheck', ids: ['not-a-uuid'] })).status).toBe(400)
+    const recheck = vi.fn(async () => [ID])
+    await call({ action: 'recheck', ids: [ID], replacement: true }, deps({ recheck }))
+    expect(recheck).toHaveBeenCalledWith([ID], true)
+    expect(await call({ action: 'confirm', ids: [ID] })).toEqual({ status: 200, data: { confirmed: 1 } })
     expect(await call({ action: 'record', id: ID, outcome: 'invited' })).toEqual({ status: 200, data: { recorded: true } })
     expect((await call({ action: 'record', id: ID, outcome: 'shortlisted' })).status).toBe(400)
     expect((await call({ action: 'withdrawals', since: null })).data.withdrawals).toHaveLength(1)

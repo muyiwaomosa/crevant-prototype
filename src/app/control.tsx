@@ -467,10 +467,16 @@ export function PrivacyRequestsPanel() {
 }
 
 const GROUP_LABEL: Record<string, string> = { active_creator: 'Creator', aspiring_creator: 'Aspiring creator', supporter: 'Supporter' }
+const STATUS_LABEL: Record<string, string> = {
+  sending: 'being sent', sent: 'accepted by the email provider (delivery not yet confirmed)', delayed: 'delivery delayed', delivered: 'delivery confirmed',
+  failed: 'email failed', bounced: 'bounced', complained: 'delivered, marked as spam', accepted: 'invitation accepted', expired: 'expired', replaced: 'replaced',
+}
 const RESULT_LABEL: Record<string, string> = {
   imported: 'copied for review', skipped: 'already here or a member', withdrawn: 'withdrawals carried', invitations_removed: 'open invitations removed',
-  deleted: 'deletion requests carried', declined: 'declines recorded', sent: 'invitations sent', failed: 'emails failed (retried next time)',
+  deleted: 'deletion requests carried', declined: 'declines recorded', outcomes_recorded: 'invited outcomes carried to the waitlist',
+  sent: 'invitations accepted by the email provider (delivery is confirmed separately)', failed: 'emails refused or not reached (retried next time)',
   retried: 'earlier failures resent', not_confirmed: 'no longer eligible (dropped)', already_invited: 'already invited',
+  outcomes_pending: 'outcomes still to reach the waitlist (carried next time)',
 }
 
 /**
@@ -555,10 +561,15 @@ export function WaitlistPanel() {
       <p className="text-[13px] text-ink-600">
         Last import: {o.lastImportAt ? new Date(o.lastImportAt).toLocaleString() : 'never'}
         {o.pendingDeletions > 0 ? ` · ${o.pendingDeletions} deletion request(s) waiting to reach the waitlist (carried on the next import or send)` : ''}
+        {o.pendingOutcomes > 0 ? ` · ${o.pendingOutcomes} invited outcome(s) waiting to reach the waitlist (carried on the next import or send)` : ''}
       </p>
       {result && (
         <p className="rounded-xl bg-paper px-3 py-2 text-[14px]" data-testid="waitlist-result">
-          {String(result.status) === 'deleted'
+          {String(result.status) === 'replaced'
+            ? Number(result.sent ?? 0) > 0 ? 'A new invitation was accepted by the email provider. The old link no longer works.' : 'A new invitation was created, but its email failed. It is retried on the next send.'
+            : String(result.status) === 'not_eligible'
+            ? 'Not replaced: the waitlist no longer confirms this person (withdrawn, consent or verification gone, or past retention).'
+            : String(result.status) === 'deleted'
             ? Number(result.waitlist_deleted ?? 0) + Number(result.removed_here ?? 0) > 0 ? 'Deleted from the waitlist and from review.' : 'No one with that address was found.'
             : String(result.status) === 'closed'
             ? 'Nothing was sent: invitations are closed.'
@@ -653,13 +664,16 @@ export function WaitlistPanel() {
       <h3 className="pt-2 font-semibold text-ink-900">Invitations from the waitlist</h3>
       <dl className="grid grid-cols-2 gap-2 text-[14px] sm:grid-cols-4" data-testid="waitlist-counts">
         {[
-          ['Sent', inv.sent],
-          ['Failed', inv.failed],
-          ['Accepted', inv.accepted],
+          ['Accepted by the email provider', inv.providerAccepted],
+          ['Delivery confirmed', inv.delivered],
+          ['Awaiting delivery confirmation', inv.awaitingConfirmation],
+          ['Failed or bounced', inv.failed + inv.bounced],
+          ['Invitation accepted', inv.accepted],
           ['Onboarded', inv.onboarded],
           ['Open', inv.open],
           ['Expired', inv.expired],
-          ['Accepted of sent', pct(inv.accepted, inv.sent + inv.failed)],
+          ['Replaced', inv.replaced],
+          ['Invitation accepted of delivered', pct(inv.accepted, inv.delivered)],
           ['Onboarded of accepted', pct(inv.onboarded, inv.accepted)],
         ].map(([k, v]) => (
           <div key={String(k)} className="rounded-xl bg-paper px-3 py-2">
@@ -668,13 +682,19 @@ export function WaitlistPanel() {
           </div>
         ))}
       </dl>
+      {inv.complained > 0 && <p className="text-[13px] text-ink-600">{inv.complained} recipient(s) marked the email as spam.</p>}
       {inv.fromCreatorLinks > 0 && <p className="text-[13px] text-ink-600">{inv.fromCreatorLinks} came through a creator's link.</p>}
       {o.recent.length > 0 && (
         <ul className="space-y-1 text-[13px]" data-testid="waitlist-recent">
-          {o.recent.map((r, i) => (
-            <li key={i} className="break-all">
-              {r.email} · {r.status}
+          {o.recent.map((r) => (
+            <li key={r.id} className="break-all">
+              {r.email} · {STATUS_LABEL[r.status] ?? r.status}
               {r.error ? ` (${r.error.replace(/_/g, ' ')})` : ''} · {new Date(r.createdAt).toLocaleDateString()}
+              {r.replaceable && (
+                <button type="button" disabled={busy !== null || !o.maySend} onClick={() => void act('replace', () => api.founderWaitlistReplace(r.id))} className="ml-2 underline">
+                  Send a new invitation
+                </button>
+              )}
             </li>
           ))}
         </ul>

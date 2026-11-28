@@ -14,6 +14,10 @@
 //   RESEND_API_KEY        a sending-only Resend key for mail.splitpost.ca.
 //                         Missing: applicants can be imported and reviewed,
 //                         but nothing is sent.
+//   RESEND_WEBHOOK_SECRET the signing secret (whsec_...) of the Resend webhook
+//                         pointed at /waitlist-bridge/delivery-event. Missing:
+//                         every event is refused, and invitations stay at
+//                         "accepted by the provider", never shown as delivered.
 // The waitlist address comes from ../_shared/policy.ts (config), never a secret.
 import { handleBridge, type BridgeDeps, type RpcResult } from './handler.ts'
 import { BUILD_HEADER, BUILD_ID, bridgeTargets, corsHeaders, memberFunctionRole, refusalReason } from '../_shared/policy.ts'
@@ -27,6 +31,7 @@ const role = memberFunctionRole(url)
 const targets = bridgeTargets(role, url)
 const handoffKey = env('WAITLIST_HANDOFF_KEY')
 const resendKey = env('RESEND_API_KEY')
+const webhookSecret = env('RESEND_WEBHOOK_SECRET')
 const configured = role !== null && targets !== null && anon !== '' && service !== '' && handoffKey.length >= 32
 const log = (event: string, detail: Record<string, string | number | boolean> = {}) => console.log(JSON.stringify({ fn: 'waitlist-bridge', event, ...detail }))
 if (!configured) log('refusing_to_run', { reason: role === null ? refusalReason(url) : 'missing keys or waitlist address' })
@@ -94,6 +99,7 @@ const deps: BridgeDeps = {
   sendEmail: (mail) => sendEmail(mail, resendKey, fetch),
   appOrigin: targets?.appOrigin ?? '',
   emailReady: resendKeyUsable(resendKey),
+  webhookSecret,
 }
 
 Deno.serve(async (req: Request) => {
@@ -101,8 +107,11 @@ Deno.serve(async (req: Request) => {
   const cors = corsHeaders(role, origin)
   const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', [BUILD_HEADER]: BUILD_ID, ...cors }
   if (req.method === 'OPTIONS') return new Response(null, { status: cors['Access-Control-Allow-Origin'] ? 204 : 403, headers })
-  const body = req.method === 'POST' ? (await req.text()).slice(0, 4096) : ''
-  const out = await handleBridge({ method: req.method, path: new URL(req.url).pathname, authorization: req.headers.get('authorization'), body }, deps)
+  const body = req.method === 'POST' ? (await req.text()).slice(0, 16384) : ''
+  const out = await handleBridge({
+    method: req.method, path: new URL(req.url).pathname, authorization: req.headers.get('authorization'), body,
+    headers: { 'svix-id': req.headers.get('svix-id'), 'svix-timestamp': req.headers.get('svix-timestamp'), 'svix-signature': req.headers.get('svix-signature') },
+  }, deps)
   // Counts and fixed codes only: never an address, link or key.
   log('request', { status: out.status, ...Object.fromEntries(Object.entries(out.data).filter(([, v]) => typeof v === 'number' || typeof v === 'string')) as Record<string, string | number> })
   return new Response(JSON.stringify(out.data), { status: out.status, headers })

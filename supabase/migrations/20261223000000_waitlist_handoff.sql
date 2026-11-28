@@ -15,13 +15,17 @@
 --
 -- 2. Handoff, for one new login, waitlist_handoff, used only by the member
 --    project's waitlist-bridge function (never a browser, never a member).
---    It can run exactly these six functions and touch no table:
+--    It can run exactly these seven functions and touch no table:
 --      handoff_export(limit)      verified, consenting entries not yet handed
 --                                 off: the minimum fields for cohort review and
 --                                 an invitation. Marks them exported.
---      handoff_recheck(ids)       which of these are still verified, consenting,
---                                 within retention and undecided (checked again
---                                 just before an invitation is sent)
+--      handoff_confirm(ids)       the member project stored these copies (an
+--                                 export never confirmed is offered again
+--                                 after an hour, so a failed import loses no one)
+--      handoff_recheck(ids, replacement)  which of these are still verified,
+--                                 consenting, within retention and undecided
+--                                 (or, for a replacement invitation, recorded
+--                                 as invited), checked just before sending
 --      handoff_record(id, outcome) invited or declined
 --      handoff_withdrawals(since) entries removed after they were handed off
 --                                 (withdrawal, deletion request or retention):
@@ -128,11 +132,13 @@ $$;
 
 alter table ops.waitlist
   add column handoff_exported_at timestamptz,
+  add column handoff_confirmed_at timestamptz,
   add column handoff_outcome     text,
   add column handoff_outcome_at  timestamptz,
   add constraint waitlist_handoff_outcome_allowed check (handoff_outcome is null or handoff_outcome in ('invited', 'declined')),
   add constraint waitlist_handoff_outcome_needs_export check (handoff_outcome is null or (handoff_exported_at is not null and handoff_outcome_at is not null));
 comment on column ops.waitlist.handoff_exported_at is 'When this entry was last copied to the member project for review (BL-009). Null: never.';
+comment on column ops.waitlist.handoff_confirmed_at is 'When the member project confirmed it stored (or deliberately skipped) the copy. An export it never confirmed is offered again after an hour, so a failed import loses no one.';
 comment on column ops.waitlist.handoff_outcome is 'invited or declined, recorded by the member project after review. Never a role.';
 
 -- Entries removed after they were handed off: the id and time only, so the
@@ -192,17 +198,20 @@ begin
   if p_limit is null or p_limit not between 1 and 500 then
     raise exception 'invalid_limit' using errcode = 'P0001';
   end if;
-  -- Not exported yet, or exported more than 30 days ago (the member copy has
-  -- expired by then) and still undecided.
+  -- Not exported yet; exported but never confirmed by the member project for
+  -- an hour (the import failed); or exported more than 30 days ago (the
+  -- member copy has expired by then) and still undecided.
   with picked as (
     select w.id from ops.waitlist w
     where ops.waitlist_handoff_eligible(w)
-      and (w.handoff_exported_at is null or w.handoff_exported_at < pg_catalog.now() - interval '30 days')
+      and (w.handoff_exported_at is null
+           or (w.handoff_confirmed_at is null and w.handoff_exported_at < pg_catalog.now() - interval '1 hour')
+           or w.handoff_exported_at < pg_catalog.now() - interval '30 days')
     order by w.joined_at
     limit p_limit
     for update skip locked
   ), marked as (
-    update ops.waitlist w set handoff_exported_at = pg_catalog.now()
+    update ops.waitlist w set handoff_exported_at = pg_catalog.now(), handoff_confirmed_at = null
     from picked where w.id = picked.id
     returning w.*
   )
@@ -227,7 +236,31 @@ begin
 end;
 $$;
 
-create function waitlist_api.handoff_recheck(p_ids uuid[])
+-- The member project confirms the exported rows it stored or deliberately
+-- skipped (already a member, already invited). Returns how many it confirmed.
+create function waitlist_api.handoff_confirm(p_ids uuid[])
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  n integer;
+begin
+  if pg_catalog.cardinality(coalesce(p_ids, '{}')) > 500 then
+    raise exception 'too_many' using errcode = 'P0001';
+  end if;
+  update ops.waitlist set handoff_confirmed_at = pg_catalog.now()
+  where id = any (coalesce(p_ids, '{}')) and handoff_exported_at is not null;
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+-- Which of these entries may receive an invitation now: verified, consenting,
+-- in retention and undecided. With p_replacement, entries already recorded as
+-- invited instead, for a replacement of an invitation that expired or failed.
+create function waitlist_api.handoff_recheck(p_ids uuid[], p_replacement boolean default false)
 returns uuid[]
 language sql
 stable
@@ -237,7 +270,12 @@ as $$
   select coalesce(pg_catalog.array_agg(w.id), '{}')
   from ops.waitlist w
   where w.id = any (coalesce(p_ids, '{}')) and pg_catalog.cardinality(p_ids) <= 500
-    and w.handoff_exported_at is not null and ops.waitlist_handoff_eligible(w);
+    and w.handoff_exported_at is not null
+    and case when coalesce(p_replacement, false)
+             then w.handoff_outcome = 'invited' and w.status = 'invited' and w.email_verified_at is not null
+                  and coalesce(w.interest_confirmed_at, w.joined_at) > pg_catalog.now() - interval '12 months'
+                  and exists (select 1 from ops.waitlist_consents c where c.waitlist_id = w.id and c.kind = 'waitlist' and c.granted)
+             else ops.waitlist_handoff_eligible(w) end;
 $$;
 
 create function waitlist_api.handoff_record(p_id uuid, p_outcome text)
@@ -320,7 +358,7 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- 3. The handoff login: no special powers, no password (the founder sets one
---    when the handoff is approved), and only the six handoff functions.
+--    when the handoff is approved), and only the seven handoff functions.
 
 do $$
 begin
@@ -335,7 +373,8 @@ grant usage on schema waitlist_api to waitlist_handoff;
 revoke all on function waitlist_api.verification_issue(text) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.verify_email(text) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.handoff_export(integer) from public, anon, authenticated, service_role;
-revoke all on function waitlist_api.handoff_recheck(uuid[]) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.handoff_recheck(uuid[], boolean) from public, anon, authenticated, service_role;
+revoke all on function waitlist_api.handoff_confirm(uuid[]) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.handoff_record(uuid, text) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.handoff_withdrawals(timestamptz) from public, anon, authenticated, service_role;
 revoke all on function waitlist_api.handoff_forget(uuid[]) from public, anon, authenticated, service_role;
@@ -344,7 +383,8 @@ revoke all on function waitlist_api.handoff_forget_email(text) from public, anon
 grant execute on function waitlist_api.verification_issue(text) to waitlist_writer;
 grant execute on function waitlist_api.verify_email(text) to waitlist_writer;
 grant execute on function waitlist_api.handoff_export(integer) to waitlist_handoff;
-grant execute on function waitlist_api.handoff_recheck(uuid[]) to waitlist_handoff;
+grant execute on function waitlist_api.handoff_recheck(uuid[], boolean) to waitlist_handoff;
+grant execute on function waitlist_api.handoff_confirm(uuid[]) to waitlist_handoff;
 grant execute on function waitlist_api.handoff_record(uuid, text) to waitlist_handoff;
 grant execute on function waitlist_api.handoff_withdrawals(timestamptz) to waitlist_handoff;
 grant execute on function waitlist_api.handoff_forget(uuid[]) to waitlist_handoff;

@@ -6,7 +6,7 @@
 --   psql "<url>" -X -q -v ON_ERROR_STOP=1 -v mode=apply -v confirm='REMOVE STAGING WAITLIST HANDOFF' -f ...
 --
 -- Drops the verification links, the withdrawals, the handoff columns, the
--- eight functions and the waitlist_handoff login, and removes the migration
+-- nine functions and the waitlist_handoff login, and removes the migration
 -- record. Verifications already recorded on entries stay (email_verified_at
 -- existed before). Refuses, changing nothing, if the record is missing, a
 -- later migration exists, or the handoff login has an open session.
@@ -48,7 +48,8 @@ end $$;
 drop function waitlist_api.verification_issue(text);
 drop function waitlist_api.verify_email(text);
 drop function waitlist_api.handoff_export(integer);
-drop function waitlist_api.handoff_recheck(uuid[]);
+drop function waitlist_api.handoff_recheck(uuid[], boolean);
+drop function waitlist_api.handoff_confirm(uuid[]);
 drop function waitlist_api.handoff_record(uuid, text);
 drop function waitlist_api.handoff_withdrawals(timestamptz);
 drop function waitlist_api.handoff_forget(uuid[]);
@@ -60,7 +61,7 @@ drop table ops.waitlist_withdrawals;
 drop table ops.waitlist_email_verifications;
 alter table ops.waitlist
   drop constraint waitlist_handoff_outcome_needs_export, drop constraint waitlist_handoff_outcome_allowed,
-  drop column handoff_outcome_at, drop column handoff_outcome, drop column handoff_exported_at;
+  drop column handoff_outcome_at, drop column handoff_outcome, drop column handoff_confirmed_at, drop column handoff_exported_at;
 revoke usage on schema waitlist_api from waitlist_handoff;
 drop role waitlist_handoff;
 delete from supabase_migrations.schema_migrations where version = '20261223000000';

@@ -142,8 +142,9 @@ begin
     jsonb_build_object('waitlist_id', pg_temp.w('3'), 'withdrawn_at', now()),
     jsonb_build_object('waitlist_id', pg_temp.w('5'), 'withdrawn_at', now())));
   if n <> 1 then raise exception 'FAIL: the open invitation was not removed (% removed)', n; end if;
-  if (public.svc_waitlist_bridge_pending() ->> 'withdrawals_since')::timestamptz < now() - interval '1 minute' then
-    raise exception 'FAIL: the withdrawal read position did not advance';
+  -- It reads again from an hour before the last withdrawal seen, so one committed late is never skipped.
+  if (public.svc_waitlist_bridge_pending() ->> 'withdrawals_since')::timestamptz not between now() - interval '61 minutes' and now() - interval '59 minutes' then
+    raise exception 'FAIL: the withdrawal read position did not advance with an hour of overlap';
   end if;
   reset role;
   if exists (select 1 from ops.waitlist_review where waitlist_id in (pg_temp.w('3'), pg_temp.w('5')))
@@ -183,6 +184,72 @@ begin
   if public.svc_waitlist_forget_address(' WA9@example.test ') <> 1 then raise exception 'FAIL: deletion by address did not remove the copy'; end if;
   reset role;
 
+  -- 10. Outcomes the waitlist has not recorded yet stay pending until it confirms.
+  set local role service_role;
+  perform public.svc_waitlist_import(jsonb_build_array(pg_temp.row('a', 'waa@example.test')));
+  reset role;
+  update ops.waitlist_review set decision = 'approved', cohort = 'fan', decided_at = now() where waitlist_id = pg_temp.w('a');
+  set local role service_role;
+  inv := public.svc_invitation_create(pg_temp.w('a'));
+  if not (public.svc_waitlist_bridge_pending() -> 'outcomes') @> jsonb_build_array(pg_temp.w('a')) then
+    raise exception 'FAIL: an outcome the waitlist has not recorded was not pending';
+  end if;
+  if public.svc_waitlist_outcomes_done(array[pg_temp.w('a')]) <> 1 then raise exception 'FAIL: the recorded outcome was not marked'; end if;
+  if (public.svc_waitlist_bridge_pending() -> 'outcomes') @> jsonb_build_array(pg_temp.w('a')) then
+    raise exception 'FAIL: a recorded outcome stayed pending';
+  end if;
+
+  -- 11. Delivery: sent means only the provider accepted it; delivered needs the provider's event.
+  perform public.svc_invitation_delivery((inv ->> 'invitation_id')::uuid, 'sent', 'msg_a1', null);
+  if (select delivery_status from ops.invitations where id = (inv ->> 'invitation_id')::uuid) <> 'sent' then raise exception 'FAIL: not recorded as sent'; end if;
+  if public.svc_invitation_delivery_event('msg_a1', 'email.opened', now()) then raise exception 'FAIL: an unknown event was applied'; end if;
+  if not public.svc_invitation_delivery_event('msg_a1', 'email.delivered', now()) then raise exception 'FAIL: the delivered event was not applied'; end if;
+  if public.svc_invitation_delivery_event('msg_a1', 'email.delivery_delayed', now() + interval '1 minute') then
+    raise exception 'FAIL: a delay replaced a confirmed delivery';
+  end if;
+  if public.svc_invitation_delivery_event('msg_a1', 'email.bounced', now() - interval '1 hour') then
+    raise exception 'FAIL: an older event overwrote a newer one';
+  end if;
+  if (select (delivery_status, delivered_at is not null) <> ('delivered', true) from ops.invitations where id = (inv ->> 'invitation_id')::uuid) then
+    raise exception 'FAIL: the delivery was not recorded with its time';
+  end if;
+  if public.svc_invitation_delivery_event('msg_nobody', 'email.delivered', now()) then raise exception 'FAIL: an unknown message was applied'; end if;
+
+  -- 12. Recovery: an open invitation can't be replaced; an expired one can, once,
+  --     revoking it and its link first; never two open at once.
+  perform pg_temp.expect_error(format('select public.svc_invitation_replace_check(%L::uuid)', inv ->> 'invitation_id'), 'still_open', 'replacing an open, delivered invitation');
+  reset role;
+  update ops.invitations set created_at = now() - interval '15 days', expires_at = now() - interval '1 day' where id = (inv ->> 'invitation_id')::uuid;
+  set local role service_role;
+  if public.svc_invitation_replace_check((inv ->> 'invitation_id')::uuid) ->> 'waitlist_id' <> pg_temp.w('a')::text then raise exception 'FAIL: the replacement check did not name the applicant'; end if;
+  j := public.svc_invitation_replace((inv ->> 'invitation_id')::uuid);
+  if j ->> 'status' <> 'created' or j ->> 'code' = inv ->> 'code' then raise exception 'FAIL: no new invitation: %', j; end if;
+  perform pg_temp.expect_error(format('select public.svc_invitation_replace(%L::uuid)', inv ->> 'invitation_id'), 'already_replaced', 'replacing the same invitation twice');
+  reset role;
+  if (select count(*) from ops.invitations where waitlist_id = pg_temp.w('a') and accepted_at is null and revoked_at is null) <> 1
+     or (select revoked_at is null from ops.registration_links where code = inv ->> 'code')
+     or (select replaces_id from ops.invitations where id = (j ->> 'invitation_id')::uuid) <> (inv ->> 'invitation_id')::uuid then
+    raise exception 'FAIL: the replacement left two open invitations, a usable old link, or no link to what it replaced';
+  end if;
+  -- A failed email can be replaced too; a stuck send is retried after 10 minutes; a bounce never is.
+  update ops.invitations set delivery_status = 'sending', created_at = now() - interval '11 minutes' where id = (j ->> 'invitation_id')::uuid;
+  set local role service_role;
+  if not exists (select 1 from jsonb_array_elements(public.svc_invitation_retry_list()) r where r ->> 'invitation_id' = j ->> 'invitation_id') then
+    raise exception 'FAIL: an invitation stuck sending was not retried';
+  end if;
+  perform public.svc_invitation_delivery((j ->> 'invitation_id')::uuid, 'sent', 'msg_a2', null);
+  perform public.svc_invitation_delivery_event('msg_a2', 'email.bounced', now());
+  if exists (select 1 from jsonb_array_elements(public.svc_invitation_retry_list()) r where r ->> 'invitation_id' = j ->> 'invitation_id') then
+    raise exception 'FAIL: a bounced invitation was retried automatically';
+  end if;
+  if public.svc_invitation_replace_check((j ->> 'invitation_id')::uuid) ->> 'waitlist_id' is null then raise exception 'FAIL: a bounced invitation could not be replaced'; end if;
+  reset role;
+  -- Never once accepted.
+  update ops.invitations set accepted_at = now() where id = (j ->> 'invitation_id')::uuid;
+  set local role service_role;
+  perform pg_temp.expect_error(format('select public.svc_invitation_replace_check(%L::uuid)', j ->> 'invitation_id'), 'already_accepted', 'replacing after the applicant accepted');
+  reset role;
+
   -- 9. Copies expire after 30 days.
   update ops.waitlist_review set imported_at = now() - interval '31 days', expires_at = now() - interval '1 day' where waitlist_id = pg_temp.w('3');
   insert into ops.waitlist_review (waitlist_id, email, joined_at, verified_at, consent_version, consented_at, imported_at, expires_at)
@@ -194,7 +261,7 @@ begin
   end if;
   reset role;
   if exists (select 1 from ops.waitlist_review where waitlist_id = pg_temp.w('8')) then raise exception 'FAIL: an expired copy was kept'; end if;
-  raise notice 'PASS: waitlist invitations: founder-only review and decisions; copies once, expiring; single-use invitations only behind the launch gate; accepted on registration; counts; withdrawals and deletions carried both ways';
+  raise notice 'PASS: waitlist invitations: founder-only review and decisions; copies once, expiring; single-use invitations only behind the launch gate; accepted on registration; counts; withdrawals, deletions and outcomes carried until confirmed; delivered only from provider events; expired, failed or bounced invitations replaceable, never two open';
 end $$;
 
 rollback;

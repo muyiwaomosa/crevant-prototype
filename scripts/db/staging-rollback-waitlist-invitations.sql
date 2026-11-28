@@ -55,6 +55,10 @@ drop function public.svc_invitation_create(uuid);
 drop function public.svc_invitation_delivery(uuid, text, text, text);
 drop function public.svc_invitation_retry_list();
 drop function public.svc_waitlist_forget_address(text);
+drop function public.svc_invitation_delivery_event(text, text, timestamptz);
+drop function public.svc_invitation_replace_check(uuid);
+drop function public.svc_invitation_replace(uuid);
+drop function public.svc_waitlist_outcomes_done(uuid[]);
 drop function ops.waitlist_founder_overview();
 drop function ops.waitlist_decide(uuid[], text, text);
 drop function ops.waitlist_forget_applicant(uuid);
@@ -66,17 +70,24 @@ drop function ops.bridge_withdraw(jsonb);
 drop function ops.bridge_invitation_create(uuid);
 drop function ops.bridge_invitation_delivery(uuid, text, text, text);
 drop function ops.bridge_invitation_retry_list();
+drop function ops.bridge_delivery_event(text, text, timestamptz);
+drop function ops.bridge_invitation_replace(uuid);
+drop function ops.bridge_invitation_replace_check(uuid);
+drop function ops.waitlist_outcomes_done(uuid[]);
+drop function ops.waitlist_outcomes_pending();
 drop function ops.invites_may_send();
 drop function ops.waitlist_review_expire();
 drop trigger registrations_accept_invitation on ops.registrations;
 drop function ops.invitation_accept_on_registration();
 drop trigger invitations_forget_waitlist_entry on ops.invitations;
 drop function ops.invitation_forget_waitlist_entry();
-drop index ops.invitations_one_per_applicant;
+drop index ops.invitations_one_open_per_applicant;
+drop index ops.invitations_one_accepted_per_applicant;
 drop index ops.invitations_one_per_link;
 alter table ops.invitations
   drop column waitlist_id, drop column link_id, drop column cohort, drop column creator_ref,
-  drop column delivery_status, drop column delivery_error, drop column provider_id, drop column send_attempts;
+  drop column delivery_status, drop column delivery_error, drop column provider_id, drop column send_attempts,
+  drop column delivered_at, drop column delivery_event_at, drop column replaces_id, drop column outcome_synced_at;
 drop table ops.waitlist_bridge_state;
 drop table ops.waitlist_forget_queue;
 drop table ops.waitlist_review;

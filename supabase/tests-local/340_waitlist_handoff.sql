@@ -62,11 +62,20 @@ begin
   set local role waitlist_writer;
   if waitlist_api.verify_email(t3) <> 'expired' then raise exception 'FAIL: an expired link was not reported as expired'; end if;
   reset role;
-  update ops.waitlist_email_verifications set expires_at = now() + interval '1 hour' where waitlist_id = v2;
+  -- Recovery: joining again with the same address (Turnstile and the submission
+  -- limits apply) asks for a new link. Today's 3 are used, so none is issued
+  -- until the 24 hours are up; then a new one replaces the expired link.
   set local role waitlist_writer;
-  got := waitlist_api.verify_email(t3);
-  if got <> 'verified' then raise exception 'FAIL: a valid link did not verify (got %)', got; end if;
-  if waitlist_api.verify_email(t3) <> 'invalid' then raise exception 'FAIL: a link worked twice'; end if;
+  if waitlist_api.verification_issue('h2@example.test') is not null then raise exception 'FAIL: a fourth link was issued within a day'; end if;
+  reset role;
+  update ops.waitlist_email_verifications set day_started = now() - interval '25 hours' where waitlist_id = v2;
+  set local role waitlist_writer;
+  t4 := waitlist_api.verification_issue('h2@example.test');
+  if t4 !~ '^[0-9a-f]{64}$' then raise exception 'FAIL: no new link after the expired one'; end if;
+  if waitlist_api.verify_email(t3) <> 'invalid' then raise exception 'FAIL: the expired link still answered after a new one was issued'; end if;
+  got := waitlist_api.verify_email(t4);
+  if got <> 'verified' then raise exception 'FAIL: the new link did not verify (got %)', got; end if;
+  if waitlist_api.verify_email(t4) <> 'invalid' then raise exception 'FAIL: a link worked twice'; end if;
   reset role;
   if (select email_verified_at is null or interest_confirmed_at is null from ops.waitlist where id = v2) then
     raise exception 'FAIL: verifying did not record the verification and confirmation';
@@ -89,6 +98,17 @@ begin
   end if;
   set local role waitlist_handoff;
   if jsonb_array_length(waitlist_api.handoff_export(500)) <> 0 then raise exception 'FAIL: an entry was exported twice'; end if;
+  -- An export the member project never confirmed is offered again after an hour (a failed import loses no one).
+  reset role;
+  update ops.waitlist set handoff_exported_at = now() - interval '2 hours' where id in (v1, v2);
+  set local role waitlist_handoff;
+  if waitlist_api.handoff_confirm(array[v1]) <> 1 then raise exception 'FAIL: the confirmation was not recorded'; end if;
+  j := waitlist_api.handoff_export(500);
+  if jsonb_array_length(j) <> 1 or (j -> 0 ->> 'waitlist_id')::uuid <> v2 then
+    raise exception 'FAIL: only the unconfirmed export should have been offered again: %', j;
+  end if;
+  if waitlist_api.handoff_confirm(array[v2]) <> 1 then raise exception 'FAIL: the second confirmation was not recorded'; end if;
+  if jsonb_array_length(waitlist_api.handoff_export(500)) <> 0 then raise exception 'FAIL: a confirmed export was offered again'; end if;
 
   -- Recheck, then record an outcome: decided entries are no longer eligible.
   ids := waitlist_api.handoff_recheck(array[v1, v2]);
@@ -96,6 +116,8 @@ begin
   if not waitlist_api.handoff_record(v1, 'invited') then raise exception 'FAIL: the outcome was not recorded'; end if;
   if waitlist_api.handoff_record(v1, 'declined') then raise exception 'FAIL: an outcome was recorded twice'; end if;
   if waitlist_api.handoff_recheck(array[v1]) <> '{}' then raise exception 'FAIL: an invited entry was still eligible'; end if;
+  -- A replacement invitation is for entries recorded as invited, still verified and consenting.
+  if waitlist_api.handoff_recheck(array[v1, v2], true) <> array[v1] then raise exception 'FAIL: the replacement recheck was wrong'; end if;
   begin
     perform waitlist_api.handoff_record(v2, 'shortlisted');
     raise exception 'FAIL: an unknown outcome was accepted';
@@ -131,7 +153,7 @@ begin
   end;
   reset role;
   if exists (select 1 from ops.waitlist where id = v2) then raise exception 'FAIL: the entry survived its deletion'; end if;
-  raise notice 'PASS: waitlist handoff: links verify once and expire; only verified, consenting, current entries are exported, once, with the minimum fields; outcomes, rechecks and withdrawals by id; the handoff login reads nothing else';
+  raise notice 'PASS: waitlist handoff: links verify once, expire and can be replaced (3 a day); unconfirmed exports are offered again; only verified, consenting, current entries are exported, once, with the minimum fields; outcomes, rechecks and withdrawals by id; the handoff login reads nothing else';
 end $$;
 
 rollback;

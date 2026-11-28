@@ -4,9 +4,14 @@ import { invitationMail } from './invitation'
 import { bridgeTargets, MEMBER_APP_ORIGIN, STAGING_APP_ORIGIN } from '../_shared/policy'
 
 const A = '00000000-0000-4000-8000-0000000000a1'
+const SECRET = 'whsec_' + btoa('0123456789abcdef0123456789abcdef')
+async function sign(id: string, ts: string, body: string) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('0123456789abcdef0123456789abcdef'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  return 'v1,' + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${id}.${ts}.${body}`)))))
+}
 const B = '00000000-0000-4000-8000-0000000000b2'
 
-function world(over: { pending?: Record<string, unknown>; eligible?: string[]; founder?: RpcResult; send?: BridgeDeps['sendEmail']; emailReady?: boolean; handoffDown?: boolean } = {}) {
+function world(over: { pending?: Record<string, unknown>; eligible?: string[]; founder?: RpcResult; send?: BridgeDeps['sendEmail']; emailReady?: boolean; handoffDown?: boolean; recordDown?: boolean; replaceCheck?: RpcResult } = {}) {
   const calls: string[] = []
   const handoffCalls: Array<Record<string, unknown>> = []
   const pending = { withdrawals_since: '-infinity', forget: [], declined: [], approved: [A, B], may_send: true, ...over.pending }
@@ -17,6 +22,9 @@ function world(over: { pending?: Record<string, unknown>; eligible?: string[]; f
       case 'svc_waitlist_import': return { ok: true, data: { imported: (body.p_rows as unknown[]).length, skipped: 0 } }
       case 'svc_invitation_create': return { ok: true, data: { status: 'created', invitation_id: 'inv-' + String(body.p_waitlist_id).slice(-2), email: 'a@example.com', code: '0123456789abcdef' } }
       case 'svc_invitation_retry_list': return { ok: true, data: [] }
+      case 'svc_invitation_replace_check': return over.replaceCheck ?? { ok: true, data: { waitlist_id: A } }
+      case 'svc_invitation_replace': return { ok: true, data: { status: 'created', invitation_id: 'inv-new', email: 'a@example.com', code: 'fedcba9876543210' } }
+      case 'svc_invitation_delivery_event': return { ok: true, data: true }
       default: return { ok: true, data: 1 }
     }
   })
@@ -28,6 +36,7 @@ function world(over: { pending?: Record<string, unknown>; eligible?: string[]; f
     handoff: vi.fn(async (body: Record<string, unknown>) => {
       handoffCalls.push(body)
       if (over.handoffDown) return { ok: false as const }
+      if (over.recordDown && body.action === 'record') return { ok: false as const }
       switch (body.action) {
         case 'withdrawals': return { ok: true as const, data: { withdrawals: [] } }
         case 'export': return { ok: true as const, data: { applicants: [{ waitlist_id: A, email: 'a@example.com' }] } }
@@ -40,6 +49,7 @@ function world(over: { pending?: Record<string, unknown>; eligible?: string[]; f
     sendEmail: over.send ?? vi.fn(async () => ({ ok: true as const, id: 'msg_1' })),
     appOrigin: 'https://app.splitpost.ca',
     emailReady: over.emailReady ?? true,
+    webhookSecret: SECRET,
   }
   return { deps, calls, handoffCalls }
 }
@@ -57,13 +67,14 @@ describe('waitlist-bridge (BL-009)', () => {
     const w = world()
     const out = await run(w.deps, 'import')
     expect(out).toMatchObject({ status: 200, data: { status: 'imported', imported: 1 } })
-    expect(w.handoffCalls.map((c) => c.action)).toEqual(['withdrawals', 'export'])
+    expect(w.handoffCalls.map((c) => c.action)).toEqual(['withdrawals', 'export', 'confirm'])
+    expect(w.handoffCalls[2]).toEqual({ action: 'confirm', ids: [A] })
     expect(w.handoffCalls[0]).toEqual({ action: 'withdrawals', since: null })
   })
   it('carries deletion requests and declines to the waitlist before anything else', async () => {
     const w = world({ pending: { forget: [B], declined: [A], approved: [] } })
     await run(w.deps, 'import')
-    expect(w.handoffCalls.map((c) => c.action)).toEqual(['withdrawals', 'forget', 'record', 'export'])
+    expect(w.handoffCalls.map((c) => c.action)).toEqual(['withdrawals', 'forget', 'record', 'export', 'confirm'])
     expect(w.handoffCalls[2]).toEqual({ action: 'record', id: A, outcome: 'declined' })
     expect(w.calls).toContain('svc_waitlist_forget_done')
     expect(w.calls).toContain('svc_waitlist_declined_done')
@@ -100,6 +111,47 @@ describe('waitlist-bridge (BL-009)', () => {
     expect(w.handoffCalls).toContainEqual({ action: 'forget_email', email: 'ava@example.com' })
     expect((await handleBridge({ method: 'POST', path: '/waitlist-bridge/forget-email', authorization: 'Bearer founder-token', body: '{"email":"nope"}' }, w.deps)).status).toBe(400)
     expect((await handleBridge({ method: 'POST', path: '/waitlist-bridge/forget-email', authorization: 'Bearer member-token', body: '{"email":"a@b.co"}' }, w.deps)).status).toBe(403)
+  })
+  it('an invitation still goes out if the waitlist misses its outcome; the outcome stays pending and is carried next time', async () => {
+    const w = world({ eligible: [A], recordDown: true })
+    const out = await run(w.deps, 'send')
+    expect(out.data).toMatchObject({ status: 'sent', sent: 1, outcomes_pending: 1 })
+    expect(w.calls).not.toContain('svc_waitlist_outcomes_done')
+    const later = world({ pending: { outcomes: [A], approved: [] } })
+    expect((await run(later.deps, 'import')).data).toMatchObject({ outcomes_recorded: 1 })
+    expect(later.handoffCalls).toContainEqual({ action: 'record', id: A, outcome: 'invited' })
+    expect(later.calls).toContain('svc_waitlist_outcomes_done')
+  })
+  it('replaces an expired or failed invitation only after a fresh waitlist check, and explains refusals', async () => {
+    const replace = (deps: BridgeDeps) => handleBridge({ method: 'POST', path: '/waitlist-bridge/replace', authorization: 'Bearer founder-token', body: JSON.stringify({ invitation_id: 'inv-old-0000-0000-0000-000000000000'.slice(0, 36) }) }, deps)
+    const w = world()
+    const ok = await handleBridge({ method: 'POST', path: '/waitlist-bridge/replace', authorization: 'Bearer founder-token', body: JSON.stringify({ invitation_id: '00000000-0000-4000-8000-0000000000c3' }) }, w.deps)
+    expect(ok).toEqual({ status: 200, data: { status: 'replaced', sent: 1, failed: 0 } })
+    expect(w.handoffCalls).toContainEqual({ action: 'recheck', ids: [A], replacement: true })
+    const notEligible = world({ eligible: [] })
+    expect((await handleBridge({ method: 'POST', path: '/waitlist-bridge/replace', authorization: 'Bearer founder-token', body: JSON.stringify({ invitation_id: '00000000-0000-4000-8000-0000000000c3' }) }, notEligible.deps)).data).toEqual({ status: 'not_eligible' })
+    expect(notEligible.calls).not.toContain('svc_invitation_replace')
+    const open = world({ replaceCheck: { ok: false, status: 400, code: 'still_open' } })
+    expect(await handleBridge({ method: 'POST', path: '/waitlist-bridge/replace', authorization: 'Bearer founder-token', body: JSON.stringify({ invitation_id: '00000000-0000-4000-8000-0000000000c3' }) }, open.deps)).toEqual({ status: 409, data: { error: 'still_open' } })
+    expect((await replace(world().deps)).status).toBe(400)
+    expect((await handleBridge({ method: 'POST', path: '/waitlist-bridge/replace', authorization: 'Bearer member-token', body: '{}' }, world().deps)).status).toBe(403)
+  })
+  it('records delivery only from a correctly signed, recent provider event', async () => {
+    const body = JSON.stringify({ type: 'email.delivered', created_at: '2026-11-28T02:00:00Z', data: { email_id: 'msg_1' } })
+    const ts = String(Math.floor(Date.now() / 1000))
+    const headers = { 'svix-id': 'evt_1', 'svix-timestamp': ts, 'svix-signature': await sign('evt_1', ts, body) }
+    const w = world()
+    const ok = await handleBridge({ method: 'POST', path: '/waitlist-bridge/delivery-event', authorization: null, body, headers }, w.deps)
+    expect(ok).toEqual({ status: 200, data: { status: 'recorded' } })
+    expect((w.deps.serviceRpc as ReturnType<typeof vi.fn>).mock.calls).toContainEqual(['svc_invitation_delivery_event', { p_provider_id: 'msg_1', p_event: 'email.delivered', p_at: '2026-11-28T02:00:00Z' }])
+    const tampered = await handleBridge({ method: 'POST', path: '/waitlist-bridge/delivery-event', authorization: null, body: body.replace('delivered', 'bounced'), headers }, world().deps)
+    expect(tampered.status).toBe(401)
+    const old = String(Math.floor(Date.now() / 1000) - 3600)
+    const stale = await handleBridge({ method: 'POST', path: '/waitlist-bridge/delivery-event', authorization: null, body, headers: { ...headers, 'svix-timestamp': old, 'svix-signature': await sign('evt_1', old, body) } }, world().deps)
+    expect(stale.status).toBe(401)
+    expect((await handleBridge({ method: 'POST', path: '/waitlist-bridge/delivery-event', authorization: null, body, headers }, { ...world().deps, webhookSecret: '' })).status).toBe(401)
+    const other = JSON.stringify({ type: 'email.opened', created_at: '2026-11-28T02:00:00Z', data: { email_id: 'msg_1' } })
+    expect((await handleBridge({ method: 'POST', path: '/waitlist-bridge/delivery-event', authorization: null, body: other, headers: { ...headers, 'svix-signature': await sign('evt_1', ts, other) } }, world().deps)).data).toEqual({ status: 'ignored' })
   })
   it('stops, sending nothing, when the waitlist cannot be reached', async () => {
     const w = world({ handoffDown: true })

@@ -758,9 +758,16 @@ export interface WaitlistApplicant {
   expiresAt: string
 }
 export interface WaitlistInvitationCounts {
-  sent: number
+  /** Accepted by the email provider: not proof of delivery. */
+  providerAccepted: number
+  /** Confirmed by the provider's delivery event. */
+  delivered: number
+  awaitingConfirmation: number
   sending: number
   failed: number
+  bounced: number
+  complained: number
+  replaced: number
   accepted: number
   onboarded: number
   expired: number
@@ -770,10 +777,12 @@ export interface WaitlistInvitationCounts {
 export interface WaitlistOverview {
   applicants: WaitlistApplicant[]
   invitations: WaitlistInvitationCounts
-  recent: Array<{ email: string; cohort: string | null; createdAt: string; status: string; error: string | null }>
+  recent: Array<{ id: string; email: string; cohort: string | null; createdAt: string; status: string; replaceable: boolean; error: string | null }>
   maySend: boolean
   lastImportAt: string | null
   pendingDeletions: number
+  /** "Invited" outcomes the waitlist has not recorded yet (carried on the next import or send). */
+  pendingOutcomes: number
 }
 /** What an import or a send did (counts and a fixed status only). */
 export type WaitlistBridgeResult = Record<string, number | string>
@@ -990,6 +999,8 @@ export interface AppApi {
   founderWaitlistSend(): Promise<WaitlistBridgeResult>
   /** A deletion request received by email: removed here and on the waitlist. */
   founderWaitlistForgetEmail(email: string): Promise<WaitlistBridgeResult>
+  /** A replacement for an invitation that expired, failed or bounced (after a fresh waitlist check). */
+  founderWaitlistReplace(invitationId: string): Promise<WaitlistBridgeResult>
   requestAdvertising(r: AdvertisingRequest): Promise<string>
   myAdvertising(): Promise<MyAdvertising | null>
   myCampaignReport(campaignId: string): Promise<CampaignReport>
@@ -1237,6 +1248,11 @@ const MESSAGES: Record<string, string> = {
   videos_unavailable: "Video posts aren't available right now. You can still post text.",
   waitlist_bridge_failed: "The waitlist couldn't be reached just now. Nothing was sent. Please try again in a minute.",
   invalid_cohort: 'Choose a cohort for the applicants you approve.',
+  replace_still_open: 'That invitation is still open and its email has not failed, so it cannot be replaced yet.',
+  replace_already_accepted: 'That person already accepted an invitation.',
+  replace_already_replaced: 'That invitation was already replaced.',
+  replace_invitations_closed: 'Invitations are closed, so nothing can be sent.',
+  replace_not_found: "That invitation wasn't found.",
   invalid_selection: 'Select at least one applicant first.',
   media_unsupported: "That file isn't a photo or a video Splitpost can use. Choose a photo (JPEG, PNG, HEIC) or a video (MP4 or MOV).",
   not_tester: 'Only the founder and testers can run the video device test.',
@@ -2819,14 +2835,17 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
           cohort: (['creator', 'fan', 'tester'].includes(String(a.cohort)) ? a.cohort : null) as WaitlistApplicant['cohort'],
           expiresAt: String(a.expires_at),
         })),
-        invitations: { sent: n(inv.sent), sending: n(inv.sending), failed: n(inv.failed), accepted: n(inv.accepted), onboarded: n(inv.onboarded),
-          expired: n(inv.expired), open: n(inv.open), fromCreatorLinks: n(inv.from_creator_links) },
+        invitations: { providerAccepted: n(inv.provider_accepted), delivered: n(inv.delivered), awaitingConfirmation: n(inv.awaiting_confirmation),
+          sending: n(inv.sending), failed: n(inv.failed), bounced: n(inv.bounced), complained: n(inv.complained), replaced: n(inv.replaced),
+          accepted: n(inv.accepted), onboarded: n(inv.onboarded), expired: n(inv.expired), open: n(inv.open), fromCreatorLinks: n(inv.from_creator_links) },
         recent: ((d.recent as Array<Record<string, unknown>> | null) ?? []).map((r) => ({
-          email: String(r.email), cohort: r.cohort ? String(r.cohort) : null, createdAt: String(r.created_at), status: String(r.status), error: r.error ? String(r.error) : null,
+          id: String(r.id), email: String(r.email), cohort: r.cohort ? String(r.cohort) : null, createdAt: String(r.created_at), status: String(r.status),
+          replaceable: r.replaceable === true, error: r.error ? String(r.error) : null,
         })),
         maySend: d.may_send === true,
         lastImportAt: d.last_import_at ? String(d.last_import_at) : null,
         pendingDeletions: n(d.pending_deletions),
+        pendingOutcomes: n(d.pending_outcomes),
       }
     },
     founderWaitlistDecide: (ids, decision, cohort) => rpc<number>('app_founder_waitlist_decide', { p_ids: ids, p_decision: decision, p_cohort: cohort ?? null }),
@@ -2839,6 +2858,16 @@ export function createSupabaseApi(client: SupabaseClient, userId: string): AppAp
     async founderWaitlistSend() {
       const { data, error } = await client.functions.invoke('waitlist-bridge/send', { body: {} })
       if (error) throw new AppApiError('waitlist_bridge_failed')
+      return (data ?? {}) as WaitlistBridgeResult
+    },
+    async founderWaitlistReplace(invitationId) {
+      const { data, error } = await client.functions.invoke('waitlist-bridge/replace', { body: { invitation_id: invitationId } })
+      if (error) {
+        // A refusal (409) carries a fixed reason in its body.
+        const ctx = (error as { context?: Response }).context
+        const reason = ctx && typeof ctx.json === 'function' ? await ctx.json().then((b: { error?: unknown }) => b.error, () => null) : null
+        throw new AppApiError(typeof reason === 'string' && /^[a-z_]{1,40}$/.test(reason) ? `replace_${reason}` : 'waitlist_bridge_failed')
+      }
       return (data ?? {}) as WaitlistBridgeResult
     },
     async founderWaitlistForgetEmail(email) {

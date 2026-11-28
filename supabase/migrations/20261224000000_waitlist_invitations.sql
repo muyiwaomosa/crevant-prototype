@@ -9,9 +9,17 @@
 --   * A copy holds the minimum for cohort review and an invitation, expires
 --     after 30 days, and is deleted as soon as the applicant is invited or
 --     declined. One copy per applicant and per address.
---   * One invitation per applicant, ever, and at most one open invitation per
---     address (already enforced). Each invitation is a single-use personal
---     link (ops.registration_links, max_uses 1).
+--   * At most one open invitation per applicant and per address, and at most
+--     one accepted. An invitation that expired or whose email failed can be
+--     replaced, only by the founder, after a fresh check with the waitlist:
+--     the old one and its link are revoked first. Each invitation is a
+--     single-use personal link (ops.registration_links, max_uses 1).
+--   * Delivery is tracked honestly: "sent" means only that the email
+--     provider accepted the message. Delivered, bounced and complained come
+--     from the provider's signed delivery events, never assumed.
+--   * Nothing the waitlist must learn is lost when it can't be reached: an
+--     "invited" outcome not yet recorded there stays pending and is carried
+--     on the next import or send, like deletions and declines.
 --   * Before anything is sent the bridge rechecks verification, consent,
 --     retention and withdrawal with the waitlist, and this database refuses to
 --     create an invitation while external access is not approved or
@@ -104,15 +112,23 @@ alter table ops.invitations
   add column delivery_error  text,
   add column provider_id     text,
   add column send_attempts   integer not null default 0,
+  add column delivered_at    timestamptz,
+  add column delivery_event_at timestamptz,
+  add column replaces_id     uuid references ops.invitations (id) on delete set null,
+  add column outcome_synced_at timestamptz,
   add constraint invitations_cohort_allowed check (cohort is null or cohort in ('creator', 'fan', 'tester')),
   add constraint invitations_creator_ref_format check (creator_ref is null or creator_ref ~ '^[0-9a-f]{20}$'),
-  add constraint invitations_delivery_allowed check (delivery_status is null or delivery_status in ('sending', 'sent', 'failed')),
+  add constraint invitations_delivery_allowed check (delivery_status is null or delivery_status in ('sending', 'sent', 'delayed', 'delivered', 'failed', 'bounced', 'complained')),
+  add constraint invitations_delivered_has_time check ((delivery_status = 'delivered') <= (delivered_at is not null)),
   add constraint invitations_delivery_error_format check (delivery_error is null or delivery_error ~ '^[a-z0-9_]{1,40}$'),
   add constraint invitations_provider_id_format check (provider_id is null or provider_id ~ '^[A-Za-z0-9_-]{1,100}$'),
   add constraint invitations_send_attempts_range check (send_attempts between 0 and 5);
-comment on column ops.invitations.waitlist_id is 'The waitlist applicant this personal invitation was sent to (BL-009). One invitation per applicant.';
-comment on column ops.invitations.delivery_status is 'sending, sent (accepted by the email provider) or failed, with a fixed error code. Never the message.';
-create unique index invitations_one_per_applicant on ops.invitations (waitlist_id) where waitlist_id is not null;
+comment on column ops.invitations.waitlist_id is 'The waitlist applicant this personal invitation was sent to (BL-009). At most one open and one accepted invitation per applicant.';
+comment on column ops.invitations.delivery_status is 'sending (not yet with the provider), sent (the provider accepted it; not proof of delivery), delayed, delivered (the provider confirmed delivery), failed (the provider refused it or could not be reached, with a fixed error code), bounced or complained. Delivered, delayed, bounced and complained come only from the provider''s signed delivery events.';
+comment on column ops.invitations.replaces_id is 'The expired or failed invitation this one replaced (revoked when it was replaced).';
+comment on column ops.invitations.outcome_synced_at is 'When the waitlist recorded this applicant as invited. Null: still to carry over (retried on every import and send).';
+create unique index invitations_one_open_per_applicant on ops.invitations (waitlist_id) where waitlist_id is not null and accepted_at is null and revoked_at is null;
+create unique index invitations_one_accepted_per_applicant on ops.invitations (waitlist_id) where waitlist_id is not null and accepted_at is not null;
 create unique index invitations_one_per_link on ops.invitations (link_id) where link_id is not null;
 
 -- Registering through an invitation's link marks the invitation accepted.
@@ -266,6 +282,39 @@ begin
 end;
 $$;
 
+-- Applicants whose "invited" outcome the waitlist has not recorded yet.
+create function ops.waitlist_outcomes_pending()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(pg_catalog.jsonb_agg(x.waitlist_id), '[]'::jsonb)
+  from (select distinct i.waitlist_id from ops.invitations i
+        where i.waitlist_id is not null and i.outcome_synced_at is null limit 200) x;
+$$;
+revoke all on function ops.waitlist_outcomes_pending() from public, anon, authenticated;
+
+-- The waitlist recorded these applicants as invited.
+create function ops.waitlist_outcomes_done(p_ids uuid[])
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  n integer;
+begin
+  update ops.invitations set outcome_synced_at = pg_catalog.now()
+  where waitlist_id = any (coalesce(p_ids, '{}')) and outcome_synced_at is null;
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+revoke all on function ops.waitlist_outcomes_done(uuid[]) from public, anon, authenticated;
+
 -- Where to read withdrawals from, and the queued deletions to carry over.
 create function public.svc_waitlist_bridge_pending()
 returns jsonb
@@ -275,7 +324,11 @@ security definer
 set search_path = ''
 as $$
   select pg_catalog.jsonb_build_object(
-    'withdrawals_since', (select withdrawals_since from ops.waitlist_bridge_state where id),
+    -- Read again from an hour before the last withdrawal seen (applying one twice
+    -- changes nothing), so one committed late is never skipped.
+    'withdrawals_since', (select case when withdrawals_since = '-infinity' then withdrawals_since else withdrawals_since - interval '1 hour' end
+                          from ops.waitlist_bridge_state where id),
+    'outcomes', ops.waitlist_outcomes_pending(),
     'forget', coalesce((select pg_catalog.jsonb_agg(q.waitlist_id order by q.queued_at) from (select * from ops.waitlist_forget_queue order by queued_at limit 500) q), '[]'::jsonb),
     'declined', coalesce((select pg_catalog.jsonb_agg(w.waitlist_id) from ops.waitlist_review w where w.decision = 'declined'), '[]'::jsonb),
     'approved', coalesce((select pg_catalog.jsonb_agg(w.waitlist_id order by w.decided_at) from (
@@ -382,13 +435,46 @@ begin
       provider_id = case when p_status = 'sent' then p_provider_id end,
       delivery_error = case when p_status = 'failed' then coalesce(p_error, 'unknown') end,
       last_sent_at = case when p_status = 'sent' then pg_catalog.now() else last_sent_at end,
+      delivered_at = null, delivery_event_at = null,
       send_attempts = least(send_attempts + 1, 5)
   where id = p_invitation and waitlist_id is not null;
   return found;
 end;
 $$;
 
--- Failed invitations still open, for another attempt (at most 5 in all).
+-- A signed delivery event from the email provider (checked by the
+-- waitlist-bridge function): delivered, delivery delayed, bounced or
+-- complained, for the message it identifies. Older events never overwrite
+-- newer ones, and a delay never replaces a final state. Repeats change nothing.
+create function ops.bridge_delivery_event(p_provider_id text, p_event text, p_at timestamptz)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_status text := case p_event when 'email.delivered' then 'delivered' when 'email.delivery_delayed' then 'delayed'
+                                 when 'email.bounced' then 'bounced' when 'email.complained' then 'complained' end;
+begin
+  if v_status is null or p_provider_id is null or p_provider_id !~ '^[A-Za-z0-9_-]{1,100}$' or p_at is null then
+    return false;
+  end if;
+  update ops.invitations
+  set delivery_status = v_status,
+      delivered_at = case when v_status = 'delivered' then p_at else delivered_at end,
+      delivery_event_at = p_at
+  where provider_id = p_provider_id and waitlist_id is not null
+    and delivery_status in ('sent', 'delayed', 'delivered', 'bounced', 'complained')
+    and (delivery_event_at is null or p_at >= delivery_event_at)
+    and not (v_status = 'delayed' and delivery_status in ('delivered', 'bounced', 'complained'));
+  return found;
+end;
+$$;
+
+-- Invitations still open whose email the provider refused or never received
+-- (failed, or still sending after 10 minutes), for another attempt (at most
+-- 5 in all). Bounces and complaints are never retried.
 create function ops.bridge_invitation_retry_list()
 returns jsonb
 language sql
@@ -398,7 +484,8 @@ set search_path = ''
 as $$
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('invitation_id', i.id, 'email', i.email, 'code', l.code, 'cohort', i.cohort)), '[]'::jsonb)
   from ops.invitations i join ops.registration_links l on l.id = i.link_id
-  where i.waitlist_id is not null and i.delivery_status = 'failed' and i.send_attempts < 5
+  where i.waitlist_id is not null and i.send_attempts < 5
+    and (i.delivery_status = 'failed' or (i.delivery_status = 'sending' and i.created_at < pg_catalog.now() - interval '10 minutes'))
     and i.accepted_at is null and i.revoked_at is null and i.expires_at > pg_catalog.now()
     and l.revoked_at is null and ops.invites_may_send();
 $$;
@@ -429,6 +516,70 @@ end;
 $$;
 revoke all on function ops.waitlist_forget_address(text) from public, anon, authenticated;
 
+-- A replacement for an invitation that expired or whose email failed or
+-- bounced. Checks only; the waitlist is asked next. Returns the applicant.
+create function ops.bridge_invitation_replace_check(p_invitation uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  i ops.invitations;
+begin
+  select * into i from ops.invitations where id = p_invitation and waitlist_id is not null;
+  if not found then
+    raise exception 'not_found' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from ops.invitations x where x.waitlist_id = i.waitlist_id and x.accepted_at is not null) then
+    raise exception 'already_accepted' using errcode = 'P0001';
+  end if;
+  if i.revoked_at is not null then
+    raise exception 'already_replaced' using errcode = 'P0001';
+  end if;
+  if not (i.expires_at <= pg_catalog.now() or i.delivery_status in ('failed', 'bounced')) then
+    raise exception 'still_open' using errcode = 'P0001';
+  end if;
+  if not ops.invites_may_send() then
+    raise exception 'invitations_closed' using errcode = 'P0001';
+  end if;
+  return pg_catalog.jsonb_build_object('waitlist_id', i.waitlist_id);
+end;
+$$;
+revoke all on function ops.bridge_invitation_replace_check(uuid) from public, anon, authenticated;
+
+-- Replaces it (after the waitlist confirmed the applicant): the old invitation
+-- and its link are revoked, then a new single-use link for the same cohort,
+-- valid 14 days, is created. Returns the address and link for the email.
+create function ops.bridge_invitation_replace(p_invitation uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  i ops.invitations;
+  v_code text;
+  v_link uuid;
+  v_inv uuid;
+begin
+  perform ops.bridge_invitation_replace_check(p_invitation);
+  select * into i from ops.invitations where id = p_invitation for update;
+  update ops.invitations set revoked_at = pg_catalog.now() where id = i.id;
+  update ops.registration_links set revoked_at = pg_catalog.now() where id = i.link_id and revoked_at is null;
+  v_code := ops.create_invitation_link('waitlist-bridge', i.cohort, 1, interval '14 days', null);
+  select id into v_link from ops.registration_links where code = v_code;
+  insert into ops.invitations (email, source, campaign, expires_at, waitlist_id, link_id, cohort, creator_ref, delivery_status, replaces_id, outcome_synced_at)
+  values (i.email, i.source, i.campaign, pg_catalog.now() + interval '14 days', i.waitlist_id, v_link, i.cohort, i.creator_ref, 'sending', i.id,
+          coalesce(i.outcome_synced_at, null))
+  returning id into v_inv;
+  return pg_catalog.jsonb_build_object('status', 'created', 'invitation_id', v_inv, 'email', i.email, 'code', v_code, 'cohort', i.cohort);
+end;
+$$;
+revoke all on function ops.bridge_invitation_replace(uuid) from public, anon, authenticated;
+
 -- The service_role entry points (public, so the function can call them with
 -- the service key): thin wrappers, so that only ops code touches ops.invitations.
 create function public.svc_waitlist_import(p_rows jsonb) returns jsonb language sql volatile security definer set search_path = ''
@@ -444,6 +595,15 @@ create function public.svc_invitation_retry_list() returns jsonb language sql st
 as $$ select ops.bridge_invitation_retry_list() $$;
 create function public.svc_waitlist_forget_address(p_email text) returns integer language sql volatile security definer set search_path = ''
 as $$ select ops.waitlist_forget_address(p_email) $$;
+create function public.svc_invitation_delivery_event(p_provider_id text, p_event text, p_at timestamptz) returns boolean
+language sql volatile security definer set search_path = ''
+as $$ select ops.bridge_delivery_event(p_provider_id, p_event, p_at) $$;
+create function public.svc_invitation_replace_check(p_invitation uuid) returns jsonb language sql stable security definer set search_path = ''
+as $$ select ops.bridge_invitation_replace_check(p_invitation) $$;
+create function public.svc_invitation_replace(p_invitation uuid) returns jsonb language sql volatile security definer set search_path = ''
+as $$ select ops.bridge_invitation_replace(p_invitation) $$;
+create function public.svc_waitlist_outcomes_done(p_ids uuid[]) returns integer language sql volatile security definer set search_path = ''
+as $$ select ops.waitlist_outcomes_done(p_ids) $$;
 revoke all on function ops.bridge_import(jsonb) from public, anon, authenticated;
 revoke all on function ops.bridge_withdraw(jsonb) from public, anon, authenticated;
 revoke all on function ops.bridge_invitation_create(uuid) from public, anon, authenticated;
@@ -460,6 +620,11 @@ revoke all on function public.svc_invitation_create(uuid) from public, anon, aut
 revoke all on function public.svc_invitation_delivery(uuid, text, text, text) from public, anon, authenticated;
 revoke all on function public.svc_invitation_retry_list() from public, anon, authenticated;
 revoke all on function public.svc_waitlist_forget_address(text) from public, anon, authenticated;
+revoke all on function public.svc_invitation_delivery_event(text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.svc_invitation_replace_check(uuid) from public, anon, authenticated;
+revoke all on function public.svc_invitation_replace(uuid) from public, anon, authenticated;
+revoke all on function public.svc_waitlist_outcomes_done(uuid[]) from public, anon, authenticated;
+revoke all on function ops.bridge_delivery_event(text, text, timestamptz) from public, anon, authenticated;
 grant execute on function public.svc_waitlist_import(jsonb) to service_role;
 grant execute on function public.svc_waitlist_withdraw(jsonb) to service_role;
 grant execute on function public.svc_waitlist_bridge_pending() to service_role;
@@ -470,6 +635,10 @@ grant execute on function public.svc_invitation_create(uuid) to service_role;
 grant execute on function public.svc_invitation_delivery(uuid, text, text, text) to service_role;
 grant execute on function public.svc_invitation_retry_list() to service_role;
 grant execute on function public.svc_waitlist_forget_address(text) to service_role;
+grant execute on function public.svc_invitation_delivery_event(text, text, timestamptz) to service_role;
+grant execute on function public.svc_invitation_replace_check(uuid) to service_role;
+grant execute on function public.svc_invitation_replace(uuid) to service_role;
+grant execute on function public.svc_waitlist_outcomes_done(uuid[]) to service_role;
 
 -- Invitation counts and the latest 50 invitations, for the founder's overview.
 create function ops.waitlist_invitation_summary()
@@ -482,20 +651,30 @@ as $$
   select pg_catalog.jsonb_build_object(
     'invitations', (
       select pg_catalog.jsonb_build_object(
-        'sent', count(*) filter (where i.delivery_status = 'sent'),
+        -- Accepted by the email provider (not proof of delivery).
+        'provider_accepted', count(*) filter (where i.delivery_status in ('sent', 'delayed', 'delivered', 'bounced', 'complained')),
+        -- Confirmed by the provider's delivery event.
+        'delivered', count(*) filter (where i.delivery_status in ('delivered', 'complained')),
+        'awaiting_confirmation', count(*) filter (where i.delivery_status in ('sent', 'delayed')),
         'sending', count(*) filter (where i.delivery_status = 'sending'),
         'failed', count(*) filter (where i.delivery_status = 'failed'),
+        'bounced', count(*) filter (where i.delivery_status = 'bounced'),
+        'complained', count(*) filter (where i.delivery_status = 'complained'),
+        'replaced', count(*) filter (where i.revoked_at is not null and exists (select 1 from ops.invitations r where r.replaces_id = i.id)),
         'accepted', count(*) filter (where i.accepted_at is not null),
         'expired', count(*) filter (where i.accepted_at is null and i.revoked_at is null and i.expires_at <= pg_catalog.now()),
         'open', count(*) filter (where i.accepted_at is null and i.revoked_at is null and i.expires_at > pg_catalog.now()),
         'from_creator_links', count(*) filter (where i.creator_ref is not null))
       from ops.invitations i where i.waitlist_id is not null),
     'recent', coalesce((select pg_catalog.jsonb_agg(x order by x ->> 'created_at' desc) from (
-        select pg_catalog.jsonb_build_object('email', i.email, 'cohort', i.cohort, 'created_at', i.created_at,
+        select pg_catalog.jsonb_build_object('id', i.id, 'email', i.email, 'cohort', i.cohort, 'created_at', i.created_at,
           'status', case when i.accepted_at is not null then 'accepted'
-                         when i.revoked_at is not null then 'revoked'
+                         when i.revoked_at is not null then 'replaced'
                          when i.expires_at <= pg_catalog.now() then 'expired'
                          else coalesce(i.delivery_status, 'sending') end,
+          'delivery', i.delivery_status,
+          'replaceable', i.accepted_at is null and i.revoked_at is null and (i.expires_at <= pg_catalog.now() or i.delivery_status in ('failed', 'bounced'))
+                         and not exists (select 1 from ops.invitations x where x.waitlist_id = i.waitlist_id and x.accepted_at is not null),
           'error', i.delivery_error) as x
         from ops.invitations i where i.waitlist_id is not null order by i.created_at desc limit 50) r), '[]'::jsonb)
   );
@@ -585,7 +764,8 @@ begin
     'recent', ops.waitlist_invitation_summary() -> 'recent',
     'may_send', ops.invites_may_send(),
     'last_import_at', (select last_import_at from ops.waitlist_bridge_state where id),
-    'pending_deletions', (select count(*) from ops.waitlist_forget_queue)
+    'pending_deletions', (select count(*) from ops.waitlist_forget_queue),
+    'pending_outcomes', pg_catalog.jsonb_array_length(ops.waitlist_outcomes_pending())
   );
 end;
 $$;

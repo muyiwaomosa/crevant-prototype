@@ -1,8 +1,16 @@
 -- Waitlist email verification and the BL-009 handoff (20261223000000).
 -- Read-only. Runs on the waitlist project, staging and member Production.
 \set ON_ERROR_STOP on
--- Skipped until the migration is applied.
-select to_regclass('ops.waitlist_withdrawals') is not null as waitlist_handoff_applied \gset
+-- Skipped only while 20261223000000 is neither recorded nor present. Once it is
+-- recorded in the migration history, the check always runs, so a recorded
+-- migration whose objects are missing or changed fails instead of skipping.
+select to_regclass('supabase_migrations.schema_migrations') is not null as has_history \gset
+\if :has_history
+select exists (select 1 from supabase_migrations.schema_migrations where version = '20261223000000') as recorded \gset
+\else
+select false as recorded \gset
+\endif
+select :'recorded'::boolean or to_regclass('ops.waitlist_withdrawals') is not null as waitlist_handoff_applied \gset
 \if :waitlist_handoff_applied
 
 do $$

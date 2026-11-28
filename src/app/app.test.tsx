@@ -309,11 +309,15 @@ function fakeApi(
       { waitlistId: 'w2', email: 'ben@example.test', joinedAt: '2026-11-21T00:00:00Z', verifiedAt: '2026-11-21T01:00:00Z', groups: ['active_creator'], intent: 'create',
         platform: 'youtube', audienceBand: '1k_10k', introducedByCreator: true, source: null, fromCreatorLink: true, decision: 'pending', cohort: null, expiresAt: '2026-12-21T00:00:00Z' },
     ],
-    invitations: { sent: 0, sending: 0, failed: 0, accepted: 0, onboarded: 0, expired: 0, open: 0, fromCreatorLinks: 0 },
-    recent: [],
+    invitations: { providerAccepted: 0, delivered: 0, awaitingConfirmation: 0, sending: 0, failed: 0, bounced: 0, complained: 0, replaced: 0,
+      accepted: 0, onboarded: 0, expired: 0, open: 0, fromCreatorLinks: 0 },
+    recent: [
+      { id: 'inv-x', email: 'old@example.test', cohort: 'fan', createdAt: '2026-11-01T00:00:00Z', status: 'expired', replaceable: true, error: null },
+    ],
     maySend: opts.waitlistMaySend ?? false,
     lastImportAt: null,
     pendingDeletions: 0,
+    pendingOutcomes: 0,
   }
   // Unified onboarding, privacy requests and switches (20261211000000, 20261212000000).
   const onb = {
@@ -1334,8 +1338,13 @@ function fakeApi(
       if (!wl.maySend) return { status: 'closed', sent: 0 }
       const sent = wl.applicants.filter((a) => a.decision === 'approved').length
       wl.applicants = wl.applicants.filter((a) => a.decision !== 'approved')
-      wl.invitations = { ...wl.invitations, sent: wl.invitations.sent + sent, open: wl.invitations.open + sent }
+      wl.invitations = { ...wl.invitations, providerAccepted: wl.invitations.providerAccepted + sent, awaitingConfirmation: wl.invitations.awaitingConfirmation + sent, open: wl.invitations.open + sent }
       return { status: 'sent', sent }
+    },
+    async founderWaitlistReplace(id) {
+      requireFounder()
+      wl.recent = wl.recent.map((r) => (r.id === id ? { ...r, status: 'replaced', replaceable: false } : r))
+      return { status: 'replaced', sent: 1, failed: 0 }
     },
     async requestAdvertising(r) {
       complete()
@@ -5473,7 +5482,14 @@ describe('unified account and progressive onboarding (20261211000000, 2026121200
     expect(await within(panel).findByText(/Approved: creator/)).toBeTruthy()
     fireEvent.click(send())
     fireEvent.click(within(panel).getByRole('button', { name: 'Yes, send' }))
-    expect((await within(panel).findByTestId('waitlist-result')).textContent).toBe('1 invitations sent')
+    expect((await within(panel).findByTestId('waitlist-result')).textContent).toBe('1 invitations accepted by the email provider (delivery is confirmed separately)')
+    // Never called delivered without the provider's confirmation.
+    const counts = within(panel).getByTestId('waitlist-counts')
+    expect(within(counts).getByText('Accepted by the email provider').nextSibling?.textContent).toBe('1')
+    expect(within(counts).getByText('Delivery confirmed').nextSibling?.textContent).toBe('0')
+    // An expired invitation can be replaced by the founder.
+    fireEvent.click(within(panel).getByRole('button', { name: 'Send a new invitation' }))
+    expect((await within(panel).findByTestId('waitlist-result')).textContent).toBe('A new invitation was accepted by the email provider. The old link no longer works.')
     expect(within(panel).queryByText('ava@example.test')).toBeNull()
     // A deletion request removes the applicant here and is queued for the waitlist.
     fireEvent.click(within(panel).getByRole('button', { name: 'Delete on request' }))

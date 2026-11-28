@@ -30,8 +30,8 @@ Three functions, two databases:
 | Piece | Project | What it may do |
 |---|---|---|
 | `join-waitlist` | waitlist | As before, plus issue and check verification links |
-| `waitlist-handoff` (new) | waitlist | The only way into the waitlist for the member project. Server to server, with a shared key. Runs as the new `waitlist_handoff` login, which can run six functions and read no table |
-| `waitlist-bridge` (new) | member | Control Center's Import, Send and Delete by email. Lets only the founder through, and the database decides who that is. Holds no database password of any project |
+| `waitlist-handoff` (new) | waitlist | The only way into the waitlist for the member project. Server to server, with a shared key. Runs as the new `waitlist_handoff` login, which can run seven functions and read no table |
+| `waitlist-bridge` (new) | member | Control Center's Import, Send, Replace and Delete by email, plus Resend's signed delivery events. Lets only the founder through (the database decides who that is), except the signed delivery events. Holds no database password of any project |
 
 Migrations: `20261223000000_waitlist_handoff.sql` (waitlist side; also on
 staging and, unused and locked, on member Production) and
@@ -44,12 +44,59 @@ staging and, unused and locked, on member Production) and
 | 1. The waitlist stays authoritative | Entries live only in the waitlist project. Member copies are temporary, and every decision is recorded back on the waitlist (`handoff_record`) |
 | 2. Only verified, consenting applicants, minimum information | `handoff_export` returns only entries that are verified, hold a granted waitlist consent, sit inside the 12-month retention window and are undecided. It sends 13 fields: id, email, join and verification times, consent version and time, participant groups, intent, platform, audience band, the creator question, source and creator link code. Interests, free text and rate limit data never leave. Checked by test 340 |
 | 3. Restricted, server-side transfer | `waitlist_handoff` has no special powers, up to 3 connections, and executes exactly six functions (check 003, check 039). Only `waitlist-handoff` uses it, on its own project (the same project check as `join-waitlist`). Browsers are refused. The member side holds a shared key, never a database credential |
-| 4. No duplicate applicants or invitations | One copy per applicant and per address (primary key and a unique address). One invitation per applicant ever (`invitations_one_per_applicant`), one per link, and at most one open invitation per address (already enforced). Anyone already a member is skipped |
+| 4. No duplicate applicants or invitations | One copy per applicant and per address (primary key and a unique address). At most one open and one accepted invitation per applicant (`invitations_one_open_per_applicant`, `invitations_one_accepted_per_applicant`), one per link, and at most one open invitation per address. Anyone already a member is skipped. An expired, failed or bounced invitation can be replaced (see "Recovery") |
 | 5. Automatic expiry and cleanup | Copies expire 30 days after import (a database constraint) and are removed whenever Control Center loads or imports. They are deleted as soon as the applicant is invited or declined. Verification links last 48 hours. Withdrawal records are kept 13 months, then purged |
 | 6. Consent evidence, invitation history, attribution and conversion | Consent records stay on the waitlist; the copy carries the version and time. Invitations keep cohort, source `waitlist`, creator link code, delivery status, send attempts and acceptance. Control Center shows sent, failed, accepted, onboarded, open, expired and from creator links |
 | 7. Recheck before sending | Send asks the waitlist again (`handoff_recheck`). Anyone no longer verified, consenting, in retention or undecided is dropped, not invited. The database also refuses to create an invitation while external access is not approved or registration is paused (check 040) |
-| 8. Deletion and withdrawal across both environments | Removing a handed-off entry on the waitlist leaves an id-only withdrawal; the next Import or Send removes the copy and any open invitation and its link. "Delete on request" and "Delete a waitlist applicant by email" in Control Center delete in both projects. A member who came from the waitlist and deletes their account has their waitlist entry deleted too |
+| 8. Deletion and withdrawal across both environments, without silent loss (see "Recovery and reconciliation") | Removing a handed-off entry on the waitlist leaves an id-only withdrawal; the next Import or Send removes the copy and any open invitation and its link. "Delete on request" and "Delete a waitlist applicant by email" in Control Center delete in both projects. A member who came from the waitlist and deletes their account has their waitlist entry deleted too |
 | 9. Privacy notice and counsel package | `docs/PRIVACY-NOTICE-WAITLIST-V1.1-DRAFT.md`, the member notice draft (section 2) and counsel package version 3 (question 50) |
+
+## Delivery tracking
+
+The panel never calls an email delivered without the provider saying so:
+
+| Status | Means | Comes from |
+|---|---|---|
+| Being sent | Created; the provider hasn't answered | the bridge |
+| Accepted by the email provider | Resend took the message. **Not proof of delivery** | Resend's answer to the send |
+| Delivery delayed | Resend is still trying | signed `email.delivery_delayed` event |
+| Delivery confirmed | The receiving server accepted it | signed `email.delivered` event |
+| Bounced | Rejected by the receiving server; never retried automatically | signed `email.bounced` event |
+| Delivered, marked as spam | Delivered, then reported as spam | signed `email.complained` event |
+| Email failed | Resend refused it or couldn't be reached (fixed code); retried | the bridge |
+| Invitation accepted | The person registered through the link | the database, on registration |
+
+Events are accepted only with a valid Resend (Svix) signature less than five
+minutes old. An older event never overwrites a newer one, and a delay never
+replaces a final state. Without the webhook secret, every event is refused,
+and invitations stay at "Accepted by the email provider".
+
+## Recovery and reconciliation
+
+* **Expired, failed or bounced invitation.** Its row in Control Center offers
+  **Send a new invitation**. The founder triggers it. The waitlist is asked
+  again: the person must still be verified, consenting and in retention. The
+  old invitation and its link are revoked first, so no one ever has two open.
+  It's never offered once the person accepted an invitation.
+* **Stuck or failed email.** An invitation still "being sent" after 10
+  minutes, or one that failed, is resent on the next Send, up to 5 attempts.
+  Bounces aren't retried; replace them instead.
+* **Expired verification link.** Joining again with the same address sends a
+  new link, through Turnstile and the usual submission limits. Each entry gets
+  at most 3 links a day, and each new link cancels the last.
+* **The waitlist can't be reached.** Nothing is lost, and Control Center shows
+  what is waiting. Every step that needs the waitlist stays pending in the
+  member database until the waitlist confirms it, and the next Import or Send
+  carries it over:
+  * deletion requests;
+  * declines;
+  * "invited" outcomes. An invitation still goes out when the outcome can't be
+    recorded, and the outcome stays pending.
+* **A failed import.** An export the member side never confirmed is offered
+  again an hour later. Repeats are ignored, so no applicant is lost and none
+  is duplicated.
+* **Withdrawals.** These are read with an hour of overlap, so one committed
+  late is never skipped. Applying one twice changes nothing.
 
 ## Email
 
@@ -90,8 +137,14 @@ acceptance below passes **and** the move is separately approved.
 5. **Deploy on the waitlist project:** `join-waitlist` and the new
    `waitlist-handoff`, both with `--no-verify-jwt` and an explicit
    `--project-ref`, as `docs/WAITLIST.md` describes.
-6. **Member project function secrets:** `WAITLIST_HANDOFF_KEY` (step 3) and
-   `RESEND_API_KEY` (the member project's separate key).
+6. **Member project function secrets:** `WAITLIST_HANDOFF_KEY` (step 3),
+   `RESEND_API_KEY` (the member project's separate key), and
+   `RESEND_WEBHOOK_SECRET`. For the webhook secret, in Resend go to
+   **Webhooks, Add endpoint**, use
+   `https://<member project ref>.supabase.co/functions/v1/waitlist-bridge/delivery-event`,
+   select the events `email.delivered`, `email.delivery_delayed`,
+   `email.bounced` and `email.complained`, and copy its signing secret
+   (`whsec_...`).
 7. **Deploy `waitlist-bridge`** with `scripts/functions/deploy.mjs`
    (`docs/FUNCTIONS-DEPLOYMENT.md`). It deploys to staging now. Member
    Production needs `waitlistBridgeFunctionApproved: true` in
@@ -108,10 +161,17 @@ acceptance below passes **and** the move is separately approved.
 4. **Send approved invitations**, then confirm. The result says 1 invitation
    sent, and the email arrives with a `/register/<code>` link.
 5. Register through the link and finish onboarding.
-6. Control Center shows Sent 1, Accepted 1, Onboarded 1.
+6. Control Center shows **Accepted by the email provider** 1, then
+   **Delivery confirmed** 1 once Resend's event arrives, then **Invitation
+   accepted** 1 and **Onboarded** 1.
 7. Member Production: the panel says invitations are closed and offers no
    send. Nothing can be sent there until PB-4.
 
-Also confirm: **Delete a waitlist applicant by email** removes a second test
-address from both projects, and a test applicant deleted on the waitlist
-disappears from review after the next Import.
+Also confirm:
+
+* **Delete a waitlist applicant by email** removes a second test address from
+  both projects.
+* A test applicant deleted on the waitlist disappears from review after the
+  next Import.
+* An invitation to an address that can't receive mail shows **Bounced**, and
+  **Send a new invitation** replaces it.
