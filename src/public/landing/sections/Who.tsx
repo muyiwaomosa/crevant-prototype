@@ -2,6 +2,7 @@ import { HOMEPAGE_COPY } from '../copy'
 import { WHO_PHOTOS } from '../photos'
 import { Photo } from '../ui/Photo'
 import { Eyebrow } from '../ui/Story'
+import { PainPoints, ProblemToSolution, UseCases } from './Audience'
 
 const copy = HOMEPAGE_COPY.who
 
@@ -38,6 +39,10 @@ export function Who() {
             </article>
           ))}
         </div>
+        {/* BR-003 to BR-005: shown only once the founder-approved words are in landing/audience.ts. */}
+        <PainPoints />
+        <UseCases />
+        <ProblemToSolution />
       </div>
     </section>
   )

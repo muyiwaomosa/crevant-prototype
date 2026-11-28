@@ -1,21 +1,26 @@
 import clsx from 'clsx'
-import { Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat2, Send, Users } from 'lucide-react'
+import { Bookmark, Heart, MessageCircle, MoreHorizontal, Share2, UserPlus } from 'lucide-react'
 import { HOMEPAGE_COPY } from '../copy'
 import { HERO_POST } from '../photos'
 
 /**
- * The hero picture (SP-BRAND-003): the Splitpost logo, expanded.
+ * The hero picture (SP-BRAND-003, refined Nov 28): the Splitpost logo, expanded.
  *
  * The logo is one post in two pieces, ivory above and seafoam below, cut on
  * the same diagonal, with an apricot line showing only in the gap. Here the
- * upper piece is an authentic-looking Splitpost image post (a fictional
- * sample creator, labelled SAMPLE: picture, name, a short title and the four
- * actions, with no counts) and the lower piece is the community whose
- * contributions help it succeed. The caption under it is the founder's
- * signature line, with a note that the people shown are illustrative. The cut follows the logo's geometry: it
- * rises by 0.169 of the width from left to right (4.05 over 24 in the logo),
- * so the picture reads as the mark at any size. No money, amounts,
- * percentages or engagement figures.
+ * cut sits near the middle so both halves carry equal weight:
+ *   * the upper piece is the content: an authentic-looking Splitpost image
+ *     post (a fictional sample creator, labelled SAMPLE: picture, name, topic,
+ *     a short title);
+ *   * the lower piece is the community engaging with that same post: two
+ *     comment bubbles, a like, a save, a share and a follow, each from one of
+ *     the followers pictured.
+ * Labels are plain interface words only (Like, Save, Share, Follow) and the
+ * comments are drawn as lines, not words. The cut follows the logo's
+ * geometry: it rises by 0.169 of the width from left to right (4.05 over 24
+ * in the logo), so the picture reads as the mark at any size. No money,
+ * amounts, percentages or engagement figures: engagement is shown as
+ * contribution, never as something that earns money.
  */
 
 const split = HOMEPAGE_COPY.split
@@ -24,8 +29,50 @@ const RISE = '16.9cqw'
 /** The gap between the pieces, where the apricot line shows. */
 const GAP = '5cqw'
 
+type Person = (typeof HERO_POST.community)[number]
+
+function Face({ person, size = 'h-9 w-9' }: { person: Person; size?: string }) {
+  return (
+    <img
+      data-photo={person.id}
+      src={person.src}
+      width={160}
+      height={160}
+      alt=""
+      decoding="async"
+      className={clsx(size, 'shrink-0 rounded-full object-cover ring-2 ring-white')}
+    />
+  )
+}
+
+/** A comment, drawn: who wrote it, and lines where the words would be. */
+function CommentBubble({ person, lines, align = 'left' }: { person: Person; lines: [string, string]; align?: 'left' | 'right' }) {
+  return (
+    <div className={clsx('flex items-end gap-2', align === 'right' && 'flex-row-reverse')}>
+      <Face person={person} />
+      <div className={clsx('min-w-0 flex-1 rounded-2xl bg-white px-3 py-2.5 shadow-[0_6px_14px_-10px_rgb(18_48_45/0.6)]', align === 'right' ? 'rounded-br-md' : 'rounded-bl-md')}>
+        <span className="block h-2 rounded-full bg-sp-ink/20" style={{ width: lines[0] }} />
+        <span className="mt-1.5 block h-2 rounded-full bg-sp-ink/12" style={{ width: lines[1] }} />
+      </div>
+      <MessageCircle className="mb-1 h-4 w-4 shrink-0 text-sp-ink/70" />
+    </div>
+  )
+}
+
+/** One action on the post, by one follower: a picture, the icon and its plain label. */
+function Action({ person, icon: Icon, label, filled }: { person?: Person; icon: typeof Heart; label: string; filled?: boolean }) {
+  return (
+    <span className={clsx('inline-flex items-center gap-1 rounded-full bg-white py-1 pr-2.5 text-[11.5px] font-bold min-[400px]:gap-1.5 min-[400px]:pr-3 min-[400px]:text-[12px] text-sp-ink shadow-[0_6px_14px_-10px_rgb(18_48_45/0.6)]', person ? 'pl-1' : 'min-h-8 pl-2.5 min-[400px]:pl-3')}>
+      {person && <Face person={person} size="h-6 w-6" />}
+      <Icon className={clsx('h-3.5 w-3.5', filled && 'fill-current text-sp-accent-text')} />
+      {label}
+    </span>
+  )
+}
+
 export function SplitThePost({ className }: { className?: string }) {
   const p = HERO_POST
+  const [c1, c2, c3, c4] = p.community
   return (
     <figure data-testid="hero-scene" className={clsx('relative m-0 mx-auto w-full max-w-[24rem] px-1 [container-type:inline-size] sm:px-0 lg:max-w-[27rem]', className)}>
       <div aria-hidden="true" className="relative">
@@ -51,21 +98,15 @@ export function SplitThePost({ className }: { className?: string }) {
               alt=""
               decoding="async"
               fetchPriority="high"
-              className="block aspect-[16/10] w-full object-cover"
+              className="block aspect-[2/1] w-full object-cover"
             />
-            <div className="px-4 pt-3" style={{ paddingBottom: `calc(${RISE} + 0.75rem)` }}>
+            <div className="px-4 pt-3" style={{ paddingBottom: `calc(${RISE} + 0.5rem)` }}>
               <p className="font-sp-display text-[15px] font-extrabold leading-snug">{p.title}</p>
-              <div className="mt-2 flex items-center gap-4 text-sp-ink">
-                <Heart className="h-[18px] w-[18px]" />
-                <MessageCircle className="h-[18px] w-[18px]" />
-                <Repeat2 className="h-[18px] w-[18px]" />
-                <Send className="h-[18px] w-[18px]" />
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Lower piece: the community, on the same diagonal, in seafoam. */}
+        {/* Lower piece: followers engaging with the same post, on the same diagonal, in seafoam. */}
         <div className="relative" style={{ marginTop: `calc(-1 * ${RISE} + ${GAP})` }}>
           {/* The apricot line, behind both pieces: it shows only in the gap, as in the logo. */}
           <svg
@@ -81,27 +122,17 @@ export function SplitThePost({ className }: { className?: string }) {
           <div data-testid="split-community-piece" className="relative z-10 [filter:drop-shadow(0_22px_28px_rgb(0_0_0/0.32))]">
             <div
               className="rounded-[24px] bg-sp-secondary px-4 pb-5 text-sp-ink"
-              style={{ clipPath: `polygon(0 ${RISE}, 100% 0, 100% 100%, 0 100%)`, paddingTop: `calc(${RISE} + 1rem)` }}
+              style={{ clipPath: `polygon(0 ${RISE}, 100% 0, 100% 100%, 0 100%)`, paddingTop: `calc(${RISE} + 0.9rem)` }}
             >
-              <div className="flex justify-center">
-                {p.community.map((c, i) => (
-                  <img
-                    key={c.id}
-                    data-photo={c.id}
-                    src={c.src}
-                    width={160}
-                    height={160}
-                    alt=""
-                    decoding="async"
-                    className={clsx('h-11 w-11 rounded-full object-cover ring-[3px] ring-sp-secondary', i > 0 && '-ml-2.5')}
-                  />
-                ))}
+              <div className="space-y-2.5">
+                <CommentBubble person={c1} lines={['86%', '58%']} />
+                <CommentBubble person={c2} lines={['74%', '46%']} align="right" />
               </div>
-              <div className="mt-3.5 flex justify-center gap-5 text-sp-ink/80">
-                <MessageCircle className="h-4 w-4" />
-                <Bookmark className="h-4 w-4" />
-                <Send className="h-4 w-4" />
-                <Users className="h-4 w-4" />
+              <div className="mt-3.5 flex flex-wrap justify-center gap-1 min-[400px]:gap-1.5">
+                <Action person={c3} icon={Heart} label="Like" filled />
+                <Action person={c4} icon={Bookmark} label="Save" />
+                <Action icon={Share2} label="Share" />
+                <Action icon={UserPlus} label="Follow" />
               </div>
             </div>
           </div>
