@@ -38,10 +38,12 @@ begin
   got := public.app_set_my_website('example.com/recipes');
   if got is distinct from 'https://example.com/recipes' then raise exception 'FAIL: a bare address was stored as %', got; end if;
   if public.app_my_website() is distinct from 'https://example.com/recipes' then raise exception 'FAIL: my own link did not read back'; end if;
-  -- Setting a link never marks first-time setup done.
-  if (select onboarded_at from social.profile_details where user_id = social.current_member()) is not null then
+  -- Setting a link never marks first-time setup done (checked as the owner of the table).
+  execute 'reset role';
+  if (select onboarded_at from social.profile_details where user_id = '00000000-0000-4000-8000-0000000c1e01') is not null then
     raise exception 'FAIL: setting a link marked setup done';
   end if;
+  execute 'set local role authenticated';
   -- Unsafe or malformed addresses are refused.
   perform pg_temp.expect_error($q$select public.app_set_my_website('javascript:alert(1)')$q$, 'website_invalid', 'a javascript: link');
   perform pg_temp.expect_error($q$select public.app_set_my_website('data:text/html,hi')$q$, 'website_invalid', 'a data: link');
