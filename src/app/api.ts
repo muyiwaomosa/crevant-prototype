@@ -1179,6 +1179,7 @@ const MESSAGES: Record<string, string> = {
   on_hold: 'That amount is on hold.',
   video_not_ready: 'Set the video storage cap first (Video posts, below). New video uploads can be switched on once it is set.',
   videos_unavailable: "Video posts aren't available right now. You can still post text.",
+  media_unsupported: "That file isn't a photo or a video Splitpost can use. Choose a photo (JPEG, PNG, HEIC) or a video (MP4 or MOV).",
   not_tester: 'Only the founder and testers can run the video device test.',
   video_too_large: 'That video is too large. Videos can be up to 110 MB once prepared.',
   video_too_long: 'That video is longer than five minutes. Please trim it and try again.',

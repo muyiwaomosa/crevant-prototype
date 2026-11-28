@@ -10,7 +10,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Clapperboard, ImagePlus, ImageOff, RefreshCw, Users, X } from "lucide-react";
+import { ImagePlus, ImageOff, RefreshCw, Users, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, Modal, buttonClass } from "../components/ui";
 import { Message, Spinner } from "../public/auth/AuthUi";
@@ -312,6 +312,29 @@ export type NewPost = {
   topic?: string;
 };
 
+/** Photo types the picker offers (HEIC and HEIF are converted in the browser, as before). */
+export const PHOTO_ACCEPT = "image/*,.heic,.heif";
+
+/**
+ * Whether a chosen file is a photo or a video (BL-001). The browser's type comes
+ * first; files some phones hand over without one fall back to the extension.
+ * The server still checks every file itself, whatever this says.
+ */
+export function mediaKindOf(file: { type: string; name: string }): "photo" | "video" | null {
+  const type = file.type.toLowerCase();
+  if (type.startsWith("video/")) return "video";
+  if (type.startsWith("image/")) return "photo";
+  const name = file.name.toLowerCase();
+  if (/\.(mp4|m4v|mov|qt|webm|mkv|3gp|3g2|avi)$/.test(name)) return "video";
+  if (/\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/.test(name)) return "photo";
+  return null;
+}
+
+/** One button for media; its name says what can be added right now. */
+export function addMediaLabel(photos: boolean, videos: boolean): string {
+  return photos && videos ? "Add photo or video" : videos ? "Add video" : "Add photo";
+}
+
 export function PostComposer({
   label,
   placeholder,
@@ -366,9 +389,9 @@ function PhotoComposer({
   const full = variant === "full";
   const { profile } = useMyProfile();
   const textId = useId();
+  // One media picker (BL-001): a photo or a video, told apart from the file itself.
   const fileRef = useRef<HTMLInputElement>(null);
   // Video posts (20261213000000): one video, prepared and uploaded as soon as it is chosen.
-  const videoRef = useRef<HTMLInputElement>(null);
   const video = useVideoJob("post");
   const withVideo = video.job.stage !== "idle";
   const videoReady = video.job.stage === "done" && video.job.result !== null;
@@ -407,6 +430,27 @@ function PhotoComposer({
     },
     [photo],
   );
+
+  // Routes the chosen file: a video goes through the video pipeline, a photo through
+  // the photo one. Both keep every existing check, limit and server verification.
+  function pick(file: File | undefined) {
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file) return;
+    setError(null);
+    const kind = mediaKindOf(file);
+    if (kind === "video") {
+      if (!videoEnabled) return setError(new AppApiError("videos_unavailable"));
+      removePhoto();
+      void video.start(file);
+      return;
+    }
+    if (kind === "photo") {
+      if (!photosEnabled) return setError(new AppApiError("photos_unavailable"));
+      void choose(file);
+      return;
+    }
+    setError(new AppApiError("media_unsupported"));
+  }
 
   async function choose(file: File | undefined) {
     if (!file) return;
@@ -520,32 +564,16 @@ function PhotoComposer({
           </div>
         </>
       )}
-      {photosEnabled && (
+      {(photosEnabled || videoEnabled) && (
         <input
           ref={fileRef}
           type="file"
-          accept="image/*,.heic,.heif"
+          accept={[photosEnabled ? PHOTO_ACCEPT : "", videoEnabled ? VIDEO_ACCEPT : ""].filter(Boolean).join(",")}
           className="sr-only"
           tabIndex={-1}
           aria-hidden="true"
-          onChange={(e) => void choose(e.target.files?.[0])}
-          data-testid="photo-input"
-        />
-      )}
-      {videoEnabled && (
-        <input
-          ref={videoRef}
-          type="file"
-          accept={VIDEO_ACCEPT}
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden="true"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void video.start(f);
-            e.target.value = "";
-          }}
-          data-testid="video-input"
+          onChange={(e) => pick(e.target.files?.[0])}
+          data-testid="media-input"
         />
       )}
       {withVideo && (
@@ -611,24 +639,14 @@ function PhotoComposer({
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          {photosEnabled && !photo && !withVideo && (
+          {(photosEnabled || videoEnabled) && !photo && !withVideo && (
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={busy}
               className={buttonClass("secondary", "sm")}
             >
-              <ImagePlus className="h-4 w-4" aria-hidden="true" /> Add photo
-            </button>
-          )}
-          {videoEnabled && !photo && !withVideo && (
-            <button
-              type="button"
-              onClick={() => videoRef.current?.click()}
-              disabled={busy}
-              className={buttonClass("secondary", "sm")}
-            >
-              <Clapperboard className="h-4 w-4" aria-hidden="true" /> Add video
+              <ImagePlus className="h-4 w-4" aria-hidden="true" /> {addMediaLabel(photosEnabled, videoEnabled)}
             </button>
           )}
           {topics && topics.length > 0 && (

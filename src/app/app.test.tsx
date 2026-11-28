@@ -62,7 +62,8 @@ import { AdsManagePage, campaignStory } from './ads'
 import { ControlCenterPage, attentionStory, contributionStory, founderStory, moneyStory, overviewCsv, retentionStory } from './insights'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage, featureFor } from './feedback'
 import { fitWithin } from './photoPrep'
-import { VideoTestPage } from './video'
+import { addMediaLabel, mediaKindOf } from './media'
+import { VideoTestPage, clampRatio } from './video'
 
 // The browser's photo preparation (canvas) doesn't exist in jsdom: stand in for it.
 vi.mock('./photoPrep', async (importOriginal) => {
@@ -3592,7 +3593,7 @@ describe('feedback (Build 5.2c)', () => {
 
 describe('photo posts (Build 5.3)', () => {
   const choose = (name = 'IMG_0001.HEIC') =>
-    fireEvent.change(screen.getByTestId('photo-input'), {
+    fireEvent.change(screen.getByTestId('media-input'), {
       target: { files: [new File(['x'], name, { type: name.endsWith('.txt') ? 'text/plain' : 'image/heic' })] },
     })
 
@@ -3752,7 +3753,7 @@ describe('photo posts (Build 5.3)', () => {
     renderApp('/app/new', f.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Add photo' }))
     choose('notes.txt')
-    expect((await screen.findByRole('alert')).textContent).toMatch(/Please choose a photo/)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/isn't a photo or a video Splitpost can use/)
     expect(f.photo.calls).toEqual([])
   })
 
@@ -5377,7 +5378,7 @@ describe('unified account and progressive onboarding (20261211000000, 2026121200
 
 describe('video posts (20261213000000)', () => {
   const chooseVideo = (name = 'IMG_0001.MOV', type = 'video/quicktime') =>
-    fireEvent.change(screen.getByTestId('video-input'), { target: { files: [new File([new Uint8Array(2000)], name, { type })] } })
+    fireEvent.change(screen.getByTestId('media-input'), { target: { files: [new File([new Uint8Array(2000)], name, { type })] } })
 
   it('while video posts are off, the composer offers no video', async () => {
     const f = fakeApi('me')
@@ -5385,7 +5386,7 @@ describe('video posts (20261213000000)', () => {
     await screen.findByRole('heading', { name: 'Home' })
     await act(async () => {})
     expect(screen.queryByRole('button', { name: 'Add video' })).toBeNull()
-    expect(screen.queryByTestId('video-input')).toBeNull()
+    expect(screen.queryByTestId('media-input')).toBeNull()
   })
 
   it('a member adds a video: it is checked, prepared, uploaded and checked by the server, then posted once with a player that never autoplays', async () => {
@@ -5469,6 +5470,66 @@ describe('video posts (20261213000000)', () => {
     await waitFor(() => expect(screen.queryByTestId('post-video-error')).toBeNull())
     await waitFor(() => expect(f.video.calls.filter((c) => c.startsWith('links:')).length).toBe(before + 2))
     expect(await screen.findByTestId('post-video-player')).toBeTruthy()
+  })
+
+  it('BL-001: one media picker tells photos from videos by the file itself, with every existing check kept', async () => {
+    expect(mediaKindOf({ type: 'video/quicktime', name: 'IMG_1.MOV' })).toBe('video')
+    expect(mediaKindOf({ type: '', name: 'IMG_2.MOV' })).toBe('video')
+    expect(mediaKindOf({ type: '', name: 'IMG_3.HEIC' })).toBe('photo')
+    expect(mediaKindOf({ type: 'image/png', name: 'a.png' })).toBe('photo')
+    expect(mediaKindOf({ type: 'application/pdf', name: 'notes.pdf' })).toBeNull()
+    expect(addMediaLabel(true, true)).toBe('Add photo or video')
+    expect(addMediaLabel(true, false)).toBe('Add photo')
+    expect(addMediaLabel(false, true)).toBe('Add video')
+    const f = fakeApi('me', { video: true, photos: true })
+    renderApp('/app/new', f.api)
+    const add = await screen.findByRole('button', { name: 'Add photo or video' })
+    expect(screen.queryByRole('button', { name: 'Add photo' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add video' })).toBeNull()
+    const input = screen.getByTestId('media-input') as HTMLInputElement
+    expect(input.accept).toMatch(/image\/\*/)
+    expect(input.accept).toMatch(/video\/mp4/)
+    // Text alone can still be posted, with no media chosen.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Write a post' }), { target: { value: 'Just words' } })
+    expect((screen.getByRole('button', { name: 'Post' }) as HTMLButtonElement).disabled).toBe(false)
+    // A video goes through the video pipeline.
+    fireEvent.click(add)
+    fireEvent.change(input, { target: { files: [new File([new Uint8Array(2000)], 'IMG_0001.MOV', { type: 'video/quicktime' })] } })
+    expect(await screen.findByText(/Ready to post: 0:20/)).toBeTruthy()
+    expect(f.video.calls[0]).toBe('begin:post')
+    expect(f.photo.calls).toEqual([])
+    // Something else is refused before anything is sent.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove video' }))
+    fireEvent.change(await screen.findByTestId('media-input'), { target: { files: [new File(['x'], 'notes.pdf', { type: 'application/pdf' })] } })
+    expect((await screen.findByRole('alert')).textContent).toMatch(/isn't a photo or a video Splitpost can use/)
+  })
+
+  it('BL-003 and BL-004: portrait videos keep their shape, and grid tiles show the poster or first frame with a video mark', async () => {
+    expect(clampRatio(9 / 16)).toBeCloseTo(0.5625)
+    expect(clampRatio(1)).toBe(1)
+    expect(clampRatio(16 / 9)).toBeCloseTo(1.7778)
+    expect(clampRatio(0.2)).toBe(0.5)
+    expect(clampRatio(Number.NaN)).toBeCloseTo(16 / 9)
+    const f = fakeApi('me', { video: true })
+    const withPoster = f.seedPost('c1', 'Portrait clip')
+    const noPoster = f.seedPost('c1', '')
+    f.posts.find((p) => p.id === withPoster)!.media = { kind: 'video', width: 720, height: 1280, description: null, durationMs: 11000, poster: true }
+    f.posts.find((p) => p.id === noPoster)!.media = { kind: 'video', width: 1280, height: 720, description: null, durationMs: 65000, poster: false }
+    renderApp('/app/u/creator_1', f.api)
+    const posters = await screen.findAllByTestId('video-thumb-poster')
+    expect(posters).toHaveLength(1)
+    expect(posters[0].getAttribute('src')).toMatch(/-poster\.jpg$/)
+    const frame = (await screen.findByTestId('video-thumb-frame')) as HTMLVideoElement
+    expect(frame.getAttribute('src')).toMatch(/\.mp4#t=0\.1$/)
+    expect(frame.getAttribute('preload')).toBe('metadata')
+    expect(frame.muted).toBe(true)
+    expect(frame.hasAttribute('autoplay')).toBe(false)
+    expect(screen.getAllByTestId('video-thumb-badge').map((b) => b.textContent)).toEqual(expect.arrayContaining(['0:11', '1:05']))
+    // The post itself: a portrait box, not a landscape one.
+    renderApp(`/app/post/${withPoster}`, f.api)
+    await screen.findAllByTestId('post-video-player')
+    const boxes = screen.getAllByTestId('post-video').map((el) => el.firstElementChild as HTMLElement)
+    expect(boxes.some((b) => b.getAttribute('data-ratio') === '0.563')).toBe(true)
   })
 
   it('the device test page: testers check, convert and upload privately, see the times, play the clip and copy the results', async () => {

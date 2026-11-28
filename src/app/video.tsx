@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Clapperboard, Copy, RefreshCw, VideoOff, X } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Copy, Play, RefreshCw, VideoOff, X } from 'lucide-react'
 import { Card, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import {
@@ -98,6 +98,53 @@ export function useVideoStatus(): VideoStatus | null {
 // ---------------------------------------------------------------------------
 // A post's video.
 
+/**
+ * A video's thumbnail for grid tiles (BL-004): its poster, or for a video without
+ * one (posted before posters worked everywhere) the first frame, read from the
+ * start of the file only. Nothing plays and there is no sound. Until the link
+ * arrives, or if the video can't be shown, the tile keeps its designed cobalt.
+ */
+export function VideoThumb({ post }: { post: Post }) {
+  const ctx = useContext(Ctx)
+  useEffect(() => {
+    ctx.request(post.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id])
+  const entry = ctx.get(post.id)
+  const links = entry?.state === 'ok' ? entry.links : null
+  const [failed, setFailed] = useState(false)
+  const media = post.media as VideoMedia
+  return (
+    <span className="absolute inset-0 bg-linear-to-br from-brand-600 to-brand-800" aria-hidden="true" data-testid="video-thumb">
+      {links && !failed && links.poster && (
+        <img src={links.poster} alt="" className="absolute inset-0 h-full w-full object-cover" onError={() => setFailed(true)} data-testid="video-thumb-poster" />
+      )}
+      {links && !failed && !links.poster && (
+        <video
+          src={`${links.src}#t=0.1`}
+          muted
+          playsInline
+          preload="metadata"
+          tabIndex={-1}
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          onError={() => setFailed(true)}
+          data-testid="video-thumb-frame"
+        />
+      )}
+      <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white" data-testid="video-thumb-badge">
+        <Play className="h-3 w-3 fill-current" aria-hidden="true" />
+        {formatDuration(media.durationMs)}
+      </span>
+    </span>
+  )
+}
+
+/** Portrait, square and landscape as they are; only extreme shapes are held to a sensible box. */
+export function clampRatio(r: number): number {
+  if (!Number.isFinite(r) || r <= 0) return 16 / 9
+  return Math.min(2.4, Math.max(0.5, r))
+}
+
 /** The player: no autoplay, nothing loaded before play, standard controls, never swiped away. */
 export function PostVideo({ post, bleed = false }: { post: Post; bleed?: boolean }) {
   const media = post.media as VideoMedia
@@ -106,6 +153,9 @@ export function PostVideo({ post, bleed = false }: { post: Post; bleed?: boolean
   const resumeAt = useRef<number | null>(null)
   const retried = useRef(false)
   const [broken, setBroken] = useState(false)
+  // The shape the browser actually shows (BL-003): rotation applied, from the poster
+  // before play and the video itself once it loads. Starts from the server's record.
+  const [shown, setShown] = useState<number | null>(null)
   useEffect(() => {
     ctx.request(post.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,11 +173,24 @@ export function PostVideo({ post, bleed = false }: { post: Post; bleed?: boolean
     resumeAt.current = ref.current?.currentTime ?? null
     ctx.request(post.id, true)
   }
-  const ratio = Math.max(media.width / media.height, 9 / 16)
+  const ratio = clampRatio(shown ?? media.width / media.height)
+  const posterUrl = links ? links.poster : null
+  useEffect(() => {
+    if (!posterUrl || typeof Image === 'undefined') return
+    let live = true
+    const img = new Image()
+    img.onload = () => {
+      if (live && img.naturalWidth > 0 && img.naturalHeight > 0) setShown(img.naturalWidth / img.naturalHeight)
+    }
+    img.src = posterUrl
+    return () => {
+      live = false
+    }
+  }, [posterUrl])
   const label = media.description ?? `Video by ${post.author.displayName}`
   return (
     <div className={bleed ? undefined : 'mt-3'} data-no-swipe data-testid="post-video" onTouchStart={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-      <div className={`relative mx-auto w-full max-w-full overflow-hidden bg-ink-900 ${bleed ? '' : 'rounded-2xl'}`} style={{ aspectRatio: String(ratio), maxHeight: '75vh' }}>
+      <div className={`relative mx-auto w-full max-w-full overflow-hidden bg-ink-900 ${bleed ? '' : 'rounded-2xl'}`} style={{ aspectRatio: String(ratio), maxHeight: '75vh', width: `min(100%, calc(75vh * ${ratio.toFixed(4)}))` }} data-ratio={ratio.toFixed(3)}>
         {links === undefined && <div className="absolute inset-0 animate-pulse bg-ink-800" aria-hidden="true" />}
         {links === null && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-ink-100 p-4 text-center text-sm text-ink-700">
@@ -176,6 +239,8 @@ export function PostVideo({ post, bleed = false }: { post: Post; bleed?: boolean
             className="absolute inset-0 h-full w-full bg-ink-900 object-contain"
             onError={failed}
             onLoadedMetadata={(e) => {
+              const v = e.currentTarget
+              if (v.videoWidth > 0 && v.videoHeight > 0) setShown(v.videoWidth / v.videoHeight)
               if (resumeAt.current !== null) {
                 e.currentTarget.currentTime = resumeAt.current
                 resumeAt.current = null

@@ -338,13 +338,13 @@ async function countWhenReady(locator, min = 1, timeout = 5000) {
   await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click()
   check('removing the picture falls back to initials', (await stored(page)).profile.avatar === undefined && (await page.locator('img[src^="data:image/jpeg"]').count()) === 0)
   // Keyboard focus stays inside the dialog.
-  await page.getByRole('button', { name: 'Add photo' }).click()
+  await page.getByRole('button', { name: /^Add (photo|photo or video)$/ }).click()
   for (let i = 0; i < 8; i++) await page.keyboard.press('Tab')
   check('keyboard focus stays inside the picture dialog', await page.evaluate(() => !!document.activeElement.closest('[role=dialog]')))
   await page.keyboard.press('Escape')
 
   // ---- Reset --------------------------------------------------------------
-  await page.getByRole('button', { name: 'Add photo' }).click()
+  await page.getByRole('button', { name: /^Add (photo|photo or video)$/ }).click()
   await page.locator('[role=dialog] input[type=file]').setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: await makeImage(page, 500, 500) })
   await page.getByRole('button', { name: 'Save picture' }).click()
   await page.getByRole('button', { name: 'Reset', exact: true }).click()

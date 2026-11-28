@@ -128,7 +128,9 @@ export async function convertVideo(file: Blob, check: VideoCheck, onProgress: (f
     input,
     output,
     tracks: 'primary',
-    video: { codec: 'avc', width: size.width, height: size.height, fit: 'contain', frameRate: 30, bitrate: TARGET_VIDEO_BPS, keyFrameInterval: 2 },
+    // Rotation is baked into the frames (BL-003), so a phone's portrait video is stored
+    // upright and its recorded size is the size people see.
+    video: { codec: 'avc', width: size.width, height: size.height, fit: 'contain', frameRate: 30, bitrate: TARGET_VIDEO_BPS, keyFrameInterval: 2, allowTransformationMetadata: false },
     // AAC sound is copied as it is; other sound is converted to AAC where the browser can.
     audio: check.audioCodec === 'aac' ? { codec: 'aac' } : { codec: 'aac', bitrate: TARGET_AUDIO_BPS },
   })

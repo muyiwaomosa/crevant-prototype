@@ -6,6 +6,7 @@ import { Card, EmptyState, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import { LIMITS, cursorOf, type Comment, type FeedFilter, type Identity, type Member, type Me, type Post, type PostCursor, type Topic } from './api'
 import { FaceView } from '../components/FaceView'
+import { useVideoStatus } from './video'
 import { useAppApi, useMyProfile } from './AppApiContext'
 import { usePublishedRecognition, useRecognize } from './recognition'
 import { HomeGoalStrip, JourneyIntro } from './journey'
@@ -709,6 +710,7 @@ export function ComposePage() {
   const api = useAppApi()
   const navigate = useNavigate()
   const photos = usePhotosEnabled()
+  const videos = useVideoStatus()?.enabled === true
   const published = usePublishedRecognition()
   return (
     <>
@@ -733,7 +735,7 @@ export function ComposePage() {
         />
       </Card>
       <p className="mt-3 px-1 text-[13px] text-ink-600">
-        {photos ? 'Text, or one photo with an optional caption.' : 'Text posts for now.'} Everyone who follows you will see it in their feed. Pick a topic so
+        {photos || videos ? 'Text, or one photo or video with an optional caption.' : 'Text posts for now.'} Everyone who follows you will see it in their feed. Pick a topic so
         people who care about it can find it in Discover.
       </p>
       <div className="mt-4">
