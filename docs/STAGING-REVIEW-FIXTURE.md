@@ -51,7 +51,13 @@ A few founder overview counts include every account, testers too, so these will 
    * Value: that address.
 
    Add it to the **staging environment only**. The workflow refuses to run if it also exists at repository or organization level.
-3. **Check staging's switches.** `STAGING_FOUNDER_ACCOUNT_ID` is already set from the activation workflow. Sharing must be on and rewards not paused (both are on staging by default). External member access must be open, which it is since setup step D.
+Nothing else needs setting. The fixture checks everything else itself before it changes anything, and if something is missing it lists every missing item in one message:
+
+* `STAGING_FOUNDER_ACCOUNT_ID` is set (it already is, from the activation workflow);
+* sharing and progression are on, and rewards aren't paused (staging's defaults);
+* the supporter goals in force are the approved benchmarks.
+
+External member access can stay **closed**. The fixture works with the founder-only launch gate as it is (see "The launch gate" below).
 
 ## The steps
 
@@ -68,6 +74,24 @@ A few founder overview counts include every account, testers too, so these will 
 7. **Remove.** Run the workflow again with mode **remove**. It deletes all 16 fixture accounts and everything they made, using the same account deletion as a member deleting their account. Each deletion is written to the deletion register, so the register checks stay clean. The membership history keeps a "removed" entry for each account, by design. You can then delete the secret too, if you like.
 
 Running **seed** again after it has worked changes nothing; the log says so. To start over, run **remove** first.
+
+## The launch gate
+
+Staging keeps external member access closed, so the launch gate refuses membership for anyone but you. The fixture leaves the gate exactly as it is: no change to its code, no disabled trigger, no setting left open.
+
+Each of the 16 fixture accounts is let in by the gate's own owner-only, recorded switch, inside the fixture's single transaction:
+
+* open the switch;
+* give that one account the tester cohort;
+* close it again.
+
+Nothing is committed until the gate is closed and exactly as it began. Other sessions only ever see committed settings, so they see the gate closed the whole time. The automated test proves this with a second session during the window: it is refused membership, and registration says "closed".
+
+The grant only works for the fixture's own accounts: the supporter's address, or one of the 15 supporting accounts this run made. Each open and close is recorded in the launch gate's history under `staging-review-fixture`, which gives 16 pairs per seed. A dry run rolls these back with everything else.
+
+## Running it again
+
+You can seed again after a remove. Each fresh seed makes new fixture ids. Account deletion keeps closed reward records on purpose, so reusing ids would collide with them, and the test runs a second full cycle to prove this works.
 
 ## Safeguards
 
