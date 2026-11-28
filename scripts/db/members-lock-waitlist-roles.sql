@@ -41,6 +41,14 @@ end $$;
 
 alter role waitlist_writer connection limit 0;
 alter role waitlist_admin connection limit 0;
+-- The BL-009 handoff login (20261223000000) exists here too, unused: the
+-- waitlist-bridge function connects to the waitlist project's login only.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'waitlist_handoff') then
+    execute 'alter role waitlist_handoff connection limit 0';
+  end if;
+end $$;
 
 do $$
 begin
@@ -55,7 +63,10 @@ begin
   -- The limit stops NEW sessions only. A session already open would survive
   -- it, so refuse (rolling the limit back too) if one exists: member
   -- Production should never have had one, and it needs investigating.
-  if exists (select 1 from pg_stat_activity where usename in ('waitlist_writer', 'waitlist_admin')) then
+  if exists (select 1 from pg_roles where rolname = 'waitlist_handoff' and rolconnlimit <> 0) then
+    raise exception 'FAIL: the waitlist_handoff connection limit did not take effect';
+  end if;
+  if exists (select 1 from pg_stat_activity where usename in ('waitlist_writer', 'waitlist_admin', 'waitlist_handoff')) then
     raise exception 'refused, nothing changed: a waitlist login has an open session on member Production; investigate before locking';
   end if;
   raise notice 'PASS: waitlist_writer and waitlist_admin have connection limit 0 and no open sessions (they still have LOGIN, as check 003 requires)';

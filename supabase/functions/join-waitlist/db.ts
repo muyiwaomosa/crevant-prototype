@@ -12,6 +12,9 @@ import type { SubmitPayload, SubmitResult } from './handler.ts'
 export type Sql = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<Array<Record<string, unknown>>>
 
 export const WRITER_ROLE = 'waitlist_writer'
+/** BL-009: the waitlist-handoff function's login (20261223000000). */
+export const HANDOFF_ROLE = 'waitlist_handoff'
+export type DbRole = typeof WRITER_ROLE | typeof HANDOFF_ROLE
 
 export interface DatabaseOptions {
   url: string
@@ -74,7 +77,7 @@ export interface DatabaseTarget {
  * with <ref> equal to the project in SUPABASE_URL. A local database is only
  * accepted when SUPABASE_URL is itself local.
  */
-export function checkDatabaseTarget(rawUrl: string, supabaseUrl: string): DatabaseTarget {
+export function checkDatabaseTarget(rawUrl: string, supabaseUrl: string, role: DbRole = WRITER_ROLE): DatabaseTarget {
   const u = parseDatabaseUrl(rawUrl)
   const user = decodeURIComponent(u.username)
   const host = hostOf(u)
@@ -84,12 +87,12 @@ export function checkDatabaseTarget(rawUrl: string, supabaseUrl: string): Databa
     const ref = hosted[1]
     if (POOLER_HOST.test(host)) {
       if (port !== '6543') throw new Error('WAITLIST_DB_URL must use the transaction pooler port, 6543')
-      if (user !== `${WRITER_ROLE}.${ref}`) throw new Error("WAITLIST_DB_URL must log in as waitlist_writer on this function's own project")
+      if (user !== `${role}.${ref}`) throw new Error(`WAITLIST_DB_URL must log in as ${role} on this function's own project`)
       return { ref, local: false }
     }
     if (host === `db.${ref}.supabase.co`) {
       if (port !== '5432') throw new Error('WAITLIST_DB_URL must use port 5432 for a direct connection')
-      if (user !== WRITER_ROLE) throw new Error('WAITLIST_DB_URL must log in as waitlist_writer')
+      if (user !== role) throw new Error(`WAITLIST_DB_URL must log in as ${role}`)
       return { ref, local: false }
     }
     throw new Error("WAITLIST_DB_URL must point at this function's own Supabase project (pooler or direct host)")
@@ -98,7 +101,7 @@ export function checkDatabaseTarget(rawUrl: string, supabaseUrl: string): Databa
     if (!LOCAL_HOSTS.includes(host)) {
       throw new Error('a local function may only use a local database')
     }
-    if (user !== WRITER_ROLE) throw new Error('WAITLIST_DB_URL must log in as waitlist_writer')
+    if (user !== role) throw new Error(`WAITLIST_DB_URL must log in as ${role}`)
     return { ref: null, local: true }
   }
   throw new Error('SUPABASE_URL is missing or not a recognised Supabase address, so the project cannot be confirmed')
@@ -126,11 +129,12 @@ function checkCaCertificate(ca: string): string {
  * verification off, and a failed connection is never retried with weaker
  * settings.
  */
-export function databaseOptions(rawUrl: string, opts: { caCert?: string; localPlaintext?: boolean } = {}): DatabaseOptions {
+export function databaseOptions(rawUrl: string, opts: { caCert?: string; localPlaintext?: boolean; role?: DbRole } = {}): DatabaseOptions {
   const u = parseDatabaseUrl(rawUrl)
   const user = decodeURIComponent(u.username)
-  if (!(user === WRITER_ROLE || /^waitlist_writer\.[a-z0-9]{20}$/.test(user))) {
-    throw new Error('WAITLIST_DB_URL must log in as waitlist_writer, the restricted waitlist role')
+  const role = opts.role ?? WRITER_ROLE
+  if (!(user === role || new RegExp(`^${role}\\.[a-z0-9]{20}$`).test(user))) {
+    throw new Error(`WAITLIST_DB_URL must log in as ${role}, the restricted waitlist role`)
   }
   if (!u.password) throw new Error('WAITLIST_DB_URL has no password')
   const host = hostOf(u)
@@ -169,6 +173,24 @@ export async function submitWithDatabase(sql: Sql, p: SubmitPayload): Promise<Su
 export async function previewWithDatabase(sql: Sql, code: string, clientKey: string): Promise<unknown> {
   const rows = await sql`select waitlist_api.invite_preview(${code}, ${clientKey}) as result`
   return rows[0]?.result
+}
+
+/** BL-009: a verification link token for an unverified entry, or null. */
+export async function issueVerificationWithDatabase(sql: Sql, email: string): Promise<string | null> {
+  const rows = await sql`select waitlist_api.verification_issue(${email}) as token`
+  const t = rows[0]?.token
+  if (t === null || t === undefined) return null
+  if (typeof t === 'string' && /^[0-9a-f]{64}$/.test(t)) return t
+  throw new Error('unexpected result from waitlist_api.verification_issue')
+}
+
+export type VerifyResult = 'verified' | 'invalid' | 'expired'
+/** BL-009: checks a verification link token. */
+export async function verifyEmailWithDatabase(sql: Sql, token: string): Promise<VerifyResult> {
+  const rows = await sql`select waitlist_api.verify_email(${token}) as result`
+  const r = rows[0]?.result
+  if (r === 'verified' || r === 'invalid' || r === 'expired') return r
+  throw new Error('unexpected result from waitlist_api.verify_email')
 }
 
 /** The health check: proves the waitlist_writer login can connect. Reads no data. */

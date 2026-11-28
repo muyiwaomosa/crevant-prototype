@@ -2,12 +2,19 @@
 
 # Splitpost pilot: legal review package
 
-Package version: 2 (Nov 28, 2026). Checklist item L1 in `docs/ACCEPTANCE-CHECKLIST.md`.
+Package version: 3 (Nov 28, 2026). Checklist item L1 in `docs/ACCEPTANCE-CHECKLIST.md`.
+
+Changes from version 2 (Nov 28): the waitlist to member journey (founder
+decision D1). Confirmed waitlist applicants are copied to the pilot system for
+review, then invited by a personal emailed link. New blocking question 50; the
+draft waitlist notice version 1.1 (`docs/PRIVACY-NOTICE-WAITLIST-V1.1-DRAFT.md`);
+question 23 now names the verification and invitation emails.
 
 Changes from version 1 (Nov 27): public previews are now on by default with a
 switch-off (Terms section 25, the Member Privacy Notice, question 27 updated);
-members may add one optional website link to their profile. If version 1 was
-already sent, send this version with a note that only these points changed.
+members may add one optional website link to their profile. If an earlier
+version was already sent, send this one with a note that only these points
+changed.
 
 ## 1. What we are asking for
 
@@ -21,8 +28,8 @@ collected from members, held, paid or redeemed.
 
 We ask counsel to:
 
-1. Answer the **20 blocking questions** (section 4) in writing. They come
-   in two sets: 18 gate external member participation, and 2 gate only
+1. Answer the **21 blocking questions** (section 4) in writing. They come
+   in two sets: 19 gate external member participation, and 2 gate only
    external advertiser activation. Nobody outside the founding team will be
    invited until set A is answered and any required changes are made.
 2. Review the **four member documents** (section 3, items 1 to 4) for an
@@ -73,6 +80,15 @@ sign-off (or markups) on documents 1 to 4 by **December 18, 2026**.
 * **Profiles:** one account and one experience for everyone (no creator or
   consumer types); members may add one optional website link, shown on their
   profile.
+* **Waitlist to member:** the waitlist (Supabase, United States) stays the
+  record of applicants. It emails a link to confirm each address. The founder
+  copies confirmed applicants who agreed to the waitlist notice into the pilot
+  system (Supabase, Canada) for review: only the fields the review and an
+  invitation need, deleted once invited or declined and after 30 days at most.
+  Each invitation is a single-use emailed link valid 14 days, sent through
+  Resend after a fresh check with the waitlist, and refused by the database
+  while external access is closed. Deletion requests are carried out in both
+  places (question 50).
 * **Data:** stored with Supabase (database and files) and served by Vercel,
   possibly outside Canada. Photos and videos are private and shown only
   through short-lived links. During the pilot there is no separate backup
@@ -94,7 +110,8 @@ Please flag any wording that promises more than this.
 | 4 | Connection Points and Simulated Rewards Rules, including Referral Integrity, Creator Monetization, Support Intent and (new) Part G: goals, qualification and locked value | `REWARDS-RULES-DRAFT.md` | Yes | 0.1, Part G added Nov 27 |
 | 5 | Splitpost Constitution, Stakeholder Rights and Responsibilities | `CONSTITUTION-DRAFT.md` | Yes, published for information | 0.1. Does not gate the pilot |
 | 6 | Advertising Policy | `ADVERTISING-POLICY-DRAFT.md` | Advertisers | 0.1. Needed before any external advertiser, not for the members-only pilot |
-| 7 | Questions for counsel (49 questions, 20 blocking) | `LEGAL-REVIEW-QUESTIONS.md` | Internal | 0.1, question 49 added Nov 27 |
+| 7 | Questions for counsel (50 questions, 21 blocking) | `LEGAL-REVIEW-QUESTIONS.md` | Internal | 0.1, question 49 added Nov 27, question 50 added Nov 28 |
+| 8 | Waitlist privacy notice, version 1.1 changes (draft) | `../PRIVACY-NOTICE-WAITLIST-V1.1-DRAFT.md` | Yes, once approved | Draft. The published version 1.0 stays until it is approved |
 
 Background only (wording already folded into document 2; no separate review
 needed): `docs/PRIVACY-NOTICE-PILOT-FEEDBACK-DRAFT.md` and
@@ -103,20 +120,20 @@ needed): `docs/PRIVACY-NOTICE-PILOT-FEEDBACK-DRAFT.md` and
 on the waitlist. It is included for questions 1, 9 and 23 and is reviewed
 before creator links are issued to anyone outside the team.
 
-## 4. The 20 blocking questions, in two separate sets
+## 4. The 21 blocking questions, in two separate sets
 
 Full wording, with the non-blocking questions, is in document 7. We ask
 counsel to say if any question belongs in the other set.
 
-**Set A: blocks external member participation (18 questions).** No one
+**Set A: blocks external member participation (19 questions).** No one
 outside the founding team is invited, and no invitation or referral link is
 sent, until these are answered.
 
 | Area | Questions |
 |---|---|
-| Privacy: consent, Ontario law, cross-border processing, 18+ attestation, retention after deletion | 1, 2, 3, 4, 5 |
+| Privacy: consent, Ontario law, cross-border processing, 18+ attestation, retention after deletion, the waitlist to member copy | 1, 2, 3, 4, 5, 50 |
 | Consumer protection: simulated values, value of points, contests, lottery, locked value | 12, 13, 14, 15, 49 |
-| CASL: invitation emails and referral messages | 23 |
+| CASL: verification and invitation emails, referral messages | 23 |
 | Intellectual property: the member content licence, public previews (now on by default with a switch-off, question 27 updated) | 26, 27 |
 | Securities and payments characterization of points and the pool | 31, 32 |
 | Pyramid selling and multi-level marketing (referrals) | 35, 36 |

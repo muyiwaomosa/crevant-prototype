@@ -29,6 +29,7 @@ import { sourceDigest } from './source-digest.mjs'
 export const ROUTES = {
   avatar: ['upload', 'remove', 'urls', 'cleanup'],
   'post-media': ['photo', 'links', 'cleanup', 'deletions', 'mod-photo', 'mod-drain', 'check', 'drain'],
+  'waitlist-bridge': ['import', 'send', 'replace', 'forget-email'],
 }
 const PREVIEW = 'https://splitpost-app-git-main-crevant.vercel.app'
 const MEMBER_APP = 'https://app.splitpost.ca'
@@ -82,7 +83,7 @@ export async function verify(o, fetchImpl = fetch) {
   if (testMode && !/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(o['base-url'] ?? '')) throw new Error('--base-url, --config-root and --skip-absence are for local tests only (a local --base-url is required)')
   if (!['staging', 'member-production'].includes(o.target)) throw new Error('--target must be staging or member-production')
   if (!['deployed', 'removed'].includes(o.mode)) throw new Error('--mode must be deployed or removed')
-  const fns = o.mode === 'removed' ? ['avatar', 'post-media', 'join-waitlist'] : ['avatar', 'post-media']
+  const fns = o.mode === 'removed' ? ['avatar', 'post-media', 'join-waitlist'] : ['avatar', 'post-media', 'waitlist-bridge']
   if (!fns.includes(o.function)) throw new Error(`--function must be one of ${fns.join(', ')} in ${o.mode} mode`)
   if (o.function === 'join-waitlist' && o.target !== 'member-production') throw new Error('join-waitlist is verified absent on member Production only')
   if (!/^[0-9a-f]{40}$/.test(o.commit ?? '')) throw new Error('--commit must be a full 40 character SHA')
@@ -110,6 +111,9 @@ export async function verify(o, fetchImpl = fetch) {
     return { ref, failures, passes }
   }
 
+  if (o.target === 'member-production' && o.function === 'waitlist-bridge' && approvals.waitlistBridgeFunctionApproved !== true) {
+    throw new Error('waitlist-bridge is not approved for member Production (waitlistBridgeFunctionApproved is false): it must not be deployed, so it is not verified as deployed')
+  }
   if (o.target === 'member-production' && o.function === 'post-media' && approvals.postMediaFunctionApproved !== true) {
     throw new Error('post-media is not approved for member Production (postMediaFunctionApproved is false): it must not be deployed, so it is not verified as deployed')
   }

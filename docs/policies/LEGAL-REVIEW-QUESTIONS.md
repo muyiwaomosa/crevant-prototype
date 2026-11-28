@@ -30,6 +30,7 @@ Splitpost is a connection-driven social media platform operated from Ontario. It
 9. Are referral notifications (telling a member that someone registered through their link) a disclosure of the new member's personal information that requires consent?
 10. What breach notification and record-keeping obligations apply, and should the notice say anything about them?
 11. Is the test, simulated and actual data classification relevant to any privacy obligation (for example, accuracy)?
+50. **BLOCKING.** Waitlist to member journey (added Nov 28, founder decision D1). Confirmed waitlist applicants who agreed to the waitlist notice are copied, with the minimum fields, from the waitlist (Supabase, United States) to the pilot system (Supabase, Canada) for the founder's review, then deleted once invited or declined, and after 30 days at most. Verification and invitation emails are sent through Resend. Is the draft waitlist notice version 1.1 (`docs/PRIVACY-NOTICE-WAITLIST-V1.1-DRAFT.md`) sufficient notice and consent for this copy, the cross-border move and the emails, or must existing applicants agree again before they are copied or emailed? Is a 30-day review window and a 13-month withdrawal record (an internal id and a time, no address) reasonable?
 
 ## B. Consumer protection
 
@@ -51,7 +52,7 @@ Splitpost is a connection-driven social media platform operated from Ontario. It
 20. **BLOCKING for external advertisers.** How should the pilot settlement terms work when an advertiser agrees a real price but the creator and fan pool allocations are simulated? Must advertisers be told, and how, that their spend is not distributed to creators during the pilot?
 21. **BLOCKING for external advertisers.** Are the prohibited and restricted categories, creative standards and review process adequate to manage risk under the Competition Act deceptive marketing provisions (including drip pricing and performance claims) and any sector rules (alcohol, financial, health)?
 22. Are Splitpost's "Sponsored" label and the creator disclosure rule consistent with Competition Bureau guidance on influencer marketing and Ad Standards guidance? Who bears responsibility if a creator fails to disclose?
-23. **BLOCKING.** CASL: are invitation emails and member-initiated referral messages commercial electronic messages? Do the CASL referral exemption and its conditions apply to referral links that members share, given that the referrer earns points? What consent, identification and unsubscribe elements are needed in invitation and system emails?
+23. **BLOCKING.** CASL: are invitation emails (including the personal invitations sent to confirmed waitlist applicants, and the waitlist verification email) and member-initiated referral messages commercial electronic messages? Do the CASL referral exemption and its conditions apply to referral links that members share, given that the referrer earns points? What consent, identification and unsubscribe elements are needed in invitation and system emails?
 24. Should political or issue advertising remain prohibited, and does any election law apply if it is later allowed?
 25. Does advertising to faith communities raise any specific concern under human rights or advertising codes?
 
@@ -106,7 +107,7 @@ Two separate sets, subject to counsel's advice on whether any question belongs i
 
 | Question | Area |
 |---|---|
-| 1, 2, 3, 4, 5 | Privacy |
+| 1, 2, 3, 4, 5, 50 | Privacy, including the waitlist to member copy |
 | 12, 13, 14, 15, 49 | Consumer protection, contests, lottery, locked value |
 | 23 | CASL: invitations and referral links |
 | 26, 27 | Content licence, public previews |

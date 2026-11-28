@@ -36,7 +36,7 @@ acceptance), Accepted, Deferred.
 | BL-006 | Automatic public post previews | Policy change (opt-in to on by default) | P2, Should | Refinement sprint; activation after legal clearance | Built in PR #141 (WP3, migration 20261222000000); visitors see nothing until the project switch is on |
 | BL-007 | Ads and Preferences off the profile | Usability refinement | P3, Should | Refinement sprint | Built in PR #141 (WP2) |
 | BL-008 | Referral and external sharing journey | Two defects, the rest intentional launch controls | P1 (dead end), Must | Refinement sprint | Built in PR #141 (WP3) |
-| BL-009 | Waitlist to member journey | Missing functionality | P1 for PB-4, Must | Before PB-4 | **Awaiting founder decision D1** (cross-database design); independent parts listed below |
+| BL-009 | Waitlist to member journey | Missing functionality | P1 for PB-4, Must | Before PB-4 | Built (D1 option A approved Nov 28 with safeguards; migrations 20261223000000 and 20261224000000; `docs/WAITLIST-HANDOFF.md`) |
 
 ## BL-001: Unified media upload
 
@@ -411,8 +411,33 @@ in different databases.
   * Control Center review and cohort, 1 day;
   * invitation sending and tracking, 1 day;
   * tests and journeys, half a day.
-* **Milestone.** Before PB-4, in time for Dec 23 if D1 is decided by Dec 2.
-* **Status.** Awaiting D1.
+* **Milestone.** Before PB-4, in time for Dec 23.
+* **Decision (Nov 28).** Option A, with nine safeguards: the waitlist stays
+  authoritative; only verified, consenting applicants and the minimum
+  information move; a restricted, server-side transfer; no duplicate
+  applicants or invitations; automatic expiry and cleanup; consent evidence,
+  invitation history, attribution and conversion kept; a recheck before every
+  invitation; deletions and withdrawals respected in both projects; the
+  privacy notice and counsel package updated. Everything runs from Control
+  Center.
+* **What was built.** See `docs/WAITLIST-HANDOFF.md`, which maps each safeguard
+  to where it is enforced:
+  * migration 20261223000000 (waitlist side): verification links, the
+    handoff functions, and the `waitlist_handoff` login (six functions, no table);
+  * migration 20261224000000 (member side): review copies (30 days at most),
+    invitation tracking, acceptance on registration, deletions both ways, and
+    founder-only Control Center functions;
+  * functions: `join-waitlist` sends the verification email; the new
+    `waitlist-handoff` (waitlist project) is the only way in; the new
+    `waitlist-bridge` (member project) powers Control Center's Import, Send
+    and Delete by email;
+  * the public page `/waitlist/verify`, and the Control Center panel
+    "Waitlist and invitations";
+  * checks 039 and 040, behaviour tests 340 and 350, and staging rollbacks.
+* **Status.** Built. Awaiting the one-time setup and the staging acceptance.
+  Production stays closed: the database refuses to create an invitation while
+  external access is not approved, and `waitlist-bridge` is not approved for
+  member Production (`waitlistBridgeFunctionApproved: false`).
 
 ## Recommendation: what must be resolved before the external pilot
 

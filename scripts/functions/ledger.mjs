@@ -2,7 +2,7 @@
 // Validation is strict: one malformed entry makes the whole ledger unusable
 // (rollback then refuses), never silently skipped.
 export const TARGETS = ['staging', 'member-production']
-export const FUNCTIONS = ['avatar', 'post-media']
+export const FUNCTIONS = ['avatar', 'post-media', 'waitlist-bridge']
 const SHA = /^[0-9a-f]{40}$/
 const DIGEST = /^[0-9a-f]{64}$/
 const REF = /^[a-z0-9]{20}$/

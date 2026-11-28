@@ -241,6 +241,12 @@ declare
     'public.app_my_website()',
     'public.app_set_my_website(text)'
   ];
+  -- Waitlist review and invitations (20261224000000), once applied: the founder only.
+  waitlist_invitations text[] := array[
+    'public.app_founder_waitlist_decide(uuid[],text,text)',
+    'public.app_founder_waitlist_forget(uuid)',
+    'public.app_founder_waitlist_overview()'
+  ];
   -- Progression rules (20261218000000), once applied.
   progression_rules text[] := array[
     'public.app_founder_correct_allocation(bigint,uuid,bigint,text,text,text)',
@@ -293,6 +299,9 @@ begin
   end if;
   if to_regprocedure('public.app_set_my_website(text)') is not null then
     expected := expected || profile_link;
+  end if;
+  if to_regclass('ops.waitlist_review') is not null then
+    expected := expected || waitlist_invitations;
   end if;
   if to_regclass('social.shares') is not null then
     expected := expected || discovery;

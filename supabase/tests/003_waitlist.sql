@@ -81,7 +81,12 @@ do $$
 declare
   r text;
 begin
-  foreach r in array array['waitlist_writer', 'waitlist_admin'] loop
+  -- BL-009 (20261223000000) adds a third login, waitlist_handoff, used only by
+  -- the waitlist-handoff function. Checked wherever this database has that
+  -- migration's functions (a login exists cluster-wide, so its presence alone
+  -- says nothing about this database).
+  foreach r in array array['waitlist_writer', 'waitlist_admin']
+      || case when to_regprocedure('waitlist_api.handoff_export(integer)') is not null then array['waitlist_handoff'] else '{}'::text[] end loop
     if not exists (select 1 from pg_roles where rolname = r) then
       raise exception 'FAIL: role % is missing', r;
     end if;
@@ -108,12 +113,19 @@ declare
   allowed text[];
   bad text;
 begin
-  foreach r in array array['waitlist_writer', 'waitlist_admin'] loop
+  foreach r in array array['waitlist_writer', 'waitlist_admin']
+      || case when to_regprocedure('waitlist_api.handoff_export(integer)') is not null then array['waitlist_handoff'] else '{}'::text[] end loop
     allowed := case r
       -- Creator acquisition: submit_v2 adds optional attribution fields to the
       -- same submission; invite_preview answers only whether a link is usable
-      -- and its creator's agreed public name.
+      -- and its creator's agreed public name. BL-009 (20261223000000): the
+      -- writer also issues and checks email verification links.
       when 'waitlist_writer' then array['waitlist_api.submit', 'waitlist_api.submit_v2', 'waitlist_api.invite_preview']
+        || case when to_regprocedure('waitlist_api.verify_email(text)') is not null
+                then array['waitlist_api.verification_issue', 'waitlist_api.verify_email'] else '{}'::text[] end
+      -- BL-009: the handoff login runs exactly the seven handoff functions.
+      when 'waitlist_handoff' then array['waitlist_api.handoff_export', 'waitlist_api.handoff_confirm', 'waitlist_api.handoff_recheck', 'waitlist_api.handoff_record',
+                                         'waitlist_api.handoff_withdrawals', 'waitlist_api.handoff_forget', 'waitlist_api.handoff_forget_email']
       else array['waitlist_api.admin_summary', 'waitlist_api.admin_status', 'waitlist_api.admin_delete', 'waitlist_api.admin_purge',
                  'waitlist_api.admin_set_notice_version', 'waitlist_api.admin_open', 'waitlist_api.admin_close',
                  'waitlist_api.admin_wave_preview', 'waitlist_api.admin_wave_select', 'waitlist_api.admin_wave_summary',

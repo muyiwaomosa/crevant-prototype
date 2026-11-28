@@ -70,7 +70,9 @@ begin
                               -- 20261218000000 adds review, holds, corrections and the scorecard; checked in 034.
                               'app_founder_correct_allocation', 'app_founder_correct_revenue', 'app_founder_decide_qualification', 'app_founder_place_hold', 'app_founder_progression_queue', 'app_founder_progression_report', 'app_founder_release_hold',
                               -- 20261219000000 adds activation by the SP-PRG-001 definitions; checked in 035.
-                              'app_founder_activation'))
+                              'app_founder_activation',
+                              -- 20261224000000 adds waitlist review and invitations; checked in 040.
+                              'app_founder_waitlist_decide', 'app_founder_waitlist_forget', 'app_founder_waitlist_overview'))
      is distinct from array['app_founder_feedback', 'app_founder_feedback_add_note', 'app_founder_feedback_list', 'app_founder_feedback_set_status'] then
     bad := bad || 'the set of app_founder_* functions'::text;
   end if;

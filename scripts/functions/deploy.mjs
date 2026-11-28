@@ -8,8 +8,10 @@
 //   node scripts/functions/deploy.mjs delete   --target <t> --function <f> --confirm "DELETE <f> FROM <ref>" --operator <label> --reason <text>
 //
 // Targets: staging, member-production (never the waitlist project).
-// Functions: avatar, post-media. On member Production, avatar only, unless
-// postMediaFunctionApproved is true in config/member-production.json on main.
+// Functions: avatar, post-media, waitlist-bridge (BL-009). On member
+// Production, avatar only, unless postMediaFunctionApproved (post-media) or
+// waitlistBridgeFunctionApproved (waitlist-bridge) is true in
+// config/member-production.json on main.
 // join-waitlist is never deployed here; it may only be DELETED, and only from
 // member Production (the accident this guards against).
 //
@@ -139,8 +141,10 @@ export function targetProject(target, projects) {
 
 /** The functions a target may hold, and which may be deployed. */
 export function allowedFunctions(target, memberApprovals) {
-  if (target === 'staging') return { deployable: ['avatar', 'post-media'], expected: ['avatar', 'post-media', 'join-waitlist'] }
+  // BL-009: staging also holds waitlist-handoff (deployed with the waitlist's own procedure, like join-waitlist).
+  if (target === 'staging') return { deployable: ['avatar', 'post-media', 'waitlist-bridge'], expected: ['avatar', 'post-media', 'waitlist-bridge', 'join-waitlist', 'waitlist-handoff'] }
   const deployable = memberApprovals?.postMediaFunctionApproved === true ? ['avatar', 'post-media'] : ['avatar']
+  if (memberApprovals?.waitlistBridgeFunctionApproved === true) deployable.push('waitlist-bridge')
   return { deployable, expected: deployable }
 }
 
@@ -374,7 +378,7 @@ export async function main(argv) {
   const operator = label(o.operator, '--operator')
   if (o.action !== 'deploy' && (typeof o.reason !== 'string' || o.reason.trim().length < 5 || o.reason.length > 300)) refuse('--reason (5 to 300 characters) is required')
   const fn = o.function
-  if (!['avatar', 'post-media', 'join-waitlist'].includes(fn)) refuse('--function must be avatar or post-media (join-waitlist: delete from member Production only)')
+  if (!['avatar', 'post-media', 'waitlist-bridge', 'join-waitlist'].includes(fn)) refuse('--function must be avatar, post-media or waitlist-bridge (join-waitlist: delete from member Production only)')
   if (fn === 'join-waitlist' && !(o.action === 'delete' && o.target === 'member-production')) refuse('join-waitlist is never deployed or rolled back by this script; it may only be deleted from member Production')
 
   const cli = pinnedCli()
@@ -391,7 +395,8 @@ export async function main(argv) {
   const commit = o.action === 'delete' ? null : o.commit
   if (o.action !== 'delete') {
     if (typeof commit !== 'string' || !/^[0-9a-f]{40}$/.test(commit)) refuse('--commit must be a full 40 character commit SHA')
-    if (!allowed.deployable.includes(fn)) refuse(fn === 'post-media' ? 'post-media may not be deployed to member Production: postMediaFunctionApproved is false on main (a separate founder approval)' : `${fn} may not be deployed to ${o.target}`)
+    if (!allowed.deployable.includes(fn)) refuse(fn === 'post-media' ? 'post-media may not be deployed to member Production: postMediaFunctionApproved is false on main (a separate founder approval)'
+      : fn === 'waitlist-bridge' ? 'waitlist-bridge may not be deployed to member Production: waitlistBridgeFunctionApproved is false on main (a separate founder approval)' : `${fn} may not be deployed to ${o.target}`)
   }
   const phrase = phraseFor(o.action, fn, p.ref, commit ?? '')
   if (o.confirm !== phrase) refuse(`the confirmation phrase must be exactly: ${phrase}`)
