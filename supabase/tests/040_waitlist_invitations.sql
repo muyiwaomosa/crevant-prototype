@@ -70,7 +70,7 @@ begin
   -- Only the founder's waitlist functions and the server's bridge steps reach the review copies.
   if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
              where n.nspname in ('public', 'social') and p.proname not like 'app\_founder\_waitlist\_%' and p.proname not like 'svc\_waitlist\_%'
-               and p.prosrc ~* '\mops\.(waitlist_founder_overview|waitlist_decide|waitlist_forget_applicant|waitlist_review)\M') then
+               and p.prosrc ~* '\mops\.(waitlist_founder_overview|waitlist_decide|waitlist_forget_applicant|waitlist_accepted_members|waitlist_review)\M') then
     bad := bad || 'a function other than the founder''s waitlist functions reaches the review copies'::text;
   end if;
   if cardinality(bad) > 0 then

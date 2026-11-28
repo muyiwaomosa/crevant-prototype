@@ -486,8 +486,6 @@ as $$
         'sending', count(*) filter (where i.delivery_status = 'sending'),
         'failed', count(*) filter (where i.delivery_status = 'failed'),
         'accepted', count(*) filter (where i.accepted_at is not null),
-        'onboarded', count(*) filter (where i.accepted_at is not null and exists (
-            select 1 from social.profile_details d where d.user_id = i.accepted_user_id and d.onboarded_at is not null)),
         'expired', count(*) filter (where i.accepted_at is null and i.revoked_at is null and i.expires_at <= pg_catalog.now()),
         'open', count(*) filter (where i.accepted_at is null and i.revoked_at is null and i.expires_at > pg_catalog.now()),
         'from_creator_links', count(*) filter (where i.creator_ref is not null))
@@ -503,6 +501,21 @@ as $$
   );
 $$;
 revoke all on function ops.waitlist_invitation_summary() from public, anon, authenticated;
+
+-- The accounts that accepted a waitlist invitation (ids only), so the founder's
+-- overview can count how many finished onboarding without ops code reading
+-- profile details (check 008).
+create function ops.waitlist_accepted_members()
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(pg_catalog.array_agg(i.accepted_user_id), '{}')
+  from ops.invitations i where i.waitlist_id is not null and i.accepted_user_id is not null;
+$$;
+revoke all on function ops.waitlist_accepted_members() from public, anon, authenticated;
 
 -- An applicant's deletion request: the copy, any open invitation and its link
 -- go now; the waitlist entry is queued for the bridge.
@@ -589,8 +602,12 @@ set search_path = ''
 as $$
 declare
   v_uid uuid := social.current_founder();
+  v jsonb := ops.waitlist_founder_overview();
+  n bigint;
 begin
-  return ops.waitlist_founder_overview();
+  select count(*) into n from social.profile_details d
+  where d.user_id = any (ops.waitlist_accepted_members()) and d.onboarded_at is not null;
+  return pg_catalog.jsonb_set(v, '{invitations,onboarded}', pg_catalog.to_jsonb(n));
 end;
 $$;
 

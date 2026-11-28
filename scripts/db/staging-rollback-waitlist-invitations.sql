@@ -60,6 +60,7 @@ drop function ops.waitlist_decide(uuid[], text, text);
 drop function ops.waitlist_forget_applicant(uuid);
 drop function ops.waitlist_forget_address(text);
 drop function ops.waitlist_invitation_summary();
+drop function ops.waitlist_accepted_members();
 drop function ops.bridge_import(jsonb);
 drop function ops.bridge_withdraw(jsonb);
 drop function ops.bridge_invitation_create(uuid);
