@@ -1,0 +1,122 @@
+name: Staging review fixture
+
+# Staging acceptance test data (SP-UX-003, check 8): a dedicated fixture
+# supporter who has met the APPROVED supporter goals for real and is waiting
+# in Control Center's qualification review, so the founder can test review and
+# approval without accumulating five milestones by hand. Reversible: `remove`
+# deletes every fixture account and everything they made. Nothing about the
+# goals, the rewards rules or eligibility changes (scripts/db/staging-review-fixture.sql,
+# tested on every pull request by scripts/db/staging-review-fixture-test.sh).
+#
+# Modes:
+#   seed     prepare it (idempotent: once recorded, a re-run changes nothing)
+#   dry-run  the same, then roll back (optional; changes nothing)
+#   remove   delete every fixture account and what they made
+#
+# Safeguards:
+#   * Started by hand only, from main, by the repository owner (actor and
+#     triggering actor); the staging environment and its secrets only.
+#   * The connection must be the hard-coded staging project, with full TLS
+#     certificate verification (scripts/db/verify-staging-target.sh).
+#   * The SQL refuses any database marked as member Production and any whose
+#     launch founder isn't STAGING_FOUNDER_ACCOUNT_ID (the staging founder).
+#   * The fixture supporter's address is a staging environment secret,
+#     STAGING_FIXTURE_MEMBER_EMAIL, and is never printed. A first job with no
+#     environment refuses if that name is visible outside the staging environment.
+#   * Shares the staging database queue, so it never overlaps a deploy or rollback.
+# Nothing here exists for member Production, and no Production workflow,
+# secret or configuration refers to it (scripts/staging-review-fixture.test.mjs).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "seed = prepare the fixture supporter; dry-run = everything, then roll back; remove = delete all fixture data"
+        type: choice
+        options:
+          - seed
+          - dry-run
+          - remove
+        default: seed
+        required: true
+      journey:
+        description: "The journey to prepare (supporter for now)"
+        type: choice
+        options:
+          - supporter
+        default: supporter
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-database-staging
+  cancel-in-progress: false
+
+env:
+  # The one project this workflow may ever touch. Changing it requires a reviewed PR.
+  EXPECTED_PROJECT_REF: kpudeppgokpjhvaqrprn
+
+jobs:
+  # No environment on purpose: this job sees only repository and organization
+  # secrets, never the staging environment's.
+  secret-scope:
+    name: Refuse a fixture address stored outside the staging environment
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Refuse if STAGING_FIXTURE_MEMBER_EMAIL exists at repository or organization level
+        env:
+          OUTSIDE_ENVIRONMENT: ${{ secrets.STAGING_FIXTURE_MEMBER_EMAIL }}
+        run: |
+          if [ -n "$OUTSIDE_ENVIRONMENT" ]; then
+            echo "::error::STAGING_FIXTURE_MEMBER_EMAIL is set at repository or organization level. Only the staging environment may hold it. Delete that secret. Nothing was done."
+            exit 1
+          fi
+
+  fixture:
+    name: ${{ inputs.mode == 'remove' && 'Remove the staging review fixture' || inputs.mode == 'dry-run' && 'Dry run the staging review fixture (no changes)' || 'Seed the staging review fixture' }}
+    needs: secret-scope
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    env:
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: ${{ github.workspace }}/config/certs/supabase-root-2021-ca.crt
+      REQUIRE_VERIFY_FULL: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the target is the approved staging project, with full TLS verification
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          # No typed input: the hard-coded staging reference is checked against the secret's own host.
+          CONFIRM_PROJECT_REF: ${{ env.EXPECTED_PROJECT_REF }}
+        run: scripts/db/verify-staging-target.sh
+
+      - name: The staging secrets are set (values never printed)
+        env:
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+          STAGING_FIXTURE_MEMBER_EMAIL: ${{ secrets.STAGING_FIXTURE_MEMBER_EMAIL }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          [ -n "$STAGING_FOUNDER_ACCOUNT_ID" ] || { echo "::error::The staging environment secret STAGING_FOUNDER_ACCOUNT_ID is not set. Nothing was done."; exit 1; }
+          if [ "$MODE" != remove ]; then
+            [ -n "$STAGING_FIXTURE_MEMBER_EMAIL" ] || { echo "::error::The staging environment secret STAGING_FIXTURE_MEMBER_EMAIL is not set. Nothing was done."; exit 1; }
+            echo "::add-mask::$STAGING_FIXTURE_MEMBER_EMAIL"
+          fi
+          echo "Secrets are set (values not shown)."
+
+      - name: Run the fixture (${{ inputs.mode }}, ${{ inputs.journey }})
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_FOUNDER_ACCOUNT_ID: ${{ secrets.STAGING_FOUNDER_ACCOUNT_ID }}
+          STAGING_FIXTURE_MEMBER_EMAIL: ${{ secrets.STAGING_FIXTURE_MEMBER_EMAIL }}
+          MODE: ${{ inputs.mode }}
+          JOURNEY: ${{ inputs.journey }}
+          PGCONNECT_TIMEOUT: '15'
+        run: psql "$STAGING_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v mode="$MODE" -v journey="$JOURNEY" -f scripts/db/staging-review-fixture.sql
