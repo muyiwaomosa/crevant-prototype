@@ -79,7 +79,9 @@ begin
   -- Removing it: empty clears the link.
   perform pg_temp.as_member('1');
   execute 'set local role authenticated';
-  if public.app_set_my_website('  ') is not null or public.app_my_website() is not null then raise exception 'FAIL: an empty link did not remove it'; end if;
+  -- Two statements: a stable read in the same statement would still see the old value.
+  if public.app_set_my_website('  ') is not null then raise exception 'FAIL: an empty link did not return null'; end if;
+  if public.app_my_website() is not null then raise exception 'FAIL: an empty link did not remove it'; end if;
   execute 'reset role';
 
   -- Visitors can't call any of it.
