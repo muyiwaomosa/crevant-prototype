@@ -169,7 +169,7 @@ function fakeApi(
   const reposts = new Set<string>()
   const shares: Array<{ id: string; channel: string }> = []
   const searchNotes: Array<Record<string, unknown>> = []
-  const previews = { allowed: false }
+  const previews = { allowed: true }
   const rewards = {
     points: null as null | {
       recognized: number
@@ -4053,26 +4053,39 @@ describe('previews and search measurement (20261204000000)', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/p/${id}?r=0123456789abcdef`))
   })
 
-  it('public previews are opt-in: off until the creator reads what is shown and chooses to allow them', async () => {
+  it('BL-006: public previews are on by default, explained in Settings, and switched off at once (and on again)', async () => {
     const fake = fakeApi()
     renderApp('/app/settings/privacy', fake.api)
     const setting = within(await screen.findByTestId('public-previews-setting'))
     const box = setting.getByRole('checkbox', { name: 'Allow public previews of my posts' }) as HTMLInputElement
-    expect(box.checked).toBe(false)
-    expect(setting.getByText(/They never see photos, comments, likes or anything about other members/)).toBeTruthy()
-    expect(setting.getByText('Off: only members can open links to your posts.')).toBeTruthy()
+    expect(box.checked).toBe(true)
+    expect(setting.getByText(/Public previews are on unless you switch them off/)).toBeTruthy()
+    expect(setting.getByText(/They never see photos or videos, comments, likes or anything about other members/)).toBeTruthy()
+    expect(setting.getByText(/deleted, hidden by moderation or under review are never shown/)).toBeTruthy()
+    expect(setting.getByText(/only when the pilot opens to the public/)).toBeTruthy()
+    expect(setting.getByText('On: shared links to your posts show a public preview.')).toBeTruthy()
+    fireEvent.click(box)
+    await waitFor(() => expect(fake.previews.allowed).toBe(false))
+    expect(await setting.findByText('Off: only members can open links to your posts.')).toBeTruthy()
     fireEvent.click(box)
     await waitFor(() => expect(fake.previews.allowed).toBe(true))
-    expect(await setting.findByText('On: shared links to your posts show a public preview.')).toBeTruthy()
   })
 
-  it('sharing your own post before opting in says only members can open the link', async () => {
+  it('sharing your own post with previews switched off says only members can open the link, and where to switch them on; with the default, no warning', async () => {
     const fake = fakeApi()
     const id = fake.seedPost('me', 'My own thoughts')
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn(async () => undefined) }, configurable: true })
     renderApp(`/app/post/${id}`, fake.api)
     fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
-    expect((await screen.findByTestId('share-notice')).textContent).toMatch(/Only members can open this link/)
+    expect(await screen.findByRole('button', { name: 'Link copied' })).toBeTruthy()
+    expect(screen.queryByTestId('share-notice')).toBeNull()
+    cleanup()
+    fake.previews.allowed = false
+    renderApp(`/app/post/${id}`, fake.api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
+    const notice = await screen.findByTestId('share-notice')
+    expect(notice.textContent).toMatch(/You switched public previews off, so only members can open this link/)
+    expect(within(notice).getByRole('link', { name: 'Privacy, sharing and ads' }).getAttribute('href')).toBe('/app/settings/privacy')
   })
 
   it('after joining from a preview, Home offers to see the creator they came for (never an automatic follow)', async () => {

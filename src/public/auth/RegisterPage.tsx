@@ -50,7 +50,7 @@ export function confirmRedirect(): string {
   return `${window.location.origin}/auth/confirm`
 }
 
-function onProductionHost(): boolean {
+export function onProductionHost(): boolean {
   try {
     return MEMBER_APP_HOSTS.includes(window.location.hostname)
   } catch {
@@ -80,13 +80,34 @@ export function RegisterPage({ open = POLICIES_PUBLISHED || !onProductionHost() 
   if (status === 'signed-in') return <Navigate to="/app" replace />
   if (!open) {
     return (
-      <AuthCard title="Registration opens soon" intro={<p>Joining Splitpost through invitation and referral links opens soon. Please check back, or join the waitlist.</p>}>
-        <p className="text-center text-sm">
-          Already have an account?{' '}
-          <Link to="/sign-in" className="font-semibold text-brand-700 underline underline-offset-2">
-            Sign in
-          </Link>
-        </p>
+      <AuthCard
+        title="Splitpost isn't open to new members yet"
+        intro={
+          <p>
+            {code
+              ? 'Your invitation is saved on this device, so this link will still work when joining opens. Nothing else is needed from you now.'
+              : 'Joining through invitation and referral links opens with the pilot.'}
+          </p>
+        }
+      >
+        <div className="space-y-3 text-center text-sm" data-testid="register-closed">
+          <p>
+            Already have an account?{' '}
+            <Link to="/sign-in" className="font-semibold text-brand-700 underline underline-offset-2">
+              Sign in
+            </Link>
+          </p>
+          <p>
+            <a href="https://www.splitpost.ca/" className="font-semibold text-brand-700 underline underline-offset-2">
+              Read about Splitpost
+            </a>{' '}
+            or see{' '}
+            <a href="https://www.splitpost.ca/join" className="font-semibold text-brand-700 underline underline-offset-2">
+              when the waitlist opens
+            </a>
+            .
+          </p>
+        </div>
       </AuthCard>
     )
   }

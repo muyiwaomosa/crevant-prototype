@@ -16,8 +16,9 @@
 #   4. The migrations then apply again cleanly (supabase migration up), the
 #      staging-safe checks pass, and a new check run succeeds.
 #
-# Later migrations follow the waitlist: link in bio (20261221000000,
-# scripts/db/rollback-profile-link-test.sh, the newest, so it goes first),
+# Later migrations follow the waitlist: public previews on by default
+# (20261222000000, scripts/db/rollback-preview-default-test.sh, the newest, so it
+# goes first), link in bio (20261221000000, scripts/db/rollback-profile-link-test.sh),
 # the video release decision (20261220000000, scripts/db/rollback-video-release-test.sh),
 # pilot closure (20261219000000, scripts/db/rollback-pilot-closure-test.sh),
 # progression rules (20261218000000, scripts/db/rollback-progression-rules-test.sh),
@@ -130,9 +131,22 @@ refuses() {
 # Later migrations first, newest first: each refuses while a later one is
 # recorded. The social core (20261117000000), then creator acquisition
 # (20261116000000).
+PREVIEWDEF=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261222000000')")
+if [ "$PREVIEWDEF" = t ]; then
+  # The newest migration (public previews on by default) goes first.
+  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-profile-link.sql 2>&1); code=$?
+  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+    && ok "the profile link rollback refuses while the preview default is recorded" \
+    || bad "the profile link rollback did not refuse while the preview default is recorded (exit $code)"
+  if DB_URL="$DB_URL" bash scripts/db/rollback-preview-default-test.sh; then
+    ok "public previews on by default: the rollback refuses while a later migration exists, and otherwise restores opt-in previews exactly"
+  else
+    bad "the preview default rollback tests failed"
+  fi
+fi
 LINK=$("${PSQL[@]}" -c "select exists (select 1 from supabase_migrations.schema_migrations where version = '20261221000000')")
 if [ "$LINK" = t ]; then
-  # The newest migration (link in bio) goes first.
+  # Then link in bio.
   out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-video-release.sql 2>&1); code=$?
   [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
     && ok "the video release rollback refuses while link in bio is recorded" \
@@ -810,9 +824,19 @@ if [ "$AUDIENCE" = t ] || [ "$PHOTOS" = t ] || [ "$FEEDBACK" = t ] || [ "$AVATAR
                                                   && ok "after reapplying, the video release rollback refuses while link in bio is recorded" \
                                                   || bad "the video release rollback did not refuse after reapply while link in bio is recorded (exit $code)"
                                                 out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-profile-link.sql 2>&1); code=$?
+                                                if [ "$PREVIEWDEF" = t ]; then
+                                                  [ $code -ne 0 ] && grep -q 'later migration' <<<"$out" \
+                                                    && ok "after reapplying, the profile link rollback refuses while the preview default is recorded" \
+                                                    || bad "the profile link rollback did not refuse after reapply while the preview default is recorded (exit $code)"
+                                                  out=$(psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v mode=check -v confirm= -f scripts/db/staging-rollback-preview-default.sql 2>&1); code=$?
+                                                  [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
+                                                    && ok "after reapplying, the preview default rollback check passes again" \
+                                                    || bad "preview default rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                                else
                                                 [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                                                   && ok "after reapplying, the profile link rollback check passes again" \
                                                   || bad "profile link rollback check after reapply (exit $code): $(tail -2 <<<"$out" | tr '\n' ' ')"
+                                                fi
                                               else
                                               [ $code -eq 0 ] && grep -q 'Check only' <<<"$out" \
                                                 && ok "after reapplying, the video release rollback check passes again" \

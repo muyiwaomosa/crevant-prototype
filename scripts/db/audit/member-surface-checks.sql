@@ -395,8 +395,8 @@ begin
         bad := bad || (r.proname || ': does not check social.current_moderator()');
       end if;
     elsif r.proname = 'app_public_post' then
-      -- Public previews (20261204000000): visitors, but only eligible posts, only while on, rate limited.
-      if position('ops.public_preview_settings' in r.prosrc) = 0 or position('social.visible_members' in r.prosrc) = 0 or position('s.deleted_at is null' in r.prosrc) = 0 or position('social.preview_consents' in r.prosrc) = 0 or position('ops.content_reports' in r.prosrc) = 0 or position('rate_limited' in r.prosrc) = 0 then
+      -- Public previews (20261204000000; on by default with a switch-off since 20261222000000): visitors, but only eligible posts, only while on, rate limited.
+      if position('ops.public_preview_settings' in r.prosrc) = 0 or position('social.visible_members' in r.prosrc) = 0 or position('s.deleted_at is null' in r.prosrc) = 0 or (position('social.preview_consents' in r.prosrc) = 0 and position('social.preview_optouts' in r.prosrc) = 0) or position('ops.content_reports' in r.prosrc) = 0 or position('rate_limited' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': public preview without its eligibility, switch or limits');
       end if;
     elsif r.proname like 'app\_founder\_%' then

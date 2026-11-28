@@ -317,7 +317,7 @@ export function ShareButton({ post }: { post: Post }) {
     if (post.isMine) {
       try {
         if ((await api.publicPreviewsAllowed()) === false)
-          setNotice("Only members can open this link. To let anyone see a preview, allow public previews in your profile.")
+          setNotice("You switched public previews off, so only members can open this link. You can switch them back on in")
       } catch {
         // The share still works.
       }
@@ -366,16 +366,21 @@ export function ShareButton({ post }: { post: Post }) {
     {notice && (
       <p role="status" className="basis-full rounded-2xl bg-ink-100/70 px-3 py-2 text-[13px] text-ink-700" data-testid="share-notice">
         {notice}{' '}
-        <Link to="/app/profile" className="font-semibold text-brand-700 underline">
-          Profile
+        <Link to="/app/settings/privacy" className="font-semibold text-brand-700 underline">
+          Privacy, sharing and ads
         </Link>
+        .
       </p>
     )}
     </>
   )
 }
 
-/** Profile setting: allow public previews of my posts (20261204000000). Hidden before the migration. */
+/**
+ * Settings: public previews of my posts (20261204000000), on by default since
+ * BL-006 (20261222000000). Switching off takes effect at once. Hidden before
+ * the migration. Previews also need Splitpost to open them project-wide.
+ */
 export function PublicPreviewsSetting() {
   const api = useAppApi()
   const [allowed, setAllowed] = useState<boolean | null | undefined>(undefined)
@@ -413,9 +418,10 @@ export function PublicPreviewsSetting() {
     <Card className="mt-4 p-5">
       <h2 className="font-display text-lg font-bold text-ink-900">Sharing outside Splitpost</h2>
       <p className="mt-2 text-[14px] leading-relaxed text-ink-700">
-        When you or someone else shares one of your posts outside Splitpost, people who aren't members can open the link. If you allow it, they see a public preview:
-        the post's text, when it was posted, its topic and your name and username. They never see photos, comments, likes or anything about other members.
-        You can change your mind at any time, and previews stop straight away.
+        Public previews are on unless you switch them off. When you or someone else shares one of your posts outside Splitpost, people who aren't members can open
+        the link and see a public preview: the post's text, when it was posted, its topic and your name and username. They never see photos or videos, comments,
+        likes or anything about other members, and posts that are deleted, hidden by moderation or under review are never shown. Switch previews off at any time
+        and they stop straight away. Splitpost turns previews on for visitors only when the pilot opens to the public.
       </p>
       <label htmlFor={id} className="mt-3 flex items-start gap-3 text-[15px] font-semibold text-ink-900">
         <input id={id} type="checkbox" checked={allowed} disabled={busy} onChange={(e) => void change(e.target.checked)} className="mt-1 h-4 w-4 accent-brand-600" />
