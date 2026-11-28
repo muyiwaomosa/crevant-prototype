@@ -1,8 +1,10 @@
 import clsx from 'clsx'
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { LinkedText } from '../lib/linkify'
 import { Link } from 'react-router-dom'
 import { Check, Heart, MessageCircle, MoreHorizontal, Repeat2, Sparkles, Trash2, Users } from 'lucide-react'
+import { useProgressFeedback } from './recognition'
+import { useProgressContext } from './journey'
 import { Card, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { relativeTime } from '../lib/time'
@@ -374,6 +376,7 @@ export function RelationshipButtons({
   size = 'sm',
   postsHref,
   source = 'other',
+  compact = false,
 }: {
   member: { id: string; displayName: string; followedByMe: boolean; inMyClique: boolean }
   /** Called after a change succeeds, with the new state (lists may refresh, or keep it locally). */
@@ -383,8 +386,14 @@ export function RelationshipButtons({
   postsHref?: string
   /** Where a follow from here starts (recorded with the follow; never a stage). */
   source?: FollowSource
+  /** One small button for a recommendation row: Follow, then Join Clique, then In your Clique. */
+  compact?: boolean
 }) {
   const api = useAppApi()
+  const progressed = useProgressFeedback()
+  // With the goals on, the progress message after joining a Clique says it; no second message here.
+  const shared = useProgressContext()?.progress
+  const goalsOn = shared?.enabled === true && shared.consumer.status === 'in_progress'
   // The state this control shows. It follows the member it is given, but a
   // successful change updates it at once, so a list that refreshes (or drops
   // the person, as suggestions do once you follow them) can't make it stale.
@@ -428,13 +437,54 @@ export function RelationshipButtons({
     <button
       type="button"
       disabled={busy}
-      onClick={() => run(() => api.cliqueAdd(member.id), { followedByMe: true, inMyClique: true }, 'Added to your Clique!')}
+      onClick={() =>
+        run(
+          async () => {
+            await api.cliqueAdd(member.id)
+            // Server-confirmed goal progress, when the goals are on; otherwise the plain confirmation below.
+            void progressed('clique_creators', 'Added to your Clique')
+          },
+          { followedByMe: true, inMyClique: true },
+          goalsOn ? null : 'Added to your Clique!',
+        )
+      }
       className={className}
     >
       <Sparkles className="h-4 w-4" aria-hidden="true" /> Join Clique<span className="sr-only">{` (${name})`}</span>
     </button>
   )
-  const prompt = justFollowed && state.followedByMe && !state.inMyClique
+  const prompt = justFollowed && state.followedByMe && !state.inMyClique && !compact
+
+  if (compact)
+    return (
+      <div className="shrink-0 text-right">
+        {!state.followedByMe ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(() => api.follow(member.id, source), { followedByMe: true, inMyClique: false }, `You're following ${name}.`, true)}
+            className={buttonClass('primary', 'sm')}
+          >
+            Follow<span className="sr-only">{` ${name}`}</span>
+          </button>
+        ) : state.inMyClique ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(() => api.cliqueRemove(member.id), { followedByMe: true, inMyClique: false }, `Removed from your Clique. You still follow ${name}.`)}
+            className={clsx(buttonClass('secondary', 'sm'), 'bg-[#fde6d3] text-[#5a2a0b] ring-[#f6b888] hover:bg-[#fbd9bd]')}
+          >
+            <Check className="h-4 w-4" aria-hidden="true" /> In Clique<span className="sr-only">{` (${name}, tap to remove)`}</span>
+          </button>
+        ) : (
+          addToClique(clsx(buttonClass('secondary', 'sm'), 'bg-sp-accent text-ink-900 ring-0 hover:bg-[#f3a970]'))
+        )}
+        <p className="sr-only" aria-live="polite" data-testid="relationship-notice">
+          {notice}
+        </p>
+        {error !== null && <p className="mt-1 max-w-40 text-[12px] text-[#b4233a]">{messageFor(error)}</p>}
+      </div>
+    )
 
   return (
     <div className="space-y-2">
@@ -521,3 +571,28 @@ export function RelationshipButtons({
 }
 
 export { LIMITS }
+
+/** Loads data for a page, with loading and error states and a reload function. */
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
+  const [data, setData] = useState<T | undefined>(undefined)
+  const [error, setError] = useState<unknown>(null)
+  const [loading, setLoading] = useState(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const run = useCallback(load, deps)
+  const reload = useCallback(async () => {
+    try {
+      const d = await run()
+      setData(d)
+      setError(null)
+    } catch (e) {
+      setError(e)
+    } finally {
+      setLoading(false)
+    }
+  }, [run])
+  useEffect(() => {
+    setLoading(true)
+    void reload()
+  }, [reload])
+  return { data, setData, error, loading, reload }
+}

@@ -294,21 +294,21 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
   check("B skipped setup: B's details are empty, and setup is marked done", sql(`select coalesce(identity, '-') || '|' || coalesce(bio, '-') || '|' || (onboarded_at is not null) from social.profile_details where user_id = '${idB}'`) === '-|-|true')
   await pageB.getByText('Your feed is quiet').waitFor()
   check('B\'s feed is empty before following anyone', (await pageB.getByTestId('post').count()) === 0)
-  check('a new member sees the three first steps on Home', await pageB.getByText('Choose your Clique').isVisible())
-  await pageB.getByRole('link', { name: 'Discover people' }).click()
+  check('a new member sees Getting started on Home', await pageB.getByText('Add a creator to your Clique').isVisible())
+  await pageB.getByTestId('quiet-feed').getByRole('link', { name: 'Discover people' }).click()
   await pageB.getByLabel('Search people, posts and topics').fill(userA)
   await pageB.getByRole('button', { name: 'Search', exact: true }).click()
   {
     const card = pageB.getByRole('region', { name: 'People' }).getByRole('listitem').filter({ hasText: 'Aye Teacher' })
     await card.getByText('Maths teacher making fractions fun.').waitFor()
-    check("Discover shows A's bio, why to follow and interests, and never a stakeholder label", (await card.getByText('Maths teacher making fractions fun.').count()) === 1
-      && (await card.getByText('One five-minute maths trick every week').count()) === 1
-      && (await card.getByText(/Creator ·/).count()) === 0
-      && (await card.getByRole('list', { name: 'Interests' }).getByText('Learning').count()) === 1)
+    // Compact rows (Nov 28): why they're suggested and the bio; why to follow is on their profile.
+    check("Discover shows A's bio and what A posts about, and never a stakeholder label", (await card.getByText('Maths teacher making fractions fun.').count()) === 1
+      && /Learning/.test(await card.getByTestId('person-reason').innerText())
+      && (await card.getByText(/Creator ·/).count()) === 0)
     // Interest-based discovery: by topic, without searching.
     await pageB.getByRole('button', { name: 'Clear search' }).click()
-    await pageB.getByRole('navigation', { name: 'Ways into Discover' }).getByRole('button', { name: /^People/ }).click()
-    const interest = pageB.getByLabel('Browse by interest')
+    await pageB.getByRole('tab', { name: 'People' }).click()
+    const interest = { selectOption: ({ label }) => pageB.getByRole('group', { name: 'Browse by interest' }).getByRole('button', { name: label, exact: true }).click() }
     await interest.selectOption({ label: 'Learning' })
     await pageB.getByRole('link', { name: 'Aye Teacher', exact: true }).waitFor()
     check('browsing Discover by "Learning" finds A', (await pageB.getByRole('link', { name: 'Aye Teacher', exact: true }).count()) === 1)
@@ -322,16 +322,11 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
     await noSidewaysScroll(pageB, 'Discover with interest filters')
   }
   await pageB.getByRole('button', { name: 'Follow Aye Teacher' }).click()
-  const confirmation = pageB.getByTestId('follow-confirmation')
-  await confirmation.waitFor()
-  check(
-    'after following, a confirmation offers Join Clique and See their posts',
-    (await confirmation.getByRole('button', { name: 'Join Clique (Aye Teacher)' }).count()) === 1
-      && (await confirmation.getByRole('link', { name: 'See their posts' }).getAttribute('href')) === `/app/u/${userA}#posts`
-      && (await pageB.getByRole('button', { name: 'Join Clique (Aye Teacher)' }).count()) === 1,
-  )
+  // The compact row: after following, its one button offers the separate Clique choice.
+  await pageB.getByRole('button', { name: 'Join Clique (Aye Teacher)' }).waitFor()
+  check('after following, the row offers Join Clique, once', (await pageB.getByRole('button', { name: 'Join Clique (Aye Teacher)' }).count()) === 1)
   await pageB.getByRole('button', { name: 'Join Clique (Aye Teacher)' }).click()
-  await pageB.getByRole('button', { name: 'In your Clique (Aye Teacher, tap to remove)' }).waitFor()
+  await pageB.getByRole('button', { name: 'In Clique (Aye Teacher, tap to remove)' }).waitFor()
   check('adding to the Clique says "Added to your Clique!"', ((await pageB.getByTestId('relationship-notice').innerText()) || '').includes('Added to your Clique!'))
   check('following and joining the Clique are separate records', sql(`select (select count(*) from social.follows where follower_id = '${idB}' and creator_id = '${idA}') || '|' || (select count(*) from social.clique_members where fan_id = '${idB}' and creator_id = '${idA}' and removed_at is null)`) === '1|1')
 
@@ -365,7 +360,7 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
   // Only the sign-in session and interface preferences (welcome seen, tips and first steps dismissed,
   // milestones already acknowledged; SP-UX-002); never posts, likes, comments or follows.
   const appStorage = await pageB.evaluate(() =>
-    Object.keys(localStorage).filter((k) => !/^sb-/.test(k) && !/^splitpost\.(welcome|tip|first-steps|goals-met|goalstrip)\./.test(k)),
+    Object.keys(localStorage).filter((k) => !/^sb-/.test(k) && !/^splitpost\.(welcome|tip|first-steps|goals-met|goalstrip|guide|tour|milestones)\./.test(k)),
   )
   check('no social data is kept in browser storage', appStorage.length === 0, appStorage.join(','))
 

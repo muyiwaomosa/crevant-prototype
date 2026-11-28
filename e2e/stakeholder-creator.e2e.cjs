@@ -104,8 +104,8 @@ J.run(async (browser) => {
   check('the first-post guide does not show again once she has posted', (await cleo.page.getByTestId('first-post-guide').count()) === 0)
 
   // ---------------------------------------------------------------------------
-  step('5. Cleo copies her personal invitation link (My Split, My Activity)')
-  await cleo.page.goto(`${APP}/app/split?face=activity`)
+  step('5. Cleo copies her personal invitation link (My Split)')
+  await cleo.page.goto(`${APP}/app/split#invite`)
   await cleo.page.getByTestId('referral-link').waitFor()
   await cleo.page.getByRole('button', { name: 'Copy link' }).click()
   await cleo.page.getByRole('button', { name: 'Copied' }).waitFor()
@@ -193,31 +193,20 @@ J.run(async (browser) => {
     for (const [route, name] of [['/app', 'home'], ['/app/clique', 'clique'], ['/app/discover', 'discover'], ['/app/new', 'create'], ['/app/split', 'my-split']]) {
       await shot(`${APP}${route}`, name, main)
     }
-    // The full-screen faces, one after another.
-    for (const face of ['Reach', 'Connection', 'Earnings']) {
-      await cleo.page.goto(`${APP}/app/profile?insights=1`)
-      await cleo.page.getByRole('tab', { name: face }).click()
-      await cleo.page.waitForLoadState('networkidle')
-      await cleo.page.waitForTimeout(400)
-      await cleo.page.screenshot({ path: require('node:path').join(process.env.SHOTS, `face-${face.toLowerCase()}-desktop.png`) })
-      await cleo.page.setViewportSize({ width: 390, height: 844 })
-      await cleo.page.waitForTimeout(400)
-      await cleo.page.screenshot({ path: require('node:path').join(process.env.SHOTS, `face-${face.toLowerCase()}-phone.png`) })
-      await cleo.page.setViewportSize({ width: 1280, height: 900 })
-    }
+    // Your Insights: one page (Nov 28).
+    await shot(`${APP}/app/insights`, 'insights', cleo.page.getByTestId('money-face'))
   }
   await cleo.page.goto(`${APP}/app/profile`)
   await screenChecks(cleo.page, 'Your profile (P1)')
-  await cleo.page.goto(`${APP}/app/profile?insights=1`)
-  await cleo.page.getByRole('tab', { name: 'Reach' }).click()
+  await cleo.page.goto(`${APP}/app/insights`)
   const att = cleo.page.getByTestId('attention-face')
   await att.waitFor()
   const ta = flat(await att.innerText())
   const followers = sql(`select count(*) from social.follows where creator_id = '${c}'`)
   check('Attention: every post was available to her follower, who saw one', followers === '1' && ta.includes('Every post was available to your follower. They saw at least one.'), ta)
-  check('Attention: where the new follower came from (the invitation card follows as Other)', /Where your new follower came from Other 1/.test(ta), ta)
-  await screenChecks(cleo.page, 'the Attention face')
-  await cleo.page.getByRole('tab', { name: 'Connection' }).click()
+  const aud = flat(await cleo.page.getByTestId('audience-insight').innerText())
+  check('Audience: where the new follower came from (the invitation card follows as Other)', /Where your new follower came from Other 1/.test(aud), aud)
+  await screenChecks(cleo.page, 'Your Insights')
   const ret = cleo.page.getByTestId('retention-face')
   await ret.waitFor()
   const tr = flat(await ret.innerText())
@@ -225,12 +214,10 @@ J.run(async (browser) => {
   check('Retention: this week\'s connections match the database (1)', connections === '1' && tr.includes('1 follower connected with your posts this week'), `${connections}: ${tr.slice(0, 160)}`)
   check('Retention: 1 Active Supporter and 1 in her Clique, as in the database',
     /1 Active Supporter, 1 in your Clique/.test(tr) && sql(`select social.is_active_supporter('${n}', '${c}')`) === 't', tr.slice(0, 300))
-  await screenChecks(cleo.page, 'the Retention face')
-  await cleo.page.getByRole('tab', { name: 'Earnings' }).click()
   const money = cleo.page.getByTestId('money-face')
   await money.waitFor()
   const tm0 = flat(await money.innerText())
-  check('Money before any ad revenue: Simulated, actual income $0.00, no ads yet', /Simulated/.test(tm0) && /Actual income Actual \$0\.00/.test(tm0) && /No ads have been shown with your posts yet/.test(tm0), tm0.slice(0, 240))
+  check('Monetization before any ad revenue: actual income $0.00, no ads yet, "not yet measured"', /Actual income \$0\.00/.test(tm0) && /Not yet measured\. No ads have been shown with your posts yet/.test(tm0), tm0.slice(0, 240))
 
   // ---------------------------------------------------------------------------
   step('9. Simulated earnings: the founder records simulated revenue; Cleo understands her share')

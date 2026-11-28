@@ -235,13 +235,14 @@ async function signIn(page, email) {
     const ctxA = await newContext(browser)
     const pageA = await ctxA.newPage()
     await signIn(pageA, emailA)
-    await pageA.goto(`${APP}/app/profile?edit=1`)
+    // Nov 28: the audience insight is part of Your Insights (it was inside Edit profile).
+    await pageA.goto(`${APP}/app/insights`)
     const insight = pageA.getByTestId('audience-insight')
     await insight.waitFor()
     const text = await insight.innerText()
     check('the audience insight tells What happened, What it means and What to do next', /What happened/i.test(text) && /What it means/i.test(text) && /What to do next/i.test(text))
     check('the audience insight marks Support Intent as non-binding', /Non-binding/.test(text) && /Nothing is charged/.test(text))
-    await screenChecks(pageA, 'your profile with the audience insight')
+    await screenChecks(pageA, 'Your Insights with the audience insight')
     await ctxA.close()
 
     check('no Content Security Policy violations', csp.length === 0, csp.slice(0, 2).join(' | '))

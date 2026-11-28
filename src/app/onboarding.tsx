@@ -8,19 +8,16 @@
  *   * InviterCard: who invited you, with Follow and Not now. Never automatic.
  *   * MySplitIntro: what Connection Points are, in plain words, with the
  *     Splitpost symbol. Simulated during the pilot, never money.
- *   * CreatorSetupCard: posting topics (up to 3), a first post, your own
- *     invitation link, and where your insights are. Shown on your own Profile.
  *   * FirstPostGuide: a short guide on Create before the first post.
  */
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Check, Copy, PenLine, Sparkles, UserPlus } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
 import { Card, buttonClass } from '../components/ui'
 import { MySplitIcon } from '../components/MySplitIcon'
-import { Message, Spinner } from '../public/auth/AuthUi'
-import { messageFor, type AppApi, type CreatorSetup, type Features, type Inviter } from './api'
+import { Message } from '../public/auth/AuthUi'
+import { messageFor, type AppApi, type Features, type Inviter } from './api'
 import { useAppApi } from './AppApiContext'
-import { TopicPicker, TopicTags, useTopics } from './profileDetails'
+import { TopicTags, useTopics } from './profileDetails'
 
 export const POSTING_TOPICS_MAX = 3
 
@@ -129,176 +126,6 @@ export function MySplitIntro({ heading = 'How My Split works' }: { heading?: str
   )
 }
 
-function useReferralLink() {
-  const api = useAppApi()
-  const [code, setCode] = useState<string | null | undefined>(undefined)
-  useEffect(() => {
-    let live = true
-    api.myReferralCode().then(
-      (c) => live && setCode(c),
-      () => live && setCode(null),
-    )
-    return () => {
-      live = false
-    }
-  }, [api])
-  return code ? `${window.location.origin}/register/${code}` : code === undefined ? undefined : null
-}
-
-function Step({ done, title, children }: { done: boolean; title: string; children?: React.ReactNode }) {
-  return (
-    <li className="flex gap-3">
-      <span
-        className={
-          done
-            ? 'grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-700 text-white'
-            : 'grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 border-ink-200 bg-white'
-        }
-        aria-hidden="true"
-      >
-        {done && <Check className="h-4 w-4" />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold text-ink-900">
-          {title}
-          <span className="sr-only">{done ? ' (done)' : ' (to do)'}</span>
-        </p>
-        {children}
-      </div>
-    </li>
-  )
-}
-
-/** Creator setup on the member's own Profile: optional, and gone once complete unless reopened. */
-export function CreatorSetupCard() {
-  const api = useAppApi()
-  const { topics } = useTopics()
-  const link = useReferralLink()
-  const [setup, setSetup] = useState<CreatorSetup | null | undefined>(undefined)
-  const [draft, setDraft] = useState<string[]>([])
-  const [editing, setEditing] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<unknown>(null)
-  const [saved, setSaved] = useState(false)
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    let live = true
-    api.myCreatorSetup().then(
-      (s) => live && (setSetup(s), setDraft(s?.postingTopics ?? [])),
-      () => live && setSetup(null),
-    )
-    return () => {
-      live = false
-    }
-  }, [api])
-  if (setup === undefined) return <Spinner label="Loading creator setup…" />
-  if (setup === null) return null
-  const topicsDone = setup.postingTopics.length > 0
-  const postDone = setup.posts > 0
-  const inviteDone = setup.joinedThroughMyLink > 0 || setup.followers > 0
-  const complete = topicsDone && postDone && inviteDone
-  async function saveTopics() {
-    setBusy(true)
-    setError(null)
-    try {
-      const t = await api.setCreatorTopics(draft)
-      setSetup((s) => (s ? { ...s, postingTopics: t } : s))
-      setSaved(true)
-      setEditing(false)
-    } catch (e) {
-      setError(e)
-    } finally {
-      setBusy(false)
-    }
-  }
-  async function copy() {
-    if (!link) return
-    try {
-      await navigator.clipboard.writeText(link)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2500)
-    } catch {
-      setCopied(false)
-    }
-  }
-  return (
-    <div data-testid="creator-setup">
-      <Card className="p-5">
-        <h2 className="flex items-center gap-2 font-display text-lg font-extrabold text-ink-900">
-          <Sparkles className="h-5 w-5 text-brand-700" aria-hidden="true" /> {complete ? 'Your creator tools' : 'Share your own work'}
-        </h2>
-        <p className="mt-1 text-[14px] leading-relaxed text-ink-600">
-          {complete
-            ? 'Everything is set up. Your insights are on the Attention, Retention and Money faces of your Profile.'
-            : 'Optional. Every Splitpost account can post. These steps help the right people find you.'}
-        </p>
-        <ol className="mt-4 space-y-4">
-          <Step done={topicsDone} title="Choose what you post about">
-            {topicsDone && !editing ? (
-              <div className="mt-1.5 space-y-2">
-                <TopicTags slugs={setup.postingTopics} topics={topics} />
-                <button type="button" onClick={() => setEditing(true)} className="text-sm font-semibold text-brand-700 underline underline-offset-2">
-                  Change topics
-                </button>
-              </div>
-            ) : (
-              <div className="mt-2 space-y-3">
-                {topics ? (
-                  <TopicPicker
-                    topics={topics}
-                    value={draft}
-                    onChange={setDraft}
-                    max={POSTING_TOPICS_MAX}
-                    legend="Topics you post about"
-                    hint="Up to 3. People interested in these topics will see you in their suggestions."
-                    hideLegend
-                  />
-                ) : (
-                  <Spinner label="Loading topics…" />
-                )}
-                <button type="button" onClick={() => void saveTopics()} disabled={busy || draft.length === 0} className={buttonClass('primary', 'sm')}>
-                  {busy ? 'Saving…' : 'Save topics'}
-                </button>
-              </div>
-            )}
-            {saved && (
-              <p className="mt-1 text-sm font-semibold text-brand-800" role="status">
-                Saved. You'll appear in suggestions for these topics.
-              </p>
-            )}
-          </Step>
-          <Step done={postDone} title="Publish your first post">
-            {!postDone && (
-              <Link to="/app/new" className={`${buttonClass('secondary', 'sm')} mt-2`}>
-                <PenLine className="h-4 w-4" aria-hidden="true" /> Write a post
-              </Link>
-            )}
-          </Step>
-          <Step done={inviteDone} title="Invite the people who already follow you elsewhere">
-            <p className="mt-1 text-[14px] text-ink-600">
-              Your personal link brings them straight to you. They choose whether to follow.
-              {setup.joinedThroughMyLink > 0 &&
-                ` ${setup.joinedThroughMyLink} ${setup.joinedThroughMyLink === 1 ? 'person has' : 'people have'} joined through it.`}
-            </p>
-            {link && (
-              <button type="button" onClick={() => void copy()} className={`${buttonClass('secondary', 'sm')} mt-2`}>
-                {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}{' '}
-                {copied ? 'Link copied' : 'Copy my invitation link'}
-              </button>
-            )}
-          </Step>
-        </ol>
-        {error !== null && (
-          <div className="mt-3">
-            <Message tone="error">{messageFor(error)}</Message>
-          </div>
-        )}
-      </Card>
-    </div>
-  )
-}
-
-/** A short guide on Create, before the member's first post. */
 export function FirstPostGuide() {
   const api = useAppApi()
   const [posts, setPosts] = useState<number | null>(null)
@@ -320,7 +147,7 @@ export function FirstPostGuide() {
         <ul className="mt-2 list-disc space-y-1 pl-5 text-[14px] leading-relaxed text-ink-700">
           <li>Say hello and what people can expect from you.</li>
           <li>Pick a topic so people who care about it can find it.</li>
-          <li>Your followers see it in their Following feed. Nothing is ranked or hidden.</li>
+          <li>It goes into your followers’ Home feeds, newest first. Nothing is ranked or hidden, though who opens it is up to them.</li>
         </ul>
       </Card>
     </div>

@@ -1,17 +1,17 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
-import { ChevronRight, X } from 'lucide-react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
 import type { EarningsByState, GoalAudience, GoalStep, MyProgress, ProgressJourney } from './api'
-import { useAppApi, useMyProfile } from './AppApiContext'
-import { GoalRing, NEXT_ACTION, creatorJourneyShown, goalText, journeyProgress } from './progression'
+import { useAppApi } from './AppApiContext'
+import { creatorJourneyShown, goalText, journeyProgress } from './progression'
 
 /**
  * The progression journey across the app (SP-UAT-001 finding 4).
  *
  * One place loads the member's own progress from the server
- * (app_my_progress) and every surface reads it: the goal strip on Home, the
- * next goal on My Split, the path on My Goals, the hint on Discover, and the
- * progress shown after a recognized contribution or a new post. Nothing is
+ * (app_my_progress) and every surface reads it: the guide on Home, both
+ * journeys on My Split, the hint on Discover, and the progress shown after a
+ * recognized contribution, a Clique change or a new post. Nothing is
  * computed on the device beyond choosing which open goal to suggest: every
  * value, target and status is the server's. The approved goals can be pursued
  * in any order, so the suggestion is only the open goal closest to done,
@@ -24,8 +24,11 @@ const ProgressCtx = createContext<Ctx | null>(null)
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
   const api = useAppApi()
+  const { pathname } = useLocation()
   const [progress, setProgress] = useState<MyProgress | null | undefined>(undefined)
+  const last = useRef(0)
   const refresh = useCallback(async () => {
+    last.current = Date.now()
     try {
       const p = await api.myProgress()
       setProgress(p)
@@ -38,12 +41,51 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh()
   }, [refresh])
+  // Progress moves with other people's actions too (followers, Cliques, returning
+  // supporters), so it is read again when the member moves around the app or
+  // comes back to it, at most every 20 seconds.
+  useEffect(() => {
+    if (last.current > 0 && Date.now() - last.current > 20_000) void refresh()
+  }, [pathname, refresh])
+  useEffect(() => {
+    const again = () => {
+      if (document.visibilityState === 'visible' && Date.now() - last.current > 20_000) void refresh()
+    }
+    document.addEventListener('visibilitychange', again)
+    return () => document.removeEventListener('visibilitychange', again)
+  }, [refresh])
   return <ProgressCtx.Provider value={{ progress, refresh }}>{children}</ProgressCtx.Provider>
 }
 
 /** The shared progress, or null outside a provider (the surfaces then show nothing). */
 export function useProgressContext(): Ctx | null {
   return useContext(ProgressCtx)
+}
+
+/**
+ * The member's progress: the shared one (fresh on arrival) inside the app, or
+ * its own read outside a provider. Undefined while loading, null where unavailable.
+ */
+export function useSharedProgress(): MyProgress | null | undefined {
+  const api = useAppApi()
+  const ctx = useProgressContext()
+  const [local, setLocal] = useState<MyProgress | null | undefined>(undefined)
+  const refresh = ctx?.refresh
+  useEffect(() => {
+    if (refresh) {
+      void refresh()
+      return
+    }
+    let live = true
+    api.myProgress().then(
+      (p) => live && setLocal(p),
+      () => live && setLocal(null),
+    )
+    return () => {
+      live = false
+    }
+  }, [api, refresh])
+  return ctx ? ctx.progress : local
 }
 
 const TITLE: Record<GoalAudience, string> = { creator: 'Creator goals', consumer: 'Supporter goals' }
@@ -107,72 +149,13 @@ export function whyItMatters(s: Suggestion) {
   const left = s.total - s.done
   const tail =
     s.unlockCents > 0
-      ? `When all ${s.total} are met and checked, your locked ${simulated(s.unlockCents)} ${ROLE[s.audience]} unlocks (simulated during the pilot).`
-      : `When all ${s.total} are met and checked, you qualify ${ROLE[s.audience]}.`
+      ? `When all ${s.total} are met, an eligibility review starts; if it is approved, your locked ${simulated(s.unlockCents)} ${ROLE[s.audience]} unlocks (simulated during the pilot).`
+      : `When all ${s.total} are met, an eligibility review starts; if it is approved, you qualify ${ROLE[s.audience]}.`
   return `It's one of the ${left} ${s.audience === 'creator' ? 'creator' : 'supporter'} goals you have left, in any order. ${tail}`
 }
 
 // ---------------------------------------------------------------------------
-// Home: a compact, dismissible next step that never crowds the feed.
-
-function todayKey() {
-  const d = new Date()
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
-}
-
-export function HomeGoalStrip() {
-  const ctx = useProgressContext()
-  const { profile } = useMyProfile()
-  const key = `splitpost.goalstrip.${profile.id}`
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return window.localStorage.getItem(key) === todayKey()
-    } catch {
-      return false
-    }
-  })
-  const p = ctx?.progress
-  if (hidden || !p || !p.enabled) return null
-  const s = suggestNext(p)
-  if (!s) return null
-  const action = NEXT_ACTION[s.step.metric]
-  return (
-    <div className="mb-4 flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5 shadow-[0_1px_2px_rgb(19_25_27/0.06),0_0_0_1px_rgb(19_25_27/0.05)]" data-testid="goal-strip">
-      <GoalRing done={s.done} total={s.total} size={38} tone={s.audience === 'creator' ? 'brand' : 'green'} />
-      <Link to="/app/split?face=goals" className="min-w-0 flex-1 leading-tight">
-        <span className="block truncate text-[13.5px] font-bold text-ink-900">
-          {s.title}: {s.done} of {s.total}
-        </span>
-        <span className="block truncate text-[12.5px] text-ink-600">
-          Next: {goalText(s.step.metric).label.toLowerCase().replace(/ \(last 28 days\)/, '')} · {Math.min(s.step.value, s.step.target)} of {s.step.target}
-        </span>
-      </Link>
-      {action && (
-        <Link to={action.to} className="inline-flex min-h-9 shrink-0 items-center rounded-full bg-brand-50 px-3 text-[12.5px] font-bold text-brand-700" aria-label={action.label}>
-          Go <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </Link>
-      )}
-      <button
-        type="button"
-        aria-label="Hide for today"
-        onClick={() => {
-          try {
-            window.localStorage.setItem(key, todayKey())
-          } catch {
-            // Hidden for this visit at least.
-          }
-          setHidden(true)
-        }}
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-500 hover:bg-ink-100"
-      >
-        <X className="h-4 w-4" aria-hidden="true" />
-      </button>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Discover: connection-building goals, where connections are made.
+// Discover: the connection-building goal, where connections are made.
 
 const CONNECTION_METRICS = ['engaged_creators', 'clique_creators']
 
@@ -181,33 +164,16 @@ export function DiscoverGoalHint() {
   if (!p || !p.enabled || p.consumer.status !== 'in_progress') return null
   const step = openSteps(p.consumer).find((s) => CONNECTION_METRICS.includes(s.metric))
   if (!step) return null
+  const how =
+    step.metric === 'clique_creators'
+      ? 'Follow creators you value here, then choose who joins your Clique. Following alone doesn’t add anyone to it.'
+      : 'Supporting different creators you find here counts.'
   return (
-    <Link
-      to="/app/split?face=goals"
-      className="mb-4 flex items-center gap-3 rounded-2xl bg-[#e7f4f1] px-4 py-3 text-[13.5px] text-[#173f37]"
-      data-testid="discover-goal-hint"
-    >
+    <Link to="/app/split#goals" className="mb-4 flex items-center gap-3 rounded-2xl bg-[#e7f4f1] px-4 py-3 text-[13.5px] text-[#173f37]" data-testid="discover-goal-hint">
       <span className="min-w-0 flex-1">
-        <strong className="font-semibold">{goalText(step.metric).label}</strong> is one of your supporter goals: {step.value} of {step.target}. Following and
-        supporting creators here counts.
+        <strong className="font-semibold">{goalText(step.metric).label}</strong> is one of your supporter goals: {step.value} of {step.target}. {how}
       </span>
       <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
     </Link>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Onboarding: the first steps introduce the journey they start.
-
-export function JourneyIntro() {
-  const p = useProgressContext()?.progress
-  if (!p || !p.enabled || p.consumer.status !== 'in_progress' || !journeyProgress(p.consumer).set) return null
-  return (
-    <p className="mt-1 text-[13px] text-ink-700" data-testid="journey-intro">
-      These steps also start your supporter goals.{' '}
-      <Link to="/app/split?face=goals" className="font-semibold text-brand-700 underline">
-        See your goals
-      </Link>
-    </p>
   )
 }

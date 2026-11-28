@@ -1,48 +1,56 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, Compass, LayoutGrid, Search, Sparkles, UserPlus } from 'lucide-react'
+import { Compass, Search, Sparkles } from 'lucide-react'
 import { EmptyState, PageHeader, buttonClass } from '../components/ui'
 import { Message } from '../public/auth/AuthUi'
 import { type DiscoverMember, type Post, type Topic } from './api'
 import { useAppApi } from './AppApiContext'
 import { ErrorNote, PostItem } from './components'
-import { FaceView } from '../components/FaceView'
 import { PersonSummary } from './profileDetails'
 import { useTopicList } from './content'
-import { PostTile } from './tiles'
 import { DiscoverGoalHint } from './journey'
 
 /**
  * Discover (SP-DESIGN-001: "find new value"), value and intent based
- * (20261203000000). Search sits above three views: For you (posts in your
- * interests from people you don't follow yet, each with its reason, and an
- * optional focus for this visit, kept in this browser tab only), Creators
- * (people, shared interests first) and Content (posts by topic). Nothing
- * about a search or a focus is stored.
+ * (20261203000000). One layout (Nov 28): the header, the search box and three
+ * compact tabs, For you (posts in your interests from people you don't follow
+ * yet, each with its reason), People (shared interests first) and Topics,
+ * always in the same place; switching tabs or searching changes only the
+ * results below. The tab is kept in the URL (?face=) so Back and links work.
+ * Nothing about a search or a focus is stored.
  */
+const TABS = [
+  { key: 'for-you', label: 'For you' },
+  { key: 'creators', label: 'People' },
+  { key: 'content', label: 'Topics' },
+] as const
+type TabKey = (typeof TABS)[number]['key']
+
 export function DiscoverPage() {
   const api = useAppApi()
   const topics = useTopicList()
   const [params, setParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [submitted, setSubmitted] = useState('')
-  // Approved design (D1): one question and one search box, then three ways
-  // in. A focused view (For you, People, Topics) opens full screen with the
-  // face transition; the choice is kept in the URL so Back works.
-  const focused = params.has('face') || params.has('browse')
-  function open(face: 'for-you' | 'creators' | 'content') {
-    const p = new URLSearchParams(params)
-    p.set('browse', '1')
-    if (face === 'for-you') p.delete('face')
-    else p.set('face', face)
-    setParams(p)
-    window.scrollTo({ top: 0 })
-  }
-  function back() {
+  const requested = params.get('face')
+  const tab: TabKey = TABS.some((t) => t.key === requested) ? (requested as TabKey) : 'for-you'
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  function choose(key: TabKey, focus = false) {
+    setSubmitted('')
+    setQuery('')
     const p = new URLSearchParams(params)
     p.delete('browse')
-    p.delete('face')
-    setParams(p)
+    if (key === 'for-you') p.delete('face')
+    else p.set('face', key)
+    setParams(p, { replace: true })
+    if (focus) tabRefs.current[TABS.findIndex((t) => t.key === key)]?.focus()
+  }
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const i = TABS.findIndex((t) => t.key === tab)
+    const to = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : null
+    if (to === null) return
+    e.preventDefault()
+    choose(TABS[(to + TABS.length) % TABS.length].key, true)
   }
   function search(e: FormEvent) {
     e.preventDefault()
@@ -55,7 +63,7 @@ export function DiscoverPage() {
   return (
     <>
       <PageHeader title="Discover" subtitle="What are you looking for today?" />
-      <form onSubmit={search} role="search" className="mb-4 flex gap-2">
+      <form onSubmit={search} role="search" className="mb-3 flex gap-2">
         <label htmlFor="discover-search" className="sr-only">
           Search people, posts and topics
         </label>
@@ -74,102 +82,40 @@ export function DiscoverPage() {
           Search
         </button>
       </form>
-      {submitted ? (
-        <SearchResults query={submitted} topics={topics} onClear={clear} api={api} />
-      ) : focused ? (
-        <>
-          <button type="button" onClick={back} className="mb-3 inline-flex items-center gap-1 text-[14px] font-semibold text-brand-700" data-testid="discover-back">
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" /> All of Discover
-          </button>
-          <FaceView
-            label="Discover views"
-            faces={[
-              { key: 'for-you', label: 'For you', content: <ForYou topics={topics} /> },
-              { key: 'creators', label: 'People', content: <Creators topics={topics} /> },
-              { key: 'content', label: 'Topics', content: <ByTopic topics={topics} /> },
-            ]}
-          />
-        </>
-      ) : (
-        <DiscoverHome onOpen={open} />
-      )}
-    </>
-  )
-}
-
-const WAYS_IN = [
-  { face: 'for-you' as const, label: 'For you', icon: Sparkles, hint: 'Picked for your interests' },
-  { face: 'creators' as const, label: 'People', icon: UserPlus, hint: 'Creators to follow' },
-  { face: 'content' as const, label: 'Topics', icon: LayoutGrid, hint: 'Browse by subject' },
-]
-
-/** The first screen: three ways in, one recommended person, and a few posts. Everything else is one tap deeper. */
-function DiscoverHome({ onOpen }: { onOpen: (face: 'for-you' | 'creators' | 'content') => void }) {
-  const api = useAppApi()
-  const topics = useTopicList()
-  const people = useAsync(() => api.discover(''), [api])
-  const mine = useAsync(async () => (await api.myDetails().catch(() => null))?.topics ?? [], [api])
-  const posts = useAsync(() => api.discoverPosts(), [api])
-  // Someone new: never a person already followed.
-  const hero = people.data?.find((m) => !m.followedByMe)
-  const few = (posts.data ?? []).slice(0, 4)
-  return (
-    <div className="space-y-5" data-testid="discover-home">
-      <DiscoverGoalHint />
-      <nav aria-label="Ways into Discover" className="grid grid-cols-3 gap-2">
-        {WAYS_IN.map((w, i) => (
+      <div role="tablist" aria-label="Discover views" onKeyDown={onKeyDown} className="mb-4 flex border-b border-ink-200" data-testid="discover-tabs">
+        {TABS.map((t, i) => (
           <button
-            key={w.face}
+            key={t.key}
+            ref={(el) => {
+              tabRefs.current[i] = el
+            }}
             type="button"
-            onClick={() => onOpen(w.face)}
-            className={`flex flex-col items-center gap-1.5 rounded-3xl px-2 py-4 text-center transition ${
-              i === 0 ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-white text-ink-900 ring-1 ring-ink-100 hover:bg-ink-50'
+            role="tab"
+            id={`discover-tab-${t.key}`}
+            aria-selected={!submitted && tab === t.key}
+            aria-controls="discover-panel"
+            tabIndex={tab === t.key ? 0 : -1}
+            onClick={() => choose(t.key)}
+            className={`-mb-px min-h-11 flex-1 border-b-2 px-2 text-[15px] font-semibold transition ${
+              !submitted && tab === t.key ? 'border-brand-600 text-ink-900' : 'border-transparent text-ink-500 hover:text-ink-800'
             }`}
           >
-            <w.icon className="h-5 w-5" aria-hidden="true" />
-            <span className="text-[15px] font-bold">{w.label}</span>
-            <span className={`text-[12px] leading-tight ${i === 0 ? 'text-white/85' : 'text-ink-600'}`}>{w.hint}</span>
+            {t.label}
           </button>
         ))}
-      </nav>
-      {hero && (
-        <section aria-labelledby="discover-hero-title">
-          <h2 id="discover-hero-title" className="mb-2 text-[15px] font-bold text-ink-900">
-            Someone you might value
-          </h2>
-          <PersonSummary member={hero} topics={topics} myTopics={mine.data} onChange={people.reload} source="discover" variant="hero" />
-        </section>
-      )}
-      {few.length > 0 && (
-        <section aria-labelledby="discover-posts-title">
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 id="discover-posts-title" className="text-[15px] font-bold text-ink-900">
-              Posts you might value
-            </h2>
-            <button type="button" onClick={() => onOpen('for-you')} className="text-[14px] font-semibold text-brand-700">
-              See more
-            </button>
-          </div>
-          {/* Approved design: a two-column grid; photos fill their tile, text posts are set on their tint. */}
-          <ul className="grid grid-cols-2 gap-3">
-            {few.map((p) => (
-              <li key={p.id} className="min-w-0">
-                <PostTile post={p} className="rounded-2xl shadow-[0_1px_2px_rgb(19_25_27/0.06)]" />
-                <p className="mt-1.5 truncate text-[13px] font-semibold text-ink-900">{p.author.displayName}</p>
-                {p.reason && (
-                  <p className="flex items-start gap-1 text-[12px] leading-snug text-ink-600" data-testid="discover-reason">
-                    <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-brand-700" aria-hidden="true" /> {p.reason}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {people.data && people.data.length === 0 && posts.data !== undefined && few.length === 0 && (
-        <EmptyState icon={<Compass className="h-7 w-7" />} title="Quiet for now" body="As more members join and post, people and posts you might value appear here." />
-      )}
-    </div>
+      </div>
+      <div id="discover-panel" role="tabpanel" aria-labelledby={submitted ? undefined : `discover-tab-${tab}`} aria-label={submitted ? 'Search results' : undefined}>
+        {submitted ? (
+          <SearchResults query={submitted} topics={topics} onClear={clear} api={api} />
+        ) : tab === 'creators' ? (
+          <Creators topics={topics} />
+        ) : tab === 'content' ? (
+          <ByTopic topics={topics} />
+        ) : (
+          <ForYou topics={topics} />
+        )}
+      </div>
+    </>
   )
 }
 
@@ -219,8 +165,13 @@ function ForYou({ topics }: { topics: Topic[] | null }) {
   useEffect(() => {
     if (focus && posts.data) void api.noteSearch('focus', posts.data.length > 0, focus).catch(() => undefined)
   }, [api, focus, posts.data])
+  // A few people to start with: never someone already followed.
+  const people = useAsync(() => api.discover(''), [api])
+  const mine = useAsync(async () => (await api.myDetails().catch(() => null))?.topics ?? [], [api])
+  const few = (people.data ?? []).filter((m) => !m.followedByMe).slice(0, 3)
   return (
     <div>
+      <DiscoverGoalHint />
       {topics && topics.length > 0 && (
         <fieldset className="mb-4">
           <legend className="mb-2 text-sm font-semibold text-ink-800">What are you here for today?</legend>
@@ -262,6 +213,14 @@ function ForYou({ topics }: { topics: Topic[] | null }) {
           }
         />
       )}
+      {few.length > 0 && (
+        <section aria-labelledby="for-you-people" className="mt-6" data-testid="for-you-people">
+          <h2 id="for-you-people" className="mb-1 text-[15px] font-bold text-ink-900">
+            People you might value
+          </h2>
+          <People people={few} topics={topics} myTopics={mine.data} onChange={people.reload} />
+        </section>
+      )}
     </div>
   )
 }
@@ -284,24 +243,19 @@ function Creators({ topics }: { topics: Topic[] | null }) {
   return (
     <div>
       {topics && topics.length > 0 && (
-        <div className="mb-4">
-          <label htmlFor="discover-topic" className="mb-1.5 block text-sm font-semibold text-ink-700">
-            Browse by interest
-          </label>
-          <select
-            id="discover-topic"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            className="block h-12 w-full rounded-2xl border border-ink-200 bg-white px-4 text-base text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-          >
-            <option value="">Everyone</option>
+        <fieldset className="mb-2">
+          <legend className="sr-only">Browse by interest</legend>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" aria-pressed={topic === ''} onClick={() => setTopic('')} className={chip(topic === '')}>
+              Everyone
+            </button>
             {topics.map((t) => (
-              <option key={t.slug} value={t.slug}>
+              <button key={t.slug} type="button" aria-pressed={topic === t.slug} onClick={() => setTopic(t.slug)} className={chip(topic === t.slug)}>
                 {t.label}
-              </option>
+              </button>
             ))}
-          </select>
-        </div>
+          </div>
+        </fieldset>
       )}
       {list.error !== null && <ErrorNote error={list.error} />}
       {list.data === undefined && list.error === null && <p className="text-sm text-ink-600">Finding people…</p>}
@@ -340,10 +294,10 @@ function People({
   onOpen?: () => void
 }) {
   return (
-    <ul className="space-y-3" onClickCapture={(e) => onOpen && (e.target as HTMLElement).closest('a') && onOpen()}>
+    <ul className="divide-y divide-ink-100" onClickCapture={(e) => onOpen && (e.target as HTMLElement).closest('a') && onOpen()}>
       {people.map((m) => (
         <li key={m.id}>
-          <PersonSummary member={m} topics={topics} myTopics={myTopics} onChange={onChange} source={fromSearch ? 'search' : 'discover'} />
+          <PersonSummary member={m} topics={topics} myTopics={myTopics} onChange={onChange} source={fromSearch ? 'search' : 'discover'} variant="row" />
         </li>
       ))}
     </ul>

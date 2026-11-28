@@ -6,14 +6,12 @@ import { Card, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
 import {
   AppApiError,
-  IDENTITIES,
   LIMITS,
   messageFor,
   normalizeWebsite,
   shortTextProblem,
   websiteLabel,
   type DiscoverMember,
-  type Identity,
   type MyDetails,
   type ProfileDetails,
   type Topic,
@@ -29,15 +27,9 @@ import { InviterCard, MySplitIntro } from './onboarding'
  * and "Why should people follow you?". Used by first-time setup, the profile
  * editor, profile pages and Discover.
  *
- * The identity preference only describes the member. It never changes what
- * they can do: the database decides access from pilot membership alone.
+ * The identity preference (kept in the data, no longer asked) only described
+ * the member and never changed what they can do.
  */
-
-export const IDENTITY_TEXT: Record<Identity, { label: string; body: string; badge: string }> = {
-  creator: { label: 'Share my own work', body: "I'd like to post and grow an audience.", badge: 'Creator' },
-  fan: { label: "Find creators I'll love", body: "I'm mostly here to discover, follow and support.", badge: 'Fan' },
-  both: { label: 'A bit of both', body: 'I want to post and to follow other creators.', badge: 'Creator and fan' },
-}
 
 /** Step N of M, as text and a progress bar. */
 export function SetupProgress({ step, total, label }: { step: number; total: number; label: string }) {
@@ -58,40 +50,6 @@ export function SetupProgress({ step, total, label }: { step: number; total: num
         <div className="h-full rounded-full bg-brand-600 transition-[width]" style={{ width: `${(step / total) * 100}%` }} />
       </div>
     </div>
-  )
-}
-
-export function IdentityPicker({ value, onChange, hideLegend }: { value: Identity | null; onChange: (v: Identity | null) => void; hideLegend?: boolean }) {
-  const name = useId()
-  return (
-    <fieldset>
-      {/* In setup the page heading asks the same question, so the legend is for screen readers only there. */}
-      <legend className={hideLegend ? 'sr-only' : 'text-sm font-semibold text-ink-800'}>What brings you to Splitpost?</legend>
-      <p id={`${name}-note`} className="mt-1 text-sm text-ink-500">
-        Optional. It only helps us suggest where to start. Every account can post, follow, build a Clique and advertise, whatever you choose, and you can change
-        it later.
-      </p>
-      <div className="mt-3 grid gap-2" aria-describedby={`${name}-note`}>
-        {IDENTITIES.map((id) => {
-          const checked = value === id
-          return (
-            <label
-              key={id}
-              className={clsx(
-                'flex min-h-14 cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition focus-within:ring-2 focus-within:ring-brand-300',
-                checked ? 'border-brand-500 bg-brand-50' : 'border-ink-200 bg-white hover:border-ink-300',
-              )}
-            >
-              <input type="radio" name={name} value={id} checked={checked} onChange={() => onChange(id)} className="mt-1 h-4 w-4 accent-brand-600" />
-              <span>
-                <span className="block font-semibold text-ink-900">{IDENTITY_TEXT[id].label}</span>
-                <span className="block text-sm text-ink-600">{IDENTITY_TEXT[id].body}</span>
-              </span>
-            </label>
-          )
-        })}
-      </div>
-    </fieldset>
   )
 }
 
@@ -611,11 +569,27 @@ export function PersonSummary({
   myTopics?: string[]
   /** Where a follow from this card starts (20261204000000 adds 'search'). */
   source?: FollowSource
-  /** Discover's first recommendation: the approved visual hero card (SP-REFINE-001, SP-UAT-001). */
-  variant?: 'card' | 'hero'
+  /** 'row': the compact recommendation row (Discover, Nov 28). 'hero': the visual hero card (SP-REFINE-001). */
+  variant?: 'card' | 'hero' | 'row'
 }) {
   const profile = `/app/u/${member.username}`
   const d = member.details
+  if (variant === 'row')
+    return (
+      <div className="flex items-center gap-3 py-2.5" data-testid="person-row">
+        <Link to={profile} aria-hidden="true" tabIndex={-1} className="shrink-0">
+          <MemberAvatar member={member} size={44} />
+        </Link>
+        <div className="min-w-0 flex-1 leading-tight">
+          <MemberLink member={member} className="block truncate" />
+          <p className="mt-0.5 truncate text-[13px] text-ink-600" data-testid="person-reason">
+            {personReason(member, topics, myTopics)}
+          </p>
+          {d?.bio && <p className="mt-0.5 truncate text-[13px] text-ink-800">{d.bio}</p>}
+        </div>
+        <RelationshipButtons member={member} onChange={onChange} source={source} compact />
+      </div>
+    )
   if (variant === 'hero')
     return (
       <div className="overflow-hidden rounded-[26px] bg-white shadow-[0_10px_30px_-18px_rgb(23_47_112/0.55),0_0_0_1px_rgb(19_25_27/0.05)]" data-testid="discover-hero-card">
@@ -693,10 +667,41 @@ export function PersonSummary({
 }
 
 /**
+ * Why this person is suggested, from what is already known about them and
+ * nothing else: interests shared with you, or what they post about, then how
+ * many posts they have. No signal is invented.
+ */
+export function personReason(member: DiscoverMember, topics: Topic[] | null | undefined, myTopics?: string[]) {
+  const label = (slug: string) => topics?.find((t) => t.slug === slug)?.label
+  const theirs = member.details?.topics ?? []
+  const shared = myTopics ? theirs.filter((t) => myTopics.includes(t)) : []
+  const parts: string[] = []
+  if ((member.sharedTopics ?? 0) > 0 || shared.length > 0) {
+    const first = shared[0] ? label(shared[0]) : undefined
+    const n = member.sharedTopics ?? shared.length
+    parts.push(first ? `Also into ${first}${n > 1 ? ` and ${n - 1} more of your interests` : ''}` : `Shares ${n} of your interests`)
+  } else if (theirs[0] && label(theirs[0])) parts.push(`Posts about ${label(theirs[0])}`)
+  parts.push(member.postCount === 0 ? 'No posts yet' : `${member.postCount} ${member.postCount === 1 ? 'post' : 'posts'}`)
+  parts.push(`@${member.username}`)
+  return parts.join(' · ')
+}
+
+/**
  * People the member doesn't follow yet, shared interests first. Shows
  * nothing on a database without profile details (the list is empty).
  */
-export function SuggestedPeople({ heading = 'Suggested for you', emptyText, limit = 5 }: { heading?: string | null; emptyText?: string; limit?: number }) {
+export function SuggestedPeople({
+  heading = 'Suggested for you',
+  emptyText,
+  limit = 5,
+  variant = 'card',
+}: {
+  heading?: string | null
+  emptyText?: string
+  limit?: number
+  /** 'row' for the compact list (Home); setup keeps the fuller card with bio and why to follow. */
+  variant?: 'card' | 'row'
+}) {
   const api = useAppApi()
   const { topics } = useTopics()
   const [people, setPeople] = useState<DiscoverMember[] | undefined>(undefined)
@@ -727,10 +732,11 @@ export function SuggestedPeople({ heading = 'Suggested for you', emptyText, limi
           {heading}
         </h2>
       )}
-      <ul className="space-y-3">
+      <ul className={variant === 'row' ? 'divide-y divide-ink-100' : 'space-y-3'}>
         {people.map((m) => (
           <li key={m.id}>
             <PersonSummary
+              variant={variant}
               member={m}
               topics={topics}
               myTopics={mine}
