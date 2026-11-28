@@ -95,7 +95,8 @@ test('member Production is recorded (one valid project, not staging or the waitl
     [p.memberProduction.ref, 'avatar', 'd2784151ef162e5967851f9d7a8849b7c8a617ef', 1],
     [p.memberProduction.ref, 'post-media', '1fa2e7aa4b243019d69ec8ded901a1a40b3117c8', 3],
   ])
-  assert.ok(ledger.deployments.every((e) => ['avatar', 'post-media'].includes(e.function)), 'only avatar and post-media are in the ledger (never join-waitlist)')
+  assert.ok(ledger.deployments.every((e) => ['avatar', 'post-media', 'waitlist-bridge'].includes(e.function)), 'only avatar, post-media and waitlist-bridge are in the ledger (never join-waitlist)')
+  assert.ok(ledger.deployments.filter((e) => e.function === 'waitlist-bridge').every((e) => e.target === 'staging'), 'waitlist-bridge is approved on staging only')
   assert.match(read('docs/function-evidence-log.md'), /\| Time \(UTC\) \| Action \| Target \| Project \| Function \| Commit \| Version \| Operator \| Reason \| Result \|/)
 })
 

@@ -242,7 +242,10 @@ test('unit: the ledger is strict, and holds exactly the approved deployments', (
     ['staging', 'kpudeppgokpjhvaqrprn', 'post-media', '74d41d7e12c211d7f08c3aace5a51fab1fba4052', 3, '74d41d7e12c211d7f08c3aace5a51fab1fba4052.ded92eff6f22f8d5622cfc422358ee2f4233b2d409be43a48bb1bdbe60881c11', 45862869246],
     // post-media at 1fa2e7a (PB-2, founder-only Production), member Production v3 (verify run 46051971520).
     ['member-production', 'brfdqkondnnzsguailcc', 'post-media', '1fa2e7aa4b243019d69ec8ded901a1a40b3117c8', 3, '1fa2e7aa4b243019d69ec8ded901a1a40b3117c8.ded92eff6f22f8d5622cfc422358ee2f4233b2d409be43a48bb1bdbe60881c11', 46051971520],
+    // waitlist-bridge at 3f058eb (PR #146's merge: BL-009 with nosniff), staging v3 (verify run 46113216465).
+    ['staging', 'kpudeppgokpjhvaqrprn', 'waitlist-bridge', '3f058ebb8b3cf08fe4d7b9e3b7aa86cbe7a243dd', 3, '3f058ebb8b3cf08fe4d7b9e3b7aa86cbe7a243dd.2b7ddd6ef46c079161c9fad3527398de5db27bd477ec5440f417b60e6f12b52f', 46113216465],
   ])
+  assert.ok(ledger.deployments.filter((e) => e.function === 'waitlist-bridge').every((e) => e.target === 'staging'), 'waitlist-bridge is approved on staging only (invitations stay closed on member Production)')
   assert.ok(ledger.deployments.filter((e) => e.function === 'post-media').every((e) => ['staging', 'member-production'].includes(e.target)), 'post-media is approved on staging and member Production only')
   const c = 'c'.repeat(40)
   const good = { target: 'member-production', ref: MEMBER, function: 'avatar', commit: c, version: 2, build: `${c}.${'d'.repeat(64)}`, approvedBy: 'founder', approvedAt: '2026-12-01', verifyRunId: 9 }
