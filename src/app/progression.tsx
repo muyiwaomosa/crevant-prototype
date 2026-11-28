@@ -4,8 +4,8 @@
  * goals, review, holds, corrections and scorecard in Control Center. Shown to
  * members only while the progression switch is on. Nothing here is paid.
  */
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Check, ChevronRight } from 'lucide-react'
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
+import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Card, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
@@ -46,15 +46,15 @@ export const goalText = (metric: string) => GOAL_TEXT[metric] ?? { label: metric
 export const NEXT_ACTION: Record<string, { label: string; to: string }> = {
   original_posts: { label: 'Create a post', to: '/app/new' },
   posting_weeks: { label: 'Post this week', to: '/app/new' },
-  genuine_followers: { label: 'Invite people who follow you elsewhere', to: '/app/split?face=activity' },
+  genuine_followers: { label: 'Invite people who follow you elsewhere', to: '/app/split#invite' },
   clique_connections: { label: 'Post something your supporters will value', to: '/app/new' },
   returning_supporters: { label: 'Post for your supporters', to: '/app/new' },
   clique_creators: { label: 'Choose your Clique', to: '/app/clique' },
-  meaningful_engagements: { label: 'Find a post to support', to: '/app' },
+  meaningful_engagements: { label: 'Find a post to support', to: '/app/discover' },
   engaged_creators: { label: 'Discover creators', to: '/app/discover' },
   supporting_weeks: { label: 'Support your Clique this week', to: '/app' },
   external_shares: { label: 'Share a post you value', to: '/app' },
-  qualified_referrals: { label: 'Invite someone', to: '/app/split?face=activity' },
+  qualified_referrals: { label: 'Invite someone', to: '/app/split#invite' },
 }
 
 /** A small ring: goals done out of the total (decorative; the text says the same). */
@@ -146,10 +146,46 @@ export function PointsBar({ recognized, redeemable }: { recognized: number; rede
   )
 }
 
+/**
+ * One milestone (SP-PRG-001 goal). Its label, value against target and bar
+ * always show; the detail (what is left and where to do it) opens and closes.
+ * The suggested next milestone starts open. Values and targets are the server's.
+ */
 function StepRow({ step, suggested = false }: { step: GoalStep; suggested?: boolean }) {
   const t = goalText(step.metric)
   const met = step.target !== null && step.value >= step.target
   const action = NEXT_ACTION[step.metric]
+  const [open, setOpen] = useState(suggested)
+  const detailId = useId()
+  const expandable = !met && step.target !== null
+  const head = (
+    <>
+      <span className="flex items-center gap-2.5 text-[14px]">
+        <span
+          className={`inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${met ? 'bg-[#0f7a64] text-white' : 'bg-ink-200'}`}
+          aria-hidden="true"
+        >
+          {met && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+        </span>
+        <span className="flex-1 text-ink-800">
+          {t.label}
+          {met && <span className="sr-only"> (done)</span>}
+        </span>
+        <span className="text-[12px] tabular-nums text-ink-600">
+          {step.target === null ? `${step.value} ${t.unit}` : `${Math.min(step.value, step.target)} / ${step.target}`}
+        </span>
+        {expandable && <ChevronDown className={`h-4 w-4 shrink-0 text-ink-500 transition ${open ? 'rotate-180' : ''}`} aria-hidden="true" />}
+      </span>
+      {step.target !== null && (
+        <span className="ml-[32px] mt-1.5 block h-1.5 overflow-hidden rounded-full bg-[#efe9de]" aria-hidden="true">
+          <span
+            className={`block h-full rounded-full ${met ? 'bg-[#0f7a64]' : 'bg-brand-600'}`}
+            style={{ width: `${Math.round((Math.min(step.value, step.target) / Math.max(1, step.target)) * 100)}%` }}
+          />
+        </span>
+      )}
+    </>
+  )
   return (
     <li
       data-testid="goal-step"
@@ -157,46 +193,32 @@ function StepRow({ step, suggested = false }: { step: GoalStep; suggested?: bool
       data-suggested={suggested ? 'true' : undefined}
       className={suggested ? '-mx-2 rounded-2xl bg-[#fdeee2] px-2 py-2' : undefined}
     >
-    {suggested && <p className="mb-1 ml-[32px] text-[11px] font-bold uppercase tracking-[0.1em] text-[#94481a]">Suggested next</p>}
-    <div className="flex items-center gap-2.5 text-[14px]">
-      <span
-        className={`inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${met ? 'bg-[#0f7a64] text-white' : 'bg-ink-200'}`}
-        aria-hidden="true"
-      >
-        {met && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
-      </span>
-      <span className="flex-1 text-ink-800">
-        {t.label}
-        {met && <span className="sr-only"> (done)</span>}
-      </span>
-      <span className="text-[12px] tabular-nums text-ink-600">
-        {step.target === null ? `${step.value} ${t.unit}` : `${Math.min(step.value, step.target)} / ${step.target}`}
-      </span>
-    </div>
-    {!met && step.target !== null && (
-      <div className="ml-[32px] mt-1.5">
-        <div className="h-1.5 overflow-hidden rounded-full bg-[#efe9de]" aria-hidden="true">
-          <div className="h-full rounded-full bg-brand-600" style={{ width: `${Math.round((Math.min(step.value, step.target) / step.target) * 100)}%` }} />
+      {suggested && <p className="mb-1 ml-[32px] text-[11px] font-bold uppercase tracking-[0.1em] text-[#94481a]">Suggested next</p>}
+      {expandable ? (
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls={detailId} className="block w-full text-left">
+          {head}
+        </button>
+      ) : (
+        <div>{head}</div>
+      )}
+      {expandable && open && step.target !== null && (
+        <div id={detailId} className="ml-[32px] mt-1">
+          <p className="text-[12px] text-ink-600">{Math.max(0, step.target - step.value)} more to go</p>
+          {action && (
+            <Link to={action.to} className="mt-1 inline-flex items-center gap-0.5 text-[13px] font-semibold text-brand-700" data-testid="goal-action">
+              {action.label} <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          )}
         </div>
-        <p className="mt-1 text-[12px] text-ink-600">
-          {Math.max(0, step.target - step.value)} more to go
-        </p>
-        {action && (
-          <Link to={action.to} className="mt-1 inline-flex items-center gap-0.5 text-[13px] font-semibold text-brand-700" data-testid="goal-action">
-            {action.label} <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </Link>
-        )}
-      </div>
-    )}
+      )}
     </li>
   )
 }
 
 /**
- * The journey as a path (SP-UAT-001): what is left, in any order (the goals
+ * The journey's milestones (SP-UAT-001): what is left, in any order (the goals
  * can be pursued together, so nothing is locked behind another), with the one
- * closest to done suggested; then what is done. Values and targets are the
- * server's.
+ * closest to done suggested; then what is done.
  */
 function GoalPath({ steps }: { steps: GoalStep[] }) {
   const open = steps.filter((s) => s.target === null || s.value < s.target)
@@ -211,7 +233,7 @@ function GoalPath({ steps }: { steps: GoalStep[] }) {
           <h3 className="text-[12px] font-bold uppercase tracking-[0.1em] text-ink-600">To do, in any order</h3>
           <ul className="mt-2 space-y-2.5">
             {open.map((s) => (
-              <StepRow key={s.metric} step={s} suggested={s.metric === suggested && open.length > 1} />
+              <StepRow key={s.metric} step={s} suggested={s.metric === suggested} />
             ))}
           </ul>
         </div>
@@ -261,68 +283,94 @@ export function EarningsRow({ e, testId, estimatedCents }: { e: EarningsByState;
   )
 }
 
+/** The approved rule, in one sentence: meeting every goal starts a review; it never unlocks by itself. */
+export const REVIEW_RULE = 'Meeting all 5 goals starts an eligibility review. Nothing unlocks automatically: locked amounts unlock only if the review is approved.'
+
 /** One plain sentence for where the member stands, and what happens next. */
-function statusLine(j: ProgressJourney, goalsSet: boolean, next: GoalStep | undefined): string {
+export function statusLine(j: ProgressJourney, goalsSet: boolean, next: GoalStep | undefined): string {
   switch (j.status) {
     case 'under_review':
-      return 'You have met every goal. We are checking it, and then your earnings unlock.'
+      return 'You have met all 5 goals, so your eligibility is under review. Locked amounts unlock only if the review is approved.'
     case 'qualified':
-      return 'Qualified. Your earnings are unlocked. Nothing is paid during the pilot.'
+      return 'Qualified after review. Your simulated earnings for this journey are unlocked. Nothing is paid during the pilot.'
     case 'eligibility_paused':
       return 'Qualified, but release is paused while a review or restriction is in place. Your qualification is kept.'
     case 'revoked':
       return 'Your qualification was revoked after a review. See the message below about appealing.'
     default:
       if (!goalsSet) return 'Your progress so far. The goals have not been set yet, so nothing unlocks for now.'
-      return next ? `Next: ${goalText(next.metric).label.toLowerCase()}.` : 'You have met every goal. Open My Split again soon to see it checked.'
+      return next
+        ? `Next: ${goalText(next.metric).label.toLowerCase()}.`
+        : 'You have met every goal. An eligibility review starts next; nothing unlocks until it is approved.'
   }
+}
+
+export const STATUS_TONE: Record<QualificationStatus, string> = {
+  in_progress: 'bg-brand-50 text-brand-800',
+  under_review: 'bg-[#fde6d3] text-[#7a3d12]',
+  qualified: 'bg-[#e7f4f1] text-[#1f5e52]',
+  eligibility_paused: 'bg-ink-100 text-ink-800',
+  revoked: 'bg-[#fbe3e6] text-[#8a1c2c]',
+}
+
+export function StatusPill({ status, testId }: { status: QualificationStatus; testId?: string }) {
+  return (
+    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[12px] font-bold ${STATUS_TONE[status]}`} data-testid={testId}>
+      {STATUS_TEXT[status]}
+    </span>
+  )
 }
 
 const GROWTH: Record<GoalAudience, string[]> = {
   creator: [
     'Reply to the comments of people who come back.',
     'Post in the weeks your supporters are most active.',
-    'Look at Reach and Connection in Your insights to see what brings people back.',
+    'Look at Reach and Connection in Your Insights to see what brings people back.',
   ],
   consumer: ['Keep supporting the creators in your Clique.', 'Discover a new creator in Discover.', 'Tell a creator what their post meant to you.'],
 }
 
+/**
+ * One qualification journey (unified My Split). The title, milestones done and
+ * qualification status always show, even collapsed, and so do notices about a
+ * hold or a revocation; the milestones open and close.
+ */
 function GoalCard({
   title,
   journey,
   earnings,
   audience,
   notices,
+  initiallyOpen,
 }: {
   title: string
   journey: ProgressJourney
   earnings: EarningsByState
   audience: GoalAudience
   notices: ProgressNotice[]
+  initiallyOpen: boolean
 }) {
-  const { set, done, next } = journeyProgress(journey)
-  const showSteps = journey.status === 'in_progress'
+  const { set, done, total, next } = journeyProgress(journey)
+  const [open, setOpen] = useState(initiallyOpen)
+  const bodyId = useId()
   const unlocks = earnings.lockedCents + earnings.pausedCents
   return (
-    <div data-testid={`goals-${audience}`}>
-      <Card className="p-5">
-        <div className="flex items-center gap-3">
-          {set && journey.status === 'in_progress' && <GoalRing done={done} total={journey.steps.length} tone={audience === 'creator' ? 'brand' : 'green'} />}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="font-bold text-ink-900">{title}</h2>
-              <span className="text-[13px] font-semibold text-ink-700" data-testid={`goals-${audience}-badge`}>
-                {journey.status === 'in_progress' && set ? `${done} of ${journey.steps.length}` : STATUS_TEXT[journey.status]}
-              </span>
-            </div>
-            {journey.status === 'in_progress' && set && unlocks > 0 && (
-              <p className="text-[12.5px] text-ink-600">Reach every goal to unlock {dollars(unlocks)} (simulated).</p>
-            )}
-          </div>
-        </div>
-        <p className="mt-1 text-[13px] leading-relaxed text-ink-600" data-testid={`goals-${audience}-status`}>
-          {statusLine(journey, set, next)}
-        </p>
+    <div data-testid={`goals-${audience}`} data-open={open ? 'true' : 'false'}>
+      <Card className="p-4 sm:p-5">
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls={bodyId} className="flex w-full items-center gap-3 text-left">
+          <GoalRing done={set ? done : 0} total={total || 5} tone={audience === 'creator' ? 'brand' : 'green'} />
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-display text-[18px] font-extrabold text-ink-900">{title}</span>
+              <StatusPill status={journey.status} testId={`goals-${audience}-badge`} />
+            </span>
+            <span className="block text-[13px] text-ink-600" data-testid={`goals-${audience}-count`}>
+              {set ? `${done} of ${total} goals met` : 'Goals not set yet'}
+            </span>
+          </span>
+          <ChevronDown className={`h-5 w-5 shrink-0 text-ink-500 transition ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+          <span className="sr-only">{open ? 'Hide goals' : 'Show goals'}</span>
+        </button>
         {notices.map((n) => (
           <p key={`${n.kind}-${n.since}`} className="mt-2 rounded-xl bg-paper px-3 py-2 text-[13px] text-ink-800" data-testid="progress-notice">
             {n.message}{' '}
@@ -331,40 +379,74 @@ function GoalCard({
             </span>
           </p>
         ))}
-        {showSteps && (
-          <GoalPath steps={journey.steps} />
-        )}
-        {journey.status === 'in_progress' && journey.goalsSince && set && (
-          <p className="mt-2 text-[12px] text-ink-600">
-            Goals in force since {new Date(journey.goalsSince).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
+        <div id={bodyId} hidden={!open}>
+          <p className="mt-3 text-[13px] leading-relaxed text-ink-700" data-testid={`goals-${audience}-status`}>
+            {statusLine(journey, set, next)}
           </p>
-        )}
-        {(journey.status === 'qualified' || journey.status === 'eligibility_paused') && (
-          <div className="mt-3" data-testid={`growth-${audience}`}>
-            <h3 className="text-[13px] font-bold text-ink-900">Keep growing (optional)</h3>
-            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-ink-700">
-              {GROWTH[audience].map((g) => (
-                <li key={g}>{g}</li>
-              ))}
-            </ul>
-            <p className="mt-1 text-[12px] text-ink-600">Optional. Your qualification never depends on them.</p>
-          </div>
-        )}
+          {journey.status === 'in_progress' && set && unlocks > 0 && (
+            <p className="mt-1 text-[12.5px] text-ink-600">Locked for this journey: {dollars(unlocks)} (simulated).</p>
+          )}
+          {journey.status === 'in_progress' && <GoalPath steps={journey.steps} />}
+          {journey.status === 'in_progress' && set && (
+            <p className="mt-3 rounded-xl bg-ink-50 px-3 py-2 text-[12.5px] leading-relaxed text-ink-700" data-testid={`review-rule-${audience}`}>
+              Goals can be met in any order. {REVIEW_RULE}
+            </p>
+          )}
+          {journey.status === 'in_progress' && journey.goalsSince && set && (
+            <p className="mt-2 text-[12px] text-ink-600">
+              Goals in force since {new Date(journey.goalsSince).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
+            </p>
+          )}
+          {(journey.status === 'qualified' || journey.status === 'eligibility_paused') && (
+            <div className="mt-3" data-testid={`growth-${audience}`}>
+              {journey.qualifiedAt && (
+                <p className="text-[13px] text-ink-700">
+                  Qualified on {new Date(journey.qualifiedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
+                </p>
+              )}
+              <h3 className="mt-2 text-[13px] font-bold text-ink-900">Keep growing (optional)</h3>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-ink-700">
+                {GROWTH[audience].map((g) => (
+                  <li key={g}>{g}</li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[12px] text-ink-600">Optional. Your qualification never depends on them.</p>
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   )
 }
 
-/** The goal cards of My Split (shown only while progression is on). */
-export function ProgressCards({ progress }: { progress: Extract<MyProgress, { enabled: true }> }) {
+/**
+ * Both journeys (shown only while progression is on): supporter first, since
+ * anyone can pursue it without posting, then creator. `open` names the
+ * journey that starts expanded (the one with the suggested next step).
+ */
+export function ProgressCards({ progress, open = 'consumer' }: { progress: Extract<MyProgress, { enabled: true }>; open?: GoalAudience | null }) {
   const creatorShown = creatorJourneyShown(progress)
   const notices = (a: GoalAudience) => journeyNotices(progress, a)
   return (
     <>
+      <GoalCard
+        title="Supporter goals"
+        audience="consumer"
+        journey={progress.consumer}
+        earnings={progress.earnings.consumer}
+        notices={notices('consumer')}
+        initiallyOpen={open === 'consumer'}
+      />
       {creatorShown && (
-        <GoalCard title="Creator goals" audience="creator" journey={progress.creator} earnings={progress.earnings.creator} notices={notices('creator')} />
+        <GoalCard
+          title="Creator goals"
+          audience="creator"
+          journey={progress.creator}
+          earnings={progress.earnings.creator}
+          notices={notices('creator')}
+          initiallyOpen={open === 'creator'}
+        />
       )}
-      <GoalCard title="Supporter goals" audience="consumer" journey={progress.consumer} earnings={progress.earnings.consumer} notices={notices('consumer')} />
     </>
   )
 }

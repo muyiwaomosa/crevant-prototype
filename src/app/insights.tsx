@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Download, Lightbulb } from 'lucide-react'
+import { ArrowLeft, Download, Lightbulb } from 'lucide-react'
 import { Card, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
-import { messageFor, type Audience, type ContributionInsights, type CreatorInsights, type FounderOverview } from './api'
+import { messageFor, type Audience, type ContributionInsights, type CreatorInsights, type FounderOverview, type SupportChoice } from './api'
+import { SUPPORT_LABEL, audienceStory } from './relationships'
 import { useAppApi } from './AppApiContext'
 import { InvitationLinksPanel, PrivacyRequestsPanel, RegistrationPanel, SwitchesPanel, WaitlistPanel } from './control'
 import { ActivationPanel, GoalsPanel } from './progression'
@@ -190,7 +191,12 @@ export function founderStory(o: FounderOverview): Story {
 }
 
 // ---------------------------------------------------------------------------
-// Creator faces (owner only, on the Profile).
+// Your Insights (unified, Nov 28): one page, reached from Profile, for every
+// member, with no creator or consumer identity to pick. It explains
+// performance and what to try next; rewards and progression stay in My Split.
+// Every core section is always shown: where there is nothing to count yet it
+// says so plainly ("not yet measured") and how to start. Only the existing
+// intelligence functions are read; nothing is estimated on the device.
 
 function useCreatorInsights(days: number) {
   const api = useAppApi()
@@ -210,9 +216,25 @@ function useCreatorInsights(days: number) {
   return { data, error }
 }
 
+function useValue<T>(load: () => Promise<T>, deps: unknown[]) {
+  const [v, setV] = useState<T | null | undefined>(undefined)
+  useEffect(() => {
+    let live = true
+    load().then(
+      (x) => live && setV(x),
+      () => live && setV(null),
+    )
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+  return v
+}
+
 function Period({ days, setDays }: { days: number; setDays: (d: number) => void }) {
   return (
-    <div role="group" aria-label="Period" className="mb-4 flex gap-2">
+    <div role="group" aria-label="Period" className="mb-2 flex gap-2">
       {[7, 28].map((d) => (
         <button
           key={d}
@@ -228,51 +250,209 @@ function Period({ days, setDays }: { days: number; setDays: (d: number) => void 
   )
 }
 
-function FaceShell({
-  children,
-  days,
-  setDays,
-  data,
-  error,
-}: {
-  children: (d: CreatorInsights) => ReactNode
-  days: number
-  setDays: (d: number) => void
-  data: CreatorInsights | null | undefined
-  error: unknown
-}) {
-  if (data === undefined) return <Spinner label="Loading your insights…" />
-  if (data === null) return error !== null ? <Message tone="error">{messageFor(error)}</Message> : <Message tone="info">Insights aren't available yet.</Message>
+function Section({ title, kind, testId, children }: { title: string; kind: 'Actual' | 'Non-binding'; testId: string; children: ReactNode }) {
+  const id = `insights-${testId}`
   return (
-    <div className="space-y-4">
-      <Period days={days} setDays={setDays} />
-      {children(data)}
+    <section aria-labelledby={id} data-testid={testId} className="mt-5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 id={id} className="font-display text-lg font-bold text-ink-900">
+          {title}
+        </h2>
+        <Tag kind={kind} />
+      </div>
+      <Card className="space-y-3 p-4 sm:p-5">{children}</Card>
+    </section>
+  )
+}
+
+function Stats({ rows }: { rows: Array<[string, ReactNode]> }) {
+  return (
+    <dl className={`grid gap-3 ${rows.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dd className="font-display text-2xl font-extrabold tabular-nums text-ink-900">{value}</dd>
+          <dt className="text-[13px] leading-snug text-ink-600">{label}</dt>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+/** What to do next: the insight's third step, or how to start where nothing is measured yet. */
+function Next({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex gap-3 rounded-2xl border border-[#f3c9a6] bg-spark-50 px-3 py-2.5 text-[14px] text-ink-900" data-testid="insight-next">
+      <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#7a3d12]" aria-hidden="true" />
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wide text-[#8a4a14]">What to do next</p>
+        <div>{children}</div>
+      </div>
     </div>
   )
 }
 
-function Ring({ value }: { value: number }) {
-  const r = 34
-  const c = 2 * Math.PI * r
+/** The three approved questions (IP-8), compact: What happened, What it means, What to do next. */
+function MiniSteps({ story }: { story: Story }) {
   return (
-    <svg viewBox="0 0 100 100" className="h-28 w-28 shrink-0" role="img" aria-label={`${value}% reached`}>
-      <circle cx="50" cy="50" r="44" fill="none" stroke="#a8d9cf" strokeWidth="9" />
-      <circle cx="50" cy="50" r={r} fill="none" stroke="#e6ecf8" strokeWidth="9" />
-      <circle
-        cx="50"
-        cy="50"
-        r={r}
-        fill="none"
-        stroke="#2a46a6"
-        strokeWidth="9"
-        strokeLinecap="round"
-        strokeDasharray={`${(c * value) / 100} ${c}`}
-        transform="rotate(-90 50 50)"
+    <div className="space-y-2.5" data-testid="insight-steps">
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wide text-ink-600">What happened</p>
+        <div className="text-[14px] text-ink-900">{story.happened}</div>
+      </div>
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wide text-ink-600">What it means</p>
+        <p className="text-[14px] text-ink-800">{story.means}</p>
+      </div>
+      <Next>{story.next}</Next>
+    </div>
+  )
+}
+
+const UNAVAILABLE = 'This isn’t available yet in the pilot.'
+
+function NotYet({ children }: { children: ReactNode }) {
+  return (
+    <p className="rounded-2xl bg-paper px-3 py-2 text-[13.5px] text-ink-700" data-testid="not-yet-measured">
+      <span className="font-semibold text-ink-900">Not yet measured. </span>
+      {children}
+    </p>
+  )
+}
+
+export function InsightsPage() {
+  const api = useAppApi()
+  const [days, setDays] = useState(7)
+  const { data, error } = useCreatorInsights(days)
+  const audience = useValue(() => api.audience(), [api])
+  const contribution = useValue(() => api.myContributionInsights(), [api])
+  return (
+    <>
+      <Link to="/app/profile" className="mb-3 inline-flex items-center gap-1 text-[14px] font-semibold text-brand-700" data-testid="insights-back">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Your profile
+      </Link>
+      <PageHeader title="Your Insights" subtitle="How your posts and your support are doing, and what to try next. Only you see this." />
+      <Period days={days} setDays={setDays} />
+      {data === undefined ? (
+        <Spinner label="Loading your insights…" />
+      ) : (
+        <>
+          {data === null && error !== null && <Message tone="error">{messageFor(error)}</Message>}
+          <ReachSection i={data} />
+          <ContentSection i={data} />
+          <AudienceSection i={data} a={audience} />
+          <ConnectionSection i={data} />
+          <SupportSection c={contribution} />
+          <MonetizationSection i={data} />
+        </>
+      )}
+      <p className="mt-5 text-[13px] text-ink-600">
+        Your simulated rewards, Connection Points and goals are in{' '}
+        <Link to="/app/split" className="font-semibold text-brand-700 underline">
+          My Split
+        </Link>
+        .
+      </p>
+    </>
+  )
+}
+
+function ReachSection({ i }: { i: CreatorInsights | null }) {
+  if (!i)
+    return (
+      <Section title="Reach" kind="Actual" testId="attention-face">
+        <NotYet>{UNAVAILABLE}</NotYet>
+      </Section>
+    )
+  const a = i.attention
+  const story = attentionStory(i)
+  return (
+    <Section title="Reach" kind="Actual" testId="attention-face">
+      <Stats
+        rows={[
+          ['Posts', a.posts],
+          ['Followers', a.followers],
+          ['Saw a post', a.reached],
+        ]}
       />
-      <text x="50" y="55" textAnchor="middle" className="fill-ink-900 font-display text-[16px] font-extrabold">
-        {value}%
-      </text>
-    </svg>
+      {/* Distribution coverage and actual reach are different things, and are shown apart. */}
+      <dl className="space-y-2 rounded-2xl bg-paper px-3 py-2.5 text-[13.5px]" data-testid="coverage-vs-reach">
+        <div>
+          <dt className="inline font-semibold text-ink-900">Available: </dt>
+          <dd className="inline text-ink-700">
+            {a.followers === 0 ? 'your posts will be in the Home feed of everyone who follows you.' : `100%. Your posts were in all ${a.followers} followers’ Home feeds.`} Being
+            available doesn’t mean being seen.
+          </dd>
+        </div>
+        <div>
+          <dt className="inline font-semibold text-ink-900">Reached: </dt>
+          <dd className="inline text-ink-700">
+            {a.followers === 0 ? 'not yet measured. Reach starts with your first followers.' : `${pct(a.reached, a.followers)}%. ${a.reached} of ${a.followers} actually viewed a post.`}
+          </dd>
+        </div>
+      </dl>
+      {a.posts === 0 ? (
+        <Next>
+          Reach starts with your first post.{' '}
+          <Link to="/app/new" className="font-semibold text-brand-700 underline">
+            Create a post
+          </Link>
+        </Next>
+      ) : (
+        <MiniSteps story={story} />
+      )}
+    </Section>
+  )
+}
+
+function ContentSection({ i }: { i: CreatorInsights | null }) {
+  if (!i)
+    return (
+      <Section title="Content" kind="Actual" testId="content-insights">
+        <NotYet>{UNAVAILABLE}</NotYet>
+      </Section>
+    )
+  const top = i.attention.top_posts
+  return (
+    <Section title="Content" kind="Actual" testId="content-insights">
+      {top.length === 0 ? (
+        <>
+          <NotYet>Your posts that travel furthest will be listed here, with their views, comments, saves, reposts and shares.</NotYet>
+          <Next>
+            Give each post a topic so people who care about it can find it in Discover.{' '}
+            <Link to="/app/new" className="font-semibold text-brand-700 underline">
+              Create a post
+            </Link>
+          </Next>
+        </>
+      ) : (
+        <>
+          <h3 className="font-semibold text-ink-900">Your posts that travelled furthest</h3>
+          <ul className="space-y-2 text-[14px]">
+            {top.map((p) => (
+              <li key={p.id}>
+                <Link to={`/app/post/${p.id}`} className="font-semibold text-ink-900 underline-offset-2 hover:underline">
+                  {p.excerpt}
+                </Link>
+                <p className="text-[13px] text-ink-600">
+                  {(
+                    [
+                      [p.views, 'view'],
+                      [p.comments, 'comment'],
+                      [p.saves, 'save'],
+                      [p.reposts, 'repost'],
+                      [p.shares, 'share'],
+                    ] as Array<[number, string]>
+                  )
+                    .map(([n, w]) => `${n} ${w}${n === 1 ? '' : 's'}`)
+                    .join(' · ')}
+                </p>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[12.5px] text-ink-600">Views count opened posts. Reading time in the feed isn’t measured yet.</p>
+        </>
+      )}
+    </Section>
   )
 }
 
@@ -293,276 +473,167 @@ function Bars({ rows }: { rows: Array<[string, number]> }) {
   )
 }
 
-export function AttentionFace() {
-  const [days, setDays] = useState(7)
-  const { data, error } = useCreatorInsights(days)
-  return (
-    <FaceShell days={days} setDays={setDays} data={data} error={error}>
-      {(i) => {
-        const a = i.attention
-        const story = attentionStory(i)
-        return (
-          <div data-testid="attention-face" className="space-y-4">
-            <Steps
-              story={{
-                ...story,
-                happened: (
-                  <div className="space-y-3">
-                    <p className="font-display text-[22px] font-extrabold leading-tight">{story.happened}</p>
-                    <Card className="flex items-center gap-4 p-4">
-                      <Ring value={pct(a.reached, a.followers)} />
-                      <dl className="space-y-2 text-[14px]">
-                        <div>
-                          <dt className="font-display text-lg font-extrabold">100%</dt>
-                          <dd className="text-ink-700">Available. Your posts were in every follower's Home.</dd>
-                        </div>
-                        <div>
-                          <dt className="font-display text-lg font-extrabold">{pct(a.reached, a.followers)}%</dt>
-                          <dd className="text-ink-700">Reached. Followers who actually viewed a post.</dd>
-                        </div>
-                      </dl>
-                    </Card>
-                    <Card className="p-4">
-                      <h3 className="mb-2 font-semibold text-ink-900">
-                        Where your {a.new_followers === 1 ? 'new follower' : `${a.new_followers} new followers`} came from
-                      </h3>
-                      {a.new_followers === 0 ? (
-                        <p className="text-[14px] text-ink-600">No new followers in this period.</p>
-                      ) : (
-                        <Bars
-                          rows={Object.entries(a.sources)
-                            .sort((x, y) => y[1] - x[1])
-                            .map(([k, n]) => [SOURCE_LABEL[k] ?? k, n])}
-                        />
-                      )}
-                    </Card>
-                    {a.top_posts.length > 0 && (
-                      <Card className="p-4">
-                        <h3 className="mb-2 font-semibold text-ink-900">Your posts that travelled furthest</h3>
-                        <ul className="space-y-2 text-[14px]">
-                          {a.top_posts.map((p) => (
-                            <li key={p.id}>
-                              <Link to={`/app/post/${p.id}`} className="font-semibold text-ink-900 underline-offset-2 hover:underline">
-                                {p.excerpt}
-                              </Link>
-                              <p className="text-[13px] text-ink-600">
-                                {(
-                                  [
-                                    [p.views, 'view'],
-                                    [p.comments, 'comment'],
-                                    [p.saves, 'save'],
-                                    [p.reposts, 'repost'],
-                                    [p.shares, 'share'],
-                                  ] as Array<[number, string]>
-                                )
-                                  .map(([n, w]) => `${n} ${w}${n === 1 ? '' : 's'}`)
-                                  .join(' · ')}
-                              </p>
-                            </li>
-                          ))}
-                        </ul>
-                      </Card>
-                    )}
-                  </div>
-                ),
-              }}
-            />
-          </div>
-        )
-      }}
-    </FaceShell>
-  )
-}
-
-export function RetentionFace() {
-  const [days, setDays] = useState(7)
-  const { data, error } = useCreatorInsights(days)
-  return (
-    <FaceShell days={days} setDays={setDays} data={data} error={error}>
-      {(i) => {
-        const r = i.retention
-        const story = retentionStory(i)
-        return (
-          <div data-testid="retention-face">
-            <Steps
-              story={{
-                ...story,
-                happened: (
-                  <div className="space-y-3">
-                    <p className="font-display text-[22px] font-extrabold leading-tight">{story.happened}</p>
-                    <Card className="p-4">
-                      <dl className="grid grid-cols-2 gap-3 text-[14px] sm:grid-cols-4">
-                        {[
-                          ['Connections this week', r.connections_this_week],
-                          ['Active Supporters', r.active_supporters],
-                          ['Clique', r.clique],
-                          ['Came back on 2+ days', r.returning],
-                        ].map(([k, v]) => (
-                          <div key={k as string}>
-                            <dd className="font-display text-2xl font-extrabold tabular-nums">{v}</dd>
-                            <dt className="text-ink-600">{k}</dt>
-                          </div>
-                        ))}
-                      </dl>
-                      <p className="mt-3 text-[13px] text-ink-600">
-                        Coverage stays 100%: every post is in every follower's Home. Reach is who chose to look. Opening a post counts as a connection; in-feed
-                        reading time isn't measured yet, so this can only be an undercount.
-                      </p>
-                    </Card>
-                  </div>
-                ),
-              }}
-            />
-          </div>
-        )
-      }}
-    </FaceShell>
-  )
-}
-
-export function MoneyFace() {
-  const api = useAppApi()
-  const [days, setDays] = useState(28)
-  const { data, error } = useCreatorInsights(days)
-  const [aud, setAud] = useState<Audience | null>(null)
-  useEffect(() => {
-    let live = true
-    api.audience().then(
-      (x) => live && setAud(x),
-      () => undefined,
+function AudienceSection({ i, a }: { i: CreatorInsights | null; a: Audience | null | undefined }) {
+  const story = a ? audienceStory(a) : null
+  const support = a ? Object.entries(a.supportByChoice).filter(([, n]) => (n ?? 0) > 0) : []
+  const att = i?.attention
+  if (!i && !a)
+    return (
+      <Section title="Audience" kind="Actual" testId="audience-insight">
+        <NotYet>{a === undefined ? 'Loading…' : UNAVAILABLE}</NotYet>
+      </Section>
     )
-    return () => {
-      live = false
-    }
-  }, [api])
   return (
-    <FaceShell days={days} setDays={setDays} data={data} error={error}>
-      {(i) => {
-        const m = i.money
-        const story = moneyStory(i, aud)
-        const latest = m.simulated_by_month[0]
-        return (
-          <div data-testid="money-face">
-            <Steps
-              story={{
-                ...story,
-                happened: (
-                  <div className="space-y-3">
-                    <p className="font-display text-[22px] font-extrabold leading-tight">{story.happened}</p>
-                    <p>
-                      <Tag kind="Simulated" /> <span className="text-[13px] text-ink-600">Not paid during the pilot.</span>
-                    </p>
-                    {latest && (
-                      <div data-testid="simulated-earnings">
-                        <Card className="p-4">
-                          <h3 className="font-semibold text-ink-900">
-                            Your simulated share by month <Tag kind="Simulated" />
-                          </h3>
-                          {/* Equal segments on purpose: the shares themselves aren't shown until the Rewards Rules are legally reviewed. */}
-                          <div className="mt-2 grid h-9 grid-cols-3 overflow-hidden rounded-xl text-[13px] font-semibold" aria-label="Shared between you, the fan rewards pool and Splitpost">
-                            <span className="grid place-items-center bg-brand-700 text-white">You</span>
-                            <span className="grid place-items-center bg-[#a8d9cf] text-ink-900">Fans</span>
-                            <span className="grid place-items-center bg-ink-100 text-ink-800">Splitpost</span>
-                          </div>
-                          <p className="mt-2 text-[13px] text-ink-600">
-                            Ads placed with your posts are shared between you, the fan rewards pool and Splitpost. Ads elsewhere in the app aren't part of creator
-                            shares.
-                          </p>
-                          <ul className="mt-3 space-y-1 text-[14px]">
-                            {m.simulated_by_month.map((e) => (
-                              <li key={e.month} className="flex justify-between">
-                                <span>{monthName(e.month)}</span>
-                                <span className="font-semibold tabular-nums">{simulatedDollars(e.creator_cents)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                          <p className="mt-2 text-[13px] text-ink-700">Nothing is paid during the pilot.</p>
-                        </Card>
-                      </div>
-                    )}
-                    {m.ads_with_your_posts.length > 0 && (
-                      <Card className="p-4">
-                        <h3 className="mb-2 font-semibold text-ink-900">
-                          Ads shown with your posts <Tag kind="Actual" />
-                        </h3>
-                        <ul className="space-y-2 text-[14px]">
-                          {m.ads_with_your_posts.map((x) => (
-                            <li key={x.campaign + x.advertiser}>
-                              <p className="font-semibold">
-                                {x.campaign} · {x.advertiser}
-                              </p>
-                              <p className="text-[13px] text-ink-600">
-                                {x.posts} {x.posts === 1 ? 'post' : 'posts'} · {x.impressions} impressions · {x.clicks} clicks
-                              </p>
-                            </li>
-                          ))}
-                        </ul>
-                      </Card>
-                    )}
-                    <Card className="p-4 text-[14px]">
-                      <p>
-                        Actual income <Tag kind="Actual" /> <span className="font-semibold">{simulatedDollars(m.actual_income_cents)}</span>
-                      </p>
-                      {aud && aud.supportIntentCount > 0 && (
-                        <p className="mt-2">
-                          Support Intent <Tag kind="Non-binding" /> {aud.supportIntentCount}{' '}
-                          {aud.supportIntentCount === 1 ? 'person says they' : 'people say they'} would support you. Nothing is charged.
-                        </p>
-                      )}
-                    </Card>
-                  </div>
-                ),
-              }}
-            />
-          </div>
-        )
-      }}
-    </FaceShell>
+    <Section title="Audience" kind="Actual" testId="audience-insight">
+      <Stats
+        rows={[
+          // Followers and new followers for the chosen period, from the same read as Reach; the audience read adds the rest.
+          ['Followers', att ? att.followers : (a?.followerCount ?? 0)],
+          [att ? 'New this period' : 'New in 7 days', att ? att.new_followers : (a?.newFollowers7d ?? 0)],
+          ['In your Clique', a ? a.cliqueCount : (i?.retention.clique ?? 0)],
+          ['Active Supporters', a ? a.activeSupporterCount : (i?.retention.active_supporters ?? 0)],
+        ]}
+      />
+      {att && att.new_followers > 0 ? (
+        <div>
+          <h3 className="mb-2 font-semibold text-ink-900">
+            Where your {att.new_followers === 1 ? 'new follower' : `${att.new_followers} new followers`} came from
+          </h3>
+          <Bars
+            rows={Object.entries(att.sources)
+              .sort((x, y) => y[1] - x[1])
+              .map(([k, n]) => [SOURCE_LABEL[k] ?? k, n])}
+          />
+        </div>
+      ) : (
+        <NotYet>Where new followers find you (Discover, search, a post, your profile) appears here once someone follows you.</NotYet>
+      )}
+      {a && a.supportIntentCount > 0 && (
+        <p className="rounded-2xl border border-dashed border-[#a8d9cf] px-3 py-2 text-[13px] text-ink-800">
+          <span className="mr-1.5 rounded-full bg-[#e7f4f1] px-2 py-0.5 text-[11px] font-bold text-[#1f5e52]">Non-binding</span>
+          {a.supportIntentCount} {a.supportIntentCount === 1 ? 'person says they' : 'people say they'} would support your work
+          {support.length > 0 && `: ${support.map(([c, n]) => `${n} at ${SUPPORT_LABEL[c as SupportChoice] ?? c}`).join(', ')}`}. Nothing is charged.
+        </p>
+      )}
+      {story ? <MiniSteps story={story} /> : <Next>Post with a topic and share your profile link: followers come from Discover, search and shared posts.</Next>}
+    </Section>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Consumer: on My Split.
-
-export function ContributionInsight() {
-  const api = useAppApi()
-  const [c, setC] = useState<ContributionInsights | null>(null)
-  useEffect(() => {
-    let live = true
-    api.myContributionInsights().then(
-      (x) => live && setC(x),
-      () => undefined,
+function ConnectionSection({ i }: { i: CreatorInsights | null }) {
+  if (!i)
+    return (
+      <Section title="Connection" kind="Actual" testId="retention-face">
+        <NotYet>{UNAVAILABLE}</NotYet>
+      </Section>
     )
-    return () => {
-      live = false
-    }
-  }, [api])
-  if (!c) return null
-  const story = contributionStory(c)
+  const r = i.retention
+  const story = retentionStory(i)
   return (
-    <div data-testid="contribution-insight">
-      <Card className="space-y-3 p-5">
-        <h2 className="font-display text-lg font-extrabold text-ink-900">Your week</h2>
-        <Steps story={story} />
-        {c.referrals.joined > 0 && (
-          <p className="text-[13px] text-ink-700">
-            Referrals: {c.referrals.joined} joined · {c.referrals.waiting_review} waiting for review · {c.referrals.approved} qualified
-            {c.referrals.not_approved > 0 ? ` · ${c.referrals.not_approved} not approved` : ''}
-          </p>
-        )}
-        {c.opportunities.length > 0 && (
-          <ul className="space-y-1 text-[14px]">
-            {c.opportunities.map((o) => (
-              <li key={o.post_id}>
-                <Link to={`/app/post/${o.post_id}`} className="font-semibold text-brand-700 underline underline-offset-2">
-                  {o.creator}: {o.excerpt}
-                </Link>
+    <Section title="Connection" kind="Actual" testId="retention-face">
+      <Stats
+        rows={[
+          ['Connections this week', r.connections_this_week],
+          ['Last week', r.connections_last_week],
+          ['Active Supporters', r.active_supporters],
+          ['Came back on 2+ days', r.returning],
+        ]}
+      />
+      <p className="text-[12.5px] text-ink-600">
+        A connection is a follower who commented, saved, reposted, shared or opened one of your posts. Reading time in the feed isn’t measured yet, so this can
+        only be an undercount.
+      </p>
+      {r.followers === 0 ? (
+        <Next>Connections start with your first followers. Post with a topic so Discover can show your work to people who care about it.</Next>
+      ) : (
+        <MiniSteps story={story} />
+      )}
+    </Section>
+  )
+}
+
+function SupportSection({ c }: { c: ContributionInsights | null | undefined }) {
+  return (
+    <Section title="Your support" kind="Actual" testId="contribution-insight">
+      {c === undefined && <p className="text-sm text-ink-600">Loading…</p>}
+      {c === null && <NotYet>{UNAVAILABLE}</NotYet>}
+      {c && (
+        <>
+          <Stats
+            rows={[
+              ['Creators you connected with this week', c.connections_this_week],
+              ['Last week', c.connections_last_week],
+              ['Joined through your link', c.referrals.joined],
+            ]}
+          />
+          {c.referrals.joined > 0 && (
+            <p className="text-[13px] text-ink-700">
+              Referrals: {c.referrals.joined} joined · {c.referrals.waiting_review} waiting for review · {c.referrals.approved} qualified
+              {c.referrals.not_approved > 0 ? ` · ${c.referrals.not_approved} not approved` : ''}
+            </p>
+          )}
+          {c.connections_this_week === 0 && c.connections_last_week === 0 && (
+            <NotYet>Each creator you comment on, save, repost or share counts here.</NotYet>
+          )}
+          <MiniSteps story={contributionStory(c)} />
+          {c.opportunities.length > 0 && (
+            <ul className="space-y-1 text-[14px]">
+              {c.opportunities.map((o) => (
+                <li key={o.post_id}>
+                  <Link to={`/app/post/${o.post_id}`} className="font-semibold text-brand-700 underline underline-offset-2">
+                    {o.creator}: {o.excerpt}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </Section>
+  )
+}
+
+function MonetizationSection({ i }: { i: CreatorInsights | null }) {
+  if (!i)
+    return (
+      <Section title="Monetization" kind="Actual" testId="money-face">
+        <NotYet>{UNAVAILABLE}</NotYet>
+      </Section>
+    )
+  const m = i.money
+  return (
+    <Section title="Monetization" kind="Actual" testId="money-face">
+      {m.ads_with_your_posts.length === 0 ? (
+        <NotYet>No ads have been shown with your posts yet. Ads are matched to post topics, never to anything personal.</NotYet>
+      ) : (
+        <div>
+          <h3 className="mb-2 font-semibold text-ink-900">Ads shown with your posts</h3>
+          <ul className="space-y-2 text-[14px]">
+            {m.ads_with_your_posts.map((x) => (
+              <li key={x.campaign + x.advertiser}>
+                <p className="font-semibold">
+                  {x.campaign} · {x.advertiser}
+                </p>
+                <p className="text-[13px] text-ink-600">
+                  {x.posts} {x.posts === 1 ? 'post' : 'posts'} · {x.impressions} impressions · {x.clicks} clicks
+                </p>
               </li>
             ))}
           </ul>
-        )}
-      </Card>
-    </div>
+        </div>
+      )}
+      <p className="text-[14px]">
+        Actual income <span className="font-semibold">{simulatedDollars(m.actual_income_cents)}</span>{' '}
+        <span className="text-[13px] text-ink-600">Nothing is paid during the pilot.</span>
+      </p>
+      <p className="text-[13px] text-ink-600">
+        Ads placed with your posts are shared between you, the fan rewards pool and Splitpost. Your simulated share is in{' '}
+        <Link to="/app/split" className="font-semibold text-brand-700 underline">
+          My Split
+        </Link>
+        , with your goals.
+      </p>
+    </Section>
   )
 }
 

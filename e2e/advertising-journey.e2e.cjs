@@ -329,7 +329,8 @@ async function signIn(page, email) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await signIn(page, email('c'))
-      await page.goto(`${APP}/app/profile?face=money`)
+      // Rewards live in My Split (Nov 28): the simulated creator share is there.
+      await page.goto(`${APP}/app/split`)
       const e = page.getByTestId('simulated-earnings')
       await e.waitFor()
       check('Cara sees her simulated creator share for the campaign month ($40.00)', (await e.innerText()).includes('$40.00'), await e.innerText())

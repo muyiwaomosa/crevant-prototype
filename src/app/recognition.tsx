@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, X } from 'lucide-react'
-import { useAppApi } from './AppApiContext'
-import type { GoalStep, MyProgress, PointsEntry } from './api'
+import { useAppApi, useMyProfile } from './AppApiContext'
+import type { GoalAudience, GoalStep, MyProgress, PointsEntry } from './api'
 import { useProgressContext } from './journey'
-import { goalText } from './progression'
+import { goalText, journeyProgress } from './progression'
 
 /**
  * Contribution recognition (UX-03, Nov 27). After a comment, save, repost or
@@ -33,12 +33,21 @@ const ACTION_GOAL: Record<string, string> = {
 }
 
 type Shown = { id: number; title: string; detail: string; bar?: { value: number; target: number } }
-type Api = { recognize: () => void; published: () => void }
-const Ctx = createContext<Api>({ recognize: () => {}, published: () => {} })
+type Api = { recognize: () => void; published: () => void; progressed: (metric: string, title: string) => Promise<void> }
+const Ctx = createContext<Api>({ recognize: () => {}, published: () => {}, progressed: async () => {} })
 
 /** Call after a contribution succeeds; it checks with the server and says something only if it was recorded. */
 export function useRecognize() {
   return useContext(Ctx).recognize
+}
+
+/**
+ * Call after an action that moves a supporter goal directly (adding someone to
+ * your Clique): it reads progress back from the server and says how far the
+ * goal has come, only if the server's value went up.
+ */
+export function useProgressFeedback() {
+  return useContext(Ctx).progressed
 }
 
 /** Call after a post is published: it reads creator progress from the server and shows the step it moved. */
@@ -68,7 +77,7 @@ export function recognitionText(entry: PointsEntry, progress: MyProgress | null)
     if (step && step.target !== null)
       return {
         id: entry.id,
-        title: `${label} recognized`,
+        title: step.value >= step.target ? `Goal complete: ${goalText(metric).label.toLowerCase()}` : `${label} recognized`,
         detail: `It counts toward your supporter goals: ${Math.min(step.value, step.target)} of ${step.target}.`,
         bar: { value: Math.min(step.value, step.target), target: step.target },
       }
@@ -78,18 +87,87 @@ export function recognitionText(entry: PointsEntry, progress: MyProgress | null)
 
 const WINDOW_MS = 2 * 60 * 1000
 
+const WHO: Record<GoalAudience, string> = { creator: 'creator', consumer: 'supporter' }
+
+type Snapshot = { met: string[]; status: Record<string, string> }
+
+function snapshot(p: Extract<MyProgress, { enabled: true }>): Snapshot {
+  const met: string[] = []
+  const status: Record<string, string> = {}
+  for (const a of ['consumer', 'creator'] as const) {
+    const j = p[a]
+    status[a] = j.status
+    for (const st of j.steps) if (st.target !== null && st.value >= st.target) met.push(`${a}:${st.metric}:${j.goalsSince ?? ''}`)
+  }
+  return { met, status }
+}
+
+/**
+ * Milestones reached since the member last looked, on this device (approved
+ * for the MVP), as one quiet message: a qualification decision first, then a
+ * goal met. Many goals are moved by other people (followers, Cliques,
+ * returning supporters), so this reads the server's progress whenever it is
+ * refreshed. The first time on a device only records where things stand.
+ */
+export function milestoneText(before: Snapshot, p: Extract<MyProgress, { enabled: true }>): Shown | null {
+  const now = snapshot(p)
+  for (const a of ['consumer', 'creator'] as const) {
+    if (before.status[a] === now.status[a]) continue
+    if (now.status[a] === 'under_review')
+      return { id: -2, title: `All 5 ${WHO[a]} goals met`, detail: 'Your eligibility review has started. Nothing unlocks until it is approved.' }
+    if (now.status[a] === 'qualified')
+      return { id: -2, title: `Qualified as a ${WHO[a]}`, detail: 'Your eligibility review was approved. Your simulated earnings for this journey are unlocked.' }
+  }
+  const fresh = now.met.filter((m) => !before.met.includes(m))
+  if (fresh.length === 0) return null
+  const [a, metric] = fresh[0].split(':') as [GoalAudience, string]
+  const { done, total } = journeyProgress(p[a])
+  return {
+    id: -2,
+    title: `Goal complete: ${goalText(metric).label.replace(/ \(last 28 days\)/, '').toLowerCase()}`,
+    detail: `That's ${done} of your ${total} ${WHO[a]} goals.${fresh.length > 1 ? ` And ${fresh.length - 1} more since you last looked.` : ''}`,
+    bar: { value: done, target: total },
+  }
+}
+
 export function RecognitionProvider({ children }: { children: ReactNode }) {
   const api = useAppApi()
+  const { profile } = useMyProfile()
   const progressCtx = useProgressContext()
   const [shown, setShown] = useState<Shown | null>(null)
   const announced = useRef<Set<number>>(new Set())
   const timer = useRef<number | undefined>(undefined)
+  const lastShown = useRef(0)
 
   const show = useCallback((text: Shown) => {
+    lastShown.current = Date.now()
     setShown(text)
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => setShown(null), 5000)
   }, [])
+
+  // Milestones and qualification decisions, whenever the shared progress changes.
+  const current = progressCtx?.progress
+  useEffect(() => {
+    if (!current || !current.enabled) return
+    const key = `splitpost.milestones.${profile.id}`
+    let before: Snapshot | null = null
+    try {
+      const raw = window.localStorage.getItem(key)
+      before = raw ? (JSON.parse(raw) as Snapshot) : null
+    } catch {
+      before = null
+    }
+    try {
+      window.localStorage.setItem(key, JSON.stringify(snapshot(current)))
+    } catch {
+      // Recognized again next time at worst.
+    }
+    if (!before || !Array.isArray(before.met)) return
+    const text = milestoneText(before, current)
+    // One message at a time: a contribution message just shown already says it.
+    if (text && Date.now() - lastShown.current > 1500) show(text)
+  }, [current, profile.id, show])
 
   const recognize = useCallback(() => {
     const asked = Date.now()
@@ -121,8 +199,31 @@ export function RecognitionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
+  const progressed = useCallback(
+    async (metric: string, title: string) => {
+      if (!progressCtx) return
+      const value = (p: MyProgress | null | undefined) =>
+        p && p.enabled && p.consumer.status === 'in_progress' ? p.consumer.steps.find((st) => st.metric === metric) : undefined
+      const before = value(progressCtx.progress)?.value
+      try {
+        const after = value(await progressCtx.refresh())
+        if (!after || after.target === null || before === undefined || after.value <= before) return
+        const v = Math.min(after.value, after.target)
+        show({
+          id: -3,
+          title: after.value >= after.target ? `Goal complete: ${goalText(metric).label.toLowerCase()}` : title,
+          detail: `It counts toward your supporter goals: ${goalText(metric).label.toLowerCase()}, ${v} of ${after.target}.`,
+          bar: { value: v, target: after.target },
+        })
+      } catch {
+        // A courtesy only.
+      }
+    },
+    [progressCtx, show],
+  )
+
   return (
-    <Ctx.Provider value={{ recognize, published }}>
+    <Ctx.Provider value={{ recognize, published, progressed }}>
       {children}
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex justify-center px-4 md:bottom-6">
         {shown && (

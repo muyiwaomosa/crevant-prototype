@@ -159,7 +159,7 @@ async function signIn(page, email) {
   await home.waitFor()
 }
 
-/** The My Split face with its breakdown opened ("What do these mean?"). */
+/** My Split with its breakdown opened ("How My Split works"). */
 async function splitBreakdown(page, APP) {
   await page.goto(`${APP}/app/split`)
   await page.getByTestId('split-explain').locator('summary').click()
@@ -239,13 +239,15 @@ async function splitBreakdown(page, APP) {
       const e = await splitBreakdown(page, APP)
       const hero = (await page.getByTestId('split-hero').innerText()).replace(/\s+/g, ' ')
       check('My Split opens on her split: $40.00 as a creator, locked, Simulated', /Simulated/.test(hero) && /\$40\.00/.test(hero) && /Locked \$40\.00/.test(hero), hero)
-      check('Next for you names her nearest goal and one action', /Be in members’ Cliques: 1 of 2/.test(await page.getByTestId('next-for-you').innerText()) && (await page.getByTestId('next-for-you').getByRole('link', { name: 'Post something your supporters will value' }).count()) === 1)
+      // Unified My Split (Nov 28): the suggested milestone is open in its journey, with one action.
+      const suggested = page.getByTestId('goals-creator').locator('[data-testid="goal-step"][data-suggested="true"]')
+      check('the suggested milestone names her nearest goal and one action', /Be in members’ Cliques.*1 \/ 2/.test((await suggested.innerText()).replace(/\s+/g, ' ')) && (await suggested.getByRole('link', { name: 'Post something your supporters will value' }).count()) === 1)
       check('no allocation percentage is shown', !/\d+\s*%/.test(await page.getByTestId('split-progression').innerText()))
-      await page.goto(`${APP}/app/split?face=goals`)
+      await page.goto(`${APP}/app/split#goals`)
       const card = page.getByTestId('goals-creator')
       await card.waitFor()
       const t = (await card.innerText()).replace(/\s+/g, ' ')
-      check('Cleo sees 4 of 5 creator goals and the next step', /4 of 5/.test(t) && /Next: be in members’ cliques\./.test(t), t)
+      check('Cleo sees 4 of 5 creator goals, In progress, and that meeting all 5 starts a review', /4 of 5 goals met/.test(t) && /In progress/.test(t) && /starts an eligibility review/.test(t), t)
       check('her simulated share is accumulated and locked, marked Simulated', /Simulated/i.test(e) && /Accumulated \$40\.00 Locked \$40\.00 Unlocked \$0\.00/.test(e), e)
       // Optional, for a person to look at (SHOTS=<directory>); never in CI.
       if (process.env.SHOTS) {
@@ -304,8 +306,9 @@ async function splitBreakdown(page, APP) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await signIn(page, email('c'))
-      await page.goto(`${APP}/app/split?face=goals`)
+      await page.goto(`${APP}/app/split#goals`)
       await page.getByTestId('goals-creator-badge').getByText('Qualified').waitFor()
+      if ((await page.getByTestId('goals-creator').getAttribute('data-open')) !== 'true') await page.getByTestId('goals-creator').getByRole('button', { name: /Creator goals/ }).click()
       check('optional growth guidance is shown once qualified', /Keep growing \(optional\)/.test(await page.getByTestId('growth-creator').innerText()))
       const e3 = await splitBreakdown(page, APP)
       check('Cleo sees Qualified and her share Settled (simulated)', /Locked \$0\.00 Unlocked \$0\.00 Settled \$40\.00/.test(e3), e3)

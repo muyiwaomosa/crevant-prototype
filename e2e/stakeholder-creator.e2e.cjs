@@ -104,8 +104,8 @@ J.run(async (browser) => {
   check('the first-post guide does not show again once she has posted', (await cleo.page.getByTestId('first-post-guide').count()) === 0)
 
   // ---------------------------------------------------------------------------
-  step('5. Cleo copies her personal invitation link (My Split, My Activity)')
-  await cleo.page.goto(`${APP}/app/split?face=activity`)
+  step('5. Cleo copies her personal invitation link (My Split)')
+  await cleo.page.goto(`${APP}/app/split#invite`)
   await cleo.page.getByTestId('referral-link').waitFor()
   await cleo.page.getByRole('button', { name: 'Copy link' }).click()
   await cleo.page.getByRole('button', { name: 'Copied' }).waitFor()
@@ -156,11 +156,12 @@ J.run(async (browser) => {
 
   // ---------------------------------------------------------------------------
   step('7. Cleo strengthens the relationship: who joined, follow back, her own Clique')
-  await cleo.page.goto(`${APP}/app/profile?edit=1`)
-  await cleo.page.getByTestId('audience-insight').waitFor()
+  // Nov 28: the audience is part of Your Insights.
+  await cleo.page.goto(`${APP}/app/insights`)
+  await cleo.page.getByTestId('audience-insight').getByText('Followers', { exact: true }).waitFor()
   check('one person joined through her link', sql(`select count(*) from ops.registrations where referrer_id = '${c}'`) === '1')
   const audience = flat(await cleo.page.getByTestId('audience-insight').innerText())
-  check('Your audience: 1 follower, 1 in her Clique, 1 Active Supporter', /1 Followers 1 Clique 1 Active Supporters/.test(audience), audience)
+  check('Your audience: 1 follower, 1 in her Clique, 1 Active Supporter', /^Audience Actual 1 Followers .* 1 In your Clique 1 Active Supporters/.test(audience), audience)
   await cleo.page.goto(`${APP}/app/u/${userN}`)
   await cleo.page.getByRole('button', { name: 'Follow Nia New' }).click()
   await cleo.page.getByTestId('follow-confirmation').getByRole('button', { name: 'Join Clique (Nia New)' }).click()
@@ -193,31 +194,20 @@ J.run(async (browser) => {
     for (const [route, name] of [['/app', 'home'], ['/app/clique', 'clique'], ['/app/discover', 'discover'], ['/app/new', 'create'], ['/app/split', 'my-split']]) {
       await shot(`${APP}${route}`, name, main)
     }
-    // The full-screen faces, one after another.
-    for (const face of ['Reach', 'Connection', 'Earnings']) {
-      await cleo.page.goto(`${APP}/app/profile?insights=1`)
-      await cleo.page.getByRole('tab', { name: face }).click()
-      await cleo.page.waitForLoadState('networkidle')
-      await cleo.page.waitForTimeout(400)
-      await cleo.page.screenshot({ path: require('node:path').join(process.env.SHOTS, `face-${face.toLowerCase()}-desktop.png`) })
-      await cleo.page.setViewportSize({ width: 390, height: 844 })
-      await cleo.page.waitForTimeout(400)
-      await cleo.page.screenshot({ path: require('node:path').join(process.env.SHOTS, `face-${face.toLowerCase()}-phone.png`) })
-      await cleo.page.setViewportSize({ width: 1280, height: 900 })
-    }
+    // Your Insights: one page (Nov 28).
+    await shot(`${APP}/app/insights`, 'insights', cleo.page.getByTestId('money-face'))
   }
   await cleo.page.goto(`${APP}/app/profile`)
   await screenChecks(cleo.page, 'Your profile (P1)')
-  await cleo.page.goto(`${APP}/app/profile?insights=1`)
-  await cleo.page.getByRole('tab', { name: 'Reach' }).click()
+  await cleo.page.goto(`${APP}/app/insights`)
   const att = cleo.page.getByTestId('attention-face')
   await att.waitFor()
   const ta = flat(await att.innerText())
   const followers = sql(`select count(*) from social.follows where creator_id = '${c}'`)
   check('Attention: every post was available to her follower, who saw one', followers === '1' && ta.includes('Every post was available to your follower. They saw at least one.'), ta)
-  check('Attention: where the new follower came from (the invitation card follows as Other)', /Where your new follower came from Other 1/.test(ta), ta)
-  await screenChecks(cleo.page, 'the Attention face')
-  await cleo.page.getByRole('tab', { name: 'Connection' }).click()
+  const aud = flat(await cleo.page.getByTestId('audience-insight').innerText())
+  check('Audience: where the new follower came from (the invitation card follows as Other)', /Where your new follower came from Other 1/.test(aud), aud)
+  await screenChecks(cleo.page, 'Your Insights')
   const ret = cleo.page.getByTestId('retention-face')
   await ret.waitFor()
   const tr = flat(await ret.innerText())
@@ -225,12 +215,10 @@ J.run(async (browser) => {
   check('Retention: this week\'s connections match the database (1)', connections === '1' && tr.includes('1 follower connected with your posts this week'), `${connections}: ${tr.slice(0, 160)}`)
   check('Retention: 1 Active Supporter and 1 in her Clique, as in the database',
     /1 Active Supporter, 1 in your Clique/.test(tr) && sql(`select social.is_active_supporter('${n}', '${c}')`) === 't', tr.slice(0, 300))
-  await screenChecks(cleo.page, 'the Retention face')
-  await cleo.page.getByRole('tab', { name: 'Earnings' }).click()
   const money = cleo.page.getByTestId('money-face')
   await money.waitFor()
   const tm0 = flat(await money.innerText())
-  check('Money before any ad revenue: Simulated, actual income $0.00, no ads yet', /Simulated/.test(tm0) && /Actual income Actual \$0\.00/.test(tm0) && /No ads have been shown with your posts yet/.test(tm0), tm0.slice(0, 240))
+  check('Monetization before any ad revenue: actual income $0.00, no ads yet, "not yet measured"', /Actual income \$0\.00/.test(tm0) && /Not yet measured\. No ads have been shown with your posts yet/.test(tm0), tm0.slice(0, 240))
 
   // ---------------------------------------------------------------------------
   step('9. Simulated earnings: the founder records simulated revenue; Cleo understands her share')
@@ -251,17 +239,18 @@ J.run(async (browser) => {
   }
   const share = sql(`select (sim.split('content_ad', 5000)).creator_cents`)
   check('the database gives Cleo the creator share of $50.00 (2000 cents)', share === '2000' && sql(`select sum(net_cents) from sim.revenue_entries where creator_id = '${c}'`) === '5000')
-  await cleo.page.reload()
-  await cleo.page.getByTestId('money-face').waitFor()
+  // Nov 28: the simulated share is a reward, so it is in My Split; Insights keeps actual income.
+  await cleo.page.goto(`${APP}/app/split`)
   const earn = cleo.page.getByTestId('simulated-earnings')
   await earn.waitFor()
   const te = flat(await earn.innerText())
-  const tm = flat(await money.innerText())
-  check('Money: her simulated share is $20.00, labelled Simulated', /Simulated/.test(te) && te.includes('$20.00') && te.includes('Your simulated share by month')
+  await cleo.page.goto(`${APP}/app/insights`)
+  const tm = flat(await cleo.page.getByTestId('money-face').innerText())
+  check('Money: her simulated share is $20.00, labelled Simulated', /Simulated/.test(te) && te.includes('$20.00') && te.includes('Your simulated creator share')
     // The total revenue is never shown beside her share, so the allocation can't be worked out (legal safeguard).
     && !te.includes('$50.00'), te)
   check('Money: a You, Fans and Splitpost bar, and "Nothing is paid during the pilot"', /You Fans Splitpost/.test(te) && te.includes('Nothing is paid during the pilot.'), te)
-  check('Money: actual income stays $0.00, apart from the simulated figure', /Actual income Actual \$0\.00/.test(tm), tm.slice(-200))
+  check('Money: actual income stays $0.00, apart from the simulated figure', /Actual income \$0\.00/.test(tm) && !tm.includes('$20.00'), tm.slice(-200))
   check('Money: no allocation percentages (no 40/20/40)', !/\d+\s*%/.test(tm) && !/40\s*\/\s*20/.test(tm))
   await screenChecks(cleo.page, 'the Money face with simulated earnings')
   check('nothing is paid: the only money is in the simulated schema', sql("select count(*) from pg_namespace where nspname = 'finance'") === '0')

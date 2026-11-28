@@ -22,6 +22,8 @@ Post opens are recorded by `app_note_open` (someone else's visible post only; at
 
 ## Creator: the Profile cube
 
+> **Nov 28 (SP-UX-003):** the creator faces and the supporter's week are now one page, **Your Insights** (`/app/insights`), opened from Profile, for every member: Reach, Content, Audience, Connection, Your support and Monetization, each with the same three questions or "Not yet measured". Simulated earnings moved to My Split. The data and functions below are unchanged.
+
 Profile now has four faces, reached by swiping or by the visible tab buttons (keyboard and screen reader accessible): **Profile, Attention, Retention, Money**.
 
 | Face | What it shows | Source |

@@ -1,5 +1,7 @@
 # SP-UX-002: value-first onboarding and member experience
 
+> **Partly superseded (Nov 28) by [SP-UX-003](SP-UX-003.md):** My Split is one page (no My Goals or My Activity faces), Home has one Getting started guide (no first steps with Hide or goal strip), the walkthrough is replayed from Profile, Help & getting started, and the identity question is retired (BL-005). The five welcome faces below are unchanged.
+
 Built Nov 27 for final copy and visual review. Screens are the real app,
 captured on a phone (390 px) and a desktop (1280 px): `sp-ux-002-*.png` in
 this folder. Nothing here changes a rule, an amount or a threshold.

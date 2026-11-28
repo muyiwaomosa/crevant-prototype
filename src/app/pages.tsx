@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bookmark, Check, Compass, MessageCircle, MoreHorizontal, Trash2, UserPlus, Users } from 'lucide-react'
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, BarChart3, Bookmark, Check, ChevronRight, Compass, LifeBuoy, MessageCircle, MoreHorizontal, Trash2, UserPlus, Users } from 'lucide-react'
 import { Card, EmptyState, PageHeader, buttonClass } from '../components/ui'
 import { Message, Spinner } from '../public/auth/AuthUi'
-import { LIMITS, cursorOf, type Comment, type FeedFilter, type Identity, type Member, type Me, type Post, type PostCursor, type Topic } from './api'
-import { FaceView } from '../components/FaceView'
+import { LIMITS, cursorOf, type Comment, type FeedFilter, type Member, type Me, type Post, type PostCursor } from './api'
 import { useVideoStatus } from './video'
 import { useAppApi, useMyProfile } from './AppApiContext'
 import { usePublishedRecognition, useRecognize } from './recognition'
-import { HomeGoalStrip, JourneyIntro } from './journey'
+import { HomeGuide, checklistComplete, useGettingStarted } from './guide'
 import { PostTile, tintFor } from './tiles'
 import { WelcomeIntro } from './welcome'
-import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When } from './components'
+import { ErrorNote, MemberAvatar, MemberLink, PostItem, RelationshipButtons, TextComposer, When, useLoad } from './components'
 import { useViewsSent } from './ViewTracker'
 import { ProfileForm } from './MemberArea'
 import { DetailsEditor, MemberAbout, SuggestedPeople, WebsiteLink, useTopics } from './profileDetails'
@@ -20,37 +19,11 @@ import { ReportButton, useModeration } from './moderation'
 import { FirstPostGuide } from './onboarding'
 import { PostComposer, usePhotosEnabled } from './media'
 import { ProfilePictureField } from './avatars'
-import { AudienceInsight, SupportButton } from './relationships'
+import { SupportButton } from './relationships'
 import { JoinedForPrompt, PublicPreviewsSetting, categorize } from './content'
 import { BlockButton, BlockedMembers, BlockedProfilePanel, GovernanceBanner } from './governance'
 import { AdPreferences, AdSlot } from './ads'
-import { AttentionFace, MoneyFace, RetentionFace } from './insights'
 import { useFeedbackAccess } from './feedback'
-
-/** Loads data for a page, with loading and error states and a reload function. */
-function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
-  const [data, setData] = useState<T | undefined>(undefined)
-  const [error, setError] = useState<unknown>(null)
-  const [loading, setLoading] = useState(true)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const run = useCallback(load, deps)
-  const reload = useCallback(async () => {
-    try {
-      const d = await run()
-      setData(d)
-      setError(null)
-    } catch (e) {
-      setError(e)
-    } finally {
-      setLoading(false)
-    }
-  }, [run])
-  useEffect(() => {
-    setLoading(true)
-    void reload()
-  }, [reload])
-  return { data, setData, error, loading, reload }
-}
 
 function Loading({ label }: { label: string }) {
   return (
@@ -189,8 +162,7 @@ function HomeFeed({
   return (
     <>
       {withStrip && <CliqueRow />}
-      {filter === 'all' && <HomeGoalStrip />}
-      {filter === 'all' && feed.data && !(feed.data.length === 0 && me.data?.followingCount === 0) && <StartHere quiet={false} />}
+      {filter === 'all' && <HomeGuide />}
       {filter === 'clique' && (
         <div className="mb-3 flex justify-end">
           <Link to="/app/clique" className="text-[13px] font-semibold text-brand-700 underline underline-offset-2">
@@ -528,180 +500,24 @@ function EarlierPosts({ member, posts }: { member: Member; posts: Post[] }) {
 }
 
 /**
- * First steps (SP-UX-002, section 3): the existing guidance, tailored by the
- * optional "What brings you here" answer and the member's interests, so the
- * first five minutes lead to people worth following, a Clique, a first post
- * or a first contribution. Each step ticks itself off from what the server
- * reports; "Hide" puts it away, and it goes once every step is done.
+ * An empty Home for someone who follows nobody yet: the guide above already
+ * lists the first steps, so this only offers a few people to start with.
  */
-type FirstStep = { key: string; title: string; body: string; to?: string; cta?: string; done: boolean }
-
-export function firstSteps(input: {
-  identity: Identity | null
-  interest: { slug: string; label: string } | null
-  followingCount: number
-  cliqueCount: number
-  postCount: number
-  contributed: boolean | null
-}): FirstStep[] {
-  const { identity, interest, followingCount, cliqueCount, postCount, contributed } = input
-  const discover = interest ? `/app/discover?face=creators&interest=${encodeURIComponent(interest.slug)}` : '/app/discover'
-  const find: FirstStep = {
-    key: 'find',
-    title: 'Find people',
-    body: interest
-      ? `Start with people who post about ${interest.label}, then open a profile to read their posts.`
-      : 'Browse Discover or search by name, then open a profile to read their posts.',
-    to: discover,
-    cta: interest ? `Discover ${interest.label}` : 'Discover people',
-    done: followingCount > 0,
-  }
-  const follow: FirstStep = {
-    key: 'follow',
-    title: 'Follow them',
-    body: 'Follow three people you value. Their new posts appear here on Home, newest first. Nobody is added for you.',
-    done: followingCount >= 3,
-  }
-  const clique: FirstStep = {
-    key: 'clique',
-    title: 'Choose your Clique',
-    body: 'Choose the people you follow that you want closest. Their posts come first. You can change them at any time.',
-    to: '/app/clique',
-    cta: 'Your Clique',
-    done: cliqueCount > 0,
-  }
-  const post: FirstStep = {
-    key: 'post',
-    title: 'Publish your first post',
-    body: interest ? `Share something about ${interest.label}. Everyone who follows you sees it on their Home.` : 'Share something. Everyone who follows you sees it on their Home.',
-    to: '/app/new',
-    cta: 'Create a post',
-    done: postCount > 0,
-  }
-  const support: FirstStep = {
-    key: 'support',
-    title: 'Support a post you value',
-    body: 'Leave a thoughtful comment, save it or share it. It helps the creator grow, and it is recognized in My Split.',
-    done: contributed === true,
-  }
-  // One account, one experience (BL-005): the same first steps for everyone. The
-  // identity input is kept for older callers and ignored.
-  void identity
-  const steps = [find, follow, clique, post]
-  // The contribution step only where the server can say whether it happened.
-  return contributed === null ? steps : [...steps, support]
-}
-
-/** An empty Home for someone who follows nobody yet: the first steps, or a plain way in if they were hidden. */
 function QuietFeed() {
-  const { profile } = useMyProfile()
-  let hidden = false
-  try {
-    hidden = window.localStorage.getItem(`splitpost.first-steps.${profile.id}`) === 'hidden'
-  } catch {
-    hidden = false
-  }
-  if (!hidden) return <StartHere quiet />
   return (
-    <EmptyState
-      icon={<Compass className="h-7 w-7" />}
-      title="Your feed is quiet"
-      body="Follow people to see their posts here, newest first. Nobody is added to your feed for you."
-      action={
-        <Link to="/app/discover" className={buttonClass('primary')}>
+    <section aria-labelledby="quiet-title" data-testid="quiet-feed">
+      <Card className="p-5">
+        <h2 id="quiet-title" className="font-display text-lg font-bold text-ink-900">
+          Your feed is quiet
+        </h2>
+        <p className="mt-1 text-sm text-ink-600">Follow people to see their posts here, newest first. Nobody is added to your feed for you.</p>
+        <div className="mt-4">
+          <SuggestedPeople heading="People you might like" limit={3} variant="row" />
+        </div>
+        <Link to="/app/discover?face=creators" className={clsx(buttonClass('primary', 'sm'), 'mt-4 h-11 px-5')}>
           Discover people
         </Link>
-      }
-    />
-  )
-}
-
-function StartHere({ quiet }: { quiet: boolean }) {
-  const api = useAppApi()
-  const { profile } = useMyProfile()
-  const me = useLoad<Me>(() => api.me(), [api])
-  const details = useLoad(() => api.myDetails().catch(() => null), [api])
-  const points = useLoad(() => api.myPoints().catch(() => null), [api])
-  const topics = useLoad(async () => (await api.topics().catch(() => null)) ?? ([] as Topic[]), [api])
-  const key = `splitpost.first-steps.${profile.id}`
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return window.localStorage.getItem(key) === 'hidden'
-    } catch {
-      return false
-    }
-  })
-  if (!me.data || details.loading || points.loading) return quiet ? <Loading label="Loading your first steps…" /> : null
-  const slug = details.data?.topics[0]
-  const label = slug ? topics.data?.find((t) => t.slug === slug)?.label : undefined
-  const steps = firstSteps({
-    identity: details.data?.identity ?? null,
-    interest: slug && label ? { slug, label } : null,
-    followingCount: me.data.followingCount,
-    cliqueCount: me.data.cliqueCount,
-    postCount: me.data.postCount,
-    contributed: points.data ? points.data.recognized + points.data.redeemableApproved + points.data.redeemablePending > 0 : null,
-  })
-  const remaining = steps.filter((s) => !s.done).length
-  if (remaining === 0 || hidden) return null
-  function hide() {
-    try {
-      window.localStorage.setItem(key, 'hidden')
-    } catch {
-      // Hidden for this visit only.
-    }
-    setHidden(true)
-  }
-  return (
-    <section className="mb-4" aria-labelledby="first-steps-title" data-testid="first-steps">
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 id="first-steps-title" className="font-display text-lg font-bold text-ink-900">
-            {quiet ? 'Your feed is quiet' : 'Start here'}
-          </h2>
-          <p className="mt-1 text-sm text-ink-600">
-            {quiet ? "Here's how to start. It takes a minute." : `${steps.length - remaining} of ${steps.length} done. A few minutes to feel at home.`}
-          </p>
-          <JourneyIntro />
-        </div>
-        <button type="button" onClick={hide} className="shrink-0 rounded-full px-2 py-1 text-[13px] font-semibold text-ink-600 hover:text-ink-900">
-          Hide
-        </button>
-      </div>
-      <ol className="mt-4 space-y-4">
-        {steps.map((step, i) => (
-          <li key={step.key} className="flex gap-3" data-done={step.done ? 'true' : 'false'}>
-            <span
-              className={clsx(
-                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold',
-                step.done ? 'bg-[#0f7a64] text-white' : 'bg-brand-50 text-brand-700',
-              )}
-              aria-hidden="true"
-            >
-              {step.done ? <Check className="h-4 w-4" strokeWidth={3} /> : i + 1}
-            </span>
-            <div className="min-w-0">
-              <p className={clsx('font-semibold', step.done ? 'text-ink-500 line-through' : 'text-ink-900')}>
-                {step.title}
-                {step.done && <span className="sr-only"> (done)</span>}
-              </p>
-              {!step.done && <p className="text-sm text-ink-600">{step.body}</p>}
-              {!step.done && step.to && step.cta && (
-                <Link to={step.to} className="mt-1 inline-block text-sm font-semibold text-brand-700 underline">
-                  {step.cta}
-                </Link>
-              )}
-            </div>
-          </li>
-        ))}
-      </ol>
-      {quiet && (
-        <div className="mt-5">
-          <SuggestedPeople heading="People you might like" limit={3} />
-        </div>
-      )}
-    </Card>
+      </Card>
     </section>
   )
 }
@@ -738,7 +554,7 @@ export function ComposePage() {
         />
       </Card>
       <p className="mt-3 px-1 text-[13px] text-ink-600">
-        {photos || videos ? 'Text, or one photo or video with an optional caption.' : 'Text posts for now.'} Everyone who follows you will see it in their feed. Pick a topic so
+        {photos || videos ? 'Text, or one photo or video with an optional caption.' : 'Text posts for now.'} It goes into the Home feed of everyone who follows you. Pick a topic so
         people who care about it can find it in Discover.
       </p>
       <div className="mt-4">
@@ -1046,51 +862,21 @@ export { CliquePage } from './relationships'
 // Your profile.
 
 /**
- * Your profile and your insights (SP-DESIGN-002): four faces, Profile,
- * Attention, Retention and Money. The insight faces are owner only: other
- * members see only the profile itself.
+ * Your profile (SP-DESIGN-002, P1). Your Insights has its own page
+ * (/app/insights); old links to the insight faces (?insights, ?face=…) go there.
  */
 export function ProfilePage() {
-  const [params, setParams] = useSearchParams()
-  // Approved design (P1): your profile is the same top as others see, Edit
-  // profile and See as others do, one Your insights card, then your posts.
-  // Editing and the insight faces open one tap deeper (kept in the URL).
+  const [params] = useSearchParams()
   const editing = params.get('edit') === '1'
-  const insights = params.has('insights') || ['attention', 'retention', 'money'].includes(params.get('face') ?? '')
-  // A link straight to an insight face (?face=money) keeps the insights view when switching faces.
-  useEffect(() => {
-    if (params.has('face') && !params.has('insights')) {
-      const p = new URLSearchParams(params)
-      p.set('insights', '1')
-      setParams(p, { replace: true })
-    }
-  }, [params, setParams])
-  const back = (
-    <Link to="/app/profile" className="mb-3 inline-flex items-center gap-1 text-[14px] font-semibold text-brand-700" data-testid="profile-back">
-      <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Your profile
-    </Link>
-  )
+  if (params.has('insights') || ['attention', 'retention', 'money'].includes(params.get('face') ?? '')) return <Navigate to="/app/insights" replace />
   if (editing)
     return (
       <>
-        {back}
+        <Link to="/app/profile" className="mb-3 inline-flex items-center gap-1 text-[14px] font-semibold text-brand-700" data-testid="profile-back">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Your profile
+        </Link>
         <PageHeader title="Edit your profile" subtitle="Your picture, name, bio and interests, and your settings." />
         <ProfileFace />
-      </>
-    )
-  if (insights)
-    return (
-      <>
-        {back}
-        <PageHeader title="Your insights" subtitle="Only you see this. What happened, what it means, and what to do next." />
-        <FaceView
-          label="Your insights"
-          faces={[
-            { key: 'attention', label: 'Reach', content: <AttentionFace /> },
-            { key: 'retention', label: 'Connection', content: <RetentionFace /> },
-            { key: 'money', label: 'Earnings', content: <MoneyFace /> },
-          ]}
-        />
       </>
     )
   return <ProfileHome />
@@ -1102,9 +888,9 @@ function ProfileHome() {
   const me = useLoad<Me>(() => api.me(), [api, profile.username, profile.displayName])
   const member = useLoad(() => api.member(profile.username), [api, profile.username])
   const posts = useLoad(async () => (member.data ? api.memberPosts(member.data.id) : []), [api, member.data?.id])
-  const insight = useLoad(() => api.creatorInsights(28).catch(() => null), [api])
+  const insight = useLoad(() => api.creatorInsights(7).catch(() => null), [api])
+  const guide = useGettingStarted()
   const website = useLoad(() => api.myWebsite().catch(() => null), [api])
-  const earnings = (insight.data?.money.simulated_by_month ?? []).reduce((n, m) => n + m.creator_cents, 0)
   const { moderator } = useModeration()
   const { founder } = useFeedbackAccess()
   const settings: Array<[string, string]> = [
@@ -1115,7 +901,6 @@ function ProfileHome() {
     ['/app/settings/privacy', 'Privacy, sharing and ads'],
     ['/app/privacy', 'Your data and privacy'],
     ['/app/advertise', 'Advertise with Splitpost'],
-    ['/app/welcome', 'How Splitpost works'],
     ...(moderator ? ([['/app/moderation', 'Moderation']] as Array<[string, string]>) : []),
     ...(founder ? ([['/app/ads', 'Advertising'], ['/app/control', 'Control Center']] as Array<[string, string]>) : []),
   ]
@@ -1147,40 +932,49 @@ function ProfileHome() {
         </Link>
       </div>
       <Link
-        to="/app/profile?insights=1"
+        to="/app/insights"
         className="relative mt-4 block overflow-hidden rounded-[22px] bg-brand-600 p-5 text-white shadow-[0_18px_30px_-22px_rgba(23,47,112,0.9)] transition hover:bg-brand-700"
         data-testid="insights-card"
       >
         <span aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(118deg,transparent_0_60%,rgb(255_255_255/0.06)_60%_100%)]" />
-        <span className="relative flex items-baseline justify-between">
-          <span className="font-display text-[18px] font-extrabold">Your insights</span>
-          <span className="text-[12px] font-semibold text-[#d3def3]">Only you see this</span>
+        <span className="relative flex items-center justify-between">
+          <span className="flex items-center gap-2 font-display text-[19px] font-extrabold">
+            <BarChart3 className="h-5 w-5" aria-hidden="true" /> Your Insights
+          </span>
+          <ChevronRight className="h-5 w-5" aria-hidden="true" />
         </span>
         <span className="relative mt-3 grid grid-cols-3 gap-2">
           {[
-            ['Reach', insight.data ? String(insight.data.attention.reached) : 'Not yet'],
-            ['Connection', insight.data ? String(insight.data.retention.active_supporters) : 'Not yet'],
-            ['Earnings', insight.data ? `$${(earnings / 100).toFixed(2)}` : 'Not yet'],
+            ['Reached', insight.data ? String(insight.data.attention.reached) : '–'],
+            ['Followers', insight.data ? String(insight.data.attention.followers) : '–'],
+            ['Connections', insight.data ? String(insight.data.retention.connections_this_week) : '–'],
           ].map(([label, value]) => (
             <span key={label} className="flex flex-col rounded-2xl bg-white/12 px-3 py-2.5">
               <span className="text-[12px] text-[#d3def3]">{label}</span>
-              <span
-                className={clsx(
-                  'font-display font-extrabold tabular-nums',
-                  value === 'Not yet' ? 'text-[15px] leading-7 text-white/85' : 'text-xl',
-                  label === 'Earnings' && insight.data && 'text-sp-accent',
-                )}
-              >
-                {value}
-              </span>
+              <span className="font-display text-xl font-extrabold tabular-nums">{value}</span>
             </span>
           ))}
         </span>
         <span className="relative mt-2 block text-[12px] text-[#d3def3]">
-          {insight.data
-            ? 'Earnings are simulated during the pilot. Open for what happened, what it means and what to do next.'
-            : 'Your insights begin with your first post.'}
+          How your posts and your support are doing, and what to try next. Only you see this. Last 7 days.
         </span>
+      </Link>
+      <Link
+        to="/app/help"
+        className="mt-3 flex min-h-14 items-center gap-3 rounded-[22px] bg-white px-4 py-3 shadow-[0_1px_2px_rgb(19_25_27/0.06),0_0_0_1px_rgb(19_25_27/0.05)] hover:bg-ink-50"
+        data-testid="help-entry"
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700">
+          <LifeBuoy className="h-[18px] w-[18px]" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-semibold text-ink-900">Help & getting started</span>
+          <span className="block truncate text-[13px] text-ink-600">
+            {guide ? (checklistComplete(guide) ? 'Getting started done' : `Getting started ${guide.filter((g) => g.done).length} of ${guide.length}`) : 'Getting started'}
+            {' · App tour · How Splitpost works'}
+          </span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-ink-400" aria-hidden="true" />
       </Link>
       <h2 id="posts" className="mb-3 mt-6 font-display text-lg font-bold text-ink-900">
         Your posts
@@ -1188,7 +982,7 @@ function ProfileHome() {
       {posts.data && posts.data.length === 0 && (
         <div className="rounded-[22px] bg-[#fde6d3] p-5 text-[#5a2a0b]" data-testid="profile-posts-empty">
           <p className="font-display text-[20px] font-extrabold leading-snug">Your posts will live here.</p>
-          <p className="mt-1 text-[14px]">Share what you know. Everyone who follows you sees it on their Home.</p>
+          <p className="mt-1 text-[14px]">Share what you know. It goes into the Home feed of everyone who follows you.</p>
           <Link to="/app/new" className={clsx(buttonClass('primary', 'sm'), 'mt-3 h-11 px-5')}>
             Create your first post
           </Link>
@@ -1221,7 +1015,6 @@ function ProfileFace() {
   return (
     <>
       {me.error !== null && <ErrorNote error={me.error} />}
-      <AudienceInsight />
       <Card className="mb-4 p-5">
         <ProfilePictureField />
       </Card>
