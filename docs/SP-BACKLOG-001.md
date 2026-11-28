@@ -37,6 +37,7 @@ acceptance), Accepted, Deferred.
 | BL-007 | Ads and Preferences off the profile | Usability refinement | P3, Should | Refinement sprint | Built in PR #141 (WP2) |
 | BL-008 | Referral and external sharing journey | Two defects, the rest intentional launch controls | P1 (dead end), Must | Refinement sprint | Built in PR #141 (WP3) |
 | BL-009 | Waitlist to member journey | Missing functionality | P1 for PB-4, Must | Before PB-4 | Built (D1 option A approved Nov 28 with safeguards; migrations 20261223000000 and 20261224000000; `docs/WAITLIST-HANDOFF.md`) |
+| BR-001 to BR-006 | SP-BRAND-003 follow-up (Nov 28): public website messaging and hero | Website refinement (separate from PR #144) | P2, Should | Before PB-4 | BR-001 and BR-002 built; BR-003 to BR-005 layout ready, awaiting founder copy; BR-006 safeguards in force. See below |
 
 ## BL-001: Unified media upload
 
@@ -438,6 +439,33 @@ in different databases.
   Production stays closed: the database refuses to create an invitation while
   external access is not approved, and `waitlist-bridge` is not approved for
   member Production (`waitlistBridgeFunctionApproved: false`).
+
+## SP-BRAND-003 follow-up (Nov 28): website messaging and hero
+
+The founder's public website refinements of Nov 28. They are kept apart
+from the member app (PR #144) and from BL-009, on their own branch
+(`claude/sp-brand-website-refine`). Merging publishes the public site, so it
+needs the founder's visual approval.
+
+**Naming:** "SP-BRAND-003" already names the Nov 27 landing refinement,
+which is accepted and closed (PR #134). This work is recorded as the
+"SP-BRAND-003 follow-up (Nov 28)". The founder may prefer to call it
+SP-BRAND-004.
+
+| Item | What | Status |
+|---|---|---|
+| BR-001 | Section 2 replaced with the founder's locked wording, verbatim, one paragraph each. "Everyone contributes. Not everyone gets a split." gets display type and the apricot rule. The old eyebrow and earlier body copy are removed. | **Built.** One sentence ("…billions in advertising revenue.") trips three existing safeguard checks. It is kept word for word and listed as the only exception in `FOUNDER_LOCKED_EXCEPTIONS` (copy.ts), pending counsel review. |
+| BR-002 | Hero illustration. The diagonal cut sits near the middle and keeps the logo's geometry. Above the cut is the sample creator's photo post. Below it, followers engage with that post: two comment bubbles (drawn, no words), Like, Save, Share and Follow. The headline is unchanged. | **Built.** No money, amounts or engagement figures. Previews are at 390 px and 1280 px. |
+| BR-003 | Ideal creator and supporter pain points | **Layout ready** (`landing/audience.ts`, `PAIN_POINTS`), empty until the founder approves the wording |
+| BR-004 | Relatable use cases in Faith & Spirituality, Personal Development, and Business & Entrepreneurship | **Layout ready** (`USE_CASES`, grouped by launch category), empty until approved |
+| BR-005 | Each pain point paired with its Splitpost solution | **Layout ready** (`PROBLEM_SOLUTION`), empty until approved |
+| BR-006 | Disclosures and claim safeguards | **In force.** Every pilot disclosure is unchanged. The claims checker is unchanged and still runs on every sentence. |
+
+**Filling BR-003 to BR-005:** add the approved entries to
+`src/public/landing/audience.ts` exactly as approved, and the optional
+headings to `AUDIENCE_HEADINGS`. Then update `landing/audience.test.tsx`,
+which pins the lists as empty today. Each block appears inside WHO only once
+it has entries.
 
 ## Recommendation: what must be resolved before the external pilot
 

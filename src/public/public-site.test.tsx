@@ -4,7 +4,7 @@ import { cleanup, render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PublicRoutes } from './PublicApp'
 import { HERO_POST } from './landing/photos'
-import { HOMEPAGE_COPY } from './landing/copy'
+import { FOUNDER_LOCKED_EXCEPTIONS, HOMEPAGE_COPY, withoutLockedExceptions } from './landing/copy'
 import { DISCLOSURES, findMisleadingClaims, mentionsProvisionalAllocation } from './landing/claims'
 import { PRODUCT_IMAGES_DISCLOSURE } from './landing/shared'
 
@@ -82,7 +82,8 @@ describe('one Splitpost story, top to bottom (SP-BRAND-002)', () => {
     expect(c.querySelectorAll('#problem, #building, #paths, #creators, #split, #vision, [data-status]')).toHaveLength(0)
   })
   it('shows no external research, percentages or statistics', () => {
-    const t = norm(landing())
+    // The founder-locked BR-001 sentence ("billions in advertising revenue") is the only exception, by exact match.
+    const t = withoutLockedExceptions(norm(landing()))
     expect(t).not.toMatch(/Goldman|Nielsen|Linktree|\bstudy\b|survey|respondents|\d+(\.\d+)?\s?%|billion|million/i)
   })
   it('joins the eight sections with the split-post seam, so they read as one story', () => {
@@ -92,7 +93,8 @@ describe('one Splitpost story, top to bottom (SP-BRAND-002)', () => {
     const c = landing()
     // Nowhere is advertising offered to visitors.
     expect(norm(c)).not.toMatch(/for advertisers|for businesses|advertise with|advertise on|reach the right people|customers, not just clicks|run (an? )?ads?/i)
-    for (const id of ['hero', 'why', 'who', 'what', 'account', 'invitation']) expect(norm(c.querySelector(`#${id}`)), id).not.toMatch(/advertis/i)
+    // WHY's founder-locked sentence names platforms' advertising revenue (not a proposition); it is the only exception.
+    for (const id of ['hero', 'why', 'who', 'what', 'account', 'invitation']) expect(withoutLockedExceptions(norm(c.querySelector(`#${id}`))), id).not.toMatch(/advertis/i)
     // HOW names advertising once, as the source of eligible revenue (decision 4: transparency, not a proposition).
     const how = c.querySelector('#how')!
     const lines = [...how.querySelectorAll('p')].map((p) => norm(p)).filter((t) => /advertis/i.test(t))
@@ -132,20 +134,24 @@ describe('HOOK', () => {
     expect(norm(scene)).toContain('Sample')
     expect(norm(scene)).not.toMatch(/[$£€%]|earn|cash|payout/i)
   })
-  it('draws the post as the logo: a photo post above, the community below, cut on the diagonal, no statistics or comments (SP-BRAND-003)', () => {
+  it('draws the post as the logo: a photo post above, followers engaging with it below, cut on the diagonal, no statistics (SP-BRAND-003, Nov 28)', () => {
     const scene = hero().querySelector('[data-testid="hero-scene"]')!
     const creator = scene.querySelector('[data-testid="split-creator-piece"]')!
     const community = scene.querySelector('[data-testid="split-community-piece"]')!
     expect(creator.querySelector(`img[data-photo="${HERO_POST.media.id}"]`)).not.toBeNull()
     expect(community.querySelectorAll('img[data-photo]')).toHaveLength(HERO_POST.community.length)
+    // The lower half shows engagement with that post: comments (drawn, no words), a like, a save, a share and a follow.
+    expect(norm(community)).toBe('LikeSaveShareFollow')
+    expect(community.querySelectorAll('.lucide-message-circle').length).toBeGreaterThanOrEqual(2)
+    for (const icon of ['heart', 'bookmark', 'share-2', 'user-plus']) expect(community.querySelector(`.lucide-${icon}`), icon).not.toBeNull()
     // The cut is diagonal (the logo), never a rectangle or a horizontal divider.
     const clips = [...scene.querySelectorAll<HTMLElement>('[style*="clip-path"]')].map((el) => el.style.clipPath)
     expect(clips).toHaveLength(2)
     for (const c of clips) expect(c).toMatch(/polygon\(/)
     expect(scene.querySelector('[data-testid="gold-seam"] line')!.getAttribute('y1')).not.toBe(scene.querySelector('[data-testid="gold-seam"] line')!.getAttribute('y2'))
-    // Only the name, role, sample tag, short title and community line carry words; no counts.
+    // Only the name, role, sample tag, short title and plain interface labels carry words; no counts, nothing about money.
     const visible = norm(scene.querySelector('[aria-hidden="true"]'))
-    const words = [HERO_POST.creator.name, HERO_POST.creator.role, 'Sample', HERO_POST.title]
+    const words = [HERO_POST.creator.name, HERO_POST.creator.role, 'Sample', HERO_POST.title, 'Like', 'Save', 'Share', 'Follow']
     expect(words.reduce((v, w) => v.replace(w, ''), visible).trim()).toBe('')
     expect(visible.replace(HERO_POST.title, '')).not.toMatch(/\d/)
     // A distinct photo: never the WHY section's.
@@ -173,9 +179,26 @@ describe('HOOK', () => {
 
 describe('WHY', () => {
   const sec = () => section('why')
-  it('uses the approved script, in order', () => {
-    const c = HOMEPAGE_COPY.why
-    expect([...sec().querySelectorAll('[data-testid="why-copy"] p')].map((p) => norm(p))).toEqual([...c.body, c.question, ...c.body2, ...c.belief])
+  it('shows the founder-approved wording verbatim, one paragraph each, with nothing added (BR-001)', () => {
+    expect(norm(sec().querySelector('h2'))).toBe('You do the work. Who gets the reward?')
+    expect([...sec().querySelectorAll('[data-testid="why-copy"] p')].map((p) => norm(p))).toEqual([
+      'You create the content. Your followers watch, like, comment, save and share it. Together, you generate the attention that platforms turn into billions in advertising revenue.',
+      'Yet the platforms decide who sees your content, how much you earn and whether you earn anything at all.',
+      'They have built predictable businesses from your creativity, while you are left trying to build a business on unpredictable algorithms.',
+      'Your followers help you grow, but rarely share in the financial value they help create.',
+      'Everyone contributes. Not everyone gets a split.',
+      "We believe it's time to change that.",
+    ])
+    // The text column holds only the heading and those paragraphs (the picture's sample dashboard is decorative).
+    const column = sec().querySelector('h2')!.parentElement!
+    expect(norm(column)).toBe(norm(sec().querySelector('h2')) + norm(sec().querySelector('[data-testid="why-copy"]')))
+  })
+  it('gives "Everyone contributes. Not everyone gets a split." more visual weight than the paragraphs around it (BR-001)', () => {
+    const emphasis = sec().querySelector('[data-testid="why-emphasis"]')!
+    expect(norm(emphasis)).toBe('Everyone contributes. Not everyone gets a split.')
+    expect(emphasis.tagName).toBe('P')
+    expect(emphasis.className).toMatch(/font-black/)
+    expect(emphasis.className).toMatch(/text-\[clamp\(/)
   })
   it('shows a creator at work and a sample dashboard with no figures, and names no company', () => {
     const v = sec().querySelector('[data-testid="why-visual"]')!
@@ -340,7 +363,9 @@ describe('claims safeguards across the whole page', () => {
   it('makes no misleading financial claim anywhere (an extra safeguard, not a substitute for review)', () => {
     const b = blocks(landing())
     expect(b.length).toBeGreaterThan(80)
-    expect(b.flatMap((x) => findMisleadingClaims(x))).toEqual([])
+    // Only the founder-locked sentence (copy.ts, FOUNDER_LOCKED_EXCEPTIONS) is excepted, by exact match.
+    expect(b.flatMap((x) => findMisleadingClaims(withoutLockedExceptions(x)))).toEqual([])
+    expect(b.flatMap((x) => findMisleadingClaims(x)).map((f) => f.sentence)).toEqual([FOUNDER_LOCKED_EXCEPTIONS[0].sentence])
   })
   it('never publishes the provisional allocation', () => {
     expect(mentionsProvisionalAllocation(norm(landing()))).toBe(false)

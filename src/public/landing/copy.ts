@@ -4,7 +4,7 @@
 // SP-BRAND-002 (founder-approved Nov 27, with the marketing positioning
 // amendment of the same day): one story for creators and supporters.
 //   HOOK         Don't just post. Get your split.
-//   WHY          You do the work. Who gets the reward?
+//   WHY          You do the work. Who gets the reward? (replaced verbatim Nov 28, BR-001)
 //   WHO          Built for people like you. (creators, supporters)
 //   WHAT         Imagine a better kind of social media.
 //   HOW          A better split starts with a better connection. (the product, step by step)
@@ -51,25 +51,23 @@ export const HOMEPAGE_COPY = {
 
   why: {
     status: 'final' as CopyStatus,
-    eyebrow: 'Why Splitpost exists',
+    /**
+     * Founder-approved and locked (Nov 28, SP-BRAND-003 follow-up, BR-001).
+     * Verbatim: do not rewrite, paraphrase, shorten or add to it. The
+     * paragraph breaks are part of the approval; the emphasis line is shown
+     * with greater visual prominence.
+     */
     headline: 'You do the work. Who gets the reward?',
     body: [
-      'Every day, people create the content that makes social media valuable.',
-      'Others watch, comment, share and help that content reach new people.',
-      'Together, they build communities, influence decisions and generate value.',
+      'You create the content. Your followers watch, like, comment, save and share it. Together, you generate the attention that platforms turn into billions in advertising revenue.',
+      'Yet the platforms decide who sees your content, how much you earn and whether you earn anything at all.',
+      'They have built predictable businesses from your creativity, while you are left trying to build a business on unpredictable algorithms.',
+      'Your followers help you grow, but rarely share in the financial value they help create.',
     ],
-    question: 'But who benefits the most?',
-    body2: [
-      'Creators spend hours making content but struggle to turn their passion into a sustainable income.',
-      'Followers help their favourite creators grow but rarely receive anything in return.',
-      'And somewhere along the way, social media became more about capturing attention than building meaningful connections.',
-    ],
-    belief: [
-      'We believe social media should work differently.',
-      'The people who help create the value should have an opportunity to share in it.',
-      "That's why we're building Splitpost.",
-    ],
+    emphasis: 'Everyone contributes. Not everyone gets a split.',
+    closing: "We believe it's time to change that.",
   },
+
 
   who: {
     status: 'final' as CopyStatus,
@@ -265,6 +263,34 @@ export const HOMEPAGE_COPY = {
   /** Shown on a photo placeholder until the founder approves the shortlist. */
   photoPending: 'Photo pending approval',
 } as const
+
+/**
+ * Founder-locked sentences that a safeguard check flags, kept word for word
+ * and listed here instead of being reworded (see the note at the top of this
+ * file). Each is excluded from the named checks only, by exact match; every
+ * other sentence still goes through every check. Each needs the founder's
+ * and counsel's sign-off before publication.
+ *
+ *   BR-001 (Nov 28): describes how platforms earn from attention today, not
+ *   anything Splitpost offers. It trips three checks: "revenue sharing
+ *   described as existing today" (the claims checker), "no statistics"
+ *   (the word "billions", an unsourced general figure), and "no mention of
+ *   advertising in WHY" (it names advertising revenue, but offers nothing to
+ *   advertisers). Open question for counsel: is "billions in advertising
+ *   revenue" acceptable without a cited source?
+ */
+export const FOUNDER_LOCKED_EXCEPTIONS: ReadonlyArray<{ sentence: string; checks: readonly string[]; approved: string }> = [
+  {
+    sentence: 'Together, you generate the attention that platforms turn into billions in advertising revenue.',
+    checks: ['revenue sharing described as existing today', 'no statistics', 'no advertising in WHY'],
+    approved: 'Founder, Nov 28 (BR-001, locked wording); counsel review pending',
+  },
+]
+
+/** Text with the founder-locked exception sentences removed, for the checks they are excepted from. */
+export function withoutLockedExceptions(text: string): string {
+  return FOUNDER_LOCKED_EXCEPTIONS.reduce((t, e) => t.split(e.sentence).join(' '), text)
+}
 
 /** Every visitor-facing string in the homepage copy, for the claim checks. */
 export function allHomepageText(copy: unknown = HOMEPAGE_COPY): string[] {

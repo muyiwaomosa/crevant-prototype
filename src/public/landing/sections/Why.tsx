@@ -1,38 +1,36 @@
 import { HOMEPAGE_COPY } from '../copy'
 import { Photo } from '../ui/Photo'
-import { Eyebrow } from '../ui/Story'
 
 const copy = HOMEPAGE_COPY.why
 
 /**
- * Section 2, WHY (SP-BRAND-002): the gap between the value people create and
- * the value they receive. The picture is a creator at work behind the scenes,
- * with a drawn dashboard laid over it: followers climb, views per post jump
- * around and earnings are a question mark. A sample with no figures, so it
- * can't be read as a real result; no statistics, no named companies.
+ * Section 2, WHY: the founder-approved wording of Nov 28 (BR-001), verbatim,
+ * paragraph by paragraph, with "Everyone contributes. Not everyone gets a
+ * split." given the most visual weight after the heading. The picture is a
+ * creator at work behind the scenes, with a drawn dashboard laid over it:
+ * followers climb, views per post jump around and earnings are a question
+ * mark. A sample with no figures, so it can't be read as a real result; no
+ * statistics, no named companies.
  */
 export function Why() {
   return (
     <section id="why" aria-labelledby="why-title" className="scroll-mt-16 bg-sp-bg text-sp-ink">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-4 pb-18 pt-20 sm:px-6 sm:pb-24 sm:pt-24 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16 lg:pb-28 lg:pt-28">
         <div className="min-w-0">
-          <Eyebrow>{copy.eyebrow}</Eyebrow>
-          <h2 id="why-title" className="mt-4 text-balance font-sp-display text-[clamp(2.2rem,7vw,4rem)] font-black leading-[0.98] tracking-[-0.02em] [font-stretch:108%]">
+          <h2 id="why-title" className="text-balance font-sp-display text-[clamp(2.2rem,7vw,4rem)] font-black leading-[0.98] tracking-[-0.02em] [font-stretch:108%]">
             {copy.headline}
           </h2>
           <div data-testid="why-copy" className="mt-6 max-w-xl space-y-4 text-[1.08rem] leading-relaxed sm:text-lg">
             {copy.body.map((p) => (
               <p key={p}>{p}</p>
             ))}
-            <p className="pt-2 font-sp-display text-xl font-extrabold">{copy.question}</p>
-            {copy.body2.map((p) => (
-              <p key={p}>{p}</p>
-            ))}
-            <div data-testid="why-belief" className="space-y-1 border-l-4 border-sp-accent pl-4 font-semibold">
-              {copy.belief.map((p) => (
-                <p key={p}>{p}</p>
-              ))}
-            </div>
+            <p
+              data-testid="why-emphasis"
+              className="border-l-4 border-sp-accent py-1 pl-4 text-balance font-sp-display text-[clamp(1.6rem,4.6vw,2.35rem)] font-black leading-[1.08] tracking-[-0.01em] text-sp-primary"
+            >
+              {copy.emphasis}
+            </p>
+            <p className="font-semibold">{copy.closing}</p>
           </div>
         </div>
         <figure data-testid="why-visual" className="relative m-0 mx-auto w-full max-w-[30rem]">
