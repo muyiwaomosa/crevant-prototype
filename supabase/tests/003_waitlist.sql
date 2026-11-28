@@ -81,10 +81,12 @@ do $$
 declare
   r text;
 begin
-  -- BL-009 (20261223000000) adds a third login, waitlist_handoff, held only by
-  -- the member project's waitlist-bridge function.
+  -- BL-009 (20261223000000) adds a third login, waitlist_handoff, used only by
+  -- the waitlist-handoff function. Checked wherever this database has that
+  -- migration's functions (a login exists cluster-wide, so its presence alone
+  -- says nothing about this database).
   foreach r in array array['waitlist_writer', 'waitlist_admin']
-      || case when exists (select 1 from pg_roles where rolname = 'waitlist_handoff') then array['waitlist_handoff'] else '{}'::text[] end loop
+      || case when to_regprocedure('waitlist_api.handoff_export(integer)') is not null then array['waitlist_handoff'] else '{}'::text[] end loop
     if not exists (select 1 from pg_roles where rolname = r) then
       raise exception 'FAIL: role % is missing', r;
     end if;
@@ -112,7 +114,7 @@ declare
   bad text;
 begin
   foreach r in array array['waitlist_writer', 'waitlist_admin']
-      || case when exists (select 1 from pg_roles where rolname = 'waitlist_handoff') then array['waitlist_handoff'] else '{}'::text[] end loop
+      || case when to_regprocedure('waitlist_api.handoff_export(integer)') is not null then array['waitlist_handoff'] else '{}'::text[] end loop
     allowed := case r
       -- Creator acquisition: submit_v2 adds optional attribution fields to the
       -- same submission; invite_preview answers only whether a link is usable
