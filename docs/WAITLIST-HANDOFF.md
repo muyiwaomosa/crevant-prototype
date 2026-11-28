@@ -136,20 +136,17 @@ In Production the waitlist (`hmrliwoychnqrbbydorg`) and the member project are
 separate projects, so each keeps its own `RESEND_API_KEY` (two separate
 sending-only keys) and each gets the same `WAITLIST_HANDOFF_KEY` value.
 
-### Staging baseline (checked Nov 28, no secret values read)
+### Staging baseline (rechecked Nov 28 after the founder's setup; no secret values read)
 
 | Item | State | Evidence |
 |---|---|---|
-| Waitlist migrations 20261110, 20261111 and BL-009's 20261223, 20261224 on staging | Done and verified | Staging plan and apply runs; staging checks |
-| `join-waitlist` deployed, `waitlist_writer` login, allowed origin, switch open | Done and verified | Waitlist health check passes (scheduled Nov 27, and run again Nov 28) |
-| Resend domain `mail.splitpost.ca` and staging Auth email | Done and verified | `docs/STAGING-ACCEPTANCE.md` step B (password reset delivered) |
-| Resend sending-only API keys | Created by the founder; awaiting verification | Verified when a verification email arrives (acceptance step 1) |
-| `join-waitlist` at the BL-009 version (email verification) | Outstanding | The deployed version answers a `verify_email` request as an ordinary join, so it predates BL-009 |
-| `waitlist_handoff` password | Outstanding (founder) | |
-| Function secrets for BL-009 | Outstanding (founder) | Not readable from here; confirmed by the steps that use them |
-| `waitlist-handoff` and `waitlist-bridge` on staging | Outstanding (founder deploys) | Both answer 404 (not deployed) |
-| Resend webhook for delivery events | Outstanding (founder) | |
-| Deployment ledger and verification run for `waitlist-bridge` | After the deploy (Claude) | `config/function-deployments.json`, `verify-functions.yml` |
+| Waitlist and BL-009 migrations on staging | Done and verified | Staging plan and apply runs; staging checks |
+| Resend domain `mail.splitpost.ca`; staging Auth email | Done and verified | `docs/STAGING-ACCEPTANCE.md` step B |
+| `join-waitlist` at the BL-009 version (65c2220) | Done and verified | A `verify_email` request with an unknown token answers `invalid`; the health check passes (database login, allowed origin, switch open) |
+| `waitlist_handoff` password, the five secrets, the Resend webhook | Done by the founder | Confirmed in use by acceptance steps 1, 2 and 6 |
+| `waitlist-handoff` deployed | Deployed, but answering `closed` (503) | It closes when `WAITLIST_HANDOFF_DB_URL` fails its checks or `WAITLIST_HANDOFF_KEY` is missing, under 32 characters or not printable; its function log names the reason, never a secret |
+| `waitlist-bridge` deployed (65c2220) | Deployed; 209 of 225 independent checks pass, the build stamp matches 65c2220's source | The 16 failures are one gap: no `X-Content-Type-Options: nosniff` header. Fixed in code here; needs a redeploy, then the verification run and ledger entry |
+| `WAITLIST_VERIFY_ORIGIN` | Not observable from outside | The function refuses any origin that is not https and in `WAITLIST_ALLOWED_ORIGINS` (it logs a config problem); the link opening in acceptance step 1 confirms it |
 
 1. **Apply the migrations.** Merge the pull request (your checksum approval),
    then run the staging plan and apply as usual.
