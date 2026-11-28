@@ -235,6 +235,12 @@ declare
     'public.app_founder_activation()',
     'public.app_my_deletion_consequences()'
   ];
+  -- Link in bio (20261221000000), once applied.
+  profile_link text[] := array[
+    'public.app_member_website(uuid)',
+    'public.app_my_website()',
+    'public.app_set_my_website(text)'
+  ];
   -- Progression rules (20261218000000), once applied.
   progression_rules text[] := array[
     'public.app_founder_correct_allocation(bigint,uuid,bigint,text,text,text)',
@@ -284,6 +290,9 @@ begin
   end if;
   if to_regclass('sim.balance_closures') is not null then
     expected := expected || closure;
+  end if;
+  if to_regprocedure('public.app_set_my_website(text)') is not null then
+    expected := expected || profile_link;
   end if;
   if to_regclass('social.shares') is not null then
     expected := expected || discovery;

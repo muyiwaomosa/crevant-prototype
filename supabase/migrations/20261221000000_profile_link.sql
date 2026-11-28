@@ -65,15 +65,22 @@ comment on function public.app_my_website() is 'The caller''s own link in bio, o
 
 create function public.app_member_website(p_member uuid)
 returns text
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
-  select case when d.hidden_at is null then d.website end
-  from social.visible_members p
-  join social.profile_details d on d.user_id = p.id
-  where p.id = p_member;
+declare
+  -- Members only, like the other profile details.
+  v_uid uuid := social.current_member();
+begin
+  return (
+    select case when d.hidden_at is null then d.website end
+    from social.visible_members p
+    join social.profile_details d on d.user_id = p.id
+    where p.id = p_member
+  );
+end;
 $$;
 comment on function public.app_member_website(uuid) is 'A visible member''s link in bio, or null (none, hidden by moderation, or not visible to the caller).';
 

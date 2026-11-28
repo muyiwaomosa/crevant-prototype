@@ -135,6 +135,8 @@ declare
   progression_rules text[] := array['app_founder_correct_allocation', 'app_founder_correct_revenue', 'app_founder_decide_qualification', 'app_founder_place_hold', 'app_founder_progression_queue', 'app_founder_progression_report', 'app_founder_release_hold'];
   -- Pilot closure, activation and triage (20261219000000).
   closure text[] := array['app_founder_activation', 'app_my_deletion_consequences'];
+  -- Link in bio (20261221000000).
+  profile_link text[] := array['app_member_website', 'app_my_website', 'app_set_my_website'];
   found text[];
 begin
   if to_regclass('social.profile_details') is not null then
@@ -196,6 +198,9 @@ begin
   end if;
   if to_regclass('sim.balance_closures') is not null then
     expected := (select array_agg(x order by x collate "C") from unnest(expected || closure) x);
+  end if;
+  if to_regprocedure('public.app_set_my_website(text)') is not null then
+    expected := (select array_agg(x order by x collate "C") from unnest(expected || profile_link) x);
   end if;
   select coalesce(array_agg(p.proname::text order by p.proname), '{}') into found
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace

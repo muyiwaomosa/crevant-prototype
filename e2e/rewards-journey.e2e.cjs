@@ -256,7 +256,7 @@ async function signIn(page, email) {
       await page.getByRole('button', { name: 'Continue' }).click()
       await page.waitForURL(`${APP}/app`)
       await page.getByTestId('welcome').getByRole('button', { name: 'Skip' }).click({ timeout: 15000 })
-      await page.getByText('Step 1 of 6: Your name').waitFor({ timeout: 15000 })
+      await page.getByText('Step 1 of 5: Your name').waitFor({ timeout: 15000 })
       await page.getByLabel('Username').fill(`rwn${RUN}`)
       await page.getByLabel('Display name').fill('Nia New')
       await page.getByRole('button', { name: 'Continue' }).click()

@@ -6,8 +6,8 @@
 // simulated money model.
 //
 //  1. Cleo registers through a founder invitation link and confirms her email.
-//  2. Setup: she chooses "Share my own work", her interests and a bio, and
-//     learns how My Split works; "Set up my creator profile" takes her to Profile.
+//  2. Setup: her interests and a bio (nobody is asked whether they create or
+//     consume, BL-005), and how My Split works; "Write my first post" opens Create.
 //  3. Creator setup on Profile: up to 3 posting topics (a fourth is not
 //     possible, in the page or in the database).
 //  4. Her first post: the first-post guide shows before it, then not again.
@@ -51,12 +51,11 @@ J.run(async (browser) => {
   check('the registration is an invitation, with no referrer', sql(`select kind || '|' || coalesce(referrer_id::text, 'none') from ops.registrations where user_id = '${c}'`) === 'invitation|none')
 
   // ---------------------------------------------------------------------------
-  step('2. Setup: "Share my own work", interests, about you, and how My Split works')
+  step('2. Setup: interests, about you, and how My Split works (one experience for everyone)')
   await nameStep(cleo.page, userC, 'Cleo Creator')
-  await screenChecks(cleo.page, 'setup, what brings you here')
-  await cleo.page.getByRole('radio', { name: /Share my own work/ }).check()
-  await cleo.page.getByRole('button', { name: 'Continue', exact: true }).click()
   await cleo.page.getByRole('heading', { name: 'What are you into?' }).waitFor()
+  check('nobody is asked whether they create or consume', (await cleo.page.getByRole('radio', { name: /Share my own work/ }).count()) === 0)
+  await screenChecks(cleo.page, 'setup, your interests')
   for (const t of ['Food & cooking', 'Travel', 'Books & writing']) await topicButton(cleo.page, t).click()
   await cleo.page.getByRole('button', { name: 'Continue', exact: true }).click()
   await cleo.page.getByRole('heading', { name: 'Tell people about you' }).waitFor()
@@ -73,31 +72,20 @@ J.run(async (browser) => {
     /You add value/.test(intro) && /redeemable after a quick review/.test(intro) && /simulated/.test(intro) && /nothing is paid/.test(intro), intro)
   check('How My Split works shows no allocation percentages', !/\d+\s*%/.test(intro))
   await screenChecks(cleo.page, 'setup, how My Split works')
-  check('the identity, interests and bio are saved',
-    sql(`select d.identity || '|' || (select string_agg(topic, ',' order by topic) from social.member_topics where user_id = d.user_id) || '|' || (d.bio is not null) from social.profile_details d where d.user_id = '${c}'`) === 'creator|books,food,travel|true')
-  await cleo.page.getByRole('link', { name: 'Set up my creator profile' }).click()
-  await cleo.page.waitForURL(`${APP}/app/profile?edit=1`)
-  const setup = cleo.page.getByTestId('creator-setup')
-  await setup.waitFor()
-  check('"Set up my creator profile" opens Profile with "Share your own work"', (await setup.getByRole('heading', { name: 'Share your own work' }).count()) === 1)
+  check('the interests and bio are saved',
+    sql(`select (select string_agg(topic, ',' order by topic) from social.member_topics where user_id = d.user_id) || '|' || (d.bio is not null) from social.profile_details d where d.user_id = '${c}'`) === 'books,food,travel|true')
+  check('everyone is offered the same first post', (await cleo.page.getByRole('link', { name: 'Set up my creator profile' }).count()) === 0)
 
   // ---------------------------------------------------------------------------
-  step('3. Creator setup: up to 3 posting topics; a fourth is not possible')
-  for (const t of ['Food & cooking', 'Travel', 'Family & parenting']) await topicButton(setup, t).click()
-  check('three posting topics are chosen', (await setup.getByTestId('posting-topic-progress').innerText()) === '3 of 3 chosen')
-  check('a fourth posting topic cannot be chosen in the page', await topicButton(setup, 'Music').isDisabled())
-  await screenChecks(cleo.page, 'Profile with creator setup')
-  await setup.getByRole('button', { name: 'Save topics' }).click()
-  await setup.getByText("Saved. You'll appear in suggestions for these topics.").waitFor()
-  check('the three posting topics are stored', sql(`select string_agg(topic, ',' order by topic) from social.creator_topics where user_id = '${c}'`) === 'family,food,travel')
-  const tC = await tokenFor(emailC)
-  const four = await rpc(tC, 'app_set_creator_topics', { p_topics: ['food', 'travel', 'family', 'music'] })
-  check('the database refuses a fourth posting topic too', four.status >= 400 && /too_many_posting_topics/.test(JSON.stringify(four.body)))
-  check('the refused request changed nothing', sql(`select count(*) from social.creator_topics where user_id = '${c}'`) === '3')
+  step('3. One profile for everyone: no separate creator setup; the server still caps posting topics')
+  check('the server still refuses more than three posting topics', await (async () => {
+    const r = await rpc(await tokenFor(emailC), 'app_set_creator_topics', { p_topics: ['food', 'travel', 'family', 'music'] })
+    return r.status >= 400 && /too_many_posting_topics/.test(JSON.stringify(r.body))
+  })())
 
   // ---------------------------------------------------------------------------
   step('4. The first post, with the first-post guide before it')
-  await setup.getByRole('link', { name: 'Write a post' }).click()
+  await cleo.page.getByRole('link', { name: 'Write my first post' }).click()
   await cleo.page.waitForURL(`${APP}/app/new`)
   const guide = cleo.page.getByTestId('first-post-guide')
   await guide.waitFor()
@@ -116,12 +104,11 @@ J.run(async (browser) => {
   check('the first-post guide does not show again once she has posted', (await cleo.page.getByTestId('first-post-guide').count()) === 0)
 
   // ---------------------------------------------------------------------------
-  step('5. Cleo copies her personal invitation link')
-  await nav(cleo.page).getByTitle('Profile').click()
-  await cleo.page.getByRole('link', { name: 'Edit profile' }).click()
-  await setup.waitFor()
-  await setup.getByRole('button', { name: 'Copy my invitation link' }).click()
-  await setup.getByRole('button', { name: 'Link copied' }).waitFor()
+  step('5. Cleo copies her personal invitation link (My Split, My Activity)')
+  await cleo.page.goto(`${APP}/app/split?face=activity`)
+  await cleo.page.getByTestId('referral-link').waitFor()
+  await cleo.page.getByRole('button', { name: 'Copy link' }).click()
+  await cleo.page.getByRole('button', { name: 'Copied' }).waitFor()
   const link = await cleo.page.evaluate(() => navigator.clipboard.readText())
   const code = (link.match(/\/register\/([0-9a-f]{16})$/) || [])[1]
   check('the copied link is her personal link on this site', link.startsWith(`${APP}/register/`) && !!code)
@@ -134,15 +121,14 @@ J.run(async (browser) => {
   const n = idOf(emailN)
   check('Nia is attributed to Cleo as a referral', sql(`select kind || '|' || referrer_id from ops.registrations where user_id = '${n}'`) === `referral|${c}`)
   await nameStep(nia.page, userN, 'Nia New')
-  await nia.page.getByRole('radio', { name: /Find creators I'll love/ }).check()
-  await nia.page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await nia.page.getByRole('heading', { name: 'What are you into?' }).waitFor()
   await topicButton(nia.page, 'Food & cooking').click()
   await nia.page.getByRole('button', { name: 'Continue', exact: true }).click()
   await nia.page.getByRole('button', { name: 'Save and continue' }).click()
   const inviter = nia.page.getByTestId('inviter-card')
   await inviter.waitFor()
   const card = flat(await inviter.innerText())
-  check('setup shows "You\'re here because of" Cleo, with her posting topics', card.includes("You're here because of") && card.includes('Cleo Creator') && card.includes(`@${userC}`) && card.includes('Food & cooking'), card)
+  check('setup shows "You\'re here because of" Cleo', card.includes("You're here because of") && card.includes('Cleo Creator') && card.includes(`@${userC}`), card)
   check('nothing is followed until Nia chooses', sql(`select count(*) from social.follows where follower_id = '${n}'`) === '0')
   await screenChecks(nia.page, 'setup with who invited you')
   await inviter.getByRole('button', { name: 'Follow Cleo Creator' }).click()
@@ -171,10 +157,8 @@ J.run(async (browser) => {
   // ---------------------------------------------------------------------------
   step('7. Cleo strengthens the relationship: who joined, follow back, her own Clique')
   await cleo.page.goto(`${APP}/app/profile?edit=1`)
-  const tools = cleo.page.getByTestId('creator-setup')
-  await tools.waitFor()
-  const t7 = flat(await tools.innerText())
-  check('creator setup says one person joined through her link, and is complete', t7.includes('1 person has joined through it.') && t7.includes('Your creator tools'), t7)
+  await cleo.page.getByTestId('audience-insight').waitFor()
+  check('one person joined through her link', sql(`select count(*) from ops.registrations where referrer_id = '${c}'`) === '1')
   const audience = flat(await cleo.page.getByTestId('audience-insight').innerText())
   check('Your audience: 1 follower, 1 in her Clique, 1 Active Supporter', /1 Followers 1 Clique 1 Active Supporters/.test(audience), audience)
   await cleo.page.goto(`${APP}/app/u/${userN}`)

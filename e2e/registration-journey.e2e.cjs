@@ -115,11 +115,11 @@ async function confirmAndSetUp(page, email, username, displayName) {
   await page.getByRole('button', { name: 'Continue' }).click()
   await page.waitForURL(`${APP}/app`)
   await page.getByTestId('welcome').getByRole('button', { name: 'Skip' }).click({ timeout: 15000 })
-  await page.getByText('Step 1 of 6: Your name').waitFor({ timeout: 15000 })
+  await page.getByText('Step 1 of 5: Your name').waitFor({ timeout: 15000 })
   await page.getByLabel('Username').fill(username)
   await page.getByLabel('Display name').fill(displayName)
   await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('heading', { name: 'What brings you to Splitpost?' }).waitFor()
+  await page.getByRole('heading', { name: 'What are you into?' }).waitFor()
   await page.getByRole('button', { name: 'Skip the rest' }).click()
   await page.getByRole('heading', { name: 'People you might like' }).waitFor()
   await page.getByRole('button', { name: 'Continue' }).click()
@@ -237,7 +237,7 @@ async function confirmAndSetUp(page, email, username, displayName) {
       await page.getByRole('button', { name: 'Continue' }).click()
       // Then the value-first welcome (SP-UX-002), then the name step.
       await page.getByTestId('welcome').getByRole('button', { name: 'Skip' }).click()
-      await page.getByText('Step 1 of 6: Your name').waitFor()
+      await page.getByText('Step 1 of 5: Your name').waitFor()
       check('after confirming, the member continues to setup', sql(`select source from ops.age_attestations where user_id = '${created.id}'`) === 'in_app')
       await ctx.close()
     }

@@ -6,7 +6,7 @@
 // rewards model in My Split.
 //
 //  1. Kai registers through an invitation link and confirms his email.
-//  2. Setup: "Find creators I'll love", his interests; the suggestions put the
+//  2. Setup: his interests (no creator or consumer question); the suggestions put the
 //     creator who shares his interests first; he follows her and joins her Clique.
 //  3. Discover: For you shows a post in his interests from someone he doesn't
 //     follow, with its reason; Creators by interest finds that creator; he follows.
@@ -64,8 +64,6 @@ J.run(async (browser) => {
   // ---------------------------------------------------------------------------
   step('2. Setup: his interests, relevant suggestions, an intentional follow and his Clique')
   await nameStep(kai.page, userK, 'Kai Fan')
-  await kai.page.getByRole('radio', { name: /Find creators I'll love/ }).check()
-  await kai.page.getByRole('button', { name: 'Continue', exact: true }).click()
   await kai.page.getByRole('heading', { name: 'What are you into?' }).waitFor()
   await topicButton(kai.page, 'Food & cooking').click()
   await topicButton(kai.page, 'Travel').click()

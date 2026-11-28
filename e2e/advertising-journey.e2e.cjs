@@ -240,7 +240,7 @@ async function signIn(page, email) {
       const ctx = await newContext(browser)
       const page = await ctx.newPage()
       await signIn(page, email('m'))
-      await page.goto(`${APP}/app/profile?edit=1`)
+      await page.goto(`${APP}/app/settings/privacy`)
       const prefs = page.getByTestId('ad-preferences')
       await prefs.waitFor()
       await prefs.getByLabel('Software & apps').selectOption('chosen')

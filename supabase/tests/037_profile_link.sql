@@ -33,7 +33,7 @@ begin
     bad := bad || 'the setter does not validate, or does not write only the caller''s own row'::text;
   end if;
   -- Shown only for visible members, and hidden with the other details.
-  if position('visible_members' in reader) = 0 or position('hidden_at' in reader) = 0 then
+  if position('visible_members' in reader) = 0 or position('hidden_at' in reader) = 0 or position('current_member' in reader) = 0 then
     bad := bad || 'the link can be read for hidden or invisible members'::text;
   end if;
   if cardinality(bad) > 0 then
