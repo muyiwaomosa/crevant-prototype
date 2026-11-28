@@ -226,7 +226,8 @@ function ForYou({ topics }: { topics: Topic[] | null }) {
 }
 
 function chip(on: boolean) {
-  return `inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semibold ring-1 transition ${
+  // No colour transition: a chip just chosen is measured (and read) in its final colours at once.
+  return `inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semibold ring-1 ${
     on ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-ink-800 ring-ink-200 hover:bg-ink-50'
   }`
 }
