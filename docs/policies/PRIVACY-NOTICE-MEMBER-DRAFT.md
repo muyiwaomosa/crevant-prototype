@@ -106,7 +106,7 @@ Information stored or processed outside Canada is subject to the laws of those c
 ### 7. Who can see what
 
 * Your profile, posts and comments are visible to signed-in pilot members who can see them (not to people you have blocked).
-* Eligible shared content may be shown in a public preview to people without an account.
+* Eligible shared posts may be shown in a public preview to people without an account: the post's text, when it was posted, its topic, and your name and username. This is on by default; you can switch it off at any time in Settings (Privacy, sharing and ads), and previews stop at once. Previews never include photos or videos, comments, likes, your other details or anything about other members. (Changed Nov 28, 2026 from opt-in; for legal review, question 27.)
 * Photos and videos are stored privately and shown only through short-lived links.
 * During the pilot we do not keep a separate backup copy of photos and videos. Keep your original files: if a file is lost, we may not be able to restore it. (Draft wording, Nov 26; for legal review with the rest of this notice.)
 * Reports are confidential: the person you report is not told who reported them.

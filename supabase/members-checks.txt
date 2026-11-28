@@ -40,3 +40,5 @@
 034_progression_rules.sql 20261218000000
 035_pilot_closure_activation_triage.sql 20261219000000
 036_video_release_decision.sql 20261220000000
+037_profile_link.sql 20261221000000
+038_preview_default.sql 20261222000000

@@ -117,7 +117,7 @@ const makePhoto = (page, w, h) =>
     await p0.goto(`${APP}/app/new`)
     await p0.getByRole('textbox', { name: 'Write a post' }).waitFor()
     await p0.waitForTimeout(800)
-    check('with the audience at founder, a tester sees no Add photo', (await p0.getByRole('button', { name: 'Add photo' }).count()) === 0)
+    check('with the audience at founder, a tester sees no Add photo', (await p0.getByRole('button', { name: /^Add (photo|photo or video)$/ }).count()) === 0)
     await ctx0.close()
   }
   sql("select ops.set_photo_audience('founder', 'members', 'OPEN PHOTO POSTING TO ALL MEMBERS')")
@@ -129,11 +129,11 @@ const makePhoto = (page, w, h) =>
   await signIn(pageP, P.email)
   // Posting is in Create (approved design, V1: Home opens on content).
   await pageP.goto(`${APP}/app/new`)
-  const addPhoto = pageP.getByRole('button', { name: 'Add photo' })
+  const addPhoto = pageP.getByRole('button', { name: /^Add (photo|photo or video)$/ })
   await addPhoto.waitFor()
   check('with photos on, Create offers Add photo', true)
   const tall = await makePhoto(pageP, 3024, 4032)
-  await pageP.getByTestId('photo-input').setInputFiles({ name: 'IMG_0420.jpg', mimeType: 'image/jpeg', buffer: tall })
+  await pageP.getByTestId('media-input').setInputFiles({ name: 'IMG_0420.jpg', mimeType: 'image/jpeg', buffer: tall })
   await pageP.getByRole('img', { name: "The photo you're adding" }).waitFor()
   const form = pageP.locator('form').filter({ has: pageP.getByRole('img', { name: "The photo you're adding" }) })
   check('choosing a photo shows a preview with Change photo and Remove photo, and one caption field (no description field)',
@@ -205,8 +205,8 @@ const makePhoto = (page, w, h) =>
 
   // 2. A second photo with a caption, from Create.
   await pageP.goto(`${APP}/app/new`)
-  await pageP.getByRole('button', { name: 'Add photo' }).waitFor()
-  await pageP.getByTestId('photo-input').setInputFiles({ name: 'wide.jpg', mimeType: 'image/jpeg', buffer: await makePhoto(pageP, 2400, 1600) })
+  await pageP.getByRole('button', { name: /^Add (photo|photo or video)$/ }).waitFor()
+  await pageP.getByTestId('media-input').setInputFiles({ name: 'wide.jpg', mimeType: 'image/jpeg', buffer: await makePhoto(pageP, 2400, 1600) })
   await pageP.getByRole('img', { name: "The photo you're adding" }).waitFor()
   await pageP.getByRole('textbox', { name: 'Write a post' }).fill(`Wide one (${RUN})`)
   await pageP.getByRole('button', { name: 'Post', exact: true }).click()

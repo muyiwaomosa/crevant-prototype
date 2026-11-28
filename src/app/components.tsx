@@ -1,5 +1,6 @@
 import clsx from 'clsx'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { LinkedText } from '../lib/linkify'
 import { Link } from 'react-router-dom'
 import { Check, Heart, MessageCircle, MoreHorizontal, Repeat2, Sparkles, Trash2, Users } from 'lucide-react'
 import { Card, buttonClass } from '../components/ui'
@@ -162,7 +163,7 @@ export function PostItem({ post, onDeleted, linkToPost = true }: { post: Post; o
             style={display ? { background: tintFor(post.id).bg, color: tintFor(post.id).fg } : undefined}
             data-display={display ? 'true' : undefined}
           >
-            {body}
+            <LinkedText text={body} />
           </p>
         )}
         <footer className="mt-3 flex flex-wrap items-center gap-1">

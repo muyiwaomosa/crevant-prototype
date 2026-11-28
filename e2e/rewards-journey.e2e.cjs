@@ -256,7 +256,7 @@ async function signIn(page, email) {
       await page.getByRole('button', { name: 'Continue' }).click()
       await page.waitForURL(`${APP}/app`)
       await page.getByTestId('welcome').getByRole('button', { name: 'Skip' }).click({ timeout: 15000 })
-      await page.getByText('Step 1 of 6: Your name').waitFor({ timeout: 15000 })
+      await page.getByText('Step 1 of 5: Your name').waitFor({ timeout: 15000 })
       await page.getByLabel('Username').fill(`rwn${RUN}`)
       await page.getByLabel('Display name').fill('Nia New')
       await page.getByRole('button', { name: 'Continue' }).click()
@@ -310,7 +310,10 @@ async function signIn(page, email) {
       await page.getByLabel('Note').fill('Journey: feed campaign')
       await page.getByRole('button', { name: 'Record simulated revenue' }).click()
       await page.getByText(`Recorded $50.00 of simulated feed advertising for ${month}.`).waitFor()
-      const o = (await page.getByTestId('rewards-overview').innerText()).replace(/\s+/g, ' ')
+      // The totals reload after the message appears: wait for them (up to 10s), then check the same figures.
+      const overview = page.getByTestId('rewards-overview')
+      await overview.getByText(/Revenue \(net\) \$150\.00/).waitFor({ timeout: 10000 }).catch(() => {})
+      const o = (await overview.innerText()).replace(/\s+/g, ' ')
       check('content ads split 40/20/40 and feed ads go to Splitpost; the parts add up to the revenue',
         /Revenue \(net\) \$150\.00 .*Creators \(content ads\) \$40\.00 .*Fan rewards pool \$20\.00 .*Splitpost \(incl\. feed ads\) \$90\.00/.test(o), o)
       await ctx.close()

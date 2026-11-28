@@ -206,7 +206,7 @@ function journey(name, password) {
     await page.waitForURL(`${APP}/app`)
     // SP-UX-002: a brand-new account sees the value-first welcome first.
     await page.getByTestId('welcome').getByRole('button', { name: 'Skip' }).click({ timeout: 15000 })
-    await page.getByText('Step 1 of 6: Your name').waitFor({ timeout: 15000 })
+    await page.getByText('Step 1 of 5: Your name').waitFor({ timeout: 15000 })
     return { subject, confirmLink: href }
   }
   async function nameStep(page, username, displayName) {
@@ -215,7 +215,8 @@ function journey(name, password) {
     await page.getByLabel('Username').fill(username)
     await page.getByLabel('Display name').fill(displayName)
     await page.getByRole('button', { name: 'Continue' }).click()
-    await page.getByRole('heading', { name: 'What brings you to Splitpost?' }).waitFor()
+    // Interests come straight after the name (BL-005).
+    await page.getByRole('heading', { name: 'What are you into?' }).waitFor()
   }
   // Interest buttons in a topic picker.
   const topicButton = (scope, label) => scope.getByRole('button', { name: label, exact: true })

@@ -187,29 +187,25 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
     await welcome.getByRole('button', { name: 'Skip' }).click()
   }
   await page.getByText('Your profile is ready').waitFor()
-  await page.getByText('Step 1 of 6: Your name').waitFor()
+  await page.getByText('Step 1 of 5: Your name').waitFor()
   await page.getByLabel('Username').fill(username)
   await page.getByLabel('Display name').fill(displayName)
   await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('heading', { name: 'What brings you to Splitpost?' }).waitFor()
+  // No creator or consumer question (BL-005): interests come straight after the name.
+  await page.getByRole('heading', { name: 'What are you into?' }).waitFor()
+  check('setup asks nobody whether they create or consume', (await page.getByRole('heading', { name: 'What brings you to Splitpost?' }).count()) === 0)
   if (setup) {
-    const v = await axe(page)
-    check('setup step 2 (identity) has no WCAG 2.2 AA violations', v.length === 0, v.join(', '))
-    await noSidewaysScroll(page, 'setup step 2')
-    await page.getByRole('radio', { name: new RegExp(`^${setup.identity}`) }).check()
-    await page.getByRole('button', { name: 'Continue' }).click()
-    await page.getByRole('heading', { name: 'What are you into?' }).waitFor()
     for (const t of setup.topics) await page.getByRole('button', { name: t, exact: true }).click()
     const v3 = await axe(page)
-    check('setup step 3 (interests) has no WCAG 2.2 AA violations', v3.length === 0, v3.join(', '))
-    await noSidewaysScroll(page, 'setup step 3')
+    check('setup step 2 (interests) has no WCAG 2.2 AA violations', v3.length === 0, v3.join(', '))
+    await noSidewaysScroll(page, 'setup step 2')
     await page.getByRole('button', { name: 'Continue' }).click()
     await page.getByRole('heading', { name: 'Tell people about you' }).waitFor()
     await page.getByLabel('Short bio').fill(setup.bio)
     await page.getByLabel('Why should people follow you?').fill(setup.followReason)
     const v4 = await axe(page)
-    check('setup step 4 (about you) has no WCAG 2.2 AA violations', v4.length === 0, v4.join(', '))
-    await noSidewaysScroll(page, 'setup step 4')
+    check('setup step 3 (about you) has no WCAG 2.2 AA violations', v4.length === 0, v4.join(', '))
+    await noSidewaysScroll(page, 'setup step 3')
     const saved = await answered(page, 'app_set_profile_details', () => page.getByRole('button', { name: 'Save and continue' }).click())
     check('the server accepted the profile details', saved === 200 || saved === 204, String(saved))
   } else {
@@ -260,7 +256,6 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
   const ctxA = await newContext(browser)
   const pageA = await ctxA.newPage()
   await signInAndSetUp(pageA, emailA, userA, 'Aye Teacher', {
-    identity: 'Share my own work',
     topics: ['Learning', 'Books & writing'],
     bio: 'Maths teacher making fractions fun.',
     followReason: 'One five-minute maths trick every week',
@@ -268,10 +263,10 @@ async function signInAndSetUp(page, email, username, displayName, setup = null, 
   check('A chose a username and display name, and the feed opened', sql(`select username || '|' || display_name from public.profiles where id = '${idA}'`) === `${userA}|Aye Teacher`)
   check(
     "A's details are stored as entered, with their interests",
-    sql(`select identity || '|' || bio || '|' || follow_reason || '|' || (onboarded_at is not null) || '|' || (select string_agg(topic, ',' order by topic) from social.member_topics where user_id = '${idA}') from social.profile_details where user_id = '${idA}'`)
-      === 'creator|Maths teacher making fractions fun.|One five-minute maths trick every week|true|books,learning',
+    sql(`select coalesce(identity, '-') || '|' || bio || '|' || follow_reason || '|' || (onboarded_at is not null) || '|' || (select string_agg(topic, ',' order by topic) from social.member_topics where user_id = '${idA}') from social.profile_details where user_id = '${idA}'`)
+      === '-|Maths teacher making fractions fun.|One five-minute maths trick every week|true|books,learning',
   )
-  check('choosing "Creator" changed nothing about A\'s pilot membership', sql(`select cohort || '|' || status from ops.member_access where user_id = '${idA}'`) === 'tester|active')
+  check('setting up a profile changed nothing about A\'s pilot membership', sql(`select cohort || '|' || status from ops.member_access where user_id = '${idA}'`) === 'tester|active')
   await pageA.reload()
   await pageA.getByRole('heading', { name: 'Home' }).waitFor()
   check('after a reload, first-time setup is not shown again', (await pageA.getByRole('progressbar').count()) === 0)

@@ -235,6 +235,12 @@ declare
     'public.app_founder_activation()',
     'public.app_my_deletion_consequences()'
   ];
+  -- Link in bio (20261221000000), once applied.
+  profile_link text[] := array[
+    'public.app_member_website(uuid)',
+    'public.app_my_website()',
+    'public.app_set_my_website(text)'
+  ];
   -- Progression rules (20261218000000), once applied.
   progression_rules text[] := array[
     'public.app_founder_correct_allocation(bigint,uuid,bigint,text,text,text)',
@@ -284,6 +290,9 @@ begin
   end if;
   if to_regclass('sim.balance_closures') is not null then
     expected := expected || closure;
+  end if;
+  if to_regprocedure('public.app_set_my_website(text)') is not null then
+    expected := expected || profile_link;
   end if;
   if to_regclass('social.shares') is not null then
     expected := expected || discovery;
@@ -395,8 +404,8 @@ begin
         bad := bad || (r.proname || ': does not check social.current_moderator()');
       end if;
     elsif r.proname = 'app_public_post' then
-      -- Public previews (20261204000000): visitors, but only eligible posts, only while on, rate limited.
-      if position('ops.public_preview_settings' in r.prosrc) = 0 or position('social.visible_members' in r.prosrc) = 0 or position('s.deleted_at is null' in r.prosrc) = 0 or position('social.preview_consents' in r.prosrc) = 0 or position('ops.content_reports' in r.prosrc) = 0 or position('rate_limited' in r.prosrc) = 0 then
+      -- Public previews (20261204000000; on by default with a switch-off since 20261222000000): visitors, but only eligible posts, only while on, rate limited.
+      if position('ops.public_preview_settings' in r.prosrc) = 0 or position('social.visible_members' in r.prosrc) = 0 or position('s.deleted_at is null' in r.prosrc) = 0 or (position('social.preview_consents' in r.prosrc) = 0 and position('social.preview_optouts' in r.prosrc) = 0) or position('ops.content_reports' in r.prosrc) = 0 or position('rate_limited' in r.prosrc) = 0 then
         bad := bad || (r.proname || ': public preview without its eligibility, switch or limits');
       end if;
     elsif r.proname like 'app\_founder\_%' then

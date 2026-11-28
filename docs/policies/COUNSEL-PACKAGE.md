@@ -2,7 +2,12 @@
 
 # Splitpost pilot: legal review package
 
-Package version: 1 (Nov 27, 2026). Checklist item L1 in `docs/ACCEPTANCE-CHECKLIST.md`.
+Package version: 2 (Nov 28, 2026). Checklist item L1 in `docs/ACCEPTANCE-CHECKLIST.md`.
+
+Changes from version 1 (Nov 27): public previews are now on by default with a
+switch-off (Terms section 25, the Member Privacy Notice, question 27 updated);
+members may add one optional website link to their profile. If version 1 was
+already sent, send this version with a note that only these points changed.
 
 ## 1. What we are asking for
 
@@ -59,6 +64,15 @@ sign-off (or markups) on documents 1 to 4 by **December 18, 2026**.
 * **Advertising:** built, but no external advertiser is active. Regulated
   financial products cannot be advertised or targeted. Targeting never uses
   sensitive information.
+* **Public previews:** when a post is shared outside Splitpost, a visitor can
+  see its text, time, topic and the creator's name, never media, counts,
+  comments or other members. Since Nov 28 this is on by default for eligible
+  posts, with a switch-off in Settings that takes effect at once (founder
+  decision, question 27). The project-wide switch stays off until counsel
+  answers and the founder approves, so visitors see nothing today.
+* **Profiles:** one account and one experience for everyone (no creator or
+  consumer types); members may add one optional website link, shown on their
+  profile.
 * **Data:** stored with Supabase (database and files) and served by Vercel,
   possibly outside Canada. Photos and videos are private and shown only
   through short-lived links. During the pilot there is no separate backup
@@ -103,7 +117,7 @@ sent, until these are answered.
 | Privacy: consent, Ontario law, cross-border processing, 18+ attestation, retention after deletion | 1, 2, 3, 4, 5 |
 | Consumer protection: simulated values, value of points, contests, lottery, locked value | 12, 13, 14, 15, 49 |
 | CASL: invitation emails and referral messages | 23 |
-| Intellectual property: the member content licence, public previews | 26, 27 |
+| Intellectual property: the member content licence, public previews (now on by default with a switch-off, question 27 updated) | 26, 27 |
 | Securities and payments characterization of points and the pool | 31, 32 |
 | Pyramid selling and multi-level marketing (referrals) | 35, 36 |
 | No statements of compliance or commitments we cannot meet (blocks publishing any document) | 46 |

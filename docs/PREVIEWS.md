@@ -36,3 +36,12 @@ No words, member, results or session are stored; a staging check fails if such a
 ## Evidence (local)
 
 Database suite with `020_previews_and_search.sql` and `160_previews_and_search.sql` (anonymous access, boundaries, off by default, deletion, open reports, opt-out, ended membership, referral counting, rate limits, switch history, rotation, search counts), rollback chain 86 passed with `rollback-previews-test.sh`, Auth integration 135, activation 38, member Production sequence 79, unit tests 789, and the browser journey `e2e/preview-journey.e2e.cjs`.
+
+## Since 20261222000000: on by default (BL-006)
+
+Previews are on by default for eligible posts; a member switches them off in
+Settings, Privacy, sharing and ads (`social.preview_optouts`), with
+immediate effect, and on again (recording the wording shown). Everything
+else above is unchanged, including the project-wide switch, which stays off
+in member Production until counsel answers question 27 and the founder
+approves. `docs/SP-BACKLOG-001.md`, BL-006.

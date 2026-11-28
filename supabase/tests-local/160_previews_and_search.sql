@@ -108,13 +108,15 @@ begin
 end $$;
 commit;
 select ops.set_public_previews('test', true, 'preview tests');
--- Opt-in: nothing of a creator who hasn't chosen previews.
+-- On by default (20261222000000): a creator who switched previews off is never
+-- previewed; one who made no choice is, once previews are on project-wide.
+insert into social.preview_optouts (member_id) values (pg_temp.p('5102'));
 begin;
 set local role anon;
 do $$
 begin
-  perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5201''), null)', 'not_found', 'a preview of a creator who has not opted in');
-  raise notice 'PASS: opt-in: a creator who has not chosen previews is never previewed, even with previews on';
+  perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5201''), null)', 'not_found', 'a preview of a creator who switched previews off');
+  raise notice 'PASS: a creator who switched previews off is never previewed, even with previews on';
 end $$;
 commit;
 begin;
@@ -122,11 +124,10 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-fdfdfd0
 set local role authenticated;
 do $$
 begin
-  perform pg_temp.expect_error('select public.app_set_public_previews(true, null)', 'invalid_request', 'consent without the wording shown');
-  perform public.app_set_public_previews(true, 'previews-v1');
+  perform pg_temp.expect_error('select public.app_set_public_previews(true, ''Not A Version!'')', 'invalid_request', 'switching on with a malformed wording version');
+  perform public.app_set_public_previews(true, 'previews-v2');
 end $$;
 commit;
-insert into social.preview_consents (member_id, wording_version) values (pg_temp.p('5103'), 'previews-v1');
 begin;
 set local role anon;
 do $$
@@ -163,15 +164,15 @@ end $$;
 update social.posts set deleted_at = now() where id = pg_temp.p('5202');
 insert into ops.content_reports (reporter_id, target_type, target_id, target_owner_id, reason, priority)
 values (pg_temp.p('5101'), 'post', pg_temp.p('5203'), pg_temp.p('5102'), 'spam', false);
-delete from social.preview_consents where member_id = pg_temp.p('5103'); -- Y withdrew
+insert into social.preview_optouts (member_id) values (pg_temp.p('5103')); -- Y switched previews off
 begin;
 set local role anon;
 do $$
 begin
   perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5202''), null)', 'not_found', 'a deleted post');
   perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5203''), null)', 'not_found', 'a post with an open report');
-  perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5204''), null)', 'not_found', 'a post whose creator withdrew consent');
-  raise notice 'PASS: deleted and reported posts, and creators who withdrew, are never previewed';
+  perform pg_temp.expect_error('select * from public.app_public_post(pg_temp.p(''5204''), null)', 'not_found', 'a post whose creator switched previews off');
+  raise notice 'PASS: deleted and reported posts, and creators who switched previews off, are never previewed';
 end $$;
 commit;
 -- A member whose access was revoked is no longer previewed.
@@ -198,20 +199,31 @@ begin
 end $$;
 commit;
 
--- Members give or withdraw their own consent (with the wording shown); the switch history is append-only.
+-- Members switch previews off and on again at any time (on again records the wording shown).
 begin;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-fdfdfd005103","role":"authenticated"}', true);
 set local role authenticated;
 do $$
 begin
-  if public.app_public_previews_allowed() then raise exception 'FAIL: Y withdrew'; end if;
-  perform public.app_set_public_previews(true, 'previews-v1');
-  if not public.app_public_previews_allowed() then raise exception 'FAIL: Y opted in again'; end if;
-  perform public.app_set_public_previews(false);
-  if public.app_public_previews_allowed() then raise exception 'FAIL: Y withdrew again'; end if;
-  raise notice 'PASS: members opt in (recording the wording shown) and withdraw at any time';
+  if public.app_public_previews_allowed() then raise exception 'FAIL: Y switched previews off'; end if;
+  perform public.app_set_public_previews(true, 'previews-v2');
+  if not public.app_public_previews_allowed() then raise exception 'FAIL: Y switched previews on again'; end if;
+  perform public.app_set_public_previews(false, 'previews-v2');
+  if public.app_public_previews_allowed() then raise exception 'FAIL: Y switched previews off again'; end if;
+  raise notice 'PASS: previews are on by default; members switch them off at once and on again at any time (with the wording shown)';
 end $$;
 commit;
+do $$
+begin
+  if not exists (select 1 from social.preview_optouts where member_id = pg_temp.p('5103'))
+     or exists (select 1 from social.preview_consents where member_id = pg_temp.p('5103')) then
+    raise exception 'FAIL: switching off is not recorded at once';
+  end if;
+  if (select wording_version from social.preview_consents where member_id = pg_temp.p('5102')) is distinct from 'previews-v2'
+     or exists (select 1 from social.preview_optouts where member_id = pg_temp.p('5102')) then
+    raise exception 'FAIL: switching on again did not clear the switch-off or record the wording shown';
+  end if;
+end $$;
 select ops.set_public_previews('test', false, 'preview tests done');
 do $$
 begin

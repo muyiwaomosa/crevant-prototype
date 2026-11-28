@@ -245,7 +245,7 @@ async function signIn(page, email) {
     await pageC.getByLabel('Email address', { exact: true }).fill(email)
     await pageC.getByLabel('Password', { exact: true }).fill(PASSWORD)
     await pageC.getByRole('button', { name: 'Sign in' }).click()
-    await pageC.getByRole('heading', { name: 'What brings you to Splitpost?' }).waitFor()
+    await pageC.getByRole('heading', { name: 'What are you into?' }).waitFor()
     await pageC.getByRole('button', { name: 'Skip the rest' }).click()
     await pageC.getByRole('heading', { name: 'People you might like' }).waitFor()
     const card = pageC.getByTestId('suggested-people').getByRole('listitem').filter({ hasText: A.displayName })

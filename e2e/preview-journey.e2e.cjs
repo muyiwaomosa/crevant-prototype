@@ -5,7 +5,7 @@
 //  2. once on, sees only the shared post (text, topic, creator), with a way to
 //     join through the sharer's referral link or sign in and follow;
 //  3. is counted per referral link, with no visitor identity;
-//  4. never sees anything of a creator who hasn't opted in, a deleted post, or a
+//  4. never sees anything of a creator who switched previews off, a deleted post, or a
 //     post whose creator withdrew;
 //  5. can reach nothing else: the member pages still ask them to sign in.
 // WCAG 2.2 AA, 320 and 390 px, no CSP violations. Run by scripts/e2e/auth-journey.sh.
@@ -150,24 +150,28 @@ async function signIn(page, email) {
     await page.getByRole('heading', { name: "This post isn't available" }).waitFor()
     check('while previews are off, a visitor sees nothing of the post', (await page.getByText(`A preview worth sharing ${RUN}`).count()) === 0)
 
-    // 2. On, but the creator hasn't opted in: still nothing.
+    // 2. On project-wide. Previews are on by default (BL-006), but this creator
+    // switches them off in Settings first: nothing is shown.
     sql("select ops.set_public_previews('preview-journey', true, 'journey: on')")
-    await page.goto(`${APP}/p/${postId}?r=${ref}`)
-    await page.getByRole('heading', { name: "This post isn't available" }).waitFor()
-    check('opt-in: a creator who has not chosen previews is never previewed', true)
-    // The creator opts in from their profile, after reading what a preview shows.
     {
       const ctxC = await newContext(browser)
       const pageC = await ctxC.newPage()
       await signIn(pageC, `pv-c-${RUN}@example.test`)
-      await pageC.goto(`${APP}/app/profile?edit=1`)
+      await pageC.goto(`${APP}/app/settings/privacy`)
       const box = pageC.getByRole('checkbox', { name: 'Allow public previews of my posts' })
       await box.waitFor()
-      check('previews start off for every creator', !(await box.isChecked()))
+      check('previews are on by default for every creator', await box.isChecked())
       await screenChecks(pageC, 'the public preview setting')
+      await box.uncheck()
+      await pageC.getByText('Off: only members can open links to your posts.').waitFor()
+      check('switching off is recorded at once', sql(`select count(*) from social.preview_optouts where member_id = '${c}'`) === '1')
+      await page.goto(`${APP}/p/${postId}?r=${ref}`)
+      await page.getByRole('heading', { name: "This post isn't available" }).waitFor()
+      check('a creator who switched previews off is never previewed', true)
+      // And on again, recording the wording shown.
       await box.check()
       await pageC.getByText('On: shared links to your posts show a public preview.').waitFor()
-      check('the consent records the wording shown', sql(`select wording_version from social.preview_consents where member_id = '${c}'`) === 'previews-v1')
+      check('switching on again records the wording shown', sql(`select wording_version from social.preview_consents where member_id = '${c}'`) === 'previews-v2')
       await ctxC.close()
     }
     await page.goto(`${APP}/p/${postId}?r=${ref}`)

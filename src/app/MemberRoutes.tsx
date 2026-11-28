@@ -9,7 +9,7 @@ import { AdvertisePage, PrivacyPage as MemberPrivacyPage } from './account'
 import { ModerationQueuePage, ModerationAppealsPage, ModerationReportPage } from './moderation'
 import { FeedbackEntryPage, FeedbackInboxPage, FeedbackPage } from './feedback'
 import { VideoTestPage } from './video'
-import { WelcomePage } from './pages'
+import { PrivacySettingsPage, WelcomePage } from './pages'
 
 /**
  * Every page of the members area under /app. Loaded on demand by
@@ -39,6 +39,7 @@ export default function MemberRoutes() {
           <Route path="control" element={<ControlCenterPage />} />
           <Route path="advertise" element={<AdvertisePage />} />
           <Route path="privacy" element={<MemberPrivacyPage />} />
+          <Route path="settings/privacy" element={<PrivacySettingsPage />} />
           <Route path="video-test" element={<VideoTestPage />} />
           <Route path="welcome" element={<WelcomePage />} />
           <Route path="feedback" element={<FeedbackPage />} />
