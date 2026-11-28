@@ -119,6 +119,38 @@ This is setup, not the invitation process: once done, everything runs from
 Control Center. Do staging first. Repeat for Production only after the staging
 acceptance below passes **and** the move is separately approved.
 
+**Staging is one Supabase project.** On staging the waitlist and the member
+app share the project `kpudeppgokpjhvaqrprn`, and Edge Function secrets are
+per project, shared by every function in it. So on staging each secret below
+is set **once**:
+
+* one `RESEND_API_KEY`: a single sending-only key restricted to
+  `mail.splitpost.ca` is enough; `join-waitlist` and `waitlist-bridge` both
+  read it;
+* one `WAITLIST_HANDOFF_KEY`: the same value is, by design, used on both sides,
+  so steps 4 and 6 set it once;
+* `WAITLIST_HANDOFF_DB_URL`, `WAITLIST_VERIFY_ORIGIN` and
+  `RESEND_WEBHOOK_SECRET` are set once each as well.
+
+In Production the waitlist (`hmrliwoychnqrbbydorg`) and the member project are
+separate projects, so each keeps its own `RESEND_API_KEY` (two separate
+sending-only keys) and each gets the same `WAITLIST_HANDOFF_KEY` value.
+
+### Staging baseline (checked Nov 28, no secret values read)
+
+| Item | State | Evidence |
+|---|---|---|
+| Waitlist migrations 20261110, 20261111 and BL-009's 20261223, 20261224 on staging | Done and verified | Staging plan and apply runs; staging checks |
+| `join-waitlist` deployed, `waitlist_writer` login, allowed origin, switch open | Done and verified | Waitlist health check passes (scheduled Nov 27, and run again Nov 28) |
+| Resend domain `mail.splitpost.ca` and staging Auth email | Done and verified | `docs/STAGING-ACCEPTANCE.md` step B (password reset delivered) |
+| Resend sending-only API keys | Created by the founder; awaiting verification | Verified when a verification email arrives (acceptance step 1) |
+| `join-waitlist` at the BL-009 version (email verification) | Outstanding | The deployed version answers a `verify_email` request as an ordinary join, so it predates BL-009 |
+| `waitlist_handoff` password | Outstanding (founder) | |
+| Function secrets for BL-009 | Outstanding (founder) | Not readable from here; confirmed by the steps that use them |
+| `waitlist-handoff` and `waitlist-bridge` on staging | Outstanding (founder deploys) | Both answer 404 (not deployed) |
+| Resend webhook for delivery events | Outstanding (founder) | |
+| Deployment ledger and verification run for `waitlist-bridge` | After the deploy (Claude) | `config/function-deployments.json`, `verify-functions.yml` |
+
 1. **Apply the migrations.** Merge the pull request (your checksum approval),
    then run the staging plan and apply as usual.
 2. **Set the handoff login's password** on the waitlist database (staging:
